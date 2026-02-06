@@ -329,6 +329,163 @@ async def delete_product(product_id: str, user=Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Product not found")
     return {"message": "Product deleted"}
 
+# ========== FOOD IMAGE BANK ==========
+FOOD_IMAGES = {
+    "chicken": "https://images.unsplash.com/photo-1632778149955-e80f8ceca2e8?w=400&h=300&fit=crop",
+    "paneer": "https://images.unsplash.com/photo-1567188040759-fb8a883dc6d8?w=400&h=300&fit=crop",
+    "egg": "https://images.unsplash.com/photo-1582169296194-e4d644c48063?w=400&h=300&fit=crop",
+    "rice": "https://images.unsplash.com/photo-1536304929831-ee1ca9d44726?w=400&h=300&fit=crop",
+    "dal": "https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=400&h=300&fit=crop",
+    "lentil": "https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=400&h=300&fit=crop",
+    "oats": "https://images.unsplash.com/photo-1517673400267-0251440c45dc?w=400&h=300&fit=crop",
+    "kabab": "https://images.unsplash.com/photo-1599487488170-d11ec9c172f0?w=400&h=300&fit=crop",
+    "fish": "https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=400&h=300&fit=crop",
+    "sweet potato": "https://images.unsplash.com/photo-1596097635121-14b38c5d7a62?w=400&h=300&fit=crop",
+    "yogurt": "https://images.unsplash.com/photo-1488477181946-6428a0291777?w=400&h=300&fit=crop",
+    "salad": "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400&h=300&fit=crop",
+    "sprout": "https://images.unsplash.com/photo-1551462147-ff29053bfc14?w=400&h=300&fit=crop",
+    "quinoa": "https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&h=300&fit=crop",
+    "soya": "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=400&h=300&fit=crop",
+    "almond": "https://images.unsplash.com/photo-1508061253366-f7da158b6d46?w=400&h=300&fit=crop",
+    "banana": "https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?w=400&h=300&fit=crop",
+    "tofu": "https://images.unsplash.com/photo-1546069901-d5bfd2cbfb1f?w=400&h=300&fit=crop",
+    "mushroom": "https://images.unsplash.com/photo-1504545102780-26774c1bb073?w=400&h=300&fit=crop",
+    "broccoli": "https://images.unsplash.com/photo-1459411552884-841db9b3cc2a?w=400&h=300&fit=crop",
+    "spinach": "https://images.unsplash.com/photo-1576045057995-568f588f82fb?w=400&h=300&fit=crop",
+    "avocado": "https://images.unsplash.com/photo-1523049673857-eb18f1d7b578?w=400&h=300&fit=crop",
+    "milk": "https://images.unsplash.com/photo-1563636619-e9143da7973b?w=400&h=300&fit=crop",
+    "roti": "https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=400&h=300&fit=crop",
+    "biryani": "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=400&h=300&fit=crop",
+    "curry": "https://images.unsplash.com/photo-1455619452474-d2be8b1e70cd?w=400&h=300&fit=crop",
+    "soup": "https://images.unsplash.com/photo-1547592166-23ac45744acd?w=400&h=300&fit=crop",
+    "sandwich": "https://images.unsplash.com/photo-1528735602780-2552fd46c7af?w=400&h=300&fit=crop",
+    "wrap": "https://images.unsplash.com/photo-1626700051175-6818013e1d4f?w=400&h=300&fit=crop",
+    "smoothie": "https://images.unsplash.com/photo-1505252585461-04db1eb84625?w=400&h=300&fit=crop",
+    "bowl": "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400&h=300&fit=crop",
+    "protein": "https://images.unsplash.com/photo-1632778149955-e80f8ceca2e8?w=400&h=300&fit=crop",
+    "default": "https://images.unsplash.com/photo-1490818387583-1baba5e638af?w=400&h=300&fit=crop",
+}
+
+def find_food_image(name: str) -> str:
+    name_lower = name.lower()
+    for key, url in FOOD_IMAGES.items():
+        if key in name_lower:
+            return url
+    return FOOD_IMAGES["default"]
+
+# ========== AI-POWERED PRODUCT CREATION ==========
+async def ai_generate_description(product_name: str, product_type: str, ingredients: List[str] = None) -> str:
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        if product_type == "ready_made" and ingredients:
+            prompt = f"""Generate a SHORT appealing food description (max 15 words) for a dish called "{product_name}" made with: {', '.join(ingredients)}. Focus on taste, health benefits, and appeal. Just the description, no quotes."""
+        else:
+            prompt = f"""Generate a SHORT appealing food description (max 15 words) for a product called "{product_name}" for a fitness/diet café. Focus on health benefits. Just the description, no quotes."""
+        chat = LlmChat(
+            api_key=os.environ.get('EMERGENT_LLM_KEY', ''),
+            session_id=f"desc-{uuid.uuid4()}",
+            system_message="You are a food copywriter. Write SHORT, appealing descriptions. No quotes or special formatting."
+        ).with_model("openai", "gpt-5.2")
+        response = await chat.send_message(UserMessage(text=prompt))
+        return response.strip().strip('"').strip("'")[:100]
+    except Exception as e:
+        logger.error(f"AI description error: {e}")
+        return f"Fresh {product_name}, nutritious and delicious"
+
+async def ai_calculate_ready_made_nutrition(dish_name: str, ingredients: List[str]) -> Dict:
+    """Use AI + NUTRITION_DB to estimate combined nutrition for a ready-made meal"""
+    total_cal, total_protein, total_carbs, total_fat = 0, 0, 0, 0
+    matched = 0
+    for ing in ingredients:
+        nutrition = match_nutrition(ing)
+        # Estimate ~100g per ingredient as default portion
+        total_cal += nutrition["calories"]
+        total_protein += nutrition["protein"]
+        total_carbs += nutrition["carbs"]
+        total_fat += nutrition["fat"]
+        matched += 1
+    if matched == 0:
+        return {"calories": 250, "protein": 15, "carbs": 30, "fat": 8, "category": "Meal"}
+    category = "Protein" if total_protein > total_carbs else "Carb" if total_carbs > total_fat else "Meal"
+    return {
+        "calories": round(total_cal / matched * 3, 1),  # ~3 ingredients avg per serving
+        "protein": round(total_protein / matched * 3, 1),
+        "carbs": round(total_carbs / matched * 3, 1),
+        "fat": round(total_fat / matched * 3, 1),
+        "category": category
+    }
+
+@api_router.post("/products/single")
+async def create_single_product(data: SingleProductCreate, user=Depends(get_current_user)):
+    """Create single product with AI: auto cost-per-gram, photo, nutrition, description"""
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    import random
+    nutrition = match_nutrition(data.name)
+    cost_per_100g = round((data.price / data.grams) * 100, 2)
+    image_url = find_food_image(data.name)
+    description = await ai_generate_description(data.name, "single")
+    product_id = str(uuid.uuid4())
+    product = {
+        "id": product_id,
+        "name": data.name,
+        "product_type": "single",
+        "cost_per_100g": cost_per_100g,
+        "base_price": data.price,
+        "base_grams": data.grams,
+        "available_qty_grams": data.grams,
+        "category": nutrition["category"],
+        "diet_type": nutrition.get("diet_type", detect_diet_type(data.name)),
+        "calories_per_100g": nutrition["calories"],
+        "protein_per_100g": nutrition["protein"],
+        "carbs_per_100g": nutrition["carbs"],
+        "fat_per_100g": nutrition["fat"],
+        "is_active": True,
+        "image_url": image_url,
+        "description": description,
+        "rating": round(random.uniform(3.8, 4.9), 1),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.products.insert_one(product)
+    return {k: v for k, v in product.items() if k != "_id"}
+
+@api_router.post("/products/ready-made")
+async def create_ready_made_meal(data: ReadyMadeMealCreate, user=Depends(get_current_user)):
+    """Create ready-made meal with AI description and auto nutrition from ingredients"""
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    import random
+    nutrition = await ai_calculate_ready_made_nutrition(data.name, data.ingredients)
+    cost_per_100g = round((data.price / data.serving_grams) * 100, 2)
+    description = await ai_generate_description(data.name, "ready_made", data.ingredients)
+    # Use first uploaded image or find one
+    image_url = data.images[0] if data.images else find_food_image(data.name)
+    product_id = str(uuid.uuid4())
+    product = {
+        "id": product_id,
+        "name": data.name,
+        "product_type": "ready_made",
+        "cost_per_100g": cost_per_100g,
+        "fixed_price": data.price,
+        "serving_grams": data.serving_grams,
+        "ingredients": data.ingredients,
+        "images": data.images,
+        "available_qty_grams": data.serving_grams * 20,  # 20 servings default
+        "category": nutrition["category"],
+        "diet_type": detect_diet_type(data.name) if any(kw in " ".join(data.ingredients).lower() for kw in NON_VEG_KEYWORDS) else "veg",
+        "calories_per_100g": nutrition["calories"],
+        "protein_per_100g": nutrition["protein"],
+        "carbs_per_100g": nutrition["carbs"],
+        "fat_per_100g": nutrition["fat"],
+        "is_active": True,
+        "image_url": image_url,
+        "description": description,
+        "rating": round(random.uniform(3.8, 4.9), 1),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.products.insert_one(product)
+    return {k: v for k, v in product.items() if k != "_id"}
+
 # ========== ORDER ROUTES ==========
 @api_router.post("/orders")
 async def create_order(data: OrderCreate, user=Depends(get_current_user)):
