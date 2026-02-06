@@ -1,132 +1,100 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl,
-  SafeAreaView, Alert, ActivityIndicator
+  View, Text, StyleSheet, FlatList, TouchableOpacity, Image, RefreshControl,
+  SafeAreaView, Alert, ActivityIndicator, ScrollView
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { apiCall } from '../../utils/api';
 
-interface Product {
-  id: string; name: string; cost_per_100g: number; category: string;
-  calories_per_100g: number; protein_per_100g: number; carbs_per_100g: number;
-  fat_per_100g: number; available_qty_grams: number;
-}
-
-interface CartItem extends Product { grams: number; }
-
-const CATEGORY_COLORS: Record<string, string> = {
-  Protein: '#FF3B30', Carb: '#FF9F0A', Fat: '#007AFF', Other: '#8E8E93'
-};
-const CATEGORY_ICONS: Record<string, string> = {
-  Protein: 'barbell', Carb: 'leaf', Fat: 'water', Other: 'ellipse'
-};
+const Z_RED = '#E23744';
+const CATS = ['All', 'Protein', 'Carb', 'Fat'];
 
 export default function MenuScreen() {
   const router = useRouter();
-  const [products, setProducts] = useState<Product[]>([]);
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
+  const [cart, setCart] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [orderType, setOrderType] = useState('dine-in');
+  const [selectedCat, setSelectedCat] = useState('All');
 
   const loadProducts = useCallback(async () => {
-    try {
-      const data = await apiCall('/products');
-      setProducts(data.filter((p: Product) => p.available_qty_grams > 0));
-    } catch (e) {} finally { setLoading(false); }
+    try { const data = await apiCall('/products'); setProducts(data.filter((p: any) => p.available_qty_grams > 0)); }
+    catch (e) {} finally { setLoading(false); }
   }, []);
 
   useEffect(() => { loadProducts(); }, []);
-
   const onRefresh = async () => { setRefreshing(true); await loadProducts(); setRefreshing(false); };
 
-  const addToCart = (product: Product) => {
+  const addToCart = (product: any) => {
     const exists = cart.find(c => c.id === product.id);
-    if (exists) {
-      setCart(cart.map(c => c.id === product.id ? { ...c, grams: c.grams + 100 } : c));
-    } else {
-      setCart([...cart, { ...product, grams: 100 }]);
-    }
+    if (exists) setCart(cart.map(c => c.id === product.id ? { ...c, grams: c.grams + 100 } : c));
+    else setCart([...cart, { ...product, grams: 100 }]);
+  };
+  const removeFromCart = (id: string) => setCart(cart.filter(c => c.id !== id));
+  const updateQty = (id: string, delta: number) => {
+    setCart(cart.map(c => {
+      if (c.id !== id) return c;
+      const newG = c.grams + delta;
+      return newG > 0 ? { ...c, grams: newG } : c;
+    }).filter(c => c.grams > 0));
   };
 
-  const removeFromCart = (productId: string) => {
-    setCart(cart.filter(c => c.id !== productId));
+  const cartTotal = cart.reduce((s, i) => s + (i.grams / 100) * i.cost_per_100g, 0);
+  const cartItems = cart.reduce((s, i) => s + 1, 0);
+
+  const filtered = products.filter(p => selectedCat === 'All' || p.category === selectedCat);
+
+  const goCustomize = () => {
+    if (cart.length === 0) { Alert.alert('Empty Cart', 'Add items first'); return; }
+    router.push({ pathname: '/customize', params: { cart: JSON.stringify(cart), orderType } });
   };
 
-  const cartTotal = cart.reduce((sum, item) => sum + (item.grams / 100) * item.cost_per_100g, 0);
-  const cartCalories = cart.reduce((sum, item) => sum + (item.grams / 100) * item.calories_per_100g, 0);
-
-  const goToCustomize = () => {
-    if (cart.length === 0) {
-      Alert.alert('Empty Cart', 'Please add items to your meal first');
-      return;
-    }
-    router.push({
-      pathname: '/customize',
-      params: { cart: JSON.stringify(cart), orderType },
-    });
-  };
-
-  const renderProduct = ({ item }: { item: Product }) => {
+  const renderProduct = ({ item }: { item: any }) => {
     const inCart = cart.find(c => c.id === item.id);
-    const catColor = CATEGORY_COLORS[item.category] || '#8E8E93';
     return (
-      <View style={styles.productCard} testID={`product-${item.id}`}>
-        <View style={styles.productTop}>
-          <View style={[styles.catDot, { backgroundColor: catColor }]} />
-          <View style={styles.productInfo}>
-            <Text style={styles.productName}>{item.name}</Text>
-            <Text style={styles.productCat}>{item.category}</Text>
+      <View style={styles.itemCard} testID={`product-${item.id}`}>
+        <View style={styles.itemInfo}>
+          <View style={styles.itemVeg}>
+            <View style={[styles.vegDot, { backgroundColor: item.category === 'Protein' ? Z_RED : item.category === 'Carb' ? '#267E3E' : '#5B5FE0' }]} />
           </View>
-          <Text style={styles.productPrice}>₹{item.cost_per_100g}<Text style={styles.per100}>/100g</Text></Text>
-        </View>
-        <View style={styles.nutritionRow}>
-          <View style={styles.nutriItem}>
-            <Ionicons name="flame" size={12} color="#FF3B30" />
-            <Text style={styles.nutriVal}>{item.calories_per_100g} cal</Text>
+          <Text style={styles.itemName}>{item.name}</Text>
+          <Text style={styles.itemDesc} numberOfLines={2}>{item.description || `${item.category} • ${item.calories_per_100g} cal/100g`}</Text>
+          <View style={styles.itemMeta}>
+            <Text style={styles.itemPrice}>₹{item.cost_per_100g}</Text>
+            <Text style={styles.itemPer}>/100g</Text>
           </View>
-          <View style={styles.nutriItem}>
-            <Text style={styles.nutriLabel}>P:</Text>
-            <Text style={styles.nutriVal}>{item.protein_per_100g}g</Text>
-          </View>
-          <View style={styles.nutriItem}>
-            <Text style={styles.nutriLabel}>C:</Text>
-            <Text style={styles.nutriVal}>{item.carbs_per_100g}g</Text>
-          </View>
-          <View style={styles.nutriItem}>
-            <Text style={styles.nutriLabel}>F:</Text>
-            <Text style={styles.nutriVal}>{item.fat_per_100g}g</Text>
+          <View style={styles.nutriBadges}>
+            <View style={styles.nutriBadge}><Text style={styles.nbText}>P: {item.protein_per_100g}g</Text></View>
+            <View style={styles.nutriBadge}><Text style={styles.nbText}>C: {item.carbs_per_100g}g</Text></View>
+            <View style={styles.nutriBadge}><Text style={styles.nbText}>F: {item.fat_per_100g}g</Text></View>
           </View>
         </View>
-        <View style={styles.productActions}>
-          <Text style={styles.stockText}>Stock: {Math.round(item.available_qty_grams)}g</Text>
+        <View style={styles.itemRight}>
+          {item.image_url ? (
+            <Image source={{ uri: item.image_url }} style={styles.itemImg} />
+          ) : (
+            <View style={[styles.itemImg, styles.imgPlaceholder]}><Ionicons name="restaurant" size={24} color="#D0D0D0" /></View>
+          )}
+          <View style={styles.ratingRow}>
+            <Ionicons name="star" size={10} color="#FFF" />
+            <Text style={styles.ratingNum}>{item.rating || '4.2'}</Text>
+          </View>
           {inCart ? (
-            <View style={styles.cartControls}>
-              <TouchableOpacity
-                testID={`remove-${item.id}`}
-                style={styles.cartBtn}
-                onPress={() => removeFromCart(item.id)}
-              >
-                <Ionicons name="trash" size={16} color="#FF453A" />
+            <View style={styles.qtyBox}>
+              <TouchableOpacity testID={`minus-${item.id}`} style={styles.qtyBtn} onPress={() => updateQty(item.id, -50)}>
+                <Ionicons name="remove" size={16} color="#FFF" />
               </TouchableOpacity>
-              <Text style={styles.cartGrams}>{inCart.grams}g</Text>
-              <TouchableOpacity
-                testID={`add-more-${item.id}`}
-                style={[styles.cartBtn, styles.cartBtnAdd]}
-                onPress={() => addToCart(item)}
-              >
+              <Text style={styles.qtyText}>{inCart.grams}g</Text>
+              <TouchableOpacity testID={`plus-${item.id}`} style={styles.qtyBtn} onPress={() => updateQty(item.id, 50)}>
                 <Ionicons name="add" size={16} color="#FFF" />
               </TouchableOpacity>
             </View>
           ) : (
-            <TouchableOpacity
-              testID={`add-${item.id}`}
-              style={styles.addBtn}
-              onPress={() => addToCart(item)}
-            >
-              <Ionicons name="add-circle" size={20} color="#FF3B30" />
+            <TouchableOpacity testID={`add-${item.id}`} style={styles.addBtn} onPress={() => addToCart(item)}>
               <Text style={styles.addText}>ADD</Text>
+              <Ionicons name="add" size={14} color={Z_RED} />
             </TouchableOpacity>
           )}
         </View>
@@ -134,57 +102,46 @@ export default function MenuScreen() {
     );
   };
 
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <View style={styles.center}><ActivityIndicator size="large" color="#FF3B30" /></View>
-      </SafeAreaView>
-    );
-  }
+  if (loading) return <SafeAreaView style={styles.safe}><View style={styles.center}><ActivityIndicator size="large" color={Z_RED} /></View></SafeAreaView>;
 
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
         <Text style={styles.title}>Menu</Text>
-        <View style={styles.orderTypeRow}>
+        <View style={styles.typeRow}>
           {['dine-in', 'takeaway', 'delivery'].map(t => (
-            <TouchableOpacity
-              key={t}
-              testID={`order-type-${t}`}
-              style={[styles.typeBtn, orderType === t && styles.typeBtnActive]}
-              onPress={() => setOrderType(t)}
-            >
-              <Ionicons
-                name={t === 'dine-in' ? 'restaurant' : t === 'takeaway' ? 'bag-handle' : 'bicycle'}
-                size={14}
-                color={orderType === t ? '#FFF' : '#8E8E93'}
-              />
-              <Text style={[styles.typeText, orderType === t && styles.typeTextActive]}>
-                {t === 'dine-in' ? 'Dine In' : t === 'takeaway' ? 'Takeaway' : 'Delivery'}
-              </Text>
+            <TouchableOpacity key={t} testID={`order-type-${t}`} style={[styles.typeChip, orderType === t && styles.typeChipActive]} onPress={() => setOrderType(t)}>
+              <Ionicons name={t === 'dine-in' ? 'restaurant' : t === 'takeaway' ? 'bag-handle' : 'bicycle'} size={14} color={orderType === t ? '#FFF' : '#696969'} />
+              <Text style={[styles.typeText, orderType === t && { color: '#FFF' }]}>{t === 'dine-in' ? 'Dine In' : t === 'takeaway' ? 'Takeaway' : 'Delivery'}</Text>
             </TouchableOpacity>
           ))}
         </View>
       </View>
 
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.catBar} contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}>
+        {CATS.map(c => (
+          <TouchableOpacity key={c} testID={`menu-cat-${c}`} style={[styles.catPill, selectedCat === c && { backgroundColor: Z_RED, borderColor: Z_RED }]} onPress={() => setSelectedCat(c)}>
+            <Text style={[styles.catText, selectedCat === c && { color: '#FFF' }]}>{c}</Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+
       <FlatList
-        data={products}
-        keyExtractor={item => item.id}
-        renderItem={renderProduct}
+        data={filtered} keyExtractor={i => i.id} renderItem={renderProduct}
         contentContainerStyle={styles.list}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FF3B30" />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Z_RED} />}
+        ItemSeparatorComponent={() => <View style={styles.sep} />}
       />
 
       {cart.length > 0 && (
-        <TouchableOpacity testID="customize-btn" style={styles.cartBar} onPress={goToCustomize} activeOpacity={0.9}>
-          <View style={styles.cartInfo}>
-            <Text style={styles.cartCount}>{cart.length} items</Text>
-            <Text style={styles.cartCal}>{Math.round(cartCalories)} cal</Text>
+        <TouchableOpacity testID="customize-btn" style={styles.cartBar} onPress={goCustomize} activeOpacity={0.95}>
+          <View>
+            <Text style={styles.cartItems}>{cartItems} item{cartItems > 1 ? 's' : ''}</Text>
+            <Text style={styles.cartTotal}>₹{Math.round(cartTotal)}</Text>
           </View>
           <View style={styles.cartRight}>
-            <Text style={styles.cartPrice}>₹{Math.round(cartTotal)}</Text>
-            <Text style={styles.cartAction}>CUSTOMIZE</Text>
-            <Ionicons name="arrow-forward" size={18} color="#FFF" />
+            <Text style={styles.cartAction}>View Cart</Text>
+            <Ionicons name="cart" size={18} color="#FFF" />
           </View>
         </TouchableOpacity>
       )}
@@ -193,62 +150,44 @@ export default function MenuScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#000' },
+  safe: { flex: 1, backgroundColor: '#F8F8F8' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: { padding: 16, paddingTop: 8 },
-  title: { fontSize: 28, fontWeight: '800', color: '#FFF', marginBottom: 12 },
-  orderTypeRow: { flexDirection: 'row', gap: 8 },
-  typeBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
-    backgroundColor: '#1C1C1E', borderWidth: 1, borderColor: '#2C2C2E',
-  },
-  typeBtnActive: { backgroundColor: '#FF3B30', borderColor: '#FF3B30' },
-  typeText: { fontSize: 12, fontWeight: '600', color: '#8E8E93' },
-  typeTextActive: { color: '#FFF' },
+  header: { backgroundColor: '#FFF', paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12 },
+  title: { fontSize: 24, fontWeight: '800', color: '#1C1C2E', marginBottom: 10 },
+  typeRow: { flexDirection: 'row', gap: 8 },
+  typeChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, backgroundColor: '#F5F5F5', borderWidth: 1, borderColor: '#E8E8E8' },
+  typeChipActive: { backgroundColor: Z_RED, borderColor: Z_RED },
+  typeText: { fontSize: 12, fontWeight: '600', color: '#696969' },
+  catBar: { backgroundColor: '#FFF', paddingVertical: 10 },
+  catPill: { paddingHorizontal: 18, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: '#E8E8E8', backgroundColor: '#FFF' },
+  catText: { fontSize: 13, fontWeight: '600', color: '#696969' },
   list: { padding: 16, paddingBottom: 100 },
-  productCard: {
-    backgroundColor: '#121212', borderRadius: 16, padding: 16,
-    marginBottom: 12, borderWidth: 1, borderColor: '#2C2C2E',
-  },
-  productTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
-  catDot: { width: 10, height: 10, borderRadius: 5, marginRight: 10 },
-  productInfo: { flex: 1 },
-  productName: { fontSize: 16, fontWeight: '700', color: '#FFF' },
-  productCat: { fontSize: 11, color: '#8E8E93', marginTop: 2 },
-  productPrice: { fontSize: 18, fontWeight: '800', color: '#FF3B30' },
-  per100: { fontSize: 11, fontWeight: '400', color: '#8E8E93' },
-  nutritionRow: { flexDirection: 'row', gap: 12, marginBottom: 10 },
-  nutriItem: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  nutriLabel: { fontSize: 11, color: '#48484A', fontWeight: '600' },
-  nutriVal: { fontSize: 11, color: '#8E8E93' },
-  productActions: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  stockText: { fontSize: 11, color: '#48484A' },
-  addBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8,
-    borderWidth: 1, borderColor: '#FF3B30',
-  },
-  addText: { color: '#FF3B30', fontSize: 13, fontWeight: '700' },
-  cartControls: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  cartBtn: {
-    width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center',
-    backgroundColor: '#1C1C1E', borderWidth: 1, borderColor: '#2C2C2E',
-  },
-  cartBtnAdd: { backgroundColor: '#FF3B30', borderColor: '#FF3B30' },
-  cartGrams: { color: '#FFF', fontSize: 14, fontWeight: '700', minWidth: 40, textAlign: 'center' },
-  cartBar: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    backgroundColor: '#FF3B30', flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16,
-    borderTopLeftRadius: 20, borderTopRightRadius: 20,
-    shadowColor: '#FF3B30', shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.3, shadowRadius: 8, elevation: 10,
-  },
-  cartInfo: {},
-  cartCount: { color: '#FFF', fontSize: 14, fontWeight: '700' },
-  cartCal: { color: 'rgba(255,255,255,0.7)', fontSize: 11 },
-  cartRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  cartPrice: { color: '#FFF', fontSize: 20, fontWeight: '800' },
-  cartAction: { color: '#FFF', fontSize: 12, fontWeight: '700', letterSpacing: 1 },
+  sep: { height: 10 },
+  itemCard: { flexDirection: 'row', backgroundColor: '#FFF', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#EFEFEF' },
+  itemInfo: { flex: 1, paddingRight: 12 },
+  itemVeg: { marginBottom: 4 },
+  vegDot: { width: 12, height: 12, borderRadius: 2, borderWidth: 1.5, borderColor: 'transparent' },
+  itemName: { fontSize: 16, fontWeight: '700', color: '#1C1C2E' },
+  itemDesc: { fontSize: 12, color: '#9C9C9C', marginTop: 3, lineHeight: 16 },
+  itemMeta: { flexDirection: 'row', alignItems: 'baseline', marginTop: 6, gap: 2 },
+  itemPrice: { fontSize: 16, fontWeight: '700', color: '#1C1C2E' },
+  itemPer: { fontSize: 11, color: '#9C9C9C' },
+  nutriBadges: { flexDirection: 'row', gap: 6, marginTop: 6 },
+  nutriBadge: { backgroundColor: '#F5F5F5', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  nbText: { fontSize: 10, fontWeight: '600', color: '#696969' },
+  itemRight: { width: 110, alignItems: 'center' },
+  itemImg: { width: 110, height: 90, borderRadius: 10, backgroundColor: '#F5F5F5' },
+  imgPlaceholder: { alignItems: 'center', justifyContent: 'center' },
+  ratingRow: { position: 'absolute', top: 70, flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: '#267E3E', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 3 },
+  ratingNum: { fontSize: 10, fontWeight: '700', color: '#FFF' },
+  addBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 8, paddingVertical: 7, paddingHorizontal: 24, borderRadius: 8, borderWidth: 1.5, borderColor: Z_RED, backgroundColor: '#FDE8EA' },
+  addText: { fontSize: 14, fontWeight: '800', color: Z_RED },
+  qtyBox: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8, backgroundColor: Z_RED, borderRadius: 8, overflow: 'hidden' },
+  qtyBtn: { paddingHorizontal: 10, paddingVertical: 7 },
+  qtyText: { color: '#FFF', fontSize: 13, fontWeight: '700', minWidth: 36, textAlign: 'center' },
+  cartBar: { position: 'absolute', bottom: 0, left: 16, right: 16, backgroundColor: Z_RED, borderRadius: 14, paddingHorizontal: 20, paddingVertical: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, elevation: 8 },
+  cartItems: { color: '#FFF', fontSize: 12, fontWeight: '500' },
+  cartTotal: { color: '#FFF', fontSize: 18, fontWeight: '800' },
+  cartRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  cartAction: { color: '#FFF', fontSize: 15, fontWeight: '700' },
 });
