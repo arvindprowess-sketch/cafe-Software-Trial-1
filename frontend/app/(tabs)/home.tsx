@@ -40,10 +40,14 @@ export default function HomeScreen() {
 
   const loadData = useCallback(async () => {
     try {
-      const [u, s, p, b] = await Promise.all([
-        getStoredUser(), apiCall('/user/nutrition-summary'), apiCall('/products'), apiCall('/banners'),
+      const [u, s, p, b, pop] = await Promise.all([
+        getStoredUser(), 
+        apiCall('/user/nutrition-summary'), 
+        apiCall('/products'), 
+        apiCall('/banners'),
+        apiCall('/products/popular').catch(() => []), // Popular items based on sales
       ]);
-      setUser(u); setSummary(s); setProducts(p); setBanners(b);
+      setUser(u); setSummary(s); setProducts(pop.length > 0 ? pop : p); setBanners(b);
     } catch (e) {} finally { setLoading(false); }
   }, []);
 
