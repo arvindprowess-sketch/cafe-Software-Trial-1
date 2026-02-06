@@ -89,50 +89,91 @@ export default function MenuScreen() {
 
   const renderProduct = ({ item }: { item: any }) => {
     const inCart = cart.find(c => c.id === item.id);
+    const isReadyMade = item.product_type === 'ready_made';
+    const isEditable = item.is_editable;
+    
+    // Price display
+    const displayPrice = isReadyMade 
+      ? (item.fixed_price || Math.round(item.cost_per_100g * (item.serving_grams || 300) / 100))
+      : item.cost_per_100g;
+    const priceUnit = isReadyMade ? '/plate' : '/100g';
+    
+    // Nutrition display
+    const displayCal = isReadyMade ? (item.total_calories_per_serving || item.calories_per_100g) : item.calories_per_100g;
+    
     return (
       <View style={styles.itemCard} testID={`product-${item.id}`}>
         <View style={styles.itemInfo}>
-          <View style={styles.itemVeg}>
-            <View style={[styles.vegBox, { borderColor: item.diet_type === 'non-veg' ? '#E23744' : '#267E3E' }]}>
-              <View style={[styles.vegDotSmall, { backgroundColor: item.diet_type === 'non-veg' ? '#E23744' : '#267E3E' }]} />
+          <View style={styles.itemTopRow}>
+            <View style={[styles.vegBox, { borderColor: item.diet_type === 'non-veg' ? Z_RED : GREEN }]}>
+              <View style={[styles.vegDotSmall, { backgroundColor: item.diet_type === 'non-veg' ? Z_RED : GREEN }]} />
             </View>
+            {isReadyMade && (
+              <View style={[styles.editBadge, isEditable ? styles.editBadgeYes : styles.editBadgeNo]}>
+                <Ionicons name={isEditable ? 'create' : 'lock-closed'} size={9} color="#FFF" />
+                <Text style={styles.editBadgeText}>{isEditable ? 'Customizable' : 'Fixed'}</Text>
+              </View>
+            )}
           </View>
           <Text style={styles.itemName}>{item.name}</Text>
-          <Text style={styles.itemDesc} numberOfLines={2}>{item.description || `${item.category} • ${item.calories_per_100g} cal/100g`}</Text>
+          <Text style={styles.itemDesc} numberOfLines={2}>
+            {item.description || `${item.category} • ${Math.round(displayCal)} cal${priceUnit}`}
+          </Text>
+          {isReadyMade && item.ingredients && item.ingredients.length > 0 && (
+            <Text style={styles.ingredientsList} numberOfLines={1}>
+              {item.ingredients.map((ing: any) => typeof ing === 'object' ? ing.name : ing).join(', ')}
+            </Text>
+          )}
           <View style={styles.itemMeta}>
-            <Text style={styles.itemPrice}>₹{item.cost_per_100g}</Text>
-            <Text style={styles.itemPer}>/100g</Text>
+            <Text style={styles.itemPrice}>₹{displayPrice}</Text>
+            <Text style={styles.itemPer}>{priceUnit}</Text>
           </View>
           <View style={styles.nutriBadges}>
-            <View style={styles.nutriBadge}><Text style={styles.nbText}>P: {item.protein_per_100g}g</Text></View>
-            <View style={styles.nutriBadge}><Text style={styles.nbText}>C: {item.carbs_per_100g}g</Text></View>
-            <View style={styles.nutriBadge}><Text style={styles.nbText}>F: {item.fat_per_100g}g</Text></View>
+            <View style={styles.nutriBadge}><Text style={styles.nbText}>P: {isReadyMade ? Math.round(item.total_protein_per_serving || item.protein_per_100g) : item.protein_per_100g}g</Text></View>
+            <View style={styles.nutriBadge}><Text style={styles.nbText}>C: {isReadyMade ? Math.round(item.total_carbs_per_serving || item.carbs_per_100g) : item.carbs_per_100g}g</Text></View>
+            <View style={styles.nutriBadge}><Text style={styles.nbText}>F: {isReadyMade ? Math.round(item.total_fat_per_serving || item.fat_per_100g) : item.fat_per_100g}g</Text></View>
           </View>
         </View>
         <View style={styles.itemRight}>
           {item.image_url ? (
             <Image source={{ uri: item.image_url }} style={styles.itemImg} />
           ) : (
-            <View style={[styles.itemImg, styles.imgPlaceholder]}><Ionicons name="restaurant" size={24} color="#D0D0D0" /></View>
+            <View style={[styles.itemImg, styles.imgPlaceholder]}>
+              <Ionicons name={isReadyMade ? 'fast-food' : 'restaurant'} size={24} color="#D0D0D0" />
+            </View>
           )}
           <View style={styles.ratingRow}>
             <Ionicons name="star" size={10} color="#FFF" />
             <Text style={styles.ratingNum}>{item.rating || '4.2'}</Text>
           </View>
           {inCart ? (
-            <View style={styles.qtyBox}>
-              <TouchableOpacity testID={`minus-${item.id}`} style={styles.qtyBtn} onPress={() => updateQty(item.id, -50)}>
-                <Ionicons name="remove" size={16} color="#FFF" />
-              </TouchableOpacity>
-              <Text style={styles.qtyText}>{inCart.grams}g</Text>
-              <TouchableOpacity testID={`plus-${item.id}`} style={styles.qtyBtn} onPress={() => updateQty(item.id, 50)}>
-                <Ionicons name="add" size={16} color="#FFF" />
-              </TouchableOpacity>
-            </View>
+            isReadyMade ? (
+              // Ready-made: plate counter
+              <View style={[styles.qtyBox, { backgroundColor: PURPLE }]}>
+                <TouchableOpacity testID={`minus-${item.id}`} style={styles.qtyBtn} onPress={() => updateQty(item.id, -1, true)}>
+                  <Ionicons name="remove" size={16} color="#FFF" />
+                </TouchableOpacity>
+                <Text style={styles.qtyText}>{inCart.quantity || 1}</Text>
+                <TouchableOpacity testID={`plus-${item.id}`} style={styles.qtyBtn} onPress={() => updateQty(item.id, 1, true)}>
+                  <Ionicons name="add" size={16} color="#FFF" />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              // Single product: gram counter
+              <View style={styles.qtyBox}>
+                <TouchableOpacity testID={`minus-${item.id}`} style={styles.qtyBtn} onPress={() => updateQty(item.id, -50, false)}>
+                  <Ionicons name="remove" size={16} color="#FFF" />
+                </TouchableOpacity>
+                <Text style={styles.qtyText}>{inCart.grams}g</Text>
+                <TouchableOpacity testID={`plus-${item.id}`} style={styles.qtyBtn} onPress={() => updateQty(item.id, 50, false)}>
+                  <Ionicons name="add" size={16} color="#FFF" />
+                </TouchableOpacity>
+              </View>
+            )
           ) : (
-            <TouchableOpacity testID={`add-${item.id}`} style={styles.addBtn} onPress={() => addToCart(item)}>
-              <Text style={styles.addText}>ADD</Text>
-              <Ionicons name="add" size={14} color={Z_RED} />
+            <TouchableOpacity testID={`add-${item.id}`} style={[styles.addBtn, isReadyMade && styles.addBtnReadyMade]} onPress={() => addToCart(item)}>
+              <Text style={[styles.addText, isReadyMade && { color: PURPLE }]}>ADD</Text>
+              <Ionicons name="add" size={14} color={isReadyMade ? PURPLE : Z_RED} />
             </TouchableOpacity>
           )}
         </View>
