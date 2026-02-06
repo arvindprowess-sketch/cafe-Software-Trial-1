@@ -484,15 +484,22 @@ async def create_single_product(data: SingleProductCreate, user=Depends(get_curr
 
 @api_router.post("/products/ready-made")
 async def create_ready_made_meal(data: ReadyMadeMealCreate, user=Depends(get_current_user)):
-    """Create ready-made meal with AI description and auto nutrition from ingredients"""
+    """Create ready-made meal with AI description, AI-generated image, and auto nutrition"""
     if user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Admin only")
     import random
     nutrition = await ai_calculate_ready_made_nutrition(data.name, data.ingredients)
     cost_per_100g = round((data.price / data.serving_grams) * 100, 2)
     description = await ai_generate_description(data.name, "ready_made", data.ingredients)
-    # Use first uploaded image or find one
-    image_url = data.images[0] if data.images else find_food_image(data.name)
+    # Use admin-uploaded image (base64) if provided, else AI generates one
+    if data.images and len(data.images) > 0:
+        image_url = data.images[0]
+    else:
+        image_url = await ai_generate_food_image(data.name, "ready_made", data.ingredients)
+    
+    # Check non-veg from ingredients
+    is_nonveg = any(kw in " ".join(data.ingredients).lower() for kw in NON_VEG_KEYWORDS) or detect_diet_type(data.name) == "non-veg"
+    
     product_id = str(uuid.uuid4())
     product = {
         "id": product_id,
@@ -503,9 +510,9 @@ async def create_ready_made_meal(data: ReadyMadeMealCreate, user=Depends(get_cur
         "serving_grams": data.serving_grams,
         "ingredients": data.ingredients,
         "images": data.images,
-        "available_qty_grams": data.serving_grams * 20,  # 20 servings default
+        "available_qty_grams": data.serving_grams * 20,
         "category": nutrition["category"],
-        "diet_type": detect_diet_type(data.name) if any(kw in " ".join(data.ingredients).lower() for kw in NON_VEG_KEYWORDS) else "veg",
+        "diet_type": "non-veg" if is_nonveg else "veg",
         "calories_per_100g": nutrition["calories"],
         "protein_per_100g": nutrition["protein"],
         "carbs_per_100g": nutrition["carbs"],
