@@ -447,26 +447,34 @@ async def ai_generate_description(product_name: str, product_type: str, ingredie
         logger.error(f"AI description error: {e}")
         return f"Fresh {product_name}, nutritious and delicious"
 
-async def ai_calculate_ready_made_nutrition(dish_name: str, ingredients: List[str]) -> Dict:
-    """Use AI + NUTRITION_DB to estimate combined nutrition for a ready-made meal"""
+async def ai_calculate_ready_made_nutrition(dish_name: str, ingredients: List[Dict]) -> Dict:
+    """Use NUTRITION_DB to calculate combined nutrition for a ready-made meal based on actual grams"""
     total_cal, total_protein, total_carbs, total_fat = 0, 0, 0, 0
-    matched = 0
+    total_grams = 0
     for ing in ingredients:
-        nutrition = match_nutrition(ing)
-        # Estimate ~100g per ingredient as default portion
-        total_cal += nutrition["calories"]
-        total_protein += nutrition["protein"]
-        total_carbs += nutrition["carbs"]
-        total_fat += nutrition["fat"]
-        matched += 1
-    if matched == 0:
+        ing_name = ing.get("name", "") if isinstance(ing, dict) else ing
+        ing_grams = ing.get("grams_per_serving", 100) if isinstance(ing, dict) else 100
+        nutrition = match_nutrition(ing_name)
+        # Calculate based on actual grams
+        factor = ing_grams / 100
+        total_cal += nutrition["calories"] * factor
+        total_protein += nutrition["protein"] * factor
+        total_carbs += nutrition["carbs"] * factor
+        total_fat += nutrition["fat"] * factor
+        total_grams += ing_grams
+    if total_grams == 0:
         return {"calories": 250, "protein": 15, "carbs": 30, "fat": 8, "category": "Meal"}
     category = "Protein" if total_protein > total_carbs else "Carb" if total_carbs > total_fat else "Meal"
+    # Normalize to per 100g for consistency
     return {
-        "calories": round(total_cal / matched * 3, 1),  # ~3 ingredients avg per serving
-        "protein": round(total_protein / matched * 3, 1),
-        "carbs": round(total_carbs / matched * 3, 1),
-        "fat": round(total_fat / matched * 3, 1),
+        "calories": round(total_cal / total_grams * 100, 1),
+        "protein": round(total_protein / total_grams * 100, 1),
+        "carbs": round(total_carbs / total_grams * 100, 1),
+        "fat": round(total_fat / total_grams * 100, 1),
+        "total_calories": round(total_cal, 1),
+        "total_protein": round(total_protein, 1),
+        "total_carbs": round(total_carbs, 1),
+        "total_fat": round(total_fat, 1),
         "category": category
     }
 
