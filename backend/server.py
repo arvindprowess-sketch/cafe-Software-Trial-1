@@ -238,6 +238,7 @@ async def create_product(data: ProductCreate, user=Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Admin only")
     nutrition = match_nutrition(data.name)
     product_id = str(uuid.uuid4())
+    import random
     product = {
         "id": product_id,
         "name": data.name,
@@ -250,6 +251,8 @@ async def create_product(data: ProductCreate, user=Depends(get_current_user)):
         "fat_per_100g": nutrition["fat"],
         "is_active": True,
         "image_url": data.image_url,
+        "description": data.description or "",
+        "rating": round(random.uniform(3.5, 4.9), 1),
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.products.insert_one(product)
