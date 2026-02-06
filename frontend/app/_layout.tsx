@@ -5,8 +5,8 @@ import { View, StyleSheet } from 'react-native';
 export default function RootLayout() {
   return (
     <View style={styles.container}>
-      <StatusBar style="light" />
-      <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
+      <StatusBar style="dark" />
+      <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right', contentStyle: { backgroundColor: '#FFFFFF' } }}>
         <Stack.Screen name="index" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(admin)" />
@@ -17,5 +17,5 @@ export default function RootLayout() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000000' },
+  container: { flex: 1, backgroundColor: '#FFFFFF' },
 });
