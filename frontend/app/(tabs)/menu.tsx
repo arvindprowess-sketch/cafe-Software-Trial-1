@@ -308,12 +308,12 @@ const styles = StyleSheet.create({
   vegFilterIcon: { width: 16, height: 16, borderRadius: 2, borderWidth: 2, borderColor: 'currentColor', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF' },
   vegDotFilter: { width: 8, height: 8, borderRadius: 4 },
   
-  // Category boxes (more visible)
-  catBar: { backgroundColor: '#FFF', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#EFEFEF' },
-  catContent: { paddingHorizontal: 16, gap: 10 },
-  catBox: { alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderRadius: 14, borderWidth: 2, borderColor: 'transparent', minWidth: 80 },
-  catIconBg: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
-  catBoxText: { fontSize: 13, fontWeight: '700', color: '#1C1C2E' },
+  // Category boxes (more visible but compact)
+  catBar: { backgroundColor: '#FFF', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#EFEFEF' },
+  catContent: { paddingHorizontal: 16, gap: 8 },
+  catBox: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5, borderColor: '#E8E8E8' },
+  catIconBg: { width: 22, height: 22, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
+  catBoxText: { fontSize: 12, fontWeight: '600', color: '#1C1C2E' },
   catPill: { paddingHorizontal: 18, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: '#E8E8E8', backgroundColor: '#FFF' },
   catText: { fontSize: 13, fontWeight: '600', color: '#696969' },
   
