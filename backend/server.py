@@ -521,7 +521,9 @@ async def seed_data():
             "carbs_per_100g": nutrition["carbs"],
             "fat_per_100g": nutrition["fat"],
             "is_active": True,
-            "image_url": None,
+            "image_url": p.get("image_url"),
+            "description": p.get("description", ""),
+            "rating": round(3.5 + (hash(p["name"]) % 15) / 10, 1),
             "created_at": datetime.now(timezone.utc).isoformat()
         }
         await db.products.insert_one(product)
