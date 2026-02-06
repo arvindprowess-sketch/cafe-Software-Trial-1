@@ -240,9 +240,9 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Veg/Non-Veg product classification"
-    - "AI Quick Meal Builder endpoint"
-    - "Reorder endpoint"
+    - "Single Product Creation (POST /api/products/single)"
+    - "Ready-Made Meal Creation (POST /api/products/ready-made)"
+    - "Admin Products List (GET /api/products/all)"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
