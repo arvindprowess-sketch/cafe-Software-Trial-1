@@ -148,6 +148,18 @@ class QuickMealRequest(BaseModel):
     budget: Optional[float] = None
     order_type: str = "dine-in"
 
+class SingleProductCreate(BaseModel):
+    name: str
+    price: float
+    grams: float
+
+class ReadyMadeMealCreate(BaseModel):
+    name: str
+    ingredients: List[str]
+    images: List[str] = []  # base64 encoded images
+    price: float
+    serving_grams: float = 300
+
 # ========== AUTH UTILS ==========
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
