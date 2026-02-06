@@ -4,7 +4,7 @@ import requests
 import os
 import uuid
 
-BASE_URL = os.environ.get('EXPO_PUBLIC_BACKEND_URL')
+BASE_URL = "https://ai-diet-cafe.preview.emergentagent.com"
 
 class TestAuth:
     """Authentication endpoint tests"""
