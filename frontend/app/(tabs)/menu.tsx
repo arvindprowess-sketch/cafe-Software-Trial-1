@@ -169,6 +169,8 @@ const styles = StyleSheet.create({
   itemInfo: { flex: 1, paddingRight: 12 },
   itemVeg: { marginBottom: 4 },
   vegDot: { width: 12, height: 12, borderRadius: 2, borderWidth: 1.5, borderColor: 'transparent' },
+  vegBox: { width: 14, height: 14, borderRadius: 2, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  vegDotSmall: { width: 7, height: 7, borderRadius: 4 },
   itemName: { fontSize: 16, fontWeight: '700', color: '#1C1C2E' },
   itemDesc: { fontSize: 12, color: '#9C9C9C', marginTop: 3, lineHeight: 16 },
   itemMeta: { flexDirection: 'row', alignItems: 'baseline', marginTop: 6, gap: 2 },
