@@ -203,12 +203,64 @@ export default function MenuScreen() {
         </View>
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.catBar} contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}>
-        {CATS.map(c => (
-          <TouchableOpacity key={c} testID={`menu-cat-${c}`} style={[styles.catPill, selectedCat === c && { backgroundColor: Z_RED, borderColor: Z_RED }]} onPress={() => setSelectedCat(c)}>
-            <Text style={[styles.catText, selectedCat === c && { color: '#FFF' }]}>{c}</Text>
-          </TouchableOpacity>
-        ))}
+      {/* ===== VEG / NON-VEG FILTER (HIGHLIGHTED AT TOP) ===== */}
+      <View style={styles.dietFilterRow}>
+        <TouchableOpacity 
+          testID="diet-all"
+          style={[styles.dietFilterBtn, dietFilter === 'all' && styles.dietFilterBtnActive]}
+          onPress={() => setDietFilter('all')}
+        >
+          <Ionicons name="apps" size={16} color={dietFilter === 'all' ? '#FFF' : '#696969'} />
+          <Text style={[styles.dietFilterText, dietFilter === 'all' && { color: '#FFF' }]}>All</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          testID="diet-veg"
+          style={[styles.dietFilterBtn, styles.vegFilterBtn, dietFilter === 'veg' && styles.vegFilterBtnActive]}
+          onPress={() => setDietFilter('veg')}
+        >
+          <View style={styles.vegFilterIcon}>
+            <View style={[styles.vegDotFilter, { backgroundColor: GREEN }]} />
+          </View>
+          <Text style={[styles.dietFilterText, dietFilter === 'veg' && { color: '#FFF' }]}>Veg</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          testID="diet-nonveg"
+          style={[styles.dietFilterBtn, styles.nonVegFilterBtn, dietFilter === 'non-veg' && styles.nonVegFilterBtnActive]}
+          onPress={() => setDietFilter('non-veg')}
+        >
+          <View style={styles.vegFilterIcon}>
+            <View style={[styles.vegDotFilter, { backgroundColor: Z_RED }]} />
+          </View>
+          <Text style={[styles.dietFilterText, dietFilter === 'non-veg' && { color: '#FFF' }]}>Non-Veg</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* ===== CATEGORY BOXES (MORE VISIBLE) ===== */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.catBar} contentContainerStyle={styles.catContent}>
+        {CATS.map(c => {
+          const isActive = selectedCat === c;
+          const icon = c === 'All' ? 'grid' : c === 'Protein' ? 'barbell' : c === 'Carb' ? 'leaf' : c === 'Fat' ? 'water' : 'fast-food';
+          const bgColor = c === 'Protein' ? '#FFE8EA' : c === 'Carb' ? '#FFF5E0' : c === 'Fat' ? '#E8E8FF' : c === 'Meal' ? '#E8FFF0' : '#F5F5F5';
+          const iconColor = c === 'Protein' ? Z_RED : c === 'Carb' ? '#FF9F0A' : c === 'Fat' ? PURPLE : c === 'Meal' ? GREEN : '#696969';
+          
+          return (
+            <TouchableOpacity 
+              key={c} 
+              testID={`menu-cat-${c}`} 
+              style={[
+                styles.catBox, 
+                { backgroundColor: isActive ? iconColor : bgColor },
+                isActive && { borderColor: iconColor }
+              ]} 
+              onPress={() => setSelectedCat(c)}
+            >
+              <View style={[styles.catIconBg, { backgroundColor: isActive ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.05)' }]}>
+                <Ionicons name={icon as any} size={18} color={isActive ? '#FFF' : iconColor} />
+              </View>
+              <Text style={[styles.catBoxText, isActive && { color: '#FFF' }]}>{c}</Text>
+            </TouchableOpacity>
+          );
+        })}
       </ScrollView>
 
       <FlatList
