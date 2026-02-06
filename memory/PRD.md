@@ -40,3 +40,15 @@ Cure.fit-inspired AI Diet Café app redesigned with Zomato-style UI. White/red t
 
 ## V2 Roadmap
 - Razorpay payment, push notifications, Google OAuth, order analytics
+
+## V1.1 - AI Quick Meal Builder (SHIPPED)
+### New Features
+- **AI Quick Meal Builder** on Home screen: Diet preference (Veg/Non-Veg/Both) + Goal + Budget → AI builds complete meal → Order
+- **Veg/Non-Veg indicators** on all product cards across Home and Menu screens
+- **Re-order button** on every past order in Orders tab
+- **diet_type field** added to all products (auto-detected: chicken/fish/egg/kabab = non-veg)
+
+### New API Endpoints
+- POST /api/ai/quick-meal (diet_preference, goal, budget, order_type → AI-built meal)
+- POST /api/orders/{order_id}/reorder (validates availability, returns cart-ready items)
+- POST /api/migrate/diet-type (one-time migration for existing products)
