@@ -449,14 +449,15 @@ async def ai_calculate_ready_made_nutrition(dish_name: str, ingredients: List[st
 
 @api_router.post("/products/single")
 async def create_single_product(data: SingleProductCreate, user=Depends(get_current_user)):
-    """Create single product with AI: auto cost-per-gram, photo, nutrition, description"""
+    """Create single product with AI: auto cost-per-gram, AI-generated photo, nutrition, description"""
     if user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Admin only")
     import random
     nutrition = match_nutrition(data.name)
     cost_per_100g = round((data.price / data.grams) * 100, 2)
-    image_url = find_food_image(data.name)
+    # AI generates description and image in parallel
     description = await ai_generate_description(data.name, "single")
+    image_url = await ai_generate_food_image(data.name, "single")
     product_id = str(uuid.uuid4())
     product = {
         "id": product_id,
