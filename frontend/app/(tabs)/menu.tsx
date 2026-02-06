@@ -21,6 +21,7 @@ export default function MenuScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [orderType, setOrderType] = useState('dine-in');
   const [selectedCat, setSelectedCat] = useState('All');
+  const [dietFilter, setDietFilter] = useState('all'); // 'all', 'veg', 'non-veg'
 
   const loadProducts = useCallback(async () => {
     try { 
