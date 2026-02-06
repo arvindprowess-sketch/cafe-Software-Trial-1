@@ -97,6 +97,7 @@ class ProductCreate(BaseModel):
     cost_per_100g: float
     available_qty_grams: Optional[float] = 10000
     image_url: Optional[str] = None
+    description: Optional[str] = None
 
 class ProductUpdate(BaseModel):
     name: Optional[str] = None
