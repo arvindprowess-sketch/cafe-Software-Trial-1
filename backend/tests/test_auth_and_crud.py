@@ -4,7 +4,7 @@ import requests
 import os
 import uuid
 
-BASE_URL = "https://mobile-app-resume.preview.emergentagent.com"
+BASE_URL = "https://resume-process.preview.emergentagent.com"
 
 class TestAuth:
     """Authentication endpoint tests"""
