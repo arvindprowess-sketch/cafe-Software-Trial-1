@@ -81,7 +81,12 @@ export default function MenuScreen() {
   }, 0);
   const cartItems = cart.length;
 
-  const filtered = products.filter(p => selectedCat === 'All' || p.category === selectedCat);
+  // Filter by both category AND diet type
+  const filtered = products.filter(p => {
+    const catMatch = selectedCat === 'All' || p.category === selectedCat;
+    const dietMatch = dietFilter === 'all' || p.diet_type === dietFilter;
+    return catMatch && dietMatch;
+  });
 
   const goCustomize = () => {
     if (cart.length === 0) { Alert.alert('Empty Cart', 'Add items first'); return; }
