@@ -101,3 +101,98 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: "AI Diet Café App - Adding AI Quick Meal Builder with Veg/Non-Veg preference, Re-order feature, and veg/non-veg indicators"
+
+backend:
+  - task: "Veg/Non-Veg product classification"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "Added diet_type field to NUTRITION_DB, detect_diet_type() function, migration endpoint, and seed data. All 16 products correctly classified."
+
+  - task: "AI Quick Meal Builder endpoint (POST /api/ai/quick-meal)"
+    implemented: true
+    working: "NA"
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "New endpoint accepts diet_preference (veg/non-veg/both), goal, budget, order_type. Filters products, sends to GPT-5.2, returns enriched meal with totals."
+
+  - task: "Reorder endpoint (POST /api/orders/{order_id}/reorder)"
+    implemented: true
+    working: "NA"
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "New endpoint validates items availability and returns enriched cart items for re-ordering."
+
+  - task: "Existing endpoints (auth, products, orders, AI suggest)"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "All existing endpoints preserved. No changes to existing functionality."
+
+frontend:
+  - task: "AI Quick Meal Builder on Home Screen"
+    implemented: false
+    working: "NA"
+    file: "(tabs)/home.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Not yet implemented - backend ready."
+
+  - task: "Re-order button on Orders Screen"
+    implemented: false
+    working: "NA"
+    file: "(tabs)/orders.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Not yet implemented - backend ready."
+
+metadata:
+  created_by: "main_agent"
+  version: "1.0"
+  test_sequence: 1
+  run_ui: false
+
+test_plan:
+  current_focus:
+    - "Veg/Non-Veg product classification"
+    - "AI Quick Meal Builder endpoint"
+    - "Reorder endpoint"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+    - agent: "main"
+      message: "Backend changes complete. Please test: 1) Product diet_type classification (GET /api/products should include diet_type). 2) Quick meal endpoint (POST /api/ai/quick-meal with {diet_preference, goal, budget, order_type}). 3) Reorder is hard to test without existing orders. Admin credentials: admin@dietcafe.com / admin123. Register a customer first to test authenticated endpoints."
