@@ -359,3 +359,44 @@ class TestAI:
         data = response.json()
         assert "suggestions" in data or "summary" in data
         print("✓ AI suggest endpoint responding (may have suggestions or fallback message)")
+
+
+class TestBanners:
+    """Banner endpoint tests for Zomato-style UI"""
+
+    def test_get_banners(self, api_client):
+        """Test GET /banners endpoint (public)"""
+        response = api_client.get(f"{BASE_URL}/api/banners")
+        assert response.status_code == 200, f"Banners endpoint failed: {response.text}"
+        banners = response.json()
+        assert isinstance(banners, list), "Banners should be a list"
+        assert len(banners) > 0, "Should have at least one banner"
+        
+        # Verify banner structure
+        banner = banners[0]
+        required_fields = ['id', 'title', 'subtitle', 'color']
+        for field in required_fields:
+            assert field in banner, f"Missing field in banner: {field}"
+        
+        print(f"✓ Banners endpoint working, returned {len(banners)} banners")
+
+
+class TestZomatoStyleProducts:
+    """Test new Zomato-style product fields (image_url, description, rating)"""
+
+    def test_products_have_zomato_fields(self, api_client):
+        """Test that products have new Zomato-style fields"""
+        response = api_client.get(f"{BASE_URL}/api/products")
+        assert response.status_code == 200
+        products = response.json()
+        assert len(products) > 0, "No products found"
+        
+        # Check for new fields
+        product = products[0]
+        zomato_fields = ['image_url', 'description', 'rating']
+        for field in zomato_fields:
+            assert field in product, f"Missing Zomato-style field: {field}"
+        
+        # Verify data types
+        assert isinstance(product.get('rating'), (int, float)), "Rating should be numeric"
+        print(f"✓ Products have Zomato-style fields (image_url, description, rating)")
