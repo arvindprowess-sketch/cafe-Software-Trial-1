@@ -1,26 +1,32 @@
 {
   "expo": {
-    "name": "frontend",
-    "slug": "frontend",
+    "name": "Diet Cafe",
+    "slug": "diet-cafe",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "frontend",
-    "userInterfaceStyle": "automatic",
+    "scheme": "dietcafe",
+    "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.dietcafe.app",
       "infoPlist": {
-        "NSPhotoLibraryUsageDescription": "Upload dish photos to your café menu"
+        "NSPhotoLibraryUsageDescription": "Upload dish photos to your café menu",
+        "NSCameraUsageDescription": "Take photos of dishes for the menu"
       }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#000"
+        "backgroundColor": "#E23744"
       },
+      "package": "com.dietcafe.app",
       "edgeToEdgeEnabled": true,
-      "permissions": ["READ_EXTERNAL_STORAGE"]
+      "permissions": [
+        "READ_EXTERNAL_STORAGE",
+        "CAMERA"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -32,7 +38,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Upload dish photos to your café menu"
+          "photosPermission": "Upload dish photos to your café menu",
+          "cameraPermission": "Take photos of dishes for the menu"
         }
       ],
       [
@@ -41,7 +48,7 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#000"
+          "backgroundColor": "#E23744"
         }
       ]
     ],
