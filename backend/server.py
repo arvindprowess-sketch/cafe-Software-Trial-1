@@ -491,22 +491,22 @@ async def seed_data():
     if existing > 0:
         return {"message": "Data already seeded"}
     seed_products = [
-        {"name": "Chicken Breast", "cost_per_100g": 45, "available_qty_grams": 5000},
-        {"name": "Paneer Tikka", "cost_per_100g": 35, "available_qty_grams": 3000},
-        {"name": "Egg White", "cost_per_100g": 15, "available_qty_grams": 4000},
-        {"name": "Brown Rice", "cost_per_100g": 8, "available_qty_grams": 8000},
-        {"name": "Dal", "cost_per_100g": 12, "available_qty_grams": 6000},
-        {"name": "Oats", "cost_per_100g": 10, "available_qty_grams": 5000},
-        {"name": "Kabab", "cost_per_100g": 50, "available_qty_grams": 3000},
-        {"name": "Grilled Fish", "cost_per_100g": 55, "available_qty_grams": 2000},
-        {"name": "Sweet Potato", "cost_per_100g": 6, "available_qty_grams": 4000},
-        {"name": "Greek Yogurt", "cost_per_100g": 20, "available_qty_grams": 3000},
-        {"name": "Salad", "cost_per_100g": 8, "available_qty_grams": 5000},
-        {"name": "Sprouts", "cost_per_100g": 10, "available_qty_grams": 3000},
-        {"name": "Quinoa", "cost_per_100g": 25, "available_qty_grams": 2000},
-        {"name": "Soya Chunks", "cost_per_100g": 12, "available_qty_grams": 3000},
-        {"name": "Almonds", "cost_per_100g": 80, "available_qty_grams": 1000},
-        {"name": "Banana", "cost_per_100g": 5, "available_qty_grams": 5000},
+        {"name": "Chicken Breast", "cost_per_100g": 45, "available_qty_grams": 5000, "description": "Grilled lean chicken breast, high protein", "image_url": "https://images.unsplash.com/photo-1632778149955-e80f8ceca2e8?w=400&h=300&fit=crop"},
+        {"name": "Paneer Tikka", "cost_per_100g": 35, "available_qty_grams": 3000, "description": "Spiced cottage cheese, tandoor grilled", "image_url": "https://images.unsplash.com/photo-1567188040759-fb8a883dc6d8?w=400&h=300&fit=crop"},
+        {"name": "Egg White", "cost_per_100g": 15, "available_qty_grams": 4000, "description": "Pure egg whites, zero fat protein", "image_url": "https://images.unsplash.com/photo-1582169296194-e4d644c48063?w=400&h=300&fit=crop"},
+        {"name": "Brown Rice", "cost_per_100g": 8, "available_qty_grams": 8000, "description": "Fiber-rich whole grain brown rice", "image_url": "https://images.unsplash.com/photo-1536304929831-ee1ca9d44726?w=400&h=300&fit=crop"},
+        {"name": "Dal", "cost_per_100g": 12, "available_qty_grams": 6000, "description": "Protein-rich lentil curry", "image_url": "https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=400&h=300&fit=crop"},
+        {"name": "Oats", "cost_per_100g": 10, "available_qty_grams": 5000, "description": "Whole grain oats, perfect for breakfast", "image_url": "https://images.unsplash.com/photo-1517673400267-0251440c45dc?w=400&h=300&fit=crop"},
+        {"name": "Kabab", "cost_per_100g": 50, "available_qty_grams": 3000, "description": "Smoky seekh kabab, charcoal grilled", "image_url": "https://images.unsplash.com/photo-1599487488170-d11ec9c172f0?w=400&h=300&fit=crop"},
+        {"name": "Grilled Fish", "cost_per_100g": 55, "available_qty_grams": 2000, "description": "Fresh fish fillet, herb grilled", "image_url": "https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=400&h=300&fit=crop"},
+        {"name": "Sweet Potato", "cost_per_100g": 6, "available_qty_grams": 4000, "description": "Baked sweet potato, complex carbs", "image_url": "https://images.unsplash.com/photo-1596097635121-14b38c5d7a62?w=400&h=300&fit=crop"},
+        {"name": "Greek Yogurt", "cost_per_100g": 20, "available_qty_grams": 3000, "description": "Thick creamy yogurt, probiotic rich", "image_url": "https://images.unsplash.com/photo-1488477181946-6428a0291777?w=400&h=300&fit=crop"},
+        {"name": "Salad", "cost_per_100g": 8, "available_qty_grams": 5000, "description": "Fresh garden salad mix", "image_url": "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400&h=300&fit=crop"},
+        {"name": "Sprouts", "cost_per_100g": 10, "available_qty_grams": 3000, "description": "Mixed sprouts, nutrient dense", "image_url": "https://images.unsplash.com/photo-1551462147-ff29053bfc14?w=400&h=300&fit=crop"},
+        {"name": "Quinoa", "cost_per_100g": 25, "available_qty_grams": 2000, "description": "Superfood grain, complete protein", "image_url": "https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&h=300&fit=crop"},
+        {"name": "Soya Chunks", "cost_per_100g": 12, "available_qty_grams": 3000, "description": "Plant-based protein powerhouse", "image_url": "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=400&h=300&fit=crop"},
+        {"name": "Almonds", "cost_per_100g": 80, "available_qty_grams": 1000, "description": "Premium California almonds", "image_url": "https://images.unsplash.com/photo-1508061253366-f7da158b6d46?w=400&h=300&fit=crop"},
+        {"name": "Banana", "cost_per_100g": 5, "available_qty_grams": 5000, "description": "Natural energy, potassium rich", "image_url": "https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?w=400&h=300&fit=crop"},
     ]
     for p in seed_products:
         nutrition = match_nutrition(p["name"])
