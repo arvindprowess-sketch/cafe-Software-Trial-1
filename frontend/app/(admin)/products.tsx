@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Modal,
-  SafeAreaView, Alert, ActivityIndicator, RefreshControl, KeyboardAvoidingView,
+  Alert, ActivityIndicator, RefreshControl, KeyboardAvoidingView,
   Platform, ScrollView, Image
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { apiCall } from '../../utils/api';
