@@ -177,7 +177,7 @@ def match_nutrition(product_name: str) -> Dict:
         for word in words:
             if len(word) > 3 and word in key:
                 return val
-    return {"calories": 100, "protein": 5, "carbs": 15, "fat": 3, "category": "Other"}
+    return {"calories": 100, "protein": 5, "carbs": 15, "fat": 3, "category": "Other", "diet_type": detect_diet_type(product_name)}
 
 # ========== AUTH ROUTES ==========
 @api_router.post("/auth/register")
