@@ -519,17 +519,40 @@ async def create_ready_made_meal(data: ReadyMadeMealCreate, user=Depends(get_cur
     if user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Admin only")
     import random
-    nutrition = await ai_calculate_ready_made_nutrition(data.name, data.ingredients)
+    
+    # Convert ingredients to list format for nutrition calculation
+    ingredients_list = [{"name": ing.name, "grams_per_serving": ing.grams_per_serving} for ing in data.ingredients]
+    ingredient_names = [ing.name for ing in data.ingredients]
+    
+    # Try to link ingredients to existing single products for stock tracking
+    linked_ingredients = []
+    for ing in data.ingredients:
+        # Find matching single product
+        product = await db.products.find_one({
+            "product_type": "single",
+            "name": {"$regex": f"^{ing.name}$", "$options": "i"},
+            "is_active": True
+        }, {"_id": 0})
+        linked_ingredients.append({
+            "name": ing.name,
+            "grams_per_serving": ing.grams_per_serving,
+            "product_id": product["id"] if product else None,
+            "linked": product is not None
+        })
+    
+    nutrition = await ai_calculate_ready_made_nutrition(data.name, ingredients_list)
     cost_per_100g = round((data.price / data.serving_grams) * 100, 2)
-    description = await ai_generate_description(data.name, "ready_made", data.ingredients)
+    description = await ai_generate_description(data.name, "ready_made", ingredient_names)
+    
     # Use admin-uploaded image (base64) if provided, else AI generates one
     if data.images and len(data.images) > 0:
         image_url = data.images[0]
     else:
-        image_url = await ai_generate_food_image(data.name, "ready_made", data.ingredients)
+        image_url = await ai_generate_food_image(data.name, "ready_made", ingredient_names)
     
     # Check non-veg from ingredients
-    is_nonveg = any(kw in " ".join(data.ingredients).lower() for kw in NON_VEG_KEYWORDS) or detect_diet_type(data.name) == "non-veg"
+    all_ingredients_text = " ".join(ingredient_names).lower()
+    is_nonveg = any(kw in all_ingredients_text for kw in NON_VEG_KEYWORDS) or detect_diet_type(data.name) == "non-veg"
     
     product_id = str(uuid.uuid4())
     product = {
@@ -539,15 +562,20 @@ async def create_ready_made_meal(data: ReadyMadeMealCreate, user=Depends(get_cur
         "cost_per_100g": cost_per_100g,
         "fixed_price": data.price,
         "serving_grams": data.serving_grams,
-        "ingredients": data.ingredients,
+        "ingredients": linked_ingredients,  # Now stores grams per serving with product links
         "images": data.images,
-        "available_qty_grams": data.serving_grams * 20,
+        "is_editable": data.is_editable,  # Whether customer can modify
+        "available_servings": 20,  # Number of plates available (will check ingredient stock)
         "category": nutrition["category"],
         "diet_type": "non-veg" if is_nonveg else "veg",
         "calories_per_100g": nutrition["calories"],
         "protein_per_100g": nutrition["protein"],
         "carbs_per_100g": nutrition["carbs"],
         "fat_per_100g": nutrition["fat"],
+        "total_calories_per_serving": nutrition.get("total_calories", 0),
+        "total_protein_per_serving": nutrition.get("total_protein", 0),
+        "total_carbs_per_serving": nutrition.get("total_carbs", 0),
+        "total_fat_per_serving": nutrition.get("total_fat", 0),
         "is_active": True,
         "image_url": image_url,
         "description": description,
@@ -556,6 +584,36 @@ async def create_ready_made_meal(data: ReadyMadeMealCreate, user=Depends(get_cur
     }
     await db.products.insert_one(product)
     return {k: v for k, v in product.items() if k != "_id"}
+
+# ========== STOCK CHECK FOR READY-MADE DISHES ==========
+async def check_ready_made_stock(product_id: str, quantity: int = 1) -> Dict:
+    """Check if all ingredients have sufficient stock for the requested quantity"""
+    product = await db.products.find_one({"id": product_id, "product_type": "ready_made"}, {"_id": 0})
+    if not product:
+        return {"available": False, "reason": "Product not found"}
+    
+    insufficient = []
+    for ing in product.get("ingredients", []):
+        if ing.get("product_id"):
+            single_product = await db.products.find_one({"id": ing["product_id"]}, {"_id": 0})
+            if single_product:
+                required_grams = ing["grams_per_serving"] * quantity
+                available = single_product.get("available_qty_grams", 0)
+                if available < required_grams:
+                    insufficient.append({
+                        "name": ing["name"],
+                        "required": required_grams,
+                        "available": available
+                    })
+    
+    if insufficient:
+        return {"available": False, "reason": "Insufficient stock", "items": insufficient}
+    return {"available": True}
+
+@api_router.get("/products/{product_id}/check-stock")
+async def check_product_stock(product_id: str, quantity: int = 1):
+    """Check stock availability for a ready-made dish"""
+    return await check_ready_made_stock(product_id, quantity)
 
 # ========== ORDER ROUTES ==========
 @api_router.post("/orders")
