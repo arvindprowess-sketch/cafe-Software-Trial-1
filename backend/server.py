@@ -374,6 +374,37 @@ def find_food_image(name: str) -> str:
             return url
     return FOOD_IMAGES["default"]
 
+# ========== AI IMAGE GENERATION ==========
+async def ai_generate_food_image(product_name: str, product_type: str, ingredients: List[str] = None) -> str:
+    """Generate a food product image using OpenAI gpt-image-1, return as base64 data URI"""
+    try:
+        from emergentintegrations.llm.openai.image_generation import OpenAIImageGeneration
+        api_key = os.environ.get('EMERGENT_LLM_KEY', '')
+        if not api_key:
+            return find_food_image(product_name)  # fallback
+
+        image_gen = OpenAIImageGeneration(api_key=api_key)
+
+        if product_type == "ready_made" and ingredients:
+            prompt = f"Professional food photography of an Indian dish called '{product_name}' made with {', '.join(ingredients)}. Served beautifully on a clean plate, top-down view, soft natural lighting, restaurant quality, appetizing and vibrant colors, white background."
+        else:
+            prompt = f"Professional food photography of fresh {product_name} for a fitness diet café. Clean minimalist presentation, top-down view, soft natural lighting, vibrant colors, white clean background, restaurant quality."
+
+        images = await image_gen.generate_images(
+            prompt=prompt,
+            model="gpt-image-1",
+            number_of_images=1
+        )
+
+        if images and len(images) > 0:
+            image_base64 = base64.b64encode(images[0]).decode('utf-8')
+            return f"data:image/png;base64,{image_base64}"
+        else:
+            return find_food_image(product_name)
+    except Exception as e:
+        logger.error(f"AI image generation error: {e}")
+        return find_food_image(product_name)  # fallback to static bank
+
 # ========== AI-POWERED PRODUCT CREATION ==========
 async def ai_generate_description(product_name: str, product_type: str, ingredients: List[str] = None) -> str:
     try:
