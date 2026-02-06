@@ -162,6 +162,51 @@ backend:
           agent: "main"
           comment: "All existing endpoints preserved. No changes to existing functionality."
 
+  - task: "Single Product Creation (POST /api/products/single)"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "New endpoint for single product creation with AI features: auto cost-per-gram calculation, AI-generated description, automatic image URL finding, nutrition detection."
+        - working: true
+          agent: "testing"
+          comment: "TESTED: POST /api/products/single works perfectly. Verified Mushroom (₹80/1000g) creates product_type='single', cost_per_100g=8.0, diet_type='veg', with AI-generated description, unsplash image URL, and correct nutrition (22cal/100g). All AI features functional."
+
+  - task: "Ready-Made Meal Creation (POST /api/products/ready-made)"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "New endpoint for ready-made meal creation with ingredients array, AI nutrition calculation from combined ingredients, and diet type detection."
+        - working: true
+          agent: "testing"
+          comment: "TESTED: POST /api/products/ready-made works perfectly for both veg and non-veg detection. Paneer Butter Masala (veg ingredients) correctly classified as diet_type='veg', Egg Curry correctly detected as 'non-veg'. AI generates descriptions, combines nutrition from ingredients array."
+
+  - task: "Admin Products List (GET /api/products/all)"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Enhanced admin endpoint to show all products including new product_type field to distinguish between 'single' and 'ready_made' products."
+        - working: true
+          agent: "testing"
+          comment: "TESTED: GET /api/products/all works correctly. Shows 21 products total including newly created products with correct product_type field. All 3 new products (Mushroom=single, Paneer Butter Masala=ready_made, Egg Curry=ready_made) found with proper classification."
+
 frontend:
   - task: "AI Quick Meal Builder on Home Screen"
     implemented: false
