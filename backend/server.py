@@ -254,6 +254,7 @@ async def create_product(data: ProductCreate, user=Depends(get_current_user)):
         "cost_per_100g": data.cost_per_100g,
         "available_qty_grams": data.available_qty_grams or 10000,
         "category": nutrition["category"],
+        "diet_type": nutrition.get("diet_type", detect_diet_type(data.name)),
         "calories_per_100g": nutrition["calories"],
         "protein_per_100g": nutrition["protein"],
         "carbs_per_100g": nutrition["carbs"],
