@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-  View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Modal,
-  SafeAreaView, Alert, ActivityIndicator, RefreshControl, KeyboardAvoidingView, Platform
-} from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Modal, SafeAreaView, Alert, ActivityIndicator, RefreshControl, KeyboardAvoidingView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { apiCall } from '../../utils/api';
+
+const Z_RED = '#E23744';
 
 export default function ProductsScreen() {
   const [products, setProducts] = useState<any[]>([]);
@@ -16,157 +15,71 @@ export default function ProductsScreen() {
   const [newQty, setNewQty] = useState('10000');
   const [saving, setSaving] = useState(false);
 
-  const loadProducts = useCallback(async () => {
-    try { const data = await apiCall('/products/all'); setProducts(data); }
-    catch (e) {} finally { setLoading(false); }
-  }, []);
-
-  useEffect(() => { loadProducts(); }, []);
-  const onRefresh = async () => { setRefreshing(true); await loadProducts(); setRefreshing(false); };
+  const load = useCallback(async () => { try { setProducts(await apiCall('/products/all')); } catch (e) {} finally { setLoading(false); } }, []);
+  useEffect(() => { load(); }, []);
+  const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
 
   const addProduct = async () => {
-    if (!newName || !newCost) { Alert.alert('Error', 'Name and cost are required'); return; }
+    if (!newName || !newCost) { Alert.alert('Error', 'Name and cost required'); return; }
     setSaving(true);
-    try {
-      await apiCall('/products', {
-        method: 'POST',
-        body: { name: newName, cost_per_100g: parseFloat(newCost), available_qty_grams: parseFloat(newQty) || 10000 }
-      });
-      setShowModal(false);
-      setNewName(''); setNewCost(''); setNewQty('10000');
-      await loadProducts();
-    } catch (e: any) { Alert.alert('Error', e.message); }
-    finally { setSaving(false); }
+    try { await apiCall('/products', { method: 'POST', body: { name: newName, cost_per_100g: parseFloat(newCost), available_qty_grams: parseFloat(newQty) || 10000 } }); setShowModal(false); setNewName(''); setNewCost(''); setNewQty('10000'); await load(); }
+    catch (e: any) { Alert.alert('Error', e.message); } finally { setSaving(false); }
   };
 
-  const toggleActive = async (product: any) => {
-    try {
-      await apiCall(`/products/${product.id}`, {
-        method: 'PUT', body: { is_active: !product.is_active }
-      });
-      await loadProducts();
-    } catch (e: any) { Alert.alert('Error', e.message); }
+  const toggleActive = async (p: any) => {
+    try { await apiCall(`/products/${p.id}`, { method: 'PUT', body: { is_active: !p.is_active } }); await load(); }
+    catch (e: any) { Alert.alert('Error', e.message); }
   };
 
-  const deleteProduct = (product: any) => {
-    Alert.alert('Delete', `Remove ${product.name}?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete', style: 'destructive',
-        onPress: async () => {
-          try { await apiCall(`/products/${product.id}`, { method: 'DELETE' }); await loadProducts(); }
-          catch (e: any) { Alert.alert('Error', e.message); }
-        }
-      }
-    ]);
-  };
+  const deleteProduct = (p: any) => Alert.alert('Delete', `Remove ${p.name}?`, [{ text: 'Cancel' }, { text: 'Delete', style: 'destructive', onPress: async () => { try { await apiCall(`/products/${p.id}`, { method: 'DELETE' }); await load(); } catch (e: any) { Alert.alert('Error', e.message); } } }]);
 
   const renderProduct = ({ item }: { item: any }) => (
-    <View style={[styles.card, !item.is_active && styles.cardInactive]} testID={`admin-product-${item.id}`}>
+    <View style={[styles.card, !item.is_active && { opacity: 0.5 }]} testID={`admin-product-${item.id}`}>
       <View style={styles.cardTop}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.productName}>{item.name}</Text>
-          <Text style={styles.productMeta}>
-            {item.category} • ₹{item.cost_per_100g}/100g
-          </Text>
+          <Text style={styles.pName}>{item.name}</Text>
+          <Text style={styles.pMeta}>{item.category} • ₹{item.cost_per_100g}/100g</Text>
         </View>
-        <View style={styles.cardActions}>
-          <TouchableOpacity
-            testID={`toggle-${item.id}`}
-            style={[styles.statusDot, item.is_active && styles.statusActive]}
-            onPress={() => toggleActive(item)}
-          >
-            <Text style={styles.statusText}>{item.is_active ? 'ON' : 'OFF'}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity testID={`delete-${item.id}`} onPress={() => deleteProduct(item)}>
-            <Ionicons name="trash" size={18} color="#FF453A" />
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity testID={`toggle-${item.id}`} style={[styles.toggle, item.is_active && styles.toggleOn]} onPress={() => toggleActive(item)}>
+          <Text style={styles.toggleText}>{item.is_active ? 'LIVE' : 'OFF'}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity testID={`delete-${item.id}`} onPress={() => deleteProduct(item)} style={{ padding: 4 }}><Ionicons name="trash-outline" size={18} color={Z_RED} /></TouchableOpacity>
       </View>
-      <View style={styles.nutritionRow}>
+      <View style={styles.nutriRow}>
         <Text style={styles.nutri}>{item.calories_per_100g} cal</Text>
         <Text style={styles.nutri}>P: {item.protein_per_100g}g</Text>
         <Text style={styles.nutri}>C: {item.carbs_per_100g}g</Text>
         <Text style={styles.nutri}>F: {item.fat_per_100g}g</Text>
-        <Text style={[styles.nutri, { color: item.available_qty_grams <= 500 ? '#FF453A' : '#32D74B' }]}>
-          Stock: {Math.round(item.available_qty_grams)}g
-        </Text>
+        <Text style={[styles.nutri, { color: item.available_qty_grams <= 500 ? Z_RED : '#267E3E' }]}>Stock: {Math.round(item.available_qty_grams)}g</Text>
       </View>
     </View>
   );
 
-  if (loading) {
-    return <SafeAreaView style={styles.safe}><View style={styles.center}><ActivityIndicator size="large" color="#FF3B30" /></View></SafeAreaView>;
-  }
+  if (loading) return <SafeAreaView style={styles.safe}><View style={styles.center}><ActivityIndicator size="large" color={Z_RED} /></View></SafeAreaView>;
 
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
         <Text style={styles.title}>Products</Text>
         <TouchableOpacity testID="add-product-btn" style={styles.addBtn} onPress={() => setShowModal(true)}>
-          <Ionicons name="add" size={20} color="#FFF" />
-          <Text style={styles.addBtnText}>ADD</Text>
+          <Ionicons name="add" size={18} color="#FFF" /><Text style={styles.addText}>Add</Text>
         </TouchableOpacity>
       </View>
-
-      <FlatList
-        data={products}
-        keyExtractor={item => item.id}
-        renderItem={renderProduct}
-        contentContainerStyle={styles.list}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FF3B30" />}
-      />
+      <FlatList data={products} keyExtractor={i => i.id} renderItem={renderProduct} contentContainerStyle={styles.list} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Z_RED} />} />
 
       <Modal visible={showModal} animationType="slide" transparent>
         <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add Product</Text>
-              <TouchableOpacity testID="close-modal-btn" onPress={() => setShowModal(false)}>
-                <Ionicons name="close-circle" size={28} color="#48484A" />
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.modalHint}>System will auto-detect nutrition & category</Text>
-
+            <View style={styles.modalHead}><Text style={styles.modalTitle}>Add Product</Text><TouchableOpacity testID="close-modal-btn" onPress={() => setShowModal(false)}><Ionicons name="close" size={24} color="#9C9C9C" /></TouchableOpacity></View>
+            <Text style={styles.hint}>Nutrition & category auto-detected</Text>
             <Text style={styles.inputLabel}>Product Name</Text>
-            <TextInput
-              testID="product-name-input"
-              style={styles.input}
-              value={newName}
-              onChangeText={setNewName}
-              placeholder="e.g. Chicken Breast, Paneer Tikka"
-              placeholderTextColor="#48484A"
-            />
-
+            <TextInput testID="product-name-input" style={styles.input} value={newName} onChangeText={setNewName} placeholder="e.g. Chicken Breast" placeholderTextColor="#B0B0B0" />
             <Text style={styles.inputLabel}>Cost per 100g (₹)</Text>
-            <TextInput
-              testID="product-cost-input"
-              style={styles.input}
-              value={newCost}
-              onChangeText={setNewCost}
-              placeholder="₹"
-              placeholderTextColor="#48484A"
-              keyboardType="decimal-pad"
-            />
-
-            <Text style={styles.inputLabel}>Available Quantity (grams)</Text>
-            <TextInput
-              testID="product-qty-input"
-              style={styles.input}
-              value={newQty}
-              onChangeText={setNewQty}
-              placeholder="grams"
-              placeholderTextColor="#48484A"
-              keyboardType="number-pad"
-            />
-
-            <TouchableOpacity
-              testID="save-product-btn"
-              style={styles.saveBtn}
-              onPress={addProduct}
-              disabled={saving}
-            >
-              {saving ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveBtnText}>ADD PRODUCT</Text>}
+            <TextInput testID="product-cost-input" style={styles.input} value={newCost} onChangeText={setNewCost} placeholder="₹" placeholderTextColor="#B0B0B0" keyboardType="decimal-pad" />
+            <Text style={styles.inputLabel}>Available Quantity (g)</Text>
+            <TextInput testID="product-qty-input" style={styles.input} value={newQty} onChangeText={setNewQty} placeholder="grams" placeholderTextColor="#B0B0B0" keyboardType="number-pad" />
+            <TouchableOpacity testID="save-product-btn" style={styles.saveBtn} onPress={addProduct} disabled={saving}>
+              {saving ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveBtnText}>Add Product</Text>}
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
@@ -176,55 +89,29 @@ export default function ProductsScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#000' },
+  safe: { flex: 1, backgroundColor: '#F8F8F8' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    padding: 16, paddingTop: 8,
-  },
-  title: { fontSize: 28, fontWeight: '800', color: '#FFF' },
-  addBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: '#FF3B30', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10,
-  },
-  addBtnText: { color: '#FFF', fontSize: 14, fontWeight: '700' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, paddingTop: 8, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#EFEFEF' },
+  title: { fontSize: 24, fontWeight: '800', color: '#1C1C2E' },
+  addBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: Z_RED, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
+  addText: { color: '#FFF', fontSize: 13, fontWeight: '700' },
   list: { padding: 16 },
-  card: {
-    backgroundColor: '#121212', borderRadius: 14, padding: 14, marginBottom: 10,
-    borderWidth: 1, borderColor: '#2C2C2E',
-  },
-  cardInactive: { opacity: 0.5 },
-  cardTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  productName: { fontSize: 16, fontWeight: '700', color: '#FFF' },
-  productMeta: { fontSize: 12, color: '#8E8E93', marginTop: 2 },
-  cardActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  statusDot: {
-    paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8,
-    backgroundColor: '#2C2C2E',
-  },
-  statusActive: { backgroundColor: '#32D74B' },
-  statusText: { fontSize: 11, fontWeight: '700', color: '#FFF' },
-  nutritionRow: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
-  nutri: { fontSize: 11, color: '#8E8E93' },
-  modalOverlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.7)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: '#1C1C1E', borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    padding: 24, paddingBottom: 40,
-  },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  modalTitle: { fontSize: 22, fontWeight: '800', color: '#FFF' },
-  modalHint: { color: '#8E8E93', fontSize: 12, marginBottom: 20 },
-  inputLabel: { color: '#8E8E93', fontSize: 12, fontWeight: '600', marginBottom: 6, marginTop: 10 },
-  input: {
-    backgroundColor: '#2C2C2E', borderRadius: 10, padding: 14,
-    color: '#FFF', fontSize: 16,
-  },
-  saveBtn: {
-    backgroundColor: '#FF3B30', borderRadius: 12, paddingVertical: 16,
-    alignItems: 'center', marginTop: 20,
-  },
-  saveBtnText: { color: '#FFF', fontSize: 16, fontWeight: '700', letterSpacing: 1 },
+  card: { backgroundColor: '#FFF', borderRadius: 12, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#EFEFEF' },
+  cardTop: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
+  pName: { fontSize: 15, fontWeight: '700', color: '#1C1C2E' },
+  pMeta: { fontSize: 12, color: '#9C9C9C', marginTop: 2 },
+  toggle: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, backgroundColor: '#E8E8E8' },
+  toggleOn: { backgroundColor: '#267E3E' },
+  toggleText: { fontSize: 10, fontWeight: '700', color: '#FFF' },
+  nutriRow: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
+  nutri: { fontSize: 11, color: '#9C9C9C' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 },
+  modalHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  modalTitle: { fontSize: 20, fontWeight: '800', color: '#1C1C2E' },
+  hint: { color: '#9C9C9C', fontSize: 12, marginBottom: 16 },
+  inputLabel: { color: '#696969', fontSize: 12, fontWeight: '600', marginBottom: 4, marginTop: 8 },
+  input: { backgroundColor: '#F5F5F5', borderRadius: 8, padding: 12, color: '#1C1C2E', fontSize: 15, borderWidth: 1, borderColor: '#EFEFEF' },
+  saveBtn: { backgroundColor: Z_RED, borderRadius: 10, paddingVertical: 14, alignItems: 'center', marginTop: 16 },
+  saveBtnText: { color: '#FFF', fontSize: 15, fontWeight: '700' },
 });
