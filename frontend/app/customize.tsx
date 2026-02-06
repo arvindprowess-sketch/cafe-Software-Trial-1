@@ -52,7 +52,8 @@ export default function CustomizeScreen() {
     try {
       const orderItems = items.filter(i => i.grams > 0).map(i => ({ product_id: i.id, product_name: i.name, grams: i.grams, price: (i.grams / 100) * i.cost_per_100g, calories: (i.grams / 100) * i.calories_per_100g, protein: (i.grams / 100) * i.protein_per_100g, carbs: (i.grams / 100) * i.carbs_per_100g, fat: (i.grams / 100) * i.fat_per_100g }));
       await apiCall('/orders', { method: 'POST', body: { order_type: orderType, items: orderItems, total_price: totals.price, total_calories: totals.calories, total_protein: totals.protein, total_carbs: totals.carbs, total_fat: totals.fat, fitness_goal: goal || null, budget: budget ? parseFloat(budget) : null } });
-      Alert.alert('Order Placed!', `Total: ₹${Math.round(totals.price + extra)}`, [{ text: 'View Orders', onPress: () => router.replace('/(tabs)/orders') }]);
+      Alert.alert('Order Placed!', `Total: ₹${Math.round(totals.price + extra)}`);
+      setTimeout(() => router.replace('/(tabs)/orders'), 1500);
     } catch (e: any) { Alert.alert('Error', e.message); } finally { setOrdering(false); }
   };
 
