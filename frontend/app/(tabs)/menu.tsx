@@ -295,9 +295,28 @@ const styles = StyleSheet.create({
   typeChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, backgroundColor: '#F5F5F5', borderWidth: 1, borderColor: '#E8E8E8' },
   typeChipActive: { backgroundColor: Z_RED, borderColor: Z_RED },
   typeText: { fontSize: 12, fontWeight: '600', color: '#696969' },
-  catBar: { backgroundColor: '#FFF', paddingVertical: 10 },
+  
+  // Diet filter (Veg/Non-Veg)
+  dietFilterRow: { flexDirection: 'row', backgroundColor: '#FFF', paddingHorizontal: 16, paddingVertical: 12, gap: 10, borderBottomWidth: 1, borderBottomColor: '#EFEFEF' },
+  dietFilterBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, borderRadius: 12, backgroundColor: '#F5F5F5', borderWidth: 2, borderColor: '#E8E8E8' },
+  dietFilterBtnActive: { backgroundColor: '#1C1C2E', borderColor: '#1C1C2E' },
+  vegFilterBtn: { borderColor: '#D0F0D0' },
+  vegFilterBtnActive: { backgroundColor: GREEN, borderColor: GREEN },
+  nonVegFilterBtn: { borderColor: '#FFE0E0' },
+  nonVegFilterBtnActive: { backgroundColor: Z_RED, borderColor: Z_RED },
+  dietFilterText: { fontSize: 14, fontWeight: '700', color: '#696969' },
+  vegFilterIcon: { width: 16, height: 16, borderRadius: 2, borderWidth: 2, borderColor: 'currentColor', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF' },
+  vegDotFilter: { width: 8, height: 8, borderRadius: 4 },
+  
+  // Category boxes (more visible)
+  catBar: { backgroundColor: '#FFF', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#EFEFEF' },
+  catContent: { paddingHorizontal: 16, gap: 10 },
+  catBox: { alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderRadius: 14, borderWidth: 2, borderColor: 'transparent', minWidth: 80 },
+  catIconBg: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
+  catBoxText: { fontSize: 13, fontWeight: '700', color: '#1C1C2E' },
   catPill: { paddingHorizontal: 18, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: '#E8E8E8', backgroundColor: '#FFF' },
   catText: { fontSize: 13, fontWeight: '600', color: '#696969' },
+  
   list: { padding: 16, paddingBottom: 100 },
   sep: { height: 10 },
   itemCard: { flexDirection: 'row', backgroundColor: '#FFF', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#EFEFEF' },
