@@ -384,7 +384,7 @@ export default function ProductsScreen() {
 
               <TouchableOpacity testID="save-ready-btn" style={[styles.saveBtn, { backgroundColor: PURPLE }]} onPress={saveReady} disabled={saving}>
                 {saving ? (
-                  <View style={styles.savingRow}><ActivityIndicator color="#FFF" size="small" /><Text style={styles.saveBtnText}>AI is working...</Text></View>
+                  <View style={styles.savingRow}><ActivityIndicator color="#FFF" size="small" /><Text style={styles.saveBtnText}>AI generating photo & details...</Text></View>
                 ) : (
                   <View style={styles.savingRow}><Ionicons name="sparkles" size={16} color="#FFF" /><Text style={styles.saveBtnText}>Add Meal with AI</Text></View>
                 )}
