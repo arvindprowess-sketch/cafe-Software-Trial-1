@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Image,
-  RefreshControl, SafeAreaView, FlatList, Dimensions, ActivityIndicator, Alert
+  RefreshControl, FlatList, Dimensions, ActivityIndicator, Alert
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { apiCall, getStoredUser } from '../../utils/api';
