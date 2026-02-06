@@ -9,7 +9,9 @@ import { useRouter } from 'expo-router';
 import { apiCall } from '../../utils/api';
 
 const Z_RED = '#E23744';
-const CATS = ['All', 'Protein', 'Carb', 'Fat'];
+const GREEN = '#267E3E';
+const PURPLE = '#5B5FE0';
+const CATS = ['All', 'Protein', 'Carb', 'Fat', 'Meal'];
 
 export default function MenuScreen() {
   const router = useRouter();
@@ -21,20 +23,48 @@ export default function MenuScreen() {
   const [selectedCat, setSelectedCat] = useState('All');
 
   const loadProducts = useCallback(async () => {
-    try { const data = await apiCall('/products'); setProducts(data.filter((p: any) => p.available_qty_grams > 0)); }
+    try { 
+      const data = await apiCall('/products'); 
+      // Filter products with available stock (check both qty and servings)
+      setProducts(data.filter((p: any) => {
+        if (p.product_type === 'ready_made') {
+          return p.is_active !== false;
+        }
+        return p.available_qty_grams > 0;
+      })); 
+    }
     catch (e) {} finally { setLoading(false); }
   }, []);
 
   useEffect(() => { loadProducts(); }, []);
   const onRefresh = async () => { setRefreshing(true); await loadProducts(); setRefreshing(false); };
 
-  const addToCart = (product: any) => {
+  // Add single product to cart (by grams)
+  const addSingleToCart = (product: any) => {
     const exists = cart.find(c => c.id === product.id);
-    if (exists) setCart(cart.map(c => c.id === product.id ? { ...c, grams: c.grams + 100 } : c));
-    else setCart([...cart, { ...product, grams: 100 }]);
+    if (exists) {
+      setCart(cart.map(c => c.id === product.id ? { ...c, grams: c.grams + 100 } : c));
+    } else {
+      setCart([...cart, { ...product, grams: 100, quantity: 1 }]);
+    }
   };
-  const removeFromCart = (id: string) => setCart(cart.filter(c => c.id !== id));
-  const updateQty = (id: string, delta: number) => {
+
+  // Add ready-made dish to cart (by plates)
+  const addReadyMadeToCart = (product: any) => {
+    const exists = cart.find(c => c.id === product.id);
+    if (exists) {
+      setCart(cart.map(c => c.id === product.id ? { ...c, quantity: c.quantity + 1 } : c));
+    } else {
+      setCart([...cart, { 
+        ...product, 
+        quantity: 1, 
+        grams: product.serving_grams || 300 
+      }]);
+    }
+  };
+
+  // Update single product quantity (grams)
+  const updateSingleQty = (id: string, delta: number) => {
     setCart(cart.map(c => {
       if (c.id !== id) return c;
       const newG = c.grams + delta;
@@ -42,8 +72,23 @@ export default function MenuScreen() {
     }).filter(c => c.grams > 0));
   };
 
-  const cartTotal = cart.reduce((s, i) => s + (i.grams / 100) * i.cost_per_100g, 0);
-  const cartItems = cart.reduce((s, i) => s + 1, 0);
+  // Update ready-made dish quantity (plates)
+  const updateReadyMadeQty = (id: string, delta: number) => {
+    setCart(cart.map(c => {
+      if (c.id !== id) return c;
+      const newQty = c.quantity + delta;
+      return newQty > 0 ? { ...c, quantity: newQty, grams: (c.serving_grams || 300) * newQty } : c;
+    }).filter(c => c.quantity > 0));
+  };
+
+  // Calculate cart totals
+  const cartTotal = cart.reduce((s, i) => {
+    if (i.product_type === 'ready_made') {
+      return s + (i.fixed_price || i.cost_per_100g * (i.serving_grams || 300) / 100) * i.quantity;
+    }
+    return s + (i.grams / 100) * i.cost_per_100g;
+  }, 0);
+  const cartItems = cart.length;
 
   const filtered = products.filter(p => selectedCat === 'All' || p.category === selectedCat);
 
@@ -54,50 +99,104 @@ export default function MenuScreen() {
 
   const renderProduct = ({ item }: { item: any }) => {
     const inCart = cart.find(c => c.id === item.id);
+    const isReadyMade = item.product_type === 'ready_made';
+    const isEditable = item.is_editable;
+    
+    // Price display
+    const displayPrice = isReadyMade 
+      ? (item.fixed_price || Math.round(item.cost_per_100g * (item.serving_grams || 300) / 100))
+      : item.cost_per_100g;
+    const priceUnit = isReadyMade ? '/plate' : '/100g';
+    
+    // Nutrition display - for ready-made, show per serving totals
+    const displayCal = isReadyMade ? (item.total_calories_per_serving || item.calories_per_100g) : item.calories_per_100g;
+    const displayProtein = isReadyMade ? (item.total_protein_per_serving || item.protein_per_100g) : item.protein_per_100g;
+    const displayCarbs = isReadyMade ? (item.total_carbs_per_serving || item.carbs_per_100g) : item.carbs_per_100g;
+    const displayFat = isReadyMade ? (item.total_fat_per_serving || item.fat_per_100g) : item.fat_per_100g;
+
     return (
       <View style={styles.itemCard} testID={`product-${item.id}`}>
         <View style={styles.itemInfo}>
-          <View style={styles.itemVeg}>
-            <View style={[styles.vegBox, { borderColor: item.diet_type === 'non-veg' ? '#E23744' : '#267E3E' }]}>
-              <View style={[styles.vegDotSmall, { backgroundColor: item.diet_type === 'non-veg' ? '#E23744' : '#267E3E' }]} />
+          <View style={styles.topRow}>
+            <View style={[styles.vegBox, { borderColor: item.diet_type === 'non-veg' ? Z_RED : GREEN }]}>
+              <View style={[styles.vegDotSmall, { backgroundColor: item.diet_type === 'non-veg' ? Z_RED : GREEN }]} />
             </View>
+            {isReadyMade && (
+              <View style={[styles.typeBadge, isEditable ? styles.editableBadge : styles.fixedBadge]}>
+                <Ionicons name={isEditable ? 'create' : 'lock-closed'} size={9} color="#FFF" />
+                <Text style={styles.typeText}>{isEditable ? 'Customizable' : 'Fixed'}</Text>
+              </View>
+            )}
           </View>
           <Text style={styles.itemName}>{item.name}</Text>
-          <Text style={styles.itemDesc} numberOfLines={2}>{item.description || `${item.category} • ${item.calories_per_100g} cal/100g`}</Text>
+          <Text style={styles.itemDesc} numberOfLines={2}>
+            {item.description || `${item.category} • ${displayCal} cal${isReadyMade ? '/plate' : '/100g'}`}
+          </Text>
+          
+          {/* Ingredients preview for ready-made */}
+          {isReadyMade && item.ingredients && item.ingredients.length > 0 && (
+            <Text style={styles.ingredientsPreview} numberOfLines={1}>
+              {item.ingredients.map((ing: any) => 
+                typeof ing === 'object' ? ing.name : ing
+              ).join(', ')}
+            </Text>
+          )}
+          
           <View style={styles.itemMeta}>
-            <Text style={styles.itemPrice}>₹{item.cost_per_100g}</Text>
-            <Text style={styles.itemPer}>/100g</Text>
+            <Text style={styles.itemPrice}>₹{displayPrice}</Text>
+            <Text style={styles.itemPer}>{priceUnit}</Text>
           </View>
           <View style={styles.nutriBadges}>
-            <View style={styles.nutriBadge}><Text style={styles.nbText}>P: {item.protein_per_100g}g</Text></View>
-            <View style={styles.nutriBadge}><Text style={styles.nbText}>C: {item.carbs_per_100g}g</Text></View>
-            <View style={styles.nutriBadge}><Text style={styles.nbText}>F: {item.fat_per_100g}g</Text></View>
+            <View style={styles.nutriBadge}><Text style={styles.nbText}>P: {Math.round(displayProtein)}g</Text></View>
+            <View style={styles.nutriBadge}><Text style={styles.nbText}>C: {Math.round(displayCarbs)}g</Text></View>
+            <View style={styles.nutriBadge}><Text style={styles.nbText}>F: {Math.round(displayFat)}g</Text></View>
           </View>
         </View>
         <View style={styles.itemRight}>
           {item.image_url ? (
             <Image source={{ uri: item.image_url }} style={styles.itemImg} />
           ) : (
-            <View style={[styles.itemImg, styles.imgPlaceholder]}><Ionicons name="restaurant" size={24} color="#D0D0D0" /></View>
+            <View style={[styles.itemImg, styles.imgPlaceholder]}>
+              <Ionicons name={isReadyMade ? 'fast-food' : 'restaurant'} size={24} color="#D0D0D0" />
+            </View>
           )}
           <View style={styles.ratingRow}>
             <Ionicons name="star" size={10} color="#FFF" />
             <Text style={styles.ratingNum}>{item.rating || '4.2'}</Text>
           </View>
+          
           {inCart ? (
-            <View style={styles.qtyBox}>
-              <TouchableOpacity testID={`minus-${item.id}`} style={styles.qtyBtn} onPress={() => updateQty(item.id, -50)}>
-                <Ionicons name="remove" size={16} color="#FFF" />
-              </TouchableOpacity>
-              <Text style={styles.qtyText}>{inCart.grams}g</Text>
-              <TouchableOpacity testID={`plus-${item.id}`} style={styles.qtyBtn} onPress={() => updateQty(item.id, 50)}>
-                <Ionicons name="add" size={16} color="#FFF" />
-              </TouchableOpacity>
-            </View>
+            isReadyMade ? (
+              // Ready-made: plate counter
+              <View style={[styles.qtyBox, { backgroundColor: PURPLE }]}>
+                <TouchableOpacity testID={`minus-${item.id}`} style={styles.qtyBtn} onPress={() => updateReadyMadeQty(item.id, -1)}>
+                  <Ionicons name="remove" size={16} color="#FFF" />
+                </TouchableOpacity>
+                <Text style={styles.qtyText}>{inCart.quantity}</Text>
+                <TouchableOpacity testID={`plus-${item.id}`} style={styles.qtyBtn} onPress={() => updateReadyMadeQty(item.id, 1)}>
+                  <Ionicons name="add" size={16} color="#FFF" />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              // Single product: gram counter
+              <View style={styles.qtyBox}>
+                <TouchableOpacity testID={`minus-${item.id}`} style={styles.qtyBtn} onPress={() => updateSingleQty(item.id, -50)}>
+                  <Ionicons name="remove" size={16} color="#FFF" />
+                </TouchableOpacity>
+                <Text style={styles.qtyText}>{inCart.grams}g</Text>
+                <TouchableOpacity testID={`plus-${item.id}`} style={styles.qtyBtn} onPress={() => updateSingleQty(item.id, 50)}>
+                  <Ionicons name="add" size={16} color="#FFF" />
+                </TouchableOpacity>
+              </View>
+            )
           ) : (
-            <TouchableOpacity testID={`add-${item.id}`} style={styles.addBtn} onPress={() => addToCart(item)}>
-              <Text style={styles.addText}>ADD</Text>
-              <Ionicons name="add" size={14} color={Z_RED} />
+            <TouchableOpacity 
+              testID={`add-${item.id}`} 
+              style={[styles.addBtn, isReadyMade && styles.addBtnReadyMade]} 
+              onPress={() => isReadyMade ? addReadyMadeToCart(item) : addSingleToCart(item)}
+            >
+              <Text style={[styles.addText, isReadyMade && { color: PURPLE }]}>ADD</Text>
+              <Ionicons name="add" size={14} color={isReadyMade ? PURPLE : Z_RED} />
             </TouchableOpacity>
           )}
         </View>
@@ -168,12 +267,16 @@ const styles = StyleSheet.create({
   sep: { height: 10 },
   itemCard: { flexDirection: 'row', backgroundColor: '#FFF', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#EFEFEF' },
   itemInfo: { flex: 1, paddingRight: 12 },
-  itemVeg: { marginBottom: 4 },
-  vegDot: { width: 12, height: 12, borderRadius: 2, borderWidth: 1.5, borderColor: 'transparent' },
+  topRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
   vegBox: { width: 14, height: 14, borderRadius: 2, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   vegDotSmall: { width: 7, height: 7, borderRadius: 4 },
+  typeBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  fixedBadge: { backgroundColor: '#9C9C9C' },
+  editableBadge: { backgroundColor: GREEN },
+  typeText: { fontSize: 9, fontWeight: '700', color: '#FFF' },
   itemName: { fontSize: 16, fontWeight: '700', color: '#1C1C2E' },
   itemDesc: { fontSize: 12, color: '#9C9C9C', marginTop: 3, lineHeight: 16 },
+  ingredientsPreview: { fontSize: 10, color: PURPLE, marginTop: 3, fontStyle: 'italic' },
   itemMeta: { flexDirection: 'row', alignItems: 'baseline', marginTop: 6, gap: 2 },
   itemPrice: { fontSize: 16, fontWeight: '700', color: '#1C1C2E' },
   itemPer: { fontSize: 11, color: '#9C9C9C' },
@@ -183,9 +286,10 @@ const styles = StyleSheet.create({
   itemRight: { width: 110, alignItems: 'center' },
   itemImg: { width: 110, height: 90, borderRadius: 10, backgroundColor: '#F5F5F5' },
   imgPlaceholder: { alignItems: 'center', justifyContent: 'center' },
-  ratingRow: { position: 'absolute', top: 70, flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: '#267E3E', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 3 },
+  ratingRow: { position: 'absolute', top: 70, flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: GREEN, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 3 },
   ratingNum: { fontSize: 10, fontWeight: '700', color: '#FFF' },
   addBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 8, paddingVertical: 7, paddingHorizontal: 24, borderRadius: 8, borderWidth: 1.5, borderColor: Z_RED, backgroundColor: '#FDE8EA' },
+  addBtnReadyMade: { borderColor: PURPLE, backgroundColor: '#F0F0FF' },
   addText: { fontSize: 14, fontWeight: '800', color: Z_RED },
   qtyBox: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8, backgroundColor: Z_RED, borderRadius: 8, overflow: 'hidden' },
   qtyBtn: { paddingHorizontal: 10, paddingVertical: 7 },
