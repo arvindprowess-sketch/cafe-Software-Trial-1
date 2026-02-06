@@ -9,7 +9,9 @@ import { useRouter } from 'expo-router';
 import { apiCall } from '../../utils/api';
 
 const Z_RED = '#E23744';
-const CATS = ['All', 'Protein', 'Carb', 'Fat'];
+const GREEN = '#267E3E';
+const PURPLE = '#5B5FE0';
+const CATS = ['All', 'Protein', 'Carb', 'Fat', 'Meal'];
 
 export default function MenuScreen() {
   const router = useRouter();
@@ -21,7 +23,14 @@ export default function MenuScreen() {
   const [selectedCat, setSelectedCat] = useState('All');
 
   const loadProducts = useCallback(async () => {
-    try { const data = await apiCall('/products'); setProducts(data.filter((p: any) => p.available_qty_grams > 0)); }
+    try { 
+      const data = await apiCall('/products'); 
+      // Include both single products with stock AND ready-made dishes
+      setProducts(data.filter((p: any) => {
+        if (p.product_type === 'ready_made') return p.is_active !== false;
+        return p.available_qty_grams > 0;
+      })); 
+    }
     catch (e) {} finally { setLoading(false); }
   }, []);
 
