@@ -2,7 +2,7 @@ import pytest
 import requests
 import os
 
-BASE_URL = os.environ.get('EXPO_PUBLIC_BACKEND_URL')
+BASE_URL = "https://ai-diet-cafe.preview.emergentagent.com"
 
 @pytest.fixture
 def api_client():
