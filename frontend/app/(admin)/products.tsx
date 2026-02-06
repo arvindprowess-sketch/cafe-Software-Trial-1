@@ -11,6 +11,7 @@ import { apiCall } from '../../utils/api';
 
 const Z_RED = '#E23744';
 const PURPLE = '#5B5FE0';
+const GREEN = '#267E3E';
 
 export default function ProductsScreen() {
   const [products, setProducts] = useState<any[]>([]);
@@ -20,6 +21,9 @@ export default function ProductsScreen() {
   const [showSingleModal, setShowSingleModal] = useState(false);
   const [showReadyModal, setShowReadyModal] = useState(false);
   const [saving, setSaving] = useState(false);
+  
+  // Diet filter: 'all', 'veg', 'non-veg'
+  const [dietFilter, setDietFilter] = useState('all');
 
   // Single product form
   const [singleName, setSingleName] = useState('');
@@ -30,9 +34,11 @@ export default function ProductsScreen() {
   const [readyName, setReadyName] = useState('');
   const [readyPrice, setReadyPrice] = useState('');
   const [readyServing, setReadyServing] = useState('300');
-  const [readyIngredients, setReadyIngredients] = useState<string[]>([]);
-  const [ingredientInput, setIngredientInput] = useState('');
+  const [readyIngredients, setReadyIngredients] = useState<{name: string, grams: string}[]>([]);
+  const [ingredientName, setIngredientName] = useState('');
+  const [ingredientGrams, setIngredientGrams] = useState('');
   const [readyImages, setReadyImages] = useState<string[]>([]);
+  const [isEditable, setIsEditable] = useState(false);
 
   const load = useCallback(async () => {
     try { setProducts(await apiCall('/products/all')); } catch (e) {} finally { setLoading(false); }
@@ -43,19 +49,25 @@ export default function ProductsScreen() {
 
   // Reset forms
   const resetSingle = () => { setSingleName(''); setSinglePrice(''); setSingleGrams(''); };
-  const resetReady = () => { setReadyName(''); setReadyPrice(''); setReadyServing('300'); setReadyIngredients([]); setIngredientInput(''); setReadyImages([]); };
+  const resetReady = () => { 
+    setReadyName(''); setReadyPrice(''); setReadyServing('300'); 
+    setReadyIngredients([]); setIngredientName(''); setIngredientGrams(''); 
+    setReadyImages([]); setIsEditable(false); 
+  };
 
-  // Add ingredient
+  // Add ingredient with grams
   const addIngredient = () => {
-    const trimmed = ingredientInput.trim();
-    if (trimmed && !readyIngredients.includes(trimmed)) {
-      setReadyIngredients([...readyIngredients, trimmed]);
-      setIngredientInput('');
+    const trimmedName = ingredientName.trim();
+    const grams = ingredientGrams.trim() || '100';
+    if (trimmedName && !readyIngredients.some(i => i.name.toLowerCase() === trimmedName.toLowerCase())) {
+      setReadyIngredients([...readyIngredients, { name: trimmedName, grams }]);
+      setIngredientName('');
+      setIngredientGrams('');
     }
   };
 
-  const removeIngredient = (ing: string) => {
-    setReadyIngredients(readyIngredients.filter(i => i !== ing));
+  const removeIngredient = (name: string) => {
+    setReadyIngredients(readyIngredients.filter(i => i.name !== name));
   };
 
   // Pick image
@@ -114,19 +126,26 @@ export default function ProductsScreen() {
       return;
     }
     if (readyIngredients.length === 0) {
-      Alert.alert('Add Ingredients', 'Add at least one ingredient');
+      Alert.alert('Add Ingredients', 'Add at least one ingredient with grams');
       return;
     }
     setSaving(true);
     try {
+      // Format ingredients with grams_per_serving
+      const ingredients = readyIngredients.map(ing => ({
+        name: ing.name,
+        grams_per_serving: parseFloat(ing.grams) || 100
+      }));
+      
       await apiCall('/products/ready-made', {
         method: 'POST',
         body: {
           name: readyName,
-          ingredients: readyIngredients,
+          ingredients: ingredients,
           images: readyImages,
           price: parseFloat(readyPrice),
           serving_grams: parseFloat(readyServing) || 300,
+          is_editable: isEditable,
         },
       });
       setShowReadyModal(false);
@@ -150,8 +169,24 @@ export default function ProductsScreen() {
     }}
   ]);
 
+  // Filter products by diet type
+  const filteredProducts = products.filter(p => {
+    if (dietFilter === 'all') return true;
+    return p.diet_type === dietFilter;
+  });
+
+  // Count by diet type
+  const vegCount = products.filter(p => p.diet_type === 'veg').length;
+  const nonVegCount = products.filter(p => p.diet_type === 'non-veg').length;
+
   const renderProduct = ({ item }: { item: any }) => {
     const isReady = item.product_type === 'ready_made';
+    // Format ingredients display for ready-made
+    const ingredientsDisplay = isReady && item.ingredients ? 
+      item.ingredients.map((ing: any) => 
+        typeof ing === 'object' ? `${ing.name} (${ing.grams_per_serving}g)` : ing
+      ).join(', ') : '';
+    
     return (
       <View style={[styles.card, !item.is_active && { opacity: 0.5 }]} testID={`admin-product-${item.id}`}>
         <View style={styles.cardRow}>
@@ -164,8 +199,8 @@ export default function ProductsScreen() {
           )}
           <View style={styles.cardInfo}>
             <View style={styles.cardNameRow}>
-              <View style={[styles.vegBadge, { borderColor: item.diet_type === 'non-veg' ? Z_RED : '#267E3E' }]}>
-                <View style={[styles.vegDotSmall, { backgroundColor: item.diet_type === 'non-veg' ? Z_RED : '#267E3E' }]} />
+              <View style={[styles.vegBadge, { borderColor: item.diet_type === 'non-veg' ? Z_RED : GREEN }]}>
+                <View style={[styles.vegDotSmall, { backgroundColor: item.diet_type === 'non-veg' ? Z_RED : GREEN }]} />
               </View>
               <Text style={styles.pName} numberOfLines={1}>{item.name}</Text>
             </View>
@@ -174,32 +209,44 @@ export default function ProductsScreen() {
                 <Ionicons name={isReady ? 'fast-food' : 'cube'} size={10} color={isReady ? PURPLE : '#FF9F0A'} />
                 <Text style={[styles.typeText, { color: isReady ? PURPLE : '#FF9F0A' }]}>{isReady ? 'Ready-Made' : 'Single'}</Text>
               </View>
+              {isReady && item.is_editable && (
+                <View style={styles.editableBadge}>
+                  <Ionicons name="pencil" size={8} color="#FFF" />
+                  <Text style={styles.editableText}>Editable</Text>
+                </View>
+              )}
               <Text style={styles.pMeta}>{item.category}</Text>
             </View>
             {item.description ? <Text style={styles.pDesc} numberOfLines={1}>{item.description}</Text> : null}
-            {isReady && item.ingredients?.length > 0 && (
-              <Text style={styles.pIngredients} numberOfLines={1}>{item.ingredients.join(', ')}</Text>
+            {isReady && ingredientsDisplay && (
+              <Text style={styles.pIngredients} numberOfLines={2}>{ingredientsDisplay}</Text>
             )}
           </View>
         </View>
         <View style={styles.cardBottom}>
           <View style={styles.priceRow}>
             {isReady ? (
-              <Text style={styles.priceText}>₹{item.fixed_price || Math.round(item.cost_per_100g * (item.serving_grams || 300) / 100)}<Text style={styles.perUnit}>/serving</Text></Text>
+              <Text style={styles.priceText}>₹{item.fixed_price || Math.round(item.cost_per_100g * (item.serving_grams || 300) / 100)}<Text style={styles.perUnit}>/plate</Text></Text>
             ) : (
               <Text style={styles.priceText}>₹{item.cost_per_100g}<Text style={styles.perUnit}>/100g</Text></Text>
             )}
           </View>
           <View style={styles.nutriRow}>
-            <Text style={styles.nutri}>{item.calories_per_100g} cal</Text>
-            <Text style={styles.nutri}>P: {item.protein_per_100g}g</Text>
-            <Text style={styles.nutri}>C: {item.carbs_per_100g}g</Text>
-            <Text style={styles.nutri}>F: {item.fat_per_100g}g</Text>
+            <Text style={styles.nutri}>{isReady ? item.total_calories_per_serving || item.calories_per_100g : item.calories_per_100g} cal</Text>
+            <Text style={styles.nutri}>P: {isReady ? item.total_protein_per_serving || item.protein_per_100g : item.protein_per_100g}g</Text>
+            <Text style={styles.nutri}>C: {isReady ? item.total_carbs_per_serving || item.carbs_per_100g : item.carbs_per_100g}g</Text>
+            <Text style={styles.nutri}>F: {isReady ? item.total_fat_per_serving || item.fat_per_100g : item.fat_per_100g}g</Text>
           </View>
           <View style={styles.stockRow}>
-            <Text style={[styles.stockText, { color: item.available_qty_grams <= 500 ? Z_RED : '#267E3E' }]}>
-              Stock: {Math.round(item.available_qty_grams)}g
-            </Text>
+            {isReady ? (
+              <Text style={[styles.stockText, { color: GREEN }]}>
+                Servings: {item.available_servings || 20}
+              </Text>
+            ) : (
+              <Text style={[styles.stockText, { color: item.available_qty_grams <= 500 ? Z_RED : GREEN }]}>
+                Stock: {Math.round(item.available_qty_grams || 0)}g
+              </Text>
+            )}
             <View style={styles.actionRow}>
               <TouchableOpacity testID={`toggle-${item.id}`} style={[styles.toggle, item.is_active && styles.toggleOn]} onPress={() => toggleActive(item)}>
                 <Text style={styles.toggleText}>{item.is_active ? 'LIVE' : 'OFF'}</Text>
@@ -224,9 +271,48 @@ export default function ProductsScreen() {
           <Ionicons name="add" size={18} color="#FFF" /><Text style={styles.addText}>Add New</Text>
         </TouchableOpacity>
       </View>
-      <FlatList data={products} keyExtractor={i => i.id} renderItem={renderProduct}
+      
+      {/* ===== VEG / NON-VEG SECTION FILTER ===== */}
+      <View style={styles.filterRow}>
+        <TouchableOpacity 
+          testID="filter-all"
+          style={[styles.filterTab, dietFilter === 'all' && styles.filterTabActive]}
+          onPress={() => setDietFilter('all')}
+        >
+          <Ionicons name="grid" size={14} color={dietFilter === 'all' ? '#FFF' : '#696969'} />
+          <Text style={[styles.filterText, dietFilter === 'all' && styles.filterTextActive]}>All ({products.length})</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          testID="filter-veg"
+          style={[styles.filterTab, styles.filterVeg, dietFilter === 'veg' && styles.filterVegActive]}
+          onPress={() => setDietFilter('veg')}
+        >
+          <View style={[styles.vegIndicator, { borderColor: GREEN }]}>
+            <View style={[styles.vegDotFilter, { backgroundColor: GREEN }]} />
+          </View>
+          <Text style={[styles.filterText, dietFilter === 'veg' && { color: '#FFF' }]}>Veg Section ({vegCount})</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          testID="filter-nonveg"
+          style={[styles.filterTab, styles.filterNonVeg, dietFilter === 'non-veg' && styles.filterNonVegActive]}
+          onPress={() => setDietFilter('non-veg')}
+        >
+          <View style={[styles.vegIndicator, { borderColor: Z_RED }]}>
+            <View style={[styles.vegDotFilter, { backgroundColor: Z_RED }]} />
+          </View>
+          <Text style={[styles.filterText, dietFilter === 'non-veg' && { color: '#FFF' }]}>Non-Veg Section ({nonVegCount})</Text>
+        </TouchableOpacity>
+      </View>
+      
+      <FlatList data={filteredProducts} keyExtractor={i => i.id} renderItem={renderProduct}
         contentContainerStyle={styles.list}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Z_RED} />}
+        ListEmptyComponent={
+          <View style={styles.emptyState}>
+            <Ionicons name={dietFilter === 'veg' ? 'leaf' : dietFilter === 'non-veg' ? 'fish' : 'restaurant'} size={48} color="#D0D0D0" />
+            <Text style={styles.emptyText}>No {dietFilter === 'all' ? '' : dietFilter} products yet</Text>
+          </View>
+        }
       />
 
       {/* ===== TYPE SELECTION SHEET ===== */}
@@ -243,7 +329,7 @@ export default function ProductsScreen() {
               </View>
               <View style={styles.typeInfo}>
                 <Text style={styles.typeName}>Ready-Made Meal</Text>
-                <Text style={styles.typeDesc}>Complete dish with ingredients & photos{'\n'}AI auto-generates description</Text>
+                <Text style={styles.typeDesc}>Complete dish with ingredients & grams per plate{'\n'}Set as editable or non-editable for customers</Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color="#D0D0D0" />
             </TouchableOpacity>
@@ -254,7 +340,7 @@ export default function ProductsScreen() {
               </View>
               <View style={styles.typeInfo}>
                 <Text style={styles.typeName}>Single Product</Text>
-                <Text style={styles.typeDesc}>Raw ingredient — enter name, price, grams{'\n'}AI handles everything else</Text>
+                <Text style={styles.typeDesc}>Raw ingredient — enter name, price, grams{'\n'}Used for stock tracking in ready-made meals</Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color="#D0D0D0" />
             </TouchableOpacity>
@@ -291,7 +377,7 @@ export default function ProductsScreen() {
 
             {singlePrice && singleGrams ? (
               <View style={styles.calcPreview}>
-                <Ionicons name="calculator" size={14} color="#267E3E" />
+                <Ionicons name="calculator" size={14} color={GREEN} />
                 <Text style={styles.calcText}>Auto: ₹{((parseFloat(singlePrice) / parseFloat(singleGrams)) * 100).toFixed(1)}/100g</Text>
               </View>
             ) : null}
@@ -323,34 +409,46 @@ export default function ProductsScreen() {
               </View>
               <View style={styles.aiBadge}>
                 <Ionicons name="sparkles" size={12} color={PURPLE} />
-                <Text style={styles.aiBadgeText}>AI will generate description & calculate nutrition from ingredients</Text>
+                <Text style={styles.aiBadgeText}>AI generates description & calculates nutrition from ingredients</Text>
               </View>
 
               <Text style={styles.inputLabel}>Dish Name</Text>
               <TextInput testID="ready-name-input" style={styles.input} value={readyName} onChangeText={setReadyName} placeholder="e.g. Chicken Biryani Bowl" placeholderTextColor="#B0B0B0" />
 
-              <Text style={styles.inputLabel}>Ingredients</Text>
+              {/* Ingredients with grams per plate */}
+              <Text style={styles.inputLabel}>Ingredients (per plate)</Text>
               <View style={styles.ingredientInputRow}>
                 <TextInput
-                  testID="ingredient-input"
-                  style={[styles.input, { flex: 1 }]}
-                  value={ingredientInput}
-                  onChangeText={setIngredientInput}
-                  placeholder="Add ingredient..."
+                  testID="ingredient-name-input"
+                  style={[styles.input, { flex: 2 }]}
+                  value={ingredientName}
+                  onChangeText={setIngredientName}
+                  placeholder="Ingredient name..."
                   placeholderTextColor="#B0B0B0"
-                  onSubmitEditing={addIngredient}
-                  returnKeyType="done"
+                />
+                <TextInput
+                  testID="ingredient-grams-input"
+                  style={[styles.input, styles.gramsInput]}
+                  value={ingredientGrams}
+                  onChangeText={setIngredientGrams}
+                  placeholder="grams"
+                  placeholderTextColor="#B0B0B0"
+                  keyboardType="number-pad"
                 />
                 <TouchableOpacity testID="add-ingredient-btn" style={styles.addIngBtn} onPress={addIngredient}>
                   <Ionicons name="add-circle" size={36} color={PURPLE} />
                 </TouchableOpacity>
               </View>
+              
               {readyIngredients.length > 0 && (
                 <View style={styles.ingredientChips}>
                   {readyIngredients.map((ing, i) => (
                     <View key={i} style={styles.chip}>
-                      <Text style={styles.chipText}>{ing}</Text>
-                      <TouchableOpacity onPress={() => removeIngredient(ing)}>
+                      <Text style={styles.chipText}>{ing.name}</Text>
+                      <View style={styles.chipGrams}>
+                        <Text style={styles.chipGramsText}>{ing.grams}g</Text>
+                      </View>
+                      <TouchableOpacity onPress={() => removeIngredient(ing.name)}>
                         <Ionicons name="close-circle" size={16} color="#9C9C9C" />
                       </TouchableOpacity>
                     </View>
@@ -376,11 +474,26 @@ export default function ProductsScreen() {
                 </ScrollView>
               )}
 
-              <Text style={styles.inputLabel}>Price (₹)</Text>
+              <Text style={styles.inputLabel}>Price (₹ per plate)</Text>
               <TextInput testID="ready-price-input" style={styles.input} value={readyPrice} onChangeText={setReadyPrice} placeholder="Price per serving" placeholderTextColor="#B0B0B0" keyboardType="decimal-pad" />
 
               <Text style={styles.inputLabel}>Serving Size (grams) - optional</Text>
               <TextInput testID="ready-serving-input" style={styles.input} value={readyServing} onChangeText={setReadyServing} placeholder="300" placeholderTextColor="#B0B0B0" keyboardType="number-pad" />
+
+              {/* Editable toggle */}
+              <View style={styles.editableRow}>
+                <View style={styles.editableInfo}>
+                  <Text style={styles.editableLabel}>Allow Customer Customization</Text>
+                  <Text style={styles.editableDesc}>Customers can modify ingredient grams</Text>
+                </View>
+                <TouchableOpacity 
+                  testID="toggle-editable"
+                  style={[styles.editableToggle, isEditable && styles.editableToggleOn]}
+                  onPress={() => setIsEditable(!isEditable)}
+                >
+                  <View style={[styles.editableKnob, isEditable && styles.editableKnobOn]} />
+                </TouchableOpacity>
+              </View>
 
               <TouchableOpacity testID="save-ready-btn" style={[styles.saveBtn, { backgroundColor: PURPLE }]} onPress={saveReady} disabled={saving}>
                 {saving ? (
@@ -405,6 +518,23 @@ const styles = StyleSheet.create({
   title: { fontSize: 24, fontWeight: '800', color: '#1C1C2E' },
   addBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: Z_RED, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 },
   addText: { color: '#FFF', fontSize: 14, fontWeight: '700' },
+  
+  // Diet filter
+  filterRow: { flexDirection: 'row', backgroundColor: '#FFF', paddingHorizontal: 12, paddingVertical: 10, gap: 8, borderBottomWidth: 1, borderBottomColor: '#EFEFEF' },
+  filterTab: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, backgroundColor: '#F5F5F5', borderWidth: 1, borderColor: '#E8E8E8' },
+  filterTabActive: { backgroundColor: '#1C1C2E', borderColor: '#1C1C2E' },
+  filterVeg: { borderColor: '#E0F0E0' },
+  filterVegActive: { backgroundColor: '#267E3E', borderColor: '#267E3E' },
+  filterNonVeg: { borderColor: '#FDE8EA' },
+  filterNonVegActive: { backgroundColor: Z_RED, borderColor: Z_RED },
+  filterText: { fontSize: 12, fontWeight: '600', color: '#696969' },
+  filterTextActive: { color: '#FFF' },
+  vegIndicator: { width: 12, height: 12, borderRadius: 2, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  vegDotFilter: { width: 6, height: 6, borderRadius: 3 },
+  
+  emptyState: { alignItems: 'center', paddingTop: 60, gap: 12 },
+  emptyText: { fontSize: 15, color: '#9C9C9C' },
+  
   list: { padding: 16 },
 
   // Product card
@@ -417,11 +547,13 @@ const styles = StyleSheet.create({
   vegBadge: { width: 14, height: 14, borderRadius: 2, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   vegDotSmall: { width: 7, height: 7, borderRadius: 4 },
   pName: { fontSize: 15, fontWeight: '700', color: '#1C1C2E', flex: 1 },
-  tagRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
+  tagRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' },
   typeBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 4 },
   readyBadge: { backgroundColor: '#F0F0FF' },
   singleBadge: { backgroundColor: '#FFF5E0' },
   typeText: { fontSize: 10, fontWeight: '700' },
+  editableBadge: { flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: '#267E3E', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  editableText: { fontSize: 9, fontWeight: '700', color: '#FFF' },
   pMeta: { fontSize: 11, color: '#9C9C9C' },
   pDesc: { fontSize: 11, color: '#696969', marginTop: 3 },
   pIngredients: { fontSize: 10, color: '#9C9C9C', marginTop: 2, fontStyle: 'italic' },
@@ -465,12 +597,15 @@ const styles = StyleSheet.create({
   calcPreview: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, backgroundColor: '#F0FFF0', padding: 8, borderRadius: 8 },
   calcText: { fontSize: 13, fontWeight: '600', color: '#267E3E' },
 
-  // Ingredients
+  // Ingredients with grams
   ingredientInputRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  gramsInput: { flex: 1, textAlign: 'center' },
   addIngBtn: { padding: 2 },
   ingredientChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F0F0FF', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#F0F0FF', paddingLeft: 10, paddingRight: 6, paddingVertical: 6, borderRadius: 16 },
   chipText: { fontSize: 13, color: '#1C1C2E', fontWeight: '500' },
+  chipGrams: { backgroundColor: '#5B5FE0', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 },
+  chipGramsText: { fontSize: 11, color: '#FFF', fontWeight: '700' },
 
   // Image picker
   imagePickerBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 14, borderWidth: 1.5, borderColor: '#5B5FE0', borderStyle: 'dashed', borderRadius: 12, backgroundColor: '#FAFAFF' },
@@ -479,6 +614,16 @@ const styles = StyleSheet.create({
   imagePreview: { marginRight: 8, position: 'relative' },
   previewImg: { width: 80, height: 80, borderRadius: 10 },
   removeImgBtn: { position: 'absolute', top: -6, right: -6 },
+
+  // Editable toggle
+  editableRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F5F5F5', padding: 14, borderRadius: 12, marginTop: 14 },
+  editableInfo: { flex: 1 },
+  editableLabel: { fontSize: 14, fontWeight: '700', color: '#1C1C2E' },
+  editableDesc: { fontSize: 11, color: '#9C9C9C', marginTop: 2 },
+  editableToggle: { width: 50, height: 28, borderRadius: 14, backgroundColor: '#D0D0D0', padding: 3, justifyContent: 'center' },
+  editableToggleOn: { backgroundColor: '#267E3E' },
+  editableKnob: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#FFF' },
+  editableKnobOn: { alignSelf: 'flex-end' },
 
   // Save button
   saveBtn: { borderRadius: 12, paddingVertical: 15, alignItems: 'center', marginTop: 18 },
