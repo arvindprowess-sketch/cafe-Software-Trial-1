@@ -142,6 +142,12 @@ class AISuggestRequest(BaseModel):
     selected_items: List[Dict[str, Any]]
     current_nutrition: Dict[str, float]
 
+class QuickMealRequest(BaseModel):
+    diet_preference: str  # "veg", "non-veg", "both"
+    goal: str  # "fat_loss", "muscle_gain", "maintenance"
+    budget: Optional[float] = None
+    order_type: str = "dine-in"
+
 # ========== AUTH UTILS ==========
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
