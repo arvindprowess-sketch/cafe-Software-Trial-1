@@ -1,0 +1,254 @@
+{
+  "identity": {
+    "name": "E1",
+    "persona": "Anti-AI Designer",
+    "tone": "The Performance Pro",
+    "philosophy": "Fusion over Imitation. Emotion First. Deep Dark Mode."
+  },
+  "visual_strategy": {
+    "theme": "dark",
+    "archetype": "ARCHETYPE 2: THE PERFORMANCE PRO",
+    "concept": "Digital Aurora",
+    "description": "Deep obsidian backgrounds with subtle, animated glowing orbs (Aurora) behind glassmorphic surfaces. High contrast for data, vibrant accents for motivation."
+  },
+  "colors": {
+    "palette": {
+      "background": {
+        "primary": "#000000",
+        "secondary": "#0A0A0A",
+        "tertiary": "#121212",
+        "modal": "#1C1C1E"
+      },
+      "text": {
+        "primary": "#FFFFFF",
+        "secondary": "#8E8E93",
+        "tertiary": "#48484A",
+        "disabled": "#3A3A3C"
+      },
+      "brand": {
+        "primary": "#FF3B30",
+        "primary_dim": "rgba(255, 59, 48, 0.15)",
+        "secondary": "#FF006E",
+        "accent": "#007AFF"
+      },
+      "status": {
+        "success": "#32D74B",
+        "warning": "#FF9F0A",
+        "error": "#FF453A",
+        "info": "#0A84FF"
+      },
+      "border": {
+        "subtle": "#2C2C2E",
+        "active": "#FF3B30"
+      }
+    },
+    "gradients": {
+      "aurora": ["#000000", "#1C1C1E"],
+      "brand_glow": ["rgba(255, 59, 48, 0.6)", "transparent"]
+    }
+  },
+  "typography": {
+    "family": {
+      "heading": "System",
+      "body": "System"
+    },
+    "styles": {
+      "h1": {
+        "fontSize": 32,
+        "fontWeight": "800",
+        "letterSpacing": 0.5,
+        "color": "#FFFFFF",
+        "lineHeight": 38
+      },
+      "h2": {
+        "fontSize": 24,
+        "fontWeight": "700",
+        "letterSpacing": 0.3,
+        "color": "#FFFFFF",
+        "lineHeight": 28
+      },
+      "h3": {
+        "fontSize": 20,
+        "fontWeight": "600",
+        "color": "#FFFFFF",
+        "lineHeight": 24
+      },
+      "body": {
+        "fontSize": 16,
+        "fontWeight": "400",
+        "color": "#E5E5EA",
+        "lineHeight": 22
+      },
+      "caption": {
+        "fontSize": 12,
+        "fontWeight": "500",
+        "color": "#8E8E93",
+        "letterSpacing": 0.2
+      },
+      "button_text": {
+        "fontSize": 16,
+        "fontWeight": "700",
+        "letterSpacing": 0.5,
+        "textTransform": "uppercase"
+      }
+    }
+  },
+  "spacing": {
+    "scale": {
+      "xs": 4,
+      "s": 8,
+      "m": 12,
+      "l": 16,
+      "xl": 24,
+      "xxl": 32,
+      "xxxl": 48
+    },
+    "layout": {
+      "screen_padding": 16,
+      "card_gap": 16,
+      "section_gap": 32
+    }
+  },
+  "components": {
+    "buttons": {
+      "primary": {
+        "backgroundColor": "#FF3B30",
+        "borderRadius": 12,
+        "paddingVertical": 16,
+        "paddingHorizontal": 24,
+        "alignItems": "center",
+        "justifyContent": "center",
+        "shadowColor": "#FF3B30",
+        "shadowOffset": { "width": 0, "height": 4 },
+        "shadowOpacity": 0.3,
+        "shadowRadius": 8,
+        "elevation": 5
+      },
+      "secondary": {
+        "backgroundColor": "#1C1C1E",
+        "borderRadius": 12,
+        "paddingVertical": 16,
+        "paddingHorizontal": 24,
+        "alignItems": "center",
+        "justifyContent": "center",
+        "borderWidth": 1,
+        "borderColor": "#2C2C2E"
+      },
+      "ghost": {
+        "backgroundColor": "transparent",
+        "paddingVertical": 8,
+        "paddingHorizontal": 16
+      }
+    },
+    "cards": {
+      "container": {
+        "backgroundColor": "#121212",
+        "borderRadius": 16,
+        "padding": 16,
+        "borderWidth": 1,
+        "borderColor": "#2C2C2E",
+        "shadowColor": "#000",
+        "shadowOffset": { "width": 0, "height": 2 },
+        "shadowOpacity": 0.25,
+        "shadowRadius": 4,
+        "elevation": 2
+      },
+      "glass": {
+        "backgroundColor": "rgba(28, 28, 30, 0.6)",
+        "borderRadius": 16,
+        "overflow": "hidden",
+        "borderColor": "rgba(255, 255, 255, 0.1)",
+        "borderWidth": 1
+      }
+    },
+    "inputs": {
+      "default": {
+        "backgroundColor": "#1C1C1E",
+        "borderRadius": 8,
+        "padding": 16,
+        "color": "#FFFFFF",
+        "borderWidth": 1,
+        "borderColor": "#2C2C2E",
+        "fontSize": 16
+      },
+      "active": {
+        "borderColor": "#FF3B30",
+        "backgroundColor": "#2C2C2E"
+      }
+    }
+  },
+  "assets": {
+    "images": {
+      "hero_food": [
+        {
+          "url": "https://images.unsplash.com/photo-1708184528306-f75a0a5118ee?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzR8MHwxfHNlYXJjaHwxfHxncmlsbGVkJTIwY2hpY2tlbiUyMGJyZWFzdCUyMGhlYWx0aHklMjBpbmRpYW4lMjBtZWFsfGVufDB8fHx8MTc3MDM3NTYwMnww&ixlib=rb-4.1.0&q=85",
+          "description": "Grilled chicken breast with rice - Hero Meal",
+          "category": "product_main"
+        },
+        {
+          "url": "https://images.unsplash.com/photo-1689832832416-e9be9dc30c6b?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1NzZ8MHwxfHNlYXJjaHwyfHxwYW5lZXIlMjB0aWtrYSUyMHNhbGFkJTIwYm93bCUyMGhlYWx0aHl8ZW58MHx8fHwxNzcwMzc1NjAzfDA&ixlib=rb-4.1.0&q=85",
+          "description": "Paneer Tikka Salad Bowl - Healthy Veg Option",
+          "category": "product_main"
+        },
+        {
+          "url": "https://images.unsplash.com/photo-1623002071634-54590669fe3d?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzNDR8MHwxfHNlYXJjaHwxfHxoZWFsdGh5JTIwZ3JlZW4lMjBzbW9vdGhpZSUyMGdsYXNzfGVufDB8fHx8MTc3MDM3NTYwNXww&ixlib=rb-4.1.0&q=85",
+          "description": "Green Detox Smoothie",
+          "category": "product_drink"
+        }
+      ],
+      "backgrounds": {
+        "gym_texture": {
+          "url": "https://images.unsplash.com/photo-1693214674451-2111f7690877?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1Nzh8MHwxfHNlYXJjaHwyfHxtb2Rlcm4lMjBkYXJrJTIwZ3ltJTIwaW50ZXJpb3IlMjBtaW5pbWFsaXN0fGVufDB8fHx8MTc3MDM3NTYwNnww&ixlib=rb-4.1.0&q=85",
+          "description": "Dark Gym Interior - Use with overlay for auth screens"
+        }
+      }
+    }
+  },
+  "layout_strategies": {
+    "mobile_container": {
+      "flex": 1,
+      "backgroundColor": "#000000"
+    },
+    "safe_area": {
+      "flex": 1,
+      "paddingHorizontal": 16
+    },
+    "row_between": {
+      "flexDirection": "row",
+      "justifyContent": "space-between",
+      "alignItems": "center"
+    }
+  },
+  "instructions_to_main_agent": {
+    "setup": [
+      "Install `expo-linear-gradient` for creating the 'Aurora' effects and button gradients.",
+      "Use `expo-blur` (already installed) for glassmorphic overlays in headers and modals.",
+      "Use `expo-image` for high-performance image loading.",
+      "Ensure all interactive elements have a minimum hit slop of 10px and height of 44px."
+    ],
+    "styling_rules": [
+      "NEVER use inline styles for complex components. Use `StyleSheet.create`.",
+      "Avoid 'pure black' (#000) for cards; use #1C1C1E to maintain depth.",
+      "Use `rgba(255, 59, 48, 0.8)` (Brand Red) for primary actions.",
+      "Text over images MUST have a gradient overlay or text shadow for readability."
+    ],
+    "animations": [
+      "Use `LayoutAnimation` for list layout changes (adding/removing items).",
+      "Use `Animated` API for simple opacity/transform transitions."
+    ],
+    "accessibility": [
+      "All `TouchableOpacity` or `Pressable` must have `accessibilityLabel`.",
+      "Contrast ratio is critical in Dark Mode. Ensure grey text (#8E8E93) is not used for essential data."
+    ]
+  },
+  "UNIVERSAL_GUIDELINES": [
+    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients.",
+    "Don't make generic centered layouts. Use left alignment for body text.",
+    "Create depth through layered design elements (Background > Card > Content).",
+    "Use glass-morphism effects with `BlurView` (tint='dark', intensity=80).",
+    "NEVER use AI assistant Emoji characters like 🤖 etc.",
+    "Every interaction needs micro-feedback (opacity change on press).",
+    "Use 2-3x more spacing than feels comfortable.",
+    "Missing categories/logos = use placeholder text (FORBIDDEN). Use a generic relevant icon instead."
+  ]
+}
