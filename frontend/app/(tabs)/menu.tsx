@@ -235,13 +235,12 @@ export default function MenuScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* ===== CATEGORY BOXES (MORE VISIBLE) ===== */}
+      {/* ===== CATEGORY BOXES (COMPACT) ===== */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.catBar} contentContainerStyle={styles.catContent}>
         {CATS.map(c => {
           const isActive = selectedCat === c;
           const icon = c === 'All' ? 'grid' : c === 'Protein' ? 'barbell' : c === 'Carb' ? 'leaf' : c === 'Fat' ? 'water' : 'fast-food';
-          const bgColor = c === 'Protein' ? '#FFE8EA' : c === 'Carb' ? '#FFF5E0' : c === 'Fat' ? '#E8E8FF' : c === 'Meal' ? '#E8FFF0' : '#F5F5F5';
-          const iconColor = c === 'Protein' ? Z_RED : c === 'Carb' ? '#FF9F0A' : c === 'Fat' ? PURPLE : c === 'Meal' ? GREEN : '#696969';
+          const activeColor = c === 'Protein' ? Z_RED : c === 'Carb' ? '#FF9F0A' : c === 'Fat' ? PURPLE : c === 'Meal' ? GREEN : '#1C1C2E';
           
           return (
             <TouchableOpacity 
@@ -249,14 +248,11 @@ export default function MenuScreen() {
               testID={`menu-cat-${c}`} 
               style={[
                 styles.catBox, 
-                { backgroundColor: isActive ? iconColor : bgColor },
-                isActive && { borderColor: iconColor }
+                isActive && { backgroundColor: activeColor, borderColor: activeColor }
               ]} 
               onPress={() => setSelectedCat(c)}
             >
-              <View style={[styles.catIconBg, { backgroundColor: isActive ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.05)' }]}>
-                <Ionicons name={icon as any} size={18} color={isActive ? '#FFF' : iconColor} />
-              </View>
+              <Ionicons name={icon as any} size={14} color={isActive ? '#FFF' : activeColor} />
               <Text style={[styles.catBoxText, isActive && { color: '#FFF' }]}>{c}</Text>
             </TouchableOpacity>
           );
