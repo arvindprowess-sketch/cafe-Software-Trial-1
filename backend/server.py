@@ -833,6 +833,20 @@ async def migrate_diet_type():
         count += 1
     return {"message": f"Migrated {count} products with diet_type"}
 
+@api_router.post("/products/{product_id}/regenerate-image")
+async def regenerate_product_image(product_id: str, user=Depends(get_current_user)):
+    """Regenerate AI image for a specific product"""
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    product = await db.products.find_one({"id": product_id}, {"_id": 0})
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    ingredients = product.get("ingredients", [])
+    product_type = product.get("product_type", "single")
+    image_url = await ai_generate_food_image(product["name"], product_type, ingredients if ingredients else None)
+    await db.products.update_one({"id": product_id}, {"$set": {"image_url": image_url}})
+    return {"message": "Image regenerated", "image_url": image_url}
+
 # ========== USER / NUTRITION ROUTES ==========
 @api_router.put("/user/goals")
 async def update_goals(data: UserGoals, user=Depends(get_current_user)):
