@@ -57,7 +57,9 @@ export default function MenuScreen() {
       <View style={styles.itemCard} testID={`product-${item.id}`}>
         <View style={styles.itemInfo}>
           <View style={styles.itemVeg}>
-            <View style={[styles.vegDot, { backgroundColor: item.category === 'Protein' ? Z_RED : item.category === 'Carb' ? '#267E3E' : '#5B5FE0' }]} />
+            <View style={[styles.vegBox, { borderColor: item.diet_type === 'non-veg' ? '#E23744' : '#267E3E' }]}>
+              <View style={[styles.vegDotSmall, { backgroundColor: item.diet_type === 'non-veg' ? '#E23744' : '#267E3E' }]} />
+            </View>
           </View>
           <Text style={styles.itemName}>{item.name}</Text>
           <Text style={styles.itemDesc} numberOfLines={2}>{item.description || `${item.category} • ${item.calories_per_100g} cal/100g`}</Text>
