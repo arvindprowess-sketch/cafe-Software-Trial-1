@@ -6,6 +6,8 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { apiCall } from '../utils/api';
 
 const Z_RED = '#E23744';
+const GREEN = '#267E3E';
+const PURPLE = '#5B5FE0';
 
 export default function CustomizeScreen() {
   const router = useRouter();
@@ -21,14 +23,66 @@ export default function CustomizeScreen() {
   const [ordering, setOrdering] = useState(false);
   const [inputMode, setInputMode] = useState<Record<string, 'grams' | 'rupees'>>({});
 
+  // For single products
   const updateGrams = (id: string, grams: number) => setItems(items.map(i => i.id === id ? { ...i, grams: Math.max(0, grams) } : i));
   const updateByRupees = (id: string, rupees: number) => { const item = items.find(i => i.id === id); if (item) updateGrams(id, Math.round((rupees / item.cost_per_100g) * 100)); };
+  
+  // For ready-made dishes (plates)
+  const updatePlates = (id: string, delta: number) => {
+    setItems(items.map(i => {
+      if (i.id !== id) return i;
+      const newQty = Math.max(1, (i.quantity || 1) + delta);
+      return { ...i, quantity: newQty, grams: (i.serving_grams || 300) * newQty };
+    }));
+  };
+  
+  // For editable ready-made dish ingredients
+  const updateIngredientGrams = (itemId: string, ingIndex: number, newGrams: number) => {
+    setItems(items.map(i => {
+      if (i.id !== itemId) return i;
+      const updatedIngredients = [...(i.customized_ingredients || i.ingredients || [])];
+      updatedIngredients[ingIndex] = { 
+        ...updatedIngredients[ingIndex], 
+        grams_per_serving: Math.max(0, newGrams) 
+      };
+      return { ...i, customized_ingredients: updatedIngredients };
+    }));
+  };
+
   const removeItem = (id: string) => setItems(items.filter(i => i.id !== id));
 
-  const totals = useMemo(() => items.reduce((a, i) => {
-    const f = i.grams / 100;
-    return { price: a.price + f * i.cost_per_100g, calories: a.calories + f * i.calories_per_100g, protein: a.protein + f * i.protein_per_100g, carbs: a.carbs + f * i.carbs_per_100g, fat: a.fat + f * i.fat_per_100g };
-  }, { price: 0, calories: 0, protein: 0, carbs: 0, fat: 0 }), [items]);
+  // Calculate totals for all items
+  const totals = useMemo(() => {
+    return items.reduce((a, i) => {
+      let itemPrice, itemCal, itemProtein, itemCarbs, itemFat;
+      
+      if (i.product_type === 'ready_made') {
+        const qty = i.quantity || 1;
+        // Use fixed price or calculate from per plate
+        itemPrice = (i.fixed_price || (i.cost_per_100g * (i.serving_grams || 300) / 100)) * qty;
+        // Use total per serving or calculate
+        itemCal = (i.total_calories_per_serving || i.calories_per_100g) * qty;
+        itemProtein = (i.total_protein_per_serving || i.protein_per_100g) * qty;
+        itemCarbs = (i.total_carbs_per_serving || i.carbs_per_100g) * qty;
+        itemFat = (i.total_fat_per_serving || i.fat_per_100g) * qty;
+      } else {
+        const f = i.grams / 100;
+        itemPrice = f * i.cost_per_100g;
+        itemCal = f * i.calories_per_100g;
+        itemProtein = f * i.protein_per_100g;
+        itemCarbs = f * i.carbs_per_100g;
+        itemFat = f * i.fat_per_100g;
+      }
+      
+      return { 
+        price: a.price + itemPrice, 
+        calories: a.calories + itemCal, 
+        protein: a.protein + itemProtein, 
+        carbs: a.carbs + itemCarbs, 
+        fat: a.fat + itemFat 
+      };
+    }, { price: 0, calories: 0, protein: 0, carbs: 0, fat: 0 });
+  }, [items]);
 
   const extra = orderType === 'delivery' ? 30 : orderType === 'takeaway' ? 10 : 0;
 
@@ -48,23 +102,215 @@ export default function CustomizeScreen() {
   };
 
   const placeOrder = async () => {
-    if (items.length === 0 || items.every(i => i.grams === 0)) { Alert.alert('Empty', 'Add items with quantities'); return; }
+    if (items.length === 0 || items.every(i => i.grams === 0 && (i.quantity || 0) === 0)) { 
+      Alert.alert('Empty', 'Add items with quantities'); 
+      return; 
+    }
     setOrdering(true);
     try {
-      const orderItems = items.filter(i => i.grams > 0).map(i => ({ product_id: i.id, product_name: i.name, grams: i.grams, price: (i.grams / 100) * i.cost_per_100g, calories: (i.grams / 100) * i.calories_per_100g, protein: (i.grams / 100) * i.protein_per_100g, carbs: (i.grams / 100) * i.carbs_per_100g, fat: (i.grams / 100) * i.fat_per_100g }));
-      await apiCall('/orders', { method: 'POST', body: { order_type: orderType, items: orderItems, total_price: totals.price, total_calories: totals.calories, total_protein: totals.protein, total_carbs: totals.carbs, total_fat: totals.fat, fitness_goal: goal || null, budget: budget ? parseFloat(budget) : null } });
+      const orderItems = items.filter(i => i.grams > 0 || (i.quantity || 0) > 0).map(i => {
+        if (i.product_type === 'ready_made') {
+          const qty = i.quantity || 1;
+          return {
+            product_id: i.id,
+            product_name: i.name,
+            product_type: 'ready_made',
+            quantity: qty,
+            grams: (i.serving_grams || 300) * qty,
+            price: (i.fixed_price || (i.cost_per_100g * (i.serving_grams || 300) / 100)) * qty,
+            calories: (i.total_calories_per_serving || i.calories_per_100g) * qty,
+            protein: (i.total_protein_per_serving || i.protein_per_100g) * qty,
+            carbs: (i.total_carbs_per_serving || i.carbs_per_100g) * qty,
+            fat: (i.total_fat_per_serving || i.fat_per_100g) * qty,
+            customized_ingredients: i.customized_ingredients || null
+          };
+        } else {
+          const f = i.grams / 100;
+          return {
+            product_id: i.id,
+            product_name: i.name,
+            product_type: 'single',
+            grams: i.grams,
+            price: f * i.cost_per_100g,
+            calories: f * i.calories_per_100g,
+            protein: f * i.protein_per_100g,
+            carbs: f * i.carbs_per_100g,
+            fat: f * i.fat_per_100g
+          };
+        }
+      });
+      
+      await apiCall('/orders', { 
+        method: 'POST', 
+        body: { 
+          order_type: orderType, 
+          items: orderItems, 
+          total_price: totals.price, 
+          total_calories: totals.calories, 
+          total_protein: totals.protein, 
+          total_carbs: totals.carbs, 
+          total_fat: totals.fat, 
+          fitness_goal: goal || null, 
+          budget: budget ? parseFloat(budget) : null 
+        } 
+      });
       Alert.alert('Order Placed!', `Total: ₹${Math.round(totals.price + extra)}`);
       setTimeout(() => router.replace('/(tabs)/orders'), 1500);
     } catch (e: any) { Alert.alert('Error', e.message); } finally { setOrdering(false); }
+  };
+
+  // Render single product item (customizable by grams)
+  const renderSingleProduct = (item: any) => {
+    const mode = inputMode[item.id] || 'grams';
+    const f = item.grams / 100;
+    
+    return (
+      <View key={item.id} style={styles.itemCard} testID={`customize-item-${item.id}`}>
+        <View style={styles.itemTop}>
+          <View style={styles.itemHeader}>
+            <View style={[styles.vegBox, { borderColor: item.diet_type === 'non-veg' ? Z_RED : GREEN }]}>
+              <View style={[styles.vegDot, { backgroundColor: item.diet_type === 'non-veg' ? Z_RED : GREEN }]} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.itemName}>{item.name}</Text>
+              <Text style={styles.itemMeta}>{item.category} • ₹{item.cost_per_100g}/100g</Text>
+            </View>
+          </View>
+          <TouchableOpacity testID={`remove-item-${item.id}`} onPress={() => removeItem(item.id)}>
+            <Ionicons name="close-circle" size={22} color="#D0D0D0" />
+          </TouchableOpacity>
+        </View>
+        <View style={styles.modeRow}>
+          {(['grams', 'rupees'] as const).map(m => (
+            <TouchableOpacity key={m} testID={`mode-${m}-${item.id}`} style={[styles.modeBtn, mode === m && styles.modeBtnActive]} onPress={() => setInputMode({ ...inputMode, [item.id]: m })}>
+              <Text style={[styles.modeText, mode === m && { color: Z_RED }]}>{m === 'grams' ? 'Grams' : 'Rupees'}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <View style={styles.qtyRow}>
+          <TouchableOpacity style={styles.qtyBtn} onPress={() => updateGrams(item.id, item.grams - 25)}>
+            <Ionicons name="remove" size={16} color={Z_RED} />
+          </TouchableOpacity>
+          <TextInput testID={`qty-input-${item.id}`} style={styles.qtyInput}
+            value={mode === 'grams' ? String(item.grams) : String(Math.round(f * item.cost_per_100g))}
+            onChangeText={v => { const n = parseInt(v) || 0; mode === 'grams' ? updateGrams(item.id, n) : updateByRupees(item.id, n); }}
+            keyboardType="number-pad" />
+          <Text style={styles.qtyUnit}>{mode === 'grams' ? 'g' : '₹'}</Text>
+          <TouchableOpacity style={[styles.qtyBtn, { backgroundColor: Z_RED }]} onPress={() => updateGrams(item.id, item.grams + 25)}>
+            <Ionicons name="add" size={16} color="#FFF" />
+          </TouchableOpacity>
+        </View>
+        <View style={styles.nutriRow}>
+          <Text style={styles.nutriText}>{Math.round(f * item.calories_per_100g)} cal</Text>
+          <Text style={styles.nutriText}>P: {(f * item.protein_per_100g).toFixed(1)}g</Text>
+          <Text style={styles.nutriText}>C: {(f * item.carbs_per_100g).toFixed(1)}g</Text>
+          <Text style={styles.nutriText}>F: {(f * item.fat_per_100g).toFixed(1)}g</Text>
+          <Text style={styles.priceText}>₹{Math.round(f * item.cost_per_100g)}</Text>
+        </View>
+      </View>
+    );
+  };
+
+  // Render ready-made dish (plates - editable or fixed)
+  const renderReadyMadeDish = (item: any) => {
+    const qty = item.quantity || 1;
+    const isEditable = item.is_editable;
+    const ingredients = item.customized_ingredients || item.ingredients || [];
+    const pricePerPlate = item.fixed_price || (item.cost_per_100g * (item.serving_grams || 300) / 100);
+    
+    return (
+      <View key={item.id} style={[styles.itemCard, styles.readyMadeCard]} testID={`customize-item-${item.id}`}>
+        <View style={styles.itemTop}>
+          <View style={styles.itemHeader}>
+            <View style={[styles.vegBox, { borderColor: item.diet_type === 'non-veg' ? Z_RED : GREEN }]}>
+              <View style={[styles.vegDot, { backgroundColor: item.diet_type === 'non-veg' ? Z_RED : GREEN }]} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={styles.nameRow}>
+                <Text style={styles.itemName}>{item.name}</Text>
+                <View style={[styles.typeBadge, isEditable ? styles.editableBadge : styles.fixedBadge]}>
+                  <Ionicons name={isEditable ? 'create' : 'lock-closed'} size={9} color="#FFF" />
+                  <Text style={styles.typeText}>{isEditable ? 'Editable' : 'Fixed'}</Text>
+                </View>
+              </View>
+              <Text style={styles.itemMeta}>Ready-Made • ₹{Math.round(pricePerPlate)}/plate</Text>
+            </View>
+          </View>
+          <TouchableOpacity testID={`remove-item-${item.id}`} onPress={() => removeItem(item.id)}>
+            <Ionicons name="close-circle" size={22} color="#D0D0D0" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Plate quantity selector */}
+        <View style={styles.plateRow}>
+          <Text style={styles.plateLabel}>Plates</Text>
+          <View style={styles.plateSelector}>
+            <TouchableOpacity style={styles.plateBtn} onPress={() => updatePlates(item.id, -1)}>
+              <Ionicons name="remove" size={16} color={PURPLE} />
+            </TouchableOpacity>
+            <Text style={styles.plateCount}>{qty}</Text>
+            <TouchableOpacity style={[styles.plateBtn, { backgroundColor: PURPLE }]} onPress={() => updatePlates(item.id, 1)}>
+              <Ionicons name="add" size={16} color="#FFF" />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Ingredients breakdown */}
+        {ingredients.length > 0 && (
+          <View style={styles.ingredientsBox}>
+            <Text style={styles.ingredientsTitle}>
+              <Ionicons name="list" size={12} color={PURPLE} /> Ingredients {isEditable ? '(tap to edit)' : ''}
+            </Text>
+            {ingredients.map((ing: any, idx: number) => (
+              <View key={idx} style={styles.ingredientRow}>
+                <Text style={styles.ingredientName}>{ing.name || ing}</Text>
+                {isEditable ? (
+                  <View style={styles.ingredientEdit}>
+                    <TouchableOpacity 
+                      style={styles.ingEditBtn} 
+                      onPress={() => updateIngredientGrams(item.id, idx, (ing.grams_per_serving || 100) - 10)}
+                    >
+                      <Ionicons name="remove" size={12} color={PURPLE} />
+                    </TouchableOpacity>
+                    <Text style={styles.ingredientGrams}>{ing.grams_per_serving || 100}g</Text>
+                    <TouchableOpacity 
+                      style={styles.ingEditBtn} 
+                      onPress={() => updateIngredientGrams(item.id, idx, (ing.grams_per_serving || 100) + 10)}
+                    >
+                      <Ionicons name="add" size={12} color={PURPLE} />
+                    </TouchableOpacity>
+                    <Text style={styles.ingredientTotal}>× {qty} = {((ing.grams_per_serving || 100) * qty)}g</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.ingredientGramsFixed}>
+                    {ing.grams_per_serving || 100}g × {qty} = {((ing.grams_per_serving || 100) * qty)}g
+                  </Text>
+                )}
+              </View>
+            ))}
+          </View>
+        )}
+
+        <View style={styles.nutriRow}>
+          <Text style={styles.nutriText}>{Math.round((item.total_calories_per_serving || item.calories_per_100g) * qty)} cal</Text>
+          <Text style={styles.nutriText}>P: {Math.round((item.total_protein_per_serving || item.protein_per_100g) * qty)}g</Text>
+          <Text style={styles.nutriText}>C: {Math.round((item.total_carbs_per_serving || item.carbs_per_100g) * qty)}g</Text>
+          <Text style={styles.nutriText}>F: {Math.round((item.total_fat_per_serving || item.fat_per_100g) * qty)}g</Text>
+          <Text style={[styles.priceText, { color: PURPLE }]}>₹{Math.round(pricePerPlate * qty)}</Text>
+        </View>
+      </View>
+    );
   };
 
   return (
     <SafeAreaView style={styles.safe}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <View style={styles.topBar}>
-          <TouchableOpacity testID="back-btn" onPress={() => router.back()} style={styles.backBtn}><Ionicons name="arrow-back" size={20} color="#1C1C2E" /></TouchableOpacity>
+          <TouchableOpacity testID="back-btn" onPress={() => router.back()} style={styles.backBtn}>
+            <Ionicons name="arrow-back" size={20} color="#1C1C2E" />
+          </TouchableOpacity>
           <Text style={styles.topTitle}>Customize Meal</Text>
-          <View style={styles.typeBadge}><Text style={styles.typeBadgeText}>{orderType}</Text></View>
+          <View style={styles.orderTypeBadge}><Text style={styles.orderTypeBadgeText}>{orderType}</Text></View>
         </View>
 
         <ScrollView contentContainerStyle={styles.scroll}>
@@ -82,44 +328,11 @@ export default function CustomizeScreen() {
           </View>
 
           <Text style={styles.section}>Your Items</Text>
-          {items.map(item => {
-            const mode = inputMode[item.id] || 'grams';
-            const f = item.grams / 100;
-            return (
-              <View key={item.id} style={styles.itemCard} testID={`customize-item-${item.id}`}>
-                <View style={styles.itemTop}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.itemName}>{item.name}</Text>
-                    <Text style={styles.itemMeta}>{item.category} • ₹{item.cost_per_100g}/100g</Text>
-                  </View>
-                  <TouchableOpacity testID={`remove-item-${item.id}`} onPress={() => removeItem(item.id)}><Ionicons name="close-circle" size={22} color="#D0D0D0" /></TouchableOpacity>
-                </View>
-                <View style={styles.modeRow}>
-                  {(['grams', 'rupees'] as const).map(m => (
-                    <TouchableOpacity key={m} testID={`mode-${m}-${item.id}`} style={[styles.modeBtn, mode === m && styles.modeBtnActive]} onPress={() => setInputMode({ ...inputMode, [item.id]: m })}>
-                      <Text style={[styles.modeText, mode === m && { color: Z_RED }]}>{m === 'grams' ? 'Grams' : 'Rupees'}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                <View style={styles.qtyRow}>
-                  <TouchableOpacity style={styles.qtyBtn} onPress={() => updateGrams(item.id, item.grams - 25)}><Ionicons name="remove" size={16} color={Z_RED} /></TouchableOpacity>
-                  <TextInput testID={`qty-input-${item.id}`} style={styles.qtyInput}
-                    value={mode === 'grams' ? String(item.grams) : String(Math.round(f * item.cost_per_100g))}
-                    onChangeText={v => { const n = parseInt(v) || 0; mode === 'grams' ? updateGrams(item.id, n) : updateByRupees(item.id, n); }}
-                    keyboardType="number-pad" />
-                  <Text style={styles.qtyUnit}>{mode === 'grams' ? 'g' : '₹'}</Text>
-                  <TouchableOpacity style={[styles.qtyBtn, { backgroundColor: Z_RED }]} onPress={() => updateGrams(item.id, item.grams + 25)}><Ionicons name="add" size={16} color="#FFF" /></TouchableOpacity>
-                </View>
-                <View style={styles.nutriRow}>
-                  <Text style={styles.nutriText}>{Math.round(f * item.calories_per_100g)} cal</Text>
-                  <Text style={styles.nutriText}>P: {(f * item.protein_per_100g).toFixed(1)}g</Text>
-                  <Text style={styles.nutriText}>C: {(f * item.carbs_per_100g).toFixed(1)}g</Text>
-                  <Text style={styles.nutriText}>F: {(f * item.fat_per_100g).toFixed(1)}g</Text>
-                  <Text style={styles.priceText}>₹{Math.round(f * item.cost_per_100g)}</Text>
-                </View>
-              </View>
-            );
-          })}
+          {items.map(item => 
+            item.product_type === 'ready_made' 
+              ? renderReadyMadeDish(item) 
+              : renderSingleProduct(item)
+          )}
 
           <TouchableOpacity testID="ai-suggest-btn" style={styles.aiBtn} onPress={getAiSuggestion} disabled={aiLoading}>
             {aiLoading ? <ActivityIndicator color="#FFF" /> : <><Ionicons name="sparkles" size={18} color="#FFF" /><Text style={styles.aiBtnText}>AI Meal Suggestion</Text></>}
@@ -165,8 +378,8 @@ const styles = StyleSheet.create({
   topBar: { flexDirection: 'row', alignItems: 'center', padding: 16, gap: 12, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#EFEFEF' },
   backBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#F5F5F5', alignItems: 'center', justifyContent: 'center' },
   topTitle: { flex: 1, fontSize: 18, fontWeight: '700', color: '#1C1C2E' },
-  typeBadge: { backgroundColor: '#FDE8EA', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-  typeBadgeText: { color: Z_RED, fontSize: 11, fontWeight: '700', textTransform: 'capitalize' },
+  orderTypeBadge: { backgroundColor: '#FDE8EA', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  orderTypeBadgeText: { color: Z_RED, fontSize: 11, fontWeight: '700', textTransform: 'capitalize' },
   scroll: { padding: 16 },
   section: { fontSize: 16, fontWeight: '700', color: '#1C1C2E', marginBottom: 8, marginTop: 4 },
   goalRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
@@ -176,10 +389,23 @@ const styles = StyleSheet.create({
   budgetRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 },
   budgetLabel: { color: '#696969', fontSize: 13, fontWeight: '600' },
   budgetInput: { flex: 1, backgroundColor: '#FFF', borderRadius: 8, padding: 10, color: '#1C1C2E', fontSize: 15, borderWidth: 1, borderColor: '#E8E8E8' },
+  
+  // Item cards
   itemCard: { backgroundColor: '#FFF', borderRadius: 12, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#EFEFEF' },
-  itemTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+  readyMadeCard: { borderColor: '#E8E0FF' },
+  itemTop: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 },
+  itemHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, flex: 1 },
+  vegBox: { width: 14, height: 14, borderRadius: 2, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', marginTop: 3 },
+  vegDot: { width: 7, height: 7, borderRadius: 4 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   itemName: { fontSize: 15, fontWeight: '700', color: '#1C1C2E' },
+  typeBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  fixedBadge: { backgroundColor: '#9C9C9C' },
+  editableBadge: { backgroundColor: GREEN },
+  typeText: { fontSize: 9, fontWeight: '700', color: '#FFF' },
   itemMeta: { fontSize: 11, color: '#9C9C9C', marginTop: 2 },
+  
+  // Single product controls
   modeRow: { flexDirection: 'row', gap: 6, marginBottom: 10 },
   modeBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 6, backgroundColor: '#F5F5F5' },
   modeBtnActive: { backgroundColor: '#FDE8EA' },
@@ -188,9 +414,31 @@ const styles = StyleSheet.create({
   qtyBtn: { width: 36, height: 36, borderRadius: 8, backgroundColor: '#FDE8EA', alignItems: 'center', justifyContent: 'center' },
   qtyInput: { flex: 1, backgroundColor: '#F5F5F5', borderRadius: 8, padding: 10, color: '#1C1C2E', fontSize: 20, fontWeight: '800', textAlign: 'center' },
   qtyUnit: { color: '#9C9C9C', fontSize: 14, fontWeight: '600' },
+  
+  // Ready-made plate controls
+  plateRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, backgroundColor: '#F8F5FF', padding: 12, borderRadius: 10 },
+  plateLabel: { fontSize: 14, fontWeight: '700', color: PURPLE },
+  plateSelector: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  plateBtn: { width: 32, height: 32, borderRadius: 8, backgroundColor: '#F0E8FF', alignItems: 'center', justifyContent: 'center' },
+  plateCount: { fontSize: 22, fontWeight: '800', color: PURPLE, minWidth: 40, textAlign: 'center' },
+  
+  // Ingredients breakdown
+  ingredientsBox: { backgroundColor: '#FAFAFA', borderRadius: 8, padding: 10, marginBottom: 10 },
+  ingredientsTitle: { fontSize: 11, fontWeight: '700', color: PURPLE, marginBottom: 8 },
+  ingredientRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
+  ingredientName: { fontSize: 13, color: '#1C1C2E', flex: 1 },
+  ingredientEdit: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  ingEditBtn: { width: 24, height: 24, borderRadius: 6, backgroundColor: '#F0E8FF', alignItems: 'center', justifyContent: 'center' },
+  ingredientGrams: { fontSize: 13, fontWeight: '700', color: PURPLE, minWidth: 40, textAlign: 'center' },
+  ingredientTotal: { fontSize: 11, color: '#9C9C9C', marginLeft: 4 },
+  ingredientGramsFixed: { fontSize: 12, color: '#9C9C9C' },
+  
+  // Nutrition row
   nutriRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   nutriText: { fontSize: 11, color: '#9C9C9C' },
   priceText: { fontSize: 14, fontWeight: '700', color: Z_RED },
+  
+  // AI suggestion
   aiBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#5B5FE0', borderRadius: 12, paddingVertical: 14, marginTop: 8 },
   aiBtnText: { color: '#FFF', fontSize: 14, fontWeight: '700' },
   aiCard: { backgroundColor: '#FFF', borderRadius: 12, padding: 14, marginTop: 12, borderWidth: 1, borderColor: '#5B5FE0' },
@@ -201,6 +449,8 @@ const styles = StyleSheet.create({
   aiSugReason: { color: '#9C9C9C', fontSize: 11, marginTop: 2 },
   applyBtn: { backgroundColor: '#5B5FE0', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 },
   applyText: { color: '#FFF', fontSize: 12, fontWeight: '700' },
+  
+  // Bottom bar
   bottomBar: { backgroundColor: '#FFF', borderTopWidth: 1, borderTopColor: '#EFEFEF', padding: 16, paddingBottom: 24, flexDirection: 'row', alignItems: 'center', gap: 14 },
   bottomInfo: { flex: 1 },
   bottomRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
