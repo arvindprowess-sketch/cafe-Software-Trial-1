@@ -624,12 +624,58 @@ async def create_order(data: OrderCreate, user=Depends(get_current_user)):
         extra_charge = 10
     elif data.order_type == "delivery":
         extra_charge = 30
+    
+    # Process items and build order with ingredient breakdowns for kitchen
+    processed_items = []
+    for item in data.items:
+        item_data = item.dict()
+        
+        # For ready-made dishes, check stock and add ingredient breakdown
+        if item.product_type == "ready_made":
+            product = await db.products.find_one({"id": item.product_id}, {"_id": 0})
+            if product:
+                quantity = item.quantity or 1
+                
+                # Check ingredient stock before creating order
+                stock_check = await check_ready_made_stock(item.product_id, quantity)
+                if not stock_check.get("available", False):
+                    raise HTTPException(status_code=400, detail=f"Insufficient stock for {item.product_name}: {stock_check.get('reason')}")
+                
+                # Build ingredient breakdown for kitchen view
+                ingredients_breakdown = []
+                for ing in product.get("ingredients", []):
+                    total_grams = ing["grams_per_serving"] * quantity
+                    ingredients_breakdown.append({
+                        "name": ing["name"],
+                        "grams_per_serving": ing["grams_per_serving"],
+                        "total_grams": total_grams,
+                        "product_id": ing.get("product_id")
+                    })
+                item_data["ingredients_breakdown"] = ingredients_breakdown
+                
+                # Deduct from linked single product stocks
+                for ing in product.get("ingredients", []):
+                    if ing.get("product_id"):
+                        deduct_grams = ing["grams_per_serving"] * quantity
+                        await db.products.update_one(
+                            {"id": ing["product_id"]},
+                            {"$inc": {"available_qty_grams": -deduct_grams}}
+                        )
+        else:
+            # Single product - deduct directly
+            await db.products.update_one(
+                {"id": item.product_id},
+                {"$inc": {"available_qty_grams": -item.grams}}
+            )
+        
+        processed_items.append(item_data)
+    
     order = {
         "id": order_id,
         "user_id": user["id"],
         "user_name": user["name"],
         "order_type": data.order_type,
-        "items": [item.dict() for item in data.items],
+        "items": processed_items,
         "total_price": data.total_price + extra_charge,
         "extra_charge": extra_charge,
         "total_calories": data.total_calories,
@@ -641,17 +687,23 @@ async def create_order(data: OrderCreate, user=Depends(get_current_user)):
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.orders.insert_one(order)
-    # Deduct inventory
-    for item in data.items:
-        await db.products.update_one(
-            {"id": item.product_id},
-            {"$inc": {"available_qty_grams": -item.grams}}
-        )
-    # Auto-hide low stock items
+    
+    # Auto-hide low stock single products
     await db.products.update_many(
-        {"available_qty_grams": {"$lte": 0}},
+        {"product_type": "single", "available_qty_grams": {"$lte": 0}},
         {"$set": {"is_active": False}}
     )
+    
+    # Auto-hide ready-made dishes that can't be made anymore
+    ready_made_products = await db.products.find({"product_type": "ready_made", "is_active": True}, {"_id": 0}).to_list(100)
+    for rm in ready_made_products:
+        for ing in rm.get("ingredients", []):
+            if ing.get("product_id"):
+                single_product = await db.products.find_one({"id": ing["product_id"]}, {"_id": 0})
+                if single_product and single_product.get("available_qty_grams", 0) < ing["grams_per_serving"]:
+                    await db.products.update_one({"id": rm["id"]}, {"$set": {"is_active": False}})
+                    break
+    
     # Save to meal history
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     await db.meal_history.update_one(
