@@ -111,11 +111,14 @@ backend:
     file: "server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         - working: true
           agent: "main"
           comment: "Added diet_type field to NUTRITION_DB, detect_diet_type() function, migration endpoint, and seed data. All 16 products correctly classified."
+        - working: true
+          agent: "testing"
+          comment: "TESTED: GET /api/products returns diet_type field correctly. Verified Chicken Breast, Kabab, Egg White, Grilled Fish are 'non-veg' and Paneer Tikka, Dal, Brown Rice, Oats are 'veg'. All 8 expected products correctly classified."
 
   - task: "AI Quick Meal Builder endpoint (POST /api/ai/quick-meal)"
     implemented: true
