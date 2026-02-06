@@ -125,6 +125,11 @@ class OrderItem(BaseModel):
     protein: float
     carbs: float
     fat: float
+    # For ready-made dishes
+    product_type: Optional[str] = "single"  # "single" or "ready_made"
+    quantity: Optional[int] = 1  # number of plates for ready-made
+    ingredients_breakdown: Optional[List[Dict[str, Any]]] = None  # detailed breakdown for kitchen
+    customized_ingredients: Optional[List[Dict[str, Any]]] = None  # if customer modified
 
 class OrderCreate(BaseModel):
     order_type: str
