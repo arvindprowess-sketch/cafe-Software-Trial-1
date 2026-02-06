@@ -697,6 +697,7 @@ async def seed_data():
             "cost_per_100g": p["cost_per_100g"],
             "available_qty_grams": p["available_qty_grams"],
             "category": nutrition["category"],
+            "diet_type": nutrition.get("diet_type", detect_diet_type(p["name"])),
             "calories_per_100g": nutrition["calories"],
             "protein_per_100g": nutrition["protein"],
             "carbs_per_100g": nutrition["carbs"],
