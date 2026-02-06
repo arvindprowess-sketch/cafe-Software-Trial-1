@@ -154,12 +154,30 @@ class SingleProductCreate(BaseModel):
     price: float
     grams: float
 
+class IngredientItem(BaseModel):
+    name: str
+    grams_per_serving: float
+    product_id: Optional[str] = None  # links to single product for stock deduction
+
 class ReadyMadeMealCreate(BaseModel):
     name: str
-    ingredients: List[str]
+    ingredients: List[IngredientItem]  # Now includes grams per serving
     images: List[str] = []  # base64 encoded images
     price: float
     serving_grams: float = 300
+    is_editable: bool = False  # Whether customer can modify ingredients
+
+class ReadyMadeOrderItem(BaseModel):
+    product_id: str
+    product_name: str
+    quantity: int  # number of plates
+    price: float
+    calories: float
+    protein: float
+    carbs: float
+    fat: float
+    ingredients_breakdown: List[Dict[str, Any]] = []  # Detailed ingredient info for kitchen
+    customized_ingredients: Optional[List[Dict[str, Any]]] = None  # For editable dishes
 
 # ========== AUTH UTILS ==========
 def hash_password(password: str) -> str:
