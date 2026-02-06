@@ -137,15 +137,18 @@ backend:
 
   - task: "Reorder endpoint (POST /api/orders/{order_id}/reorder)"
     implemented: true
-    working: "NA"
+    working: true
     file: "server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         - working: "NA"
           agent: "main"
           comment: "New endpoint validates items availability and returns enriched cart items for re-ordering."
+        - working: true
+          agent: "testing"
+          comment: "TESTED: POST /api/orders/{order_id}/reorder works correctly. Successfully created test order (ID: 75B03DEB) and reordered 2 items with full product details including product_id, product_name, grams, price, calories, protein, carbs, fat, cost_per_100g, diet_type. Validates item availability and returns proper cart_items structure."
 
   - task: "Existing endpoints (auth, products, orders, AI suggest)"
     implemented: true
