@@ -549,6 +549,15 @@ async def seed_data():
         await db.users.insert_one(admin)
     return {"message": "Seed data created", "products": len(seed_products)}
 
+@api_router.get("/banners")
+async def get_banners():
+    return [
+        {"id": "1", "title": "Flat 20% OFF", "subtitle": "On all protein meals today", "color": "#E23744"},
+        {"id": "2", "title": "Muscle Gain Pack", "subtitle": "Curated high-protein combo at ₹199", "color": "#267E3E"},
+        {"id": "3", "title": "Free Delivery", "subtitle": "On orders above ₹299", "color": "#FF9F0A"},
+        {"id": "4", "title": "AI Meal Planner", "subtitle": "Get personalized diet suggestions", "color": "#5B5FE0"},
+    ]
+
 app.include_router(api_router)
 
 app.add_middleware(
