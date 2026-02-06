@@ -298,7 +298,7 @@ export default function ProductsScreen() {
 
             <TouchableOpacity testID="save-single-btn" style={[styles.saveBtn, { backgroundColor: '#FF9F0A' }]} onPress={saveSingle} disabled={saving}>
               {saving ? (
-                <View style={styles.savingRow}><ActivityIndicator color="#FFF" size="small" /><Text style={styles.saveBtnText}>AI is working...</Text></View>
+                <View style={styles.savingRow}><ActivityIndicator color="#FFF" size="small" /><Text style={styles.saveBtnText}>AI generating photo & details...</Text></View>
               ) : (
                 <View style={styles.savingRow}><Ionicons name="sparkles" size={16} color="#FFF" /><Text style={styles.saveBtnText}>Add with AI</Text></View>
               )}
