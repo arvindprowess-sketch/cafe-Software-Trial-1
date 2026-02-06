@@ -462,6 +462,168 @@ Respond in this exact JSON format:
         logger.error(f"AI suggestion error: {e}")
         return {"suggestions": [], "summary": "AI suggestion unavailable. Please select items manually."}
 
+# ========== QUICK MEAL (AI BUILD MY MEAL) ==========
+@api_router.post("/ai/quick-meal")
+async def ai_quick_meal(data: QuickMealRequest, user=Depends(get_current_user)):
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        # Build product filter
+        query = {"is_active": True, "available_qty_grams": {"$gt": 50}}
+        if data.diet_preference == "veg":
+            query["diet_type"] = "veg"
+        elif data.diet_preference == "non-veg":
+            query["diet_type"] = "non-veg"
+        # "both" = no filter on diet_type
+
+        products = await db.products.find(query, {"_id": 0}).to_list(100)
+        if not products:
+            return {"meal_items": [], "summary": "No products available for your preference.", "totals": {}}
+
+        available_str = "\n".join([
+            f"- {p['name']} ({p.get('diet_type','veg')}): ₹{p['cost_per_100g']}/100g | {p['calories_per_100g']}cal, {p['protein_per_100g']}g protein, {p['carbs_per_100g']}g carbs, {p['fat_per_100g']}g fat per 100g | Stock: {p['available_qty_grams']}g"
+            for p in products
+        ])
+        budget_str = f"Budget: ₹{data.budget}. STRICTLY stay within this budget." if data.budget else "No budget limit, but keep meal reasonable (₹100-₹400 range)."
+        diet_pref_str = {"veg": "VEGETARIAN ONLY", "non-veg": "NON-VEGETARIAN ONLY", "both": "Both veg and non-veg allowed"}.get(data.diet_preference, "Both")
+
+        prompt = f"""You are a nutrition expert at a fitness café in India. Build a COMPLETE single meal for this customer.
+
+Diet Preference: {diet_pref_str}
+Fitness Goal: {data.goal}
+{budget_str}
+
+Available Menu Items:
+{available_str}
+
+RULES:
+- Build a COMPLETE balanced meal (protein source + carb source + optionally extras like salad/yogurt)
+- ONLY use items from the available menu above
+- Use the EXACT product names as listed
+- Suggest specific gram quantities (multiples of 25g)
+- Keep within budget if specified
+- For {data.goal}:
+  * fat_loss: High protein, low carb, ~400-600 cal total, prioritize lean proteins
+  * muscle_gain: High protein, moderate-high carbs, ~700-1000 cal, include carb sources
+  * maintenance: Balanced macros, ~500-700 cal, good variety
+- Select 3-5 items for a complete meal
+
+Respond ONLY in this exact JSON format (no other text):
+{{"meal_items": [{{"product_name": "Exact Name", "grams": 150, "reason": "Brief reason"}}], "summary": "One line meal description"}}"""
+
+        chat = LlmChat(
+            api_key=os.environ.get('EMERGENT_LLM_KEY', ''),
+            session_id=f"quickmeal-{uuid.uuid4()}",
+            system_message="You are a nutrition expert. Always respond in valid JSON format only. No markdown, no backticks."
+        ).with_model("openai", "gpt-5.2")
+        response = await chat.send_message(UserMessage(text=prompt))
+
+        # Parse AI response
+        cleaned = response.strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
+            cleaned = cleaned.rsplit("```", 1)[0]
+        result = json.loads(cleaned)
+
+        # Enrich with full product data and calculate totals
+        enriched_items = []
+        totals = {"price": 0, "calories": 0, "protein": 0, "carbs": 0, "fat": 0}
+        for ai_item in result.get("meal_items", []):
+            product = next((p for p in products if p["name"].lower() == ai_item["product_name"].lower()), None)
+            if not product:
+                # Fuzzy match
+                product = next((p for p in products if ai_item["product_name"].lower() in p["name"].lower() or p["name"].lower() in ai_item["product_name"].lower()), None)
+            if product:
+                grams = ai_item.get("grams", 100)
+                factor = grams / 100
+                item_data = {
+                    "product_id": product["id"],
+                    "product_name": product["name"],
+                    "grams": grams,
+                    "price": round(factor * product["cost_per_100g"], 2),
+                    "calories": round(factor * product["calories_per_100g"], 1),
+                    "protein": round(factor * product["protein_per_100g"], 1),
+                    "carbs": round(factor * product["carbs_per_100g"], 1),
+                    "fat": round(factor * product["fat_per_100g"], 1),
+                    "diet_type": product.get("diet_type", "veg"),
+                    "image_url": product.get("image_url"),
+                    "reason": ai_item.get("reason", ""),
+                    "cost_per_100g": product["cost_per_100g"],
+                    "calories_per_100g": product["calories_per_100g"],
+                    "protein_per_100g": product["protein_per_100g"],
+                    "carbs_per_100g": product["carbs_per_100g"],
+                    "fat_per_100g": product["fat_per_100g"],
+                    "category": product.get("category", ""),
+                }
+                enriched_items.append(item_data)
+                totals["price"] += item_data["price"]
+                totals["calories"] += item_data["calories"]
+                totals["protein"] += item_data["protein"]
+                totals["carbs"] += item_data["carbs"]
+                totals["fat"] += item_data["fat"]
+
+        totals = {k: round(v, 1) for k, v in totals.items()}
+        return {
+            "meal_items": enriched_items,
+            "summary": result.get("summary", "AI-built meal"),
+            "totals": totals,
+            "diet_preference": data.diet_preference,
+            "goal": data.goal
+        }
+    except json.JSONDecodeError:
+        logger.error("AI quick-meal JSON parse error")
+        return {"meal_items": [], "summary": "Could not parse AI response. Please try again.", "totals": {}}
+    except Exception as e:
+        logger.error(f"AI quick-meal error: {e}")
+        return {"meal_items": [], "summary": "AI meal builder unavailable. Please try the manual menu.", "totals": {}}
+
+# ========== REORDER ==========
+@api_router.post("/orders/{order_id}/reorder")
+async def reorder(order_id: str, user=Depends(get_current_user)):
+    order = await db.orders.find_one({"id": order_id, "user_id": user["id"]}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    # Validate items are still available
+    cart_items = []
+    unavailable = []
+    for item in order.get("items", []):
+        product = await db.products.find_one({"id": item["product_id"], "is_active": True}, {"_id": 0})
+        if product and product.get("available_qty_grams", 0) >= item["grams"]:
+            cart_items.append({
+                **item,
+                "cost_per_100g": product["cost_per_100g"],
+                "calories_per_100g": product["calories_per_100g"],
+                "protein_per_100g": product["protein_per_100g"],
+                "carbs_per_100g": product["carbs_per_100g"],
+                "fat_per_100g": product["fat_per_100g"],
+                "category": product.get("category", ""),
+                "diet_type": product.get("diet_type", "veg"),
+                "image_url": product.get("image_url"),
+                "description": product.get("description", ""),
+                "rating": product.get("rating", 4.0),
+                "available_qty_grams": product.get("available_qty_grams", 0),
+                "id": product["id"],
+                "name": product["name"],
+            })
+        else:
+            unavailable.append(item["product_name"])
+    return {
+        "cart_items": cart_items,
+        "order_type": order.get("order_type", "dine-in"),
+        "unavailable": unavailable
+    }
+
+# ========== MIGRATE EXISTING PRODUCTS ==========
+@api_router.post("/migrate/diet-type")
+async def migrate_diet_type():
+    """Add diet_type to all existing products that don't have it"""
+    products = await db.products.find({"diet_type": {"$exists": False}}, {"_id": 0}).to_list(500)
+    count = 0
+    for p in products:
+        dt = detect_diet_type(p["name"])
+        await db.products.update_one({"id": p["id"]}, {"$set": {"diet_type": dt}})
+        count += 1
+    return {"message": f"Migrated {count} products with diet_type"}
+
 # ========== USER / NUTRITION ROUTES ==========
 @api_router.put("/user/goals")
 async def update_goals(data: UserGoals, user=Depends(get_current_user)):
