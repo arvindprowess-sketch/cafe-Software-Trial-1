@@ -277,7 +277,7 @@ export default function ProductsScreen() {
             </View>
             <View style={styles.aiBadge}>
               <Ionicons name="sparkles" size={12} color={PURPLE} />
-              <Text style={styles.aiBadgeText}>AI will auto-calculate cost/gram, find photo, detect nutrition & generate description</Text>
+              <Text style={styles.aiBadgeText}>AI will auto-calculate cost/gram, GENERATE product photo, detect nutrition & generate description</Text>
             </View>
 
             <Text style={styles.inputLabel}>Product Name</Text>
