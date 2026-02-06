@@ -1,47 +1,42 @@
 # AI Diet Café App - PRD
 
 ## Overview
-Cure.fit-inspired AI Diet Café mobile app for fitness-conscious customers and café owners. Dark theme with vibrant red accents.
+Cure.fit-inspired AI Diet Café app redesigned with Zomato-style UI. White/red theme (#E23744), food cards with images, horizontal category scroll, cart bar, order timeline tracking.
 
 ## Tech Stack
 - **Frontend**: Expo (React Native) with expo-router
 - **Backend**: FastAPI (Python) with MongoDB
-- **AI**: OpenAI GPT-5.2 via Emergent LLM Key for meal suggestions
+- **AI**: OpenAI GPT-5.2 via Emergent LLM Key
 
-## Features Implemented (V1 MVP)
+## Features (V1 MVP - Zomato Redesign)
 
 ### Authentication
-- Email/password JWT auth (customer/admin roles)
+- Zomato-style login/register with role selection (customer/admin)
 - Demo admin: admin@dietcafe.com / admin123
 
 ### Customer Flow
-- **Home**: Daily nutrition dashboard (calories, protein, carbs, fat tracking)
-- **Menu**: Browse products with nutrition info, add to cart, order type selection (dine-in/takeaway/delivery)
-- **Customize**: Real-time calorie/macro/price calculator, grams or ₹ input modes, AI meal suggestions
-- **Orders**: Order history with status tracking
-- **Profile**: Fitness goals (fat loss/muscle gain/maintenance), daily macro targets
+- **Home**: Location bar, search, banner carousel (4 promotional), category filter pills, popular items grid with food images & ratings, nutrition summary card
+- **Menu**: Zomato-style food cards with images, ADD buttons (+/- counter), order type chips (dine-in/takeaway/delivery), category filtering, floating cart bar
+- **Customize**: Fitness goal selector, budget input, grams/rupees toggle, real-time calorie/macro/price calc, AI meal suggestions (GPT-5.2)
+- **Orders**: Timeline tracking (Placed→Preparing→Ready→Completed), nutrition breakdown, order history
+- **Profile**: Fitness goals, daily macro targets, save settings
 
 ### Admin Flow
-- **Dashboard**: Stats (products, orders, revenue)
-- **Products**: Add/edit/delete products with auto-nutrition detection (40+ Indian foods DB)
-- **Kitchen**: Live orders with exact gram measurements, status management (pending→preparing→ready→completed)
+- **Dashboard**: Stats cards (products, pending orders, revenue), quick actions
+- **Products**: Add with auto-nutrition detection (40+ foods), toggle active, delete
+- **Kitchen**: Live orders with exact gram measurements, status workflow buttons
 
 ### Core Systems
-- Auto nutrition matching from built-in database
-- Auto inventory deduction on order completion
-- Low-stock items auto-hidden from menu
+- 16 seeded products with food images, descriptions, ratings
+- Auto inventory deduction, low-stock auto-hide
 - Order type charges (dine-in: free, takeaway: ₹10, delivery: ₹30)
-- Meal history tracking per user per day
+- Daily meal history & nutrition tracking
 
 ## API Endpoints
-- POST /api/auth/register, /api/auth/login, GET /api/auth/me
-- GET/POST /api/products, PUT/DELETE /api/products/{id}
-- POST /api/orders, GET /api/orders, GET /api/orders/kitchen, PUT /api/orders/{id}/status
-- POST /api/ai/suggest
+- GET /api/banners, GET /api/products, POST /api/products
+- POST /api/orders, GET /api/orders, GET /api/orders/kitchen
+- PUT /api/orders/{id}/status, POST /api/ai/suggest
 - GET /api/user/nutrition-summary, PUT /api/user/goals
 
 ## V2 Roadmap
-- Razorpay payment integration
-- Push notification reminders for missed meals
-- Google OAuth login
-- Order analytics & reporting
+- Razorpay payment, push notifications, Google OAuth, order analytics
