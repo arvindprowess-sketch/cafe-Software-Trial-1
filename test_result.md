@@ -204,6 +204,6 @@ test_plan:
 
 agent_communication:
     - agent: "main"
-      message: "Backend changes complete. Please test: 1) Product diet_type classification (GET /api/products should include diet_type). 2) Quick meal endpoint (POST /api/ai/quick-meal with {diet_preference, goal, budget, order_type}). 3) Reorder is hard to test without existing orders. Admin credentials: admin@dietcafe.com / admin123. Register a customer first to test authenticated endpoints."
+      message: "Backend changes complete for AI-powered product management. New endpoints added: 1) POST /api/products/single (name, price, grams -> AI generates desc, finds photo, calculates per-gram cost, nutrition). 2) POST /api/products/ready-made (name, ingredients[], images[], price, serving_grams -> AI generates desc, calculates combined nutrition from ingredients). Both tested via curl and working. Admin credentials: admin@dietcafe.com / admin123. Both endpoints require admin auth."
     - agent: "testing"
       message: "BACKEND TESTING COMPLETE ✅ All new features working perfectly! 🎉 Tested: (1) Products diet_type - all 8 expected products correctly classified veg/non-veg (2) AI Quick Meal Builder - GPT-5.2 integration working, generates proper meals for both veg/non-veg preferences with complete nutrition data (3) Reorder endpoint - validates availability and returns full product details (4) Existing endpoints (auth, products, banners) - all functional. Backend ready for frontend integration."
