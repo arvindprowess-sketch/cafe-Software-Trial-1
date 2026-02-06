@@ -122,15 +122,18 @@ backend:
 
   - task: "AI Quick Meal Builder endpoint (POST /api/ai/quick-meal)"
     implemented: true
-    working: "NA"
+    working: true
     file: "server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         - working: "NA"
           agent: "main"
           comment: "New endpoint accepts diet_preference (veg/non-veg/both), goal, budget, order_type. Filters products, sends to GPT-5.2, returns enriched meal with totals."
+        - working: true
+          agent: "testing"
+          comment: "TESTED: POST /api/ai/quick-meal works perfectly. Tested both veg (4 items, ₹72.0 total) and non-veg (4 items, ₹252.5 total) preferences. Response includes proper meal_items array with product_id, product_name, grams, price, calories, protein, carbs, fat, diet_type. Diet filtering works correctly. AI integration with GPT-5.2 is functional."
 
   - task: "Reorder endpoint (POST /api/orders/{order_id}/reorder)"
     implemented: true
