@@ -752,6 +752,47 @@ async def update_order_status(order_id: str, status: str, user=Depends(get_curre
         raise HTTPException(status_code=404, detail="Order not found")
     return order
 
+# ========== POPULAR ITEMS (Based on Previous Day Sales) ==========
+@api_router.get("/products/popular")
+async def get_popular_products(user=Depends(get_current_user)):
+    """Get popular products based on previous day orders"""
+    from datetime import timedelta
+    
+    # Get yesterday's date range
+    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    yesterday = today - timedelta(days=1)
+    
+    # Get orders from yesterday
+    yesterday_orders = await db.orders.find({
+        "created_at": {"$gte": yesterday.isoformat(), "$lt": today.isoformat()},
+        "status": {"$in": ["completed", "ready", "preparing"]}
+    }, {"_id": 0}).to_list(500)
+    
+    # Count product sales
+    product_sales = {}
+    for order in yesterday_orders:
+        for item in order.get("items", []):
+            pid = item.get("product_id")
+            if pid:
+                product_sales[pid] = product_sales.get(pid, 0) + item.get("quantity", 1)
+    
+    # Get all active products
+    products = await db.products.find({"is_active": True}, {"_id": 0}).to_list(100)
+    
+    # Sort by sales (products with sales first, then by rating)
+    def sort_key(p):
+        sales = product_sales.get(p["id"], 0)
+        rating = p.get("rating", 0)
+        return (-sales, -rating)
+    
+    sorted_products = sorted(products, key=sort_key)
+    
+    # Add sales count to each product
+    for p in sorted_products:
+        p["yesterday_sales"] = product_sales.get(p["id"], 0)
+    
+    return sorted_products[:12]  # Return top 12
+
 # ========== AI ROUTES ==========
 @api_router.post("/ai/suggest")
 async def ai_suggest(data: AISuggestRequest, user=Depends(get_current_user)):
