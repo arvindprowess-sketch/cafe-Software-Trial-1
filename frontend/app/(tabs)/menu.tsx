@@ -37,22 +37,48 @@ export default function MenuScreen() {
   useEffect(() => { loadProducts(); }, []);
   const onRefresh = async () => { setRefreshing(true); await loadProducts(); setRefreshing(false); };
 
+  // Add single product to cart (by grams)
   const addToCart = (product: any) => {
-    const exists = cart.find(c => c.id === product.id);
-    if (exists) setCart(cart.map(c => c.id === product.id ? { ...c, grams: c.grams + 100 } : c));
-    else setCart([...cart, { ...product, grams: 100 }]);
+    if (product.product_type === 'ready_made') {
+      // Ready-made: add by plates
+      const exists = cart.find(c => c.id === product.id);
+      if (exists) {
+        setCart(cart.map(c => c.id === product.id ? { ...c, quantity: c.quantity + 1 } : c));
+      } else {
+        setCart([...cart, { ...product, quantity: 1, grams: product.serving_grams || 300 }]);
+      }
+    } else {
+      // Single product: add by grams
+      const exists = cart.find(c => c.id === product.id);
+      if (exists) setCart(cart.map(c => c.id === product.id ? { ...c, grams: c.grams + 100 } : c));
+      else setCart([...cart, { ...product, grams: 100, quantity: 1 }]);
+    }
   };
+  
   const removeFromCart = (id: string) => setCart(cart.filter(c => c.id !== id));
-  const updateQty = (id: string, delta: number) => {
+  
+  const updateQty = (id: string, delta: number, isReadyMade: boolean = false) => {
     setCart(cart.map(c => {
       if (c.id !== id) return c;
-      const newG = c.grams + delta;
-      return newG > 0 ? { ...c, grams: newG } : c;
-    }).filter(c => c.grams > 0));
+      if (isReadyMade) {
+        const newQty = (c.quantity || 1) + delta;
+        return newQty > 0 ? { ...c, quantity: newQty, grams: (c.serving_grams || 300) * newQty } : c;
+      } else {
+        const newG = c.grams + delta;
+        return newG > 0 ? { ...c, grams: newG } : c;
+      }
+    }).filter(c => c.grams > 0 || (c.quantity || 0) > 0));
   };
 
-  const cartTotal = cart.reduce((s, i) => s + (i.grams / 100) * i.cost_per_100g, 0);
-  const cartItems = cart.reduce((s, i) => s + 1, 0);
+  // Calculate cart total
+  const cartTotal = cart.reduce((s, i) => {
+    if (i.product_type === 'ready_made') {
+      const price = i.fixed_price || (i.cost_per_100g * (i.serving_grams || 300) / 100);
+      return s + price * (i.quantity || 1);
+    }
+    return s + (i.grams / 100) * i.cost_per_100g;
+  }, 0);
+  const cartItems = cart.length;
 
   const filtered = products.filter(p => selectedCat === 'All' || p.category === selectedCat);
 
