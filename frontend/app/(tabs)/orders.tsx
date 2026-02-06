@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl, SafeAreaView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, RefreshControl, SafeAreaView, ActivityIndicator, TouchableOpacity, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { apiCall } from '../../utils/api';
 
 const Z_RED = '#E23744';
@@ -9,9 +10,11 @@ const STEP_LABELS: Record<string, string> = { pending: 'Order Placed', preparing
 const STEP_ICONS: Record<string, string> = { pending: 'checkmark-circle', preparing: 'flame', ready: 'bag-check', completed: 'checkmark-done-circle' };
 
 export default function OrdersScreen() {
+  const router = useRouter();
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [reorderingId, setReorderingId] = useState<string | null>(null);
 
   const loadOrders = useCallback(async () => {
     try { setOrders(await apiCall('/orders')); } catch (e) {} finally { setLoading(false); }
@@ -20,8 +23,64 @@ export default function OrdersScreen() {
   useEffect(() => { loadOrders(); }, []);
   const onRefresh = async () => { setRefreshing(true); await loadOrders(); setRefreshing(false); };
 
+  const handleReorder = async (orderId: string) => {
+    setReorderingId(orderId);
+    try {
+      const result = await apiCall(`/orders/${orderId}/reorder`, { method: 'POST' });
+      if (result.unavailable?.length > 0) {
+        Alert.alert(
+          'Some items unavailable',
+          `${result.unavailable.join(', ')} ${result.unavailable.length === 1 ? 'is' : 'are'} currently unavailable. Proceeding with available items.`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Continue', onPress: () => {
+              if (result.cart_items.length > 0) {
+                const cart = result.cart_items.map((item: any) => ({
+                  id: item.id,
+                  name: item.name,
+                  grams: item.grams,
+                  cost_per_100g: item.cost_per_100g,
+                  calories_per_100g: item.calories_per_100g,
+                  protein_per_100g: item.protein_per_100g,
+                  carbs_per_100g: item.carbs_per_100g,
+                  fat_per_100g: item.fat_per_100g,
+                  category: item.category,
+                  diet_type: item.diet_type,
+                  image_url: item.image_url,
+                }));
+                router.push({ pathname: '/customize', params: { cart: JSON.stringify(cart), orderType: result.order_type } });
+              }
+            }},
+          ]
+        );
+      } else if (result.cart_items.length > 0) {
+        const cart = result.cart_items.map((item: any) => ({
+          id: item.id,
+          name: item.name,
+          grams: item.grams,
+          cost_per_100g: item.cost_per_100g,
+          calories_per_100g: item.calories_per_100g,
+          protein_per_100g: item.protein_per_100g,
+          carbs_per_100g: item.carbs_per_100g,
+          fat_per_100g: item.fat_per_100g,
+          category: item.category,
+          diet_type: item.diet_type,
+          image_url: item.image_url,
+        }));
+        router.push({ pathname: '/customize', params: { cart: JSON.stringify(cart), orderType: result.order_type } });
+      } else {
+        Alert.alert('Unavailable', 'All items from this order are currently unavailable.');
+      }
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Could not prepare reorder');
+    } finally {
+      setReorderingId(null);
+    }
+  };
+
   const renderOrder = ({ item }: { item: any }) => {
     const statusIdx = STEPS.indexOf(item.status);
+    const isReordering = reorderingId === item.id;
     return (
       <View style={styles.card} testID={`order-${item.id}`}>
         <View style={styles.cardTop}>
@@ -73,6 +132,24 @@ export default function OrdersScreen() {
           <Text style={styles.nutritionText}>C: {Math.round(item.total_carbs)}g</Text>
           <Text style={styles.nutritionText}>F: {Math.round(item.total_fat)}g</Text>
         </View>
+
+        {/* Re-order Button */}
+        <TouchableOpacity
+          testID={`reorder-${item.id}`}
+          style={styles.reorderBtn}
+          onPress={() => handleReorder(item.id)}
+          disabled={isReordering}
+          activeOpacity={0.85}
+        >
+          {isReordering ? (
+            <ActivityIndicator color={Z_RED} size="small" />
+          ) : (
+            <>
+              <Ionicons name="refresh" size={16} color={Z_RED} />
+              <Text style={styles.reorderText}>Re-order</Text>
+            </>
+          )}
+        </TouchableOpacity>
       </View>
     );
   };
@@ -131,4 +208,8 @@ const styles = StyleSheet.create({
   nutritionBar: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#EFEFEF' },
   nutritionText: { fontSize: 11, color: '#9C9C9C' },
   nutritionSep: { color: '#D0D0D0' },
+
+  // Re-order button
+  reorderBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 12, paddingVertical: 11, borderRadius: 10, borderWidth: 1.5, borderColor: Z_RED, backgroundColor: '#FDE8EA' },
+  reorderText: { fontSize: 14, fontWeight: '700', color: Z_RED },
 });
