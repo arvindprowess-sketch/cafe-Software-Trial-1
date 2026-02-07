@@ -1609,12 +1609,38 @@ async def seed_data():
 
 @api_router.get("/banners")
 async def get_banners():
-    return [
-        {"id": "1", "title": "Flat 20% OFF", "subtitle": "On all protein meals today", "color": "#E23744"},
-        {"id": "2", "title": "Muscle Gain Pack", "subtitle": "Curated high-protein combo at ₹199", "color": "#267E3E"},
-        {"id": "3", "title": "Free Delivery", "subtitle": "On orders above ₹299", "color": "#FF9F0A"},
-        {"id": "4", "title": "AI Meal Planner", "subtitle": "Get personalized diet suggestions", "color": "#5B5FE0"},
-    ]
+    """Dynamic banners from active offers + packs"""
+    banners = []
+    offers = await db.offers.find({"is_active": True}, {"_id": 0}).sort("created_at", -1).to_list(10)
+    for o in offers:
+        banners.append({
+            "id": f"offer-{o['id']}",
+            "type": "offer",
+            "offer_id": o["id"],
+            "title": o["title"],
+            "subtitle": o["subtitle"],
+            "color": o.get("banner_color", "#E23744"),
+            "discount_value": o.get("discount_value", 0),
+            "discount_type": o.get("discount_type", "percentage"),
+        })
+    packs = await db.packs.find({"is_active": True}, {"_id": 0}).sort("created_at", -1).to_list(10)
+    for p in packs:
+        banners.append({
+            "id": f"pack-{p['id']}",
+            "type": "pack",
+            "pack_id": p["id"],
+            "title": p["name"],
+            "subtitle": p.get("description", ""),
+            "color": p.get("banner_color", "#267E3E"),
+            "goal": p.get("goal", ""),
+        })
+    # Fallback if no offers/packs yet
+    if not banners:
+        banners = [
+            {"id": "default-1", "type": "info", "title": "Welcome to Diet Cafe", "subtitle": "Healthy meals, your way", "color": "#E23744"},
+            {"id": "default-2", "type": "info", "title": "AI Meal Planner", "subtitle": "Get personalized diet suggestions", "color": "#5B5FE0"},
+        ]
+    return banners
 
 # ========== QR CODE TABLE ORDERING ==========
 class TableOrderRequest(BaseModel):
