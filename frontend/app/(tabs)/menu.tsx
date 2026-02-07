@@ -83,8 +83,20 @@ export default function MenuScreen() {
 
   // Filter by both category AND diet type
   const filtered = products.filter(p => {
-    const catMatch = selectedCat === 'All' || p.category === selectedCat;
+    // Category matching
+    let catMatch = selectedCat === 'All';
+    if (selectedCat === 'Meal') {
+      // Meal = ready-made dishes
+      catMatch = p.product_type === 'ready_made' || p.category === 'Meal';
+    } else if (selectedCat !== 'All') {
+      // For Protein/Carb/Fat - check if category matches OR if it's in the name
+      catMatch = p.category === selectedCat || 
+                 (p.name && p.name.toLowerCase().includes(selectedCat.toLowerCase()));
+    }
+    
+    // Diet type matching
     const dietMatch = dietFilter === 'all' || p.diet_type === dietFilter;
+    
     return catMatch && dietMatch;
   });
 
