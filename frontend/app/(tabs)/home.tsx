@@ -412,8 +412,22 @@ export default function HomeScreen() {
             </TouchableOpacity>
           ))}
         </View>
-        <View style={{ height: 24 }} />
+        <View style={{ height: 100 }} />
       </ScrollView>
+
+      {/* Floating AI Chat Button */}
+      <TouchableOpacity 
+        style={styles.floatingAiBtn}
+        onPress={() => router.push('/ai-chat')}
+        activeOpacity={0.9}
+      >
+        <View style={styles.floatingAiInner}>
+          <Ionicons name="chatbubbles" size={22} color="#FFF" />
+        </View>
+        <View style={styles.floatingAiBadge}>
+          <Ionicons name="sparkles" size={10} color="#FFF" />
+        </View>
+      </TouchableOpacity>
     </SafeAreaView>
   );
 }
