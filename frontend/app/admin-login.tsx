@@ -39,8 +39,8 @@ export default function AdminLoginScreen() {
         return;
       }
 
-      await AsyncStorage.setItem('token', result.token);
-      await AsyncStorage.setItem('user', JSON.stringify(result.user));
+      await AsyncStorage.setItem('auth_token', result.token);
+      await AsyncStorage.setItem('user_data', JSON.stringify(result.user));
       
       router.replace('/(admin)/dashboard');
     } catch (e: any) {
