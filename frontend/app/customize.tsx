@@ -102,30 +102,49 @@ export default function CustomizeScreen() {
   };
 
   const applySuggestion = async (s: any) => {
+    const suggestedName = s.product_name?.toLowerCase().trim() || '';
+    
     // Try to find the item by name (case insensitive, partial match)
-    let item = items.find(i => 
-      i.name.toLowerCase() === s.product_name?.toLowerCase() ||
-      i.name.toLowerCase().includes(s.product_name?.toLowerCase()) ||
-      s.product_name?.toLowerCase().includes(i.name.toLowerCase())
-    );
+    let item = items.find(i => {
+      const itemName = i.name?.toLowerCase().trim() || '';
+      return itemName === suggestedName ||
+        itemName.includes(suggestedName) ||
+        suggestedName.includes(itemName);
+    });
     
     if (item) {
       // Item exists in cart - update grams
-      updateGrams(item.id, s.suggested_grams);
-      Alert.alert('Applied!', `${item.name} updated to ${s.suggested_grams}g`);
+      const newGrams = s.suggested_grams || 100;
+      setItems(items.map(i => i.id === item.id ? { ...i, grams: newGrams } : i));
+      Alert.alert('Applied!', `${item.name} updated to ${newGrams}g`);
     } else {
       // Item not in cart - need to fetch it and add
       try {
         const allProducts = await apiCall('/products');
-        const product = allProducts.find((p: any) => 
-          p.name.toLowerCase() === s.product_name?.toLowerCase() ||
-          p.name.toLowerCase().includes(s.product_name?.toLowerCase()) ||
-          s.product_name?.toLowerCase().includes(p.name.toLowerCase())
-        );
+        const product = allProducts.find((p: any) => {
+          const productName = p.name?.toLowerCase().trim() || '';
+          return productName === suggestedName ||
+            productName.includes(suggestedName) ||
+            suggestedName.includes(productName);
+        });
         
         if (product) {
-          // Add to cart with suggested grams
-          setItems([...items, { ...product, grams: s.suggested_grams }]);
+          // Add to cart with suggested grams - ensure all required fields are present
+          const newItem = {
+            ...product,
+            id: product.id,
+            name: product.name,
+            grams: s.suggested_grams || 100,
+            cost_per_100g: product.cost_per_100g,
+            calories_per_100g: product.calories_per_100g,
+            protein_per_100g: product.protein_per_100g,
+            carbs_per_100g: product.carbs_per_100g,
+            fat_per_100g: product.fat_per_100g,
+            category: product.category,
+            diet_type: product.diet_type || 'veg',
+            product_type: product.product_type || 'single'
+          };
+          setItems(prevItems => [...prevItems, newItem]);
           Alert.alert('Added!', `${product.name} added with ${s.suggested_grams}g`);
         } else {
           Alert.alert('Not Found', `Could not find "${s.product_name}" in menu`);
