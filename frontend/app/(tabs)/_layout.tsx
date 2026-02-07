@@ -31,4 +31,20 @@ export default function TabLayout() {
 const styles = StyleSheet.create({
   tabBar: { backgroundColor: '#FFF', borderTopColor: '#EFEFEF', borderTopWidth: 1, height: 60, paddingBottom: 6, paddingTop: 6, elevation: 8 },
   tabLabel: { fontSize: 10, fontWeight: '600' },
+  budgetLabel: { fontSize: 10, fontWeight: '700' },
+  budgetIcon: { },
+  budgetIconActive: { 
+    backgroundColor: PURPLE, 
+    width: 40, 
+    height: 40, 
+    borderRadius: 20, 
+    alignItems: 'center', 
+    justifyContent: 'center',
+    marginTop: -15,
+    shadowColor: PURPLE,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
 });
