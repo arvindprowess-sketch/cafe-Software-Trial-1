@@ -95,9 +95,39 @@ export default function CustomizeScreen() {
     } catch (e: any) { Alert.alert('Error', e.message); } finally { setAiLoading(false); }
   };
 
-  const applySuggestion = (s: any) => {
-    const item = items.find(i => i.name.toLowerCase() === s.product_name?.toLowerCase());
-    if (item) updateGrams(item.id, s.suggested_grams);
+  const applySuggestion = async (s: any) => {
+    // Try to find the item by name (case insensitive, partial match)
+    let item = items.find(i => 
+      i.name.toLowerCase() === s.product_name?.toLowerCase() ||
+      i.name.toLowerCase().includes(s.product_name?.toLowerCase()) ||
+      s.product_name?.toLowerCase().includes(i.name.toLowerCase())
+    );
+    
+    if (item) {
+      // Item exists in cart - update grams
+      updateGrams(item.id, s.suggested_grams);
+      Alert.alert('Applied!', `${item.name} updated to ${s.suggested_grams}g`);
+    } else {
+      // Item not in cart - need to fetch it and add
+      try {
+        const allProducts = await apiCall('/products');
+        const product = allProducts.find((p: any) => 
+          p.name.toLowerCase() === s.product_name?.toLowerCase() ||
+          p.name.toLowerCase().includes(s.product_name?.toLowerCase()) ||
+          s.product_name?.toLowerCase().includes(p.name.toLowerCase())
+        );
+        
+        if (product) {
+          // Add to cart with suggested grams
+          setItems([...items, { ...product, grams: s.suggested_grams }]);
+          Alert.alert('Added!', `${product.name} added with ${s.suggested_grams}g`);
+        } else {
+          Alert.alert('Not Found', `Could not find "${s.product_name}" in menu`);
+        }
+      } catch (e) {
+        Alert.alert('Error', 'Could not add item. Please try again.');
+      }
+    }
     setAiSuggestion(null);
   };
 
