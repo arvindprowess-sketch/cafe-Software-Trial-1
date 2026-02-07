@@ -1,16 +1,17 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Modal, Animated,
-  Dimensions, ScrollView, Pressable
+  Dimensions, ScrollView, Pressable, TextInput, Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { logout } from '../../utils/api';
+import { apiCall, logout } from '../../utils/api';
 
 const { width } = Dimensions.get('window');
-const DRAWER_WIDTH = width * 0.8;
+const DRAWER_WIDTH = width * 0.85;
 const Z_RED = '#E23744';
 const GREEN = '#267E3E';
+const PURPLE = '#5B5FE0';
 
 interface SideDrawerProps {
   visible: boolean;
@@ -18,20 +19,42 @@ interface SideDrawerProps {
   user: any;
 }
 
+const GOALS = [
+  { key: 'fat_loss', label: 'Fat Loss', icon: 'trending-down' as const, color: Z_RED },
+  { key: 'muscle_gain', label: 'Muscle Gain', icon: 'trending-up' as const, color: GREEN },
+  { key: 'maintenance', label: 'Maintain', icon: 'swap-horizontal' as const, color: PURPLE },
+];
+
 const MENU_ITEMS = [
   { id: 'orders', label: 'Recent Orders', icon: 'time-outline', route: '/(tabs)/orders' },
   { id: 'addresses', label: 'Saved Addresses', icon: 'location-outline', route: null },
   { id: 'deals', label: 'Saved Deals', icon: 'pricetag-outline', route: null },
   { id: 'divider1', type: 'divider' },
-  { id: 'nutrition', label: 'Nutrition Info', icon: 'nutrition-outline', route: '/(tabs)/profile' },
   { id: 'faq', label: 'FAQs & Support', icon: 'help-circle-outline', route: null },
-  { id: 'divider2', type: 'divider' },
-  { id: 'logout', label: 'Logout', icon: 'log-out-outline', route: 'logout', color: Z_RED },
 ];
 
 export default function SideDrawer({ visible, onClose, user }: SideDrawerProps) {
   const router = useRouter();
   const slideAnim = React.useRef(new Animated.Value(-DRAWER_WIDTH)).current;
+
+  // Profile state
+  const [showGoals, setShowGoals] = useState(false);
+  const [goal, setGoal] = useState(user?.fitness_goal || 'maintenance');
+  const [calories, setCalories] = useState(String(user?.daily_calories || 2000));
+  const [protein, setProtein] = useState(String(user?.daily_protein || 100));
+  const [carbs, setCarbs] = useState(String(user?.daily_carbs || 250));
+  const [fat, setFat] = useState(String(user?.daily_fat || 65));
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      setGoal(user.fitness_goal || 'maintenance');
+      setCalories(String(user.daily_calories || 2000));
+      setProtein(String(user.daily_protein || 100));
+      setCarbs(String(user.daily_carbs || 250));
+      setFat(String(user.daily_fat || 65));
+    }
+  }, [user]);
 
   React.useEffect(() => {
     Animated.timing(slideAnim, {
@@ -41,18 +64,40 @@ export default function SideDrawer({ visible, onClose, user }: SideDrawerProps) 
     }).start();
   }, [visible]);
 
+  const saveGoals = async () => {
+    setSaving(true);
+    try {
+      await apiCall('/user/goals', {
+        method: 'PUT',
+        body: {
+          fitness_goal: goal,
+          daily_calories: parseInt(calories) || 2000,
+          daily_protein: parseInt(protein) || 100,
+          daily_carbs: parseInt(carbs) || 250,
+          daily_fat: parseInt(fat) || 65,
+        },
+      });
+      Alert.alert('Saved!', 'Your fitness goals updated');
+    } catch (e: any) {
+      Alert.alert('Error', e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleItemPress = async (item: any) => {
-    if (item.route === 'logout') {
-      await logout();
-      onClose();
-      router.replace('/');
-    } else if (item.route) {
+    if (item.route) {
       onClose();
       router.push(item.route);
     } else {
-      // Coming soon
       onClose();
     }
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    onClose();
+    router.replace('/');
   };
 
   if (!visible) return null;
@@ -62,9 +107,9 @@ export default function SideDrawer({ visible, onClose, user }: SideDrawerProps) 
       <View style={styles.overlay}>
         <Pressable style={styles.backdrop} onPress={onClose} />
         <Animated.View style={[styles.drawer, { transform: [{ translateX: slideAnim }] }]}>
-          {/* Header with User Info */}
+          {/* Header */}
           <View style={styles.header}>
-            <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
+            <TouchableOpacity style={styles.closeBtn} onPress={onClose} data-testid="drawer-close-btn">
               <Ionicons name="arrow-back" size={24} color="#1C1C2E" />
             </TouchableOpacity>
             <TouchableOpacity style={styles.notifBtn}>
@@ -86,22 +131,82 @@ export default function SideDrawer({ visible, onClose, user }: SideDrawerProps) 
             </View>
           </View>
 
-          {/* Fitness Goal Card */}
-          <View style={styles.goalCard}>
-            <View style={styles.goalIcon}>
+          {/* Fitness Goal Toggle Card */}
+          <TouchableOpacity
+            style={styles.goalCard}
+            onPress={() => setShowGoals(!showGoals)}
+            data-testid="drawer-fitness-toggle"
+          >
+            <View style={styles.goalIconBox}>
               <Ionicons name="fitness" size={20} color="#FFF" />
             </View>
-            <Text style={styles.goalText}>
-              {user?.fitness_goal === 'fat_loss' ? 'Fat Loss' : 
-               user?.fitness_goal === 'muscle_gain' ? 'Muscle Gain' : 'Maintenance'}
-            </Text>
-            <TouchableOpacity style={styles.goalBtn} onPress={() => { onClose(); router.push('/(tabs)/profile'); }}>
-              <Text style={styles.goalBtnText}>Update</Text>
-            </TouchableOpacity>
-          </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.goalText}>
+                {goal === 'fat_loss' ? 'Fat Loss' : goal === 'muscle_gain' ? 'Muscle Gain' : 'Maintenance'}
+              </Text>
+              <Text style={styles.goalSub}>{calories} kcal target</Text>
+            </View>
+            <Ionicons name={showGoals ? 'chevron-up' : 'chevron-down'} size={20} color="#FFF" />
+          </TouchableOpacity>
 
-          {/* Menu Items */}
           <ScrollView style={styles.menuList} showsVerticalScrollIndicator={false}>
+            {/* Expandable Goals Section */}
+            {showGoals && (
+              <View style={styles.goalsSection} data-testid="drawer-goals-section">
+                <Text style={styles.sectionTitle}>Fitness Goal</Text>
+                <View style={styles.goalsRow}>
+                  {GOALS.map(g => (
+                    <TouchableOpacity
+                      key={g.key}
+                      data-testid={`drawer-goal-${g.key}`}
+                      style={[styles.goalPill, goal === g.key && { borderColor: g.color, backgroundColor: `${g.color}15` }]}
+                      onPress={() => setGoal(g.key)}
+                    >
+                      <Ionicons name={g.icon} size={16} color={goal === g.key ? g.color : '#9C9C9C'} />
+                      <Text style={[styles.goalPillText, goal === g.key && { color: g.color, fontWeight: '700' }]}>{g.label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <Text style={styles.sectionTitle}>Daily Targets</Text>
+                <View style={styles.targetsGrid}>
+                  {[
+                    { label: 'Calories', val: calories, set: setCalories, unit: 'kcal', color: Z_RED },
+                    { label: 'Protein', val: protein, set: setProtein, unit: 'g', color: Z_RED },
+                    { label: 'Carbs', val: carbs, set: setCarbs, unit: 'g', color: '#FF9F0A' },
+                    { label: 'Fat', val: fat, set: setFat, unit: 'g', color: PURPLE },
+                  ].map(t => (
+                    <View key={t.label} style={styles.targetCard}>
+                      <Text style={[styles.targetLabel, { color: t.color }]}>{t.label}</Text>
+                      <View style={styles.targetInputRow}>
+                        <TextInput
+                          data-testid={`drawer-target-${t.label.toLowerCase()}`}
+                          style={styles.targetInput}
+                          value={t.val}
+                          onChangeText={t.set}
+                          keyboardType="number-pad"
+                        />
+                        <Text style={styles.targetUnit}>{t.unit}</Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+
+                <TouchableOpacity
+                  style={styles.saveBtn}
+                  onPress={saveGoals}
+                  disabled={saving}
+                  data-testid="drawer-save-goals-btn"
+                >
+                  <Ionicons name="checkmark-circle" size={18} color="#FFF" />
+                  <Text style={styles.saveBtnText}>{saving ? 'Saving...' : 'Save Goals'}</Text>
+                </TouchableOpacity>
+
+                <View style={styles.divider} />
+              </View>
+            )}
+
+            {/* Menu Items */}
             {MENU_ITEMS.map((item) => {
               if (item.type === 'divider') {
                 return <View key={item.id} style={styles.divider} />;
@@ -111,22 +216,27 @@ export default function SideDrawer({ visible, onClose, user }: SideDrawerProps) 
                   key={item.id}
                   style={styles.menuItem}
                   onPress={() => handleItemPress(item)}
-                  testID={`drawer-${item.id}`}
+                  data-testid={`drawer-${item.id}`}
                 >
-                  <Ionicons 
-                    name={item.icon as any} 
-                    size={22} 
-                    color={item.color || '#1C1C2E'} 
-                  />
-                  <Text style={[styles.menuLabel, item.color && { color: item.color }]}>
-                    {item.label}
-                  </Text>
+                  <Ionicons name={item.icon as any} size={22} color="#1C1C2E" />
+                  <Text style={styles.menuLabel}>{item.label}</Text>
                 </TouchableOpacity>
               );
             })}
+
+            <View style={styles.divider} />
+
+            {/* Logout */}
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={handleLogout}
+              data-testid="drawer-logout"
+            >
+              <Ionicons name="log-out-outline" size={22} color={Z_RED} />
+              <Text style={[styles.menuLabel, { color: Z_RED }]}>Logout</Text>
+            </TouchableOpacity>
           </ScrollView>
 
-          {/* App Version */}
           <Text style={styles.version}>Diet Cafe v1.3</Text>
         </Animated.View>
       </View>
@@ -139,9 +249,7 @@ const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
   drawer: {
     position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
+    left: 0, top: 0, bottom: 0,
     width: DRAWER_WIDTH,
     backgroundColor: '#FFF8F0',
   },
@@ -154,83 +262,85 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
   },
   closeBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 40, height: 40, borderRadius: 20,
     backgroundColor: '#FFF',
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: 'center', justifyContent: 'center',
   },
   notifBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 40, height: 40, borderRadius: 20,
     backgroundColor: '#FFF',
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: 'center', justifyContent: 'center',
   },
   profile: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-    gap: 14,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 20, paddingVertical: 16, gap: 14,
   },
   avatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 56, height: 56, borderRadius: 28,
     backgroundColor: '#FDE8EA',
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: 'center', justifyContent: 'center',
   },
   userInfo: { flex: 1 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   userName: { fontSize: 20, fontWeight: '700', color: '#1C1C2E' },
   userPhone: { fontSize: 14, color: '#696969', marginTop: 2 },
-  
+
   goalCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'row', alignItems: 'center',
     backgroundColor: '#4A3728',
-    marginHorizontal: 16,
-    borderRadius: 14,
-    padding: 14,
-    gap: 12,
+    marginHorizontal: 16, borderRadius: 14,
+    padding: 14, gap: 12,
   },
-  goalIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  goalIconBox: {
+    width: 40, height: 40, borderRadius: 20,
     backgroundColor: Z_RED,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: 'center', justifyContent: 'center',
   },
-  goalText: { flex: 1, fontSize: 14, fontWeight: '600', color: '#FFF' },
-  goalBtn: {
-    backgroundColor: Z_RED,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+  goalText: { fontSize: 15, fontWeight: '700', color: '#FFF' },
+  goalSub: { fontSize: 12, color: '#C4A882', marginTop: 2 },
+
+  menuList: { flex: 1, marginTop: 12 },
+
+  // Goals expandable section
+  goalsSection: { paddingHorizontal: 16, paddingTop: 8 },
+  sectionTitle: { fontSize: 14, fontWeight: '700', color: '#1C1C2E', marginBottom: 8, marginTop: 4 },
+  goalsRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
+  goalPill: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6, paddingVertical: 10, borderRadius: 20,
+    backgroundColor: '#FFF', borderWidth: 1.5, borderColor: '#E8E8E8',
   },
-  goalBtnText: { color: '#FFF', fontSize: 12, fontWeight: '700' },
-  
-  menuList: { flex: 1, marginTop: 20 },
+  goalPillText: { fontSize: 11, fontWeight: '600', color: '#696969' },
+
+  targetsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 },
+  targetCard: {
+    width: '47%', backgroundColor: '#FFF', borderRadius: 10,
+    padding: 10, borderWidth: 1, borderColor: '#EFEFEF',
+  },
+  targetLabel: { fontSize: 11, fontWeight: '600', marginBottom: 4 },
+  targetInputRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  targetInput: {
+    flex: 1, backgroundColor: '#F5F5F5', borderRadius: 6,
+    padding: 8, color: '#1C1C2E', fontSize: 16, fontWeight: '700',
+  },
+  targetUnit: { fontSize: 11, color: '#9C9C9C', fontWeight: '600' },
+
+  saveBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, backgroundColor: Z_RED, borderRadius: 10,
+    paddingVertical: 12, marginBottom: 8,
+  },
+  saveBtnText: { color: '#FFF', fontSize: 14, fontWeight: '700' },
+
   menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    gap: 16,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 20, paddingVertical: 16, gap: 16,
   },
   menuLabel: { fontSize: 16, fontWeight: '600', color: '#1C1C2E' },
   divider: { height: 1, backgroundColor: '#E8E8E8', marginVertical: 8, marginHorizontal: 20 },
-  
-  version: { 
-    textAlign: 'center', 
-    color: '#B0B0B0', 
-    fontSize: 12, 
-    paddingBottom: 30,
-    paddingTop: 10,
+
+  version: {
+    textAlign: 'center', color: '#B0B0B0', fontSize: 12,
+    paddingBottom: 30, paddingTop: 10,
   },
 });
