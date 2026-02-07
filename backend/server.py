@@ -1500,6 +1500,15 @@ async def update_goals(data: UserGoals, user=Depends(get_current_user)):
     await db.users.update_one({"id": user["id"]}, {"$set": data.dict()})
     return {"message": "Goals updated", **data.dict()}
 
+@api_router.put("/user/profile")
+async def update_profile(data: dict = Body(...), user=Depends(get_current_user)):
+    allowed = {k: v for k, v in data.items() if k in ("name",)}
+    if not allowed:
+        raise HTTPException(400, "No valid fields to update")
+    await db.users.update_one({"id": user["id"]}, {"$set": allowed})
+    return {"message": "Profile updated", **allowed}
+
+
 @api_router.get("/user/nutrition-summary")
 async def nutrition_summary(user=Depends(get_current_user)):
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
