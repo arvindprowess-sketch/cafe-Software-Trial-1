@@ -85,8 +85,8 @@ export default function AuthScreen() {
 
             {isLogin && (
               <TouchableOpacity testID="demo-admin-btn" style={styles.demoBtn} onPress={() => { setEmail('admin@dietcafe.com'); setPassword('admin123'); }}>
-                <Ionicons name="flash" size={14} color={Z_RED} />
-                <Text style={styles.demoBtnText}>Quick login: admin@dietcafe.com</Text>
+                <Ionicons name="storefront" size={14} color={Z_RED} />
+                <Text style={styles.demoBtnText}>Café Owner? Tap here to login</Text>
               </TouchableOpacity>
             )}
           </View>
