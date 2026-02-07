@@ -73,55 +73,41 @@ async def test_admin_login(session):
         results.log_fail("Admin Login", f"Exception: {e}")
         return False
 
-async def test_single_product_creation(session):
-    """Test single product creation with AI features"""
-    if not admin_token:
-        results.log_fail("Single Product Creation", "No admin token available")
-        return False
-    
+async def test_categories_endpoint(session):
+    """Test GET /api/categories should return 6 categories (per review request)"""
     try:
-        headers = {"Authorization": f"Bearer {admin_token}"}
-        payload = {"name": "Mushroom", "price": 80, "grams": 1000}
-        
-        async with session.post(f"{API_BASE}/products/single", json=payload, headers=headers) as response:
+        async with session.get(f"{API_BASE}/categories") as response:
             if response.status == 200:
                 data = await response.json()
-                
-                # Verify required fields
-                required_checks = [
-                    ("product_type", "single", data.get("product_type")),
-                    ("cost_per_100g", 8.0, data.get("cost_per_100g")),  # 80/1000 * 100 = 8.0
-                    ("diet_type", "veg", data.get("diet_type")),
-                    ("name", "Mushroom", data.get("name"))
-                ]
-                
-                checks_passed = 0
-                for field, expected, actual in required_checks:
-                    if actual == expected:
-                        checks_passed += 1
-                    else:
-                        results.log_fail("Single Product Creation", f"{field} mismatch: expected {expected}, got {actual}")
+                if isinstance(data, list):
+                    category_count = len(data)
+                    # Check for expected 6 categories
+                    if category_count == 6:
+                        results.log_pass("Categories Endpoint", f"✓ Found exactly {category_count} categories as expected")
                         
-                # Check AI-generated content
-                has_description = bool(data.get("description"))
-                has_image_url = bool(data.get("image_url"))
-                has_nutrition = all(k in data for k in ["calories_per_100g", "protein_per_100g", "carbs_per_100g", "fat_per_100g"])
-                
-                if checks_passed == 4 and has_description and has_image_url and has_nutrition:
-                    results.log_pass("Single Product Creation", 
-                        f"✓ cost_per_100g: {data['cost_per_100g']}, diet_type: {data['diet_type']}, " +
-                        f"AI desc: '{data.get('description', '')[:40]}...', image: {data.get('image_url') is not None}, " +
-                        f"nutrition: {data.get('calories_per_100g')}cal")
-                    return data
+                        # Verify category structure  
+                        sample_category = data[0] if data else {}
+                        required_fields = ['id', 'name', 'icon', 'color']
+                        missing_fields = [field for field in required_fields if field not in sample_category]
+                        
+                        if not missing_fields:
+                            results.log_pass("Category Structure Validation", "✓ Categories have all required fields")
+                            return True
+                        else:
+                            results.log_fail("Category Structure Validation", f"Missing fields: {missing_fields}")
+                            return False
+                    else:
+                        results.log_fail("Categories Endpoint", f"Expected 6 categories, got {category_count}")
+                        return False
                 else:
-                    results.log_fail("Single Product Creation", f"Missing fields: description={has_description}, image={has_image_url}, nutrition={has_nutrition}")
+                    results.log_fail("Categories Endpoint", "Response is not a list")
                     return False
             else:
                 text = await response.text()
-                results.log_fail("Single Product Creation", f"HTTP {response.status}: {text}")
+                results.log_fail("Categories Endpoint", f"HTTP {response.status}: {text}")
                 return False
     except Exception as e:
-        results.log_fail("Single Product Creation", f"Exception: {e}")
+        results.log_fail("Categories Endpoint", f"Exception: {e}")
         return False
 
 async def test_ready_made_veg_meal(session):
