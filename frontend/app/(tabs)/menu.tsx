@@ -300,7 +300,7 @@ export default function MenuScreen() {
   );
 }
 
-const SIDEBAR_WIDTH = 90;
+const SIDEBAR_WIDTH = 70;
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#F5F5F5' },
@@ -312,24 +312,24 @@ const styles = StyleSheet.create({
     alignItems: 'center', 
     justifyContent: 'space-between',
     backgroundColor: '#FFF', 
-    paddingHorizontal: 16, 
-    paddingVertical: 14,
+    paddingHorizontal: 12, 
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
   },
   menuBtn: { 
-    width: 40, 
-    height: 40, 
-    borderRadius: 10, 
+    width: 36, 
+    height: 36, 
+    borderRadius: 8, 
     backgroundColor: '#F5F5F5', 
     alignItems: 'center', 
     justifyContent: 'center' 
   },
-  title: { fontSize: 20, fontWeight: '800', color: '#1C1C2E' },
+  title: { fontSize: 18, fontWeight: '800', color: '#1C1C2E' },
   searchBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: '#FDE8EA',
     alignItems: 'center',
     justifyContent: 'center',
@@ -340,16 +340,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFF',
-    marginHorizontal: 16,
-    marginVertical: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 12,
-    gap: 10,
+    marginHorizontal: 10,
+    marginVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    gap: 8,
     borderWidth: 1,
     borderColor: '#F0F0F0',
   },
-  searchInput: { flex: 1, fontSize: 14, color: '#1C1C2E' },
+  searchInput: { flex: 1, fontSize: 13, color: '#1C1C2E' },
   
   // Main Content Layout
   mainContent: { 
@@ -357,7 +357,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   
-  // Left Sidebar
+  // Left Sidebar (Compact)
   sidebar: { 
     width: SIDEBAR_WIDTH, 
     backgroundColor: '#FFF',
@@ -365,12 +365,12 @@ const styles = StyleSheet.create({
     borderRightColor: '#F0F0F0',
   },
   sidebarContent: { 
-    paddingVertical: 8,
+    paddingVertical: 4,
   },
   sidebarCat: { 
     alignItems: 'center', 
-    paddingVertical: 12,
-    paddingHorizontal: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
     borderLeftWidth: 3,
     borderLeftColor: 'transparent',
     position: 'relative',
@@ -381,31 +381,31 @@ const styles = StyleSheet.create({
   sidebarActiveBar: {
     position: 'absolute',
     left: 0,
-    top: 8,
-    bottom: 8,
+    top: 6,
+    bottom: 6,
     width: 3,
     borderRadius: 2,
   },
   sidebarCatImg: { 
-    width: 50, 
-    height: 50, 
-    borderRadius: 10,
-    marginBottom: 6,
+    width: 40, 
+    height: 40, 
+    borderRadius: 8,
+    marginBottom: 4,
   },
   sidebarCatIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 6,
+    marginBottom: 4,
   },
   sidebarCatLabel: { 
-    fontSize: 10, 
+    fontSize: 9, 
     fontWeight: '600', 
     color: '#696969', 
     textAlign: 'center',
-    lineHeight: 13,
+    lineHeight: 11,
   },
   
   // Product List
