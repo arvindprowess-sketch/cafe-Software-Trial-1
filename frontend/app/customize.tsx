@@ -163,6 +163,7 @@ export default function CustomizeScreen() {
   const renderSingleProduct = (item: any) => {
     const mode = inputMode[item.id] || 'grams';
     const f = item.grams / 100;
+    const currentRupees = Math.round(f * item.cost_per_100g);
     
     return (
       <View key={item.id} style={styles.itemCard} testID={`customize-item-${item.id}`}>
@@ -188,24 +189,33 @@ export default function CustomizeScreen() {
           ))}
         </View>
         <View style={styles.qtyRow}>
-          <TouchableOpacity style={styles.qtyBtn} onPress={() => updateGrams(item.id, item.grams - 25)}>
+          <TouchableOpacity style={styles.qtyBtn} onPress={() => mode === 'grams' ? updateGrams(item.id, item.grams - 25) : updateByRupees(item.id, currentRupees - 10)}>
             <Ionicons name="remove" size={16} color={Z_RED} />
           </TouchableOpacity>
           <TextInput testID={`qty-input-${item.id}`} style={styles.qtyInput}
-            value={mode === 'grams' ? String(item.grams) : String(Math.round(f * item.cost_per_100g))}
+            value={mode === 'grams' ? String(item.grams) : String(currentRupees)}
             onChangeText={v => { const n = parseInt(v) || 0; mode === 'grams' ? updateGrams(item.id, n) : updateByRupees(item.id, n); }}
             keyboardType="number-pad" />
           <Text style={styles.qtyUnit}>{mode === 'grams' ? 'g' : '₹'}</Text>
-          <TouchableOpacity style={[styles.qtyBtn, { backgroundColor: Z_RED }]} onPress={() => updateGrams(item.id, item.grams + 25)}>
+          <TouchableOpacity style={[styles.qtyBtn, { backgroundColor: Z_RED }]} onPress={() => mode === 'grams' ? updateGrams(item.id, item.grams + 25) : updateByRupees(item.id, currentRupees + 10)}>
             <Ionicons name="add" size={16} color="#FFF" />
           </TouchableOpacity>
         </View>
+        
+        {/* Show conversion feedback when in rupees mode */}
+        {mode === 'rupees' && (
+          <View style={styles.conversionRow}>
+            <Ionicons name="swap-horizontal" size={14} color="#5B5FE0" />
+            <Text style={styles.conversionText}>₹{currentRupees} = <Text style={styles.conversionHighlight}>{item.grams}g</Text> of {item.name}</Text>
+          </View>
+        )}
+        
         <View style={styles.nutriRow}>
           <Text style={styles.nutriText}>{Math.round(f * item.calories_per_100g)} cal</Text>
           <Text style={styles.nutriText}>P: {(f * item.protein_per_100g).toFixed(1)}g</Text>
           <Text style={styles.nutriText}>C: {(f * item.carbs_per_100g).toFixed(1)}g</Text>
           <Text style={styles.nutriText}>F: {(f * item.fat_per_100g).toFixed(1)}g</Text>
-          <Text style={styles.priceText}>₹{Math.round(f * item.cost_per_100g)}</Text>
+          <Text style={styles.priceText}>₹{currentRupees}</Text>
         </View>
       </View>
     );
