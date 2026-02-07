@@ -25,7 +25,13 @@ export default function CustomizeScreen() {
 
   // For single products
   const updateGrams = (id: string, grams: number) => setItems(items.map(i => i.id === id ? { ...i, grams: Math.max(0, grams) } : i));
-  const updateByRupees = (id: string, rupees: number) => { const item = items.find(i => i.id === id); if (item) updateGrams(id, Math.round((rupees / item.cost_per_100g) * 100)); };
+  const updateByRupees = (id: string, rupees: number) => { 
+    const item = items.find(i => i.id === id); 
+    if (item) {
+      const calculatedGrams = Math.round((rupees / item.cost_per_100g) * 100);
+      setItems(items.map(i => i.id === id ? { ...i, grams: Math.max(0, calculatedGrams) } : i));
+    }
+  };
   
   // For ready-made dishes (plates)
   const updatePlates = (id: string, delta: number) => {
