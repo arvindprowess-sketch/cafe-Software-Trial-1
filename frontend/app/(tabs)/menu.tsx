@@ -59,8 +59,7 @@ export default function MenuScreen() {
       }));
       // Merge DB categories with defaults
       if (cats && cats.length > 0) {
-        const allCat = { key: 'All', label: 'All Items', icon: 'grid', color: '#1C1C2E', image_url: null };
-        setCategories([allCat, ...cats]);
+        setCategories(cats);
       }
     }
     catch (e) {} finally { setLoading(false); }
