@@ -17,7 +17,6 @@ const { width, height } = Dimensions.get('window');
 
 // Default categories (used as fallback if no DB categories)
 const DEFAULT_CATS = [
-  { key: 'All', label: 'All Items', icon: 'grid', color: '#1C1C2E', image_url: null },
   { key: 'Protein', label: 'Protein', icon: 'barbell', color: Z_RED, image_url: 'https://images.unsplash.com/photo-1632778149955-e80f8ceca2e8?w=80&h=80&fit=crop' },
   { key: 'Carb', label: 'Carbs', icon: 'leaf', color: '#FF9F0A', image_url: 'https://images.unsplash.com/photo-1536304929831-ee1ca9d44726?w=80&h=80&fit=crop' },
   { key: 'Fat', label: 'Fats', icon: 'water', color: PURPLE, image_url: 'https://images.unsplash.com/photo-1523049673857-eb18f1d7b578?w=80&h=80&fit=crop' },
