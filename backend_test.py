@@ -7,7 +7,7 @@ from pathlib import Path
 
 # Load frontend env to get backend URL
 frontend_env_path = Path("/app/frontend/.env")
-backend_url = "https://healthy-bites-72.preview.emergentagent.com"
+backend_url = "https://expo-diet-companion.preview.emergentagent.com"
 if frontend_env_path.exists():
     with open(frontend_env_path) as f:
         for line in f:
