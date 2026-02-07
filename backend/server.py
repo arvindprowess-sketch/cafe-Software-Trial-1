@@ -1748,7 +1748,245 @@ async def mark_notification_read(notification_id: str, user=Depends(get_current_
     )
     return {"message": "Marked as read"}
 
-# ========== DELIVERY TRACKING (GOOGLE MAPS) ==========
+# ========== OFFERS & BANNERS SYSTEM (Admin-Managed) ==========
+class OfferCreate(BaseModel):
+    title: str
+    subtitle: str
+    discount_type: str = "percentage"  # "percentage" or "flat"
+    discount_value: float = 10  # 10% or ₹10
+    applicable_to: str = "all"  # "all", "category", "products"
+    applicable_category: Optional[str] = None  # "Protein", "Carb", etc.
+    applicable_product_ids: Optional[List[str]] = []
+    banner_color: str = "#E23744"
+    coupon_code: Optional[str] = None
+    min_order_value: float = 0
+    max_discount: Optional[float] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    is_active: bool = True
+
+class OfferUpdate(BaseModel):
+    title: Optional[str] = None
+    subtitle: Optional[str] = None
+    discount_type: Optional[str] = None
+    discount_value: Optional[float] = None
+    applicable_to: Optional[str] = None
+    applicable_category: Optional[str] = None
+    applicable_product_ids: Optional[List[str]] = None
+    banner_color: Optional[str] = None
+    coupon_code: Optional[str] = None
+    min_order_value: Optional[float] = None
+    max_discount: Optional[float] = None
+    is_active: Optional[bool] = None
+
+@api_router.get("/offers")
+async def get_active_offers():
+    """Get all active offers for customers"""
+    offers = await db.offers.find({"is_active": True}, {"_id": 0}).sort("created_at", -1).to_list(20)
+    return offers
+
+@api_router.get("/offers/all")
+async def get_all_offers(user=Depends(get_current_user)):
+    """Admin: Get all offers"""
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    offers = await db.offers.find({}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    return offers
+
+@api_router.post("/offers")
+async def create_offer(data: OfferCreate, user=Depends(get_current_user)):
+    """Admin: Create a new offer"""
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    offer = {
+        "id": str(uuid.uuid4()),
+        **data.dict(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_by": user["id"],
+    }
+    await db.offers.insert_one(offer)
+    del offer["_id"]
+    return offer
+
+@api_router.put("/offers/{offer_id}")
+async def update_offer(offer_id: str, data: OfferUpdate, user=Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    update_data = {k: v for k, v in data.dict().items() if v is not None}
+    if update_data:
+        await db.offers.update_one({"id": offer_id}, {"$set": update_data})
+    offer = await db.offers.find_one({"id": offer_id}, {"_id": 0})
+    if not offer:
+        raise HTTPException(status_code=404, detail="Offer not found")
+    return offer
+
+@api_router.delete("/offers/{offer_id}")
+async def delete_offer(offer_id: str, user=Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    result = await db.offers.delete_one({"id": offer_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Offer not found")
+    return {"message": "Offer deleted"}
+
+@api_router.get("/offers/{offer_id}/products")
+async def get_offer_products(offer_id: str):
+    """Get products applicable to an offer with discounted prices"""
+    offer = await db.offers.find_one({"id": offer_id, "is_active": True}, {"_id": 0})
+    if not offer:
+        raise HTTPException(status_code=404, detail="Offer not found or inactive")
+    query = {"is_active": True}
+    if offer["applicable_to"] == "category" and offer.get("applicable_category"):
+        cat = offer["applicable_category"]
+        query["$or"] = [{"category": cat}, {"diet_type": cat}]
+    elif offer["applicable_to"] == "products" and offer.get("applicable_product_ids"):
+        query["id"] = {"$in": offer["applicable_product_ids"]}
+    products = await db.products.find(query, {"_id": 0}).to_list(100)
+    for p in products:
+        original = p["cost_per_100g"]
+        if offer["discount_type"] == "percentage":
+            discount = original * (offer["discount_value"] / 100)
+        else:
+            discount = offer["discount_value"]
+        if offer.get("max_discount"):
+            discount = min(discount, offer["max_discount"])
+        p["original_price"] = original
+        p["discounted_price"] = round(max(original - discount, 0), 2)
+        p["discount_amount"] = round(discount, 2)
+        p["offer_id"] = offer["id"]
+        p["offer_title"] = offer["title"]
+    return {"offer": offer, "products": products}
+
+# ========== GOAL PACKS (Admin-Created Meal Packs) ==========
+class PackItem(BaseModel):
+    product_id: str
+    product_name: str
+    grams: float = 100
+
+class PackCreate(BaseModel):
+    name: str
+    description: Optional[str] = ""
+    goal: str  # "muscle_gain", "fat_loss", "maintenance"
+    diet_type: str = "both"  # "veg", "non-veg", "both"
+    items: List[PackItem]
+    pack_price: float
+    banner_color: str = "#267E3E"
+    image_url: Optional[str] = None
+    is_active: bool = True
+
+class PackUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    goal: Optional[str] = None
+    diet_type: Optional[str] = None
+    items: Optional[List[PackItem]] = None
+    pack_price: Optional[float] = None
+    banner_color: Optional[str] = None
+    image_url: Optional[str] = None
+    is_active: Optional[bool] = None
+
+@api_router.get("/packs")
+async def get_active_packs():
+    """Get all active goal packs"""
+    packs = await db.packs.find({"is_active": True}, {"_id": 0}).sort("created_at", -1).to_list(20)
+    for pack in packs:
+        total_cal, total_pro, total_carb, total_fat = 0, 0, 0, 0
+        for item in pack.get("items", []):
+            nutrition = match_nutrition(item["product_name"])
+            f = item.get("grams", 100) / 100
+            total_cal += nutrition["calories"] * f
+            total_pro += nutrition["protein"] * f
+            total_carb += nutrition["carbs"] * f
+            total_fat += nutrition["fat"] * f
+        pack["total_calories"] = round(total_cal)
+        pack["total_protein"] = round(total_pro)
+        pack["total_carbs"] = round(total_carb)
+        pack["total_fat"] = round(total_fat)
+    return packs
+
+@api_router.get("/packs/all")
+async def get_all_packs(user=Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    return await db.packs.find({}, {"_id": 0}).sort("created_at", -1).to_list(50)
+
+@api_router.get("/packs/{pack_id}")
+async def get_pack_detail(pack_id: str):
+    pack = await db.packs.find_one({"id": pack_id}, {"_id": 0})
+    if not pack:
+        raise HTTPException(status_code=404, detail="Pack not found")
+    enriched_items = []
+    total_cal, total_pro = 0, 0
+    for item in pack.get("items", []):
+        product = await db.products.find_one({"id": item["product_id"]}, {"_id": 0})
+        if product:
+            f = item.get("grams", 100) / 100
+            enriched_items.append({
+                **item,
+                "cost_per_100g": product["cost_per_100g"],
+                "calories_per_100g": product["calories_per_100g"],
+                "protein_per_100g": product["protein_per_100g"],
+                "carbs_per_100g": product["carbs_per_100g"],
+                "fat_per_100g": product["fat_per_100g"],
+                "diet_type": product.get("diet_type", "veg"),
+                "image_url": product.get("image_url"),
+                "calories": round(product["calories_per_100g"] * f),
+                "protein": round(product["protein_per_100g"] * f, 1),
+                "price": round(product["cost_per_100g"] * f, 2),
+            })
+            total_cal += product["calories_per_100g"] * f
+            total_pro += product["protein_per_100g"] * f
+    pack["items"] = enriched_items
+    pack["total_calories"] = round(total_cal)
+    pack["total_protein"] = round(total_pro)
+    individual_total = sum(i["price"] for i in enriched_items)
+    pack["individual_total"] = round(individual_total, 2)
+    pack["savings"] = round(max(individual_total - pack["pack_price"], 0), 2)
+    return pack
+
+@api_router.post("/packs")
+async def create_pack(data: PackCreate, user=Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    pack = {
+        "id": str(uuid.uuid4()),
+        **data.dict(),
+        "items": [i.dict() for i in data.items],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_by": user["id"],
+    }
+    await db.packs.insert_one(pack)
+    del pack["_id"]
+    return pack
+
+@api_router.put("/packs/{pack_id}")
+async def update_pack(pack_id: str, data: PackUpdate, user=Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    update_data = {}
+    for k, v in data.dict().items():
+        if v is not None:
+            if k == "items":
+                update_data[k] = [i.dict() if hasattr(i, 'dict') else i for i in v]
+            else:
+                update_data[k] = v
+    if update_data:
+        await db.packs.update_one({"id": pack_id}, {"$set": update_data})
+    pack = await db.packs.find_one({"id": pack_id}, {"_id": 0})
+    if not pack:
+        raise HTTPException(status_code=404, detail="Pack not found")
+    return pack
+
+@api_router.delete("/packs/{pack_id}")
+async def delete_pack(pack_id: str, user=Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    result = await db.packs.delete_one({"id": pack_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Pack not found")
+    return {"message": "Pack deleted"}
+
+# ========== DYNAMIC BANNERS (from Offers + Packs) ==========
 class DeliveryLocationUpdate(BaseModel):
     order_id: str
     latitude: float
