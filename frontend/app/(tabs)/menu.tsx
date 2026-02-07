@@ -308,7 +308,7 @@ export default function MenuScreen() {
   );
 }
 
-const SIDEBAR_WIDTH = 70;
+const SIDEBAR_WIDTH = 75;
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#F5F5F5' },
@@ -365,55 +365,64 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   
-  // Left Sidebar (Compact)
-  sidebar: { 
+  // Left Sidebar Container (Fixed Width)
+  sidebarContainer: { 
     width: SIDEBAR_WIDTH, 
     backgroundColor: '#FFF',
     borderRightWidth: 1,
     borderRightColor: '#F0F0F0',
   },
   sidebarContent: { 
-    paddingVertical: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 2,
   },
   sidebarCat: { 
+    width: SIDEBAR_WIDTH - 4,
     alignItems: 'center', 
-    paddingVertical: 8,
-    paddingHorizontal: 4,
+    paddingVertical: 10,
+    paddingHorizontal: 2,
+    marginBottom: 2,
     borderLeftWidth: 3,
     borderLeftColor: 'transparent',
     position: 'relative',
   },
   sidebarCatActive: { 
-    backgroundColor: '#FFF8F0',
+    backgroundColor: '#FFF5F5',
   },
   sidebarActiveBar: {
     position: 'absolute',
     left: 0,
-    top: 6,
-    bottom: 6,
+    top: 8,
+    bottom: 8,
     width: 3,
     borderRadius: 2,
   },
   sidebarCatImg: { 
-    width: 40, 
-    height: 40, 
-    borderRadius: 8,
-    marginBottom: 4,
+    width: 44, 
+    height: 44, 
+    borderRadius: 10,
+    marginBottom: 6,
   },
   sidebarCatIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
+    width: 44,
+    height: 44,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   sidebarCatLabel: { 
-    fontSize: 9, 
+    fontSize: 10, 
     fontWeight: '600', 
     color: '#696969', 
     textAlign: 'center',
-    lineHeight: 11,
+    lineHeight: 12,
+    width: '100%',
+  },
+  
+  // Product List Container (Takes remaining space)
+  productListContainer: {
+    flex: 1,
   },
   
   // Product List
