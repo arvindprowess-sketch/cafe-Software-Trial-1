@@ -126,27 +126,28 @@ export default function MenuScreen() {
   };
 
   // Render left sidebar category card
-  const renderSidebarCat = (cat: typeof SIDEBAR_CATS[0], index: number) => {
+  const renderSidebarCat = (cat: any, index: number) => {
     const isActive = selectedCat === cat.key;
+    const catColor = cat.color || '#1C1C2E';
     return (
       <TouchableOpacity
-        key={cat.key}
-        testID={`sidebar-cat-${cat.key}`}
+        key={cat.key || cat.id}
+        testID={`sidebar-cat-${cat.key || cat.id}`}
         style={[styles.sidebarCat, isActive && styles.sidebarCatActive]}
-        onPress={() => setSelectedCat(cat.key)}
+        onPress={() => setSelectedCat(cat.key || cat.name)}
         activeOpacity={0.8}
       >
-        {cat.image ? (
-          <Image source={{ uri: cat.image }} style={styles.sidebarCatImg} />
+        {cat.image_url ? (
+          <Image source={{ uri: cat.image_url }} style={styles.sidebarCatImg} />
         ) : (
-          <View style={[styles.sidebarCatIcon, { backgroundColor: cat.color }]}>
-            <Ionicons name={cat.icon as any} size={20} color="#FFF" />
+          <View style={[styles.sidebarCatIcon, { backgroundColor: catColor }]}>
+            <Ionicons name={(cat.icon || 'grid') as any} size={18} color="#FFF" />
           </View>
         )}
-        <Text style={[styles.sidebarCatLabel, isActive && { color: cat.color, fontWeight: '800' }]} numberOfLines={2}>
-          {cat.label}
+        <Text style={[styles.sidebarCatLabel, isActive && { color: catColor, fontWeight: '800' }]} numberOfLines={2}>
+          {cat.label || cat.name}
         </Text>
-        {isActive && <View style={[styles.sidebarActiveBar, { backgroundColor: cat.color }]} />}
+        {isActive && <View style={[styles.sidebarActiveBar, { backgroundColor: catColor }]} />}
       </TouchableOpacity>
     );
   };
