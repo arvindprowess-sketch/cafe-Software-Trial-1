@@ -321,6 +321,13 @@ const styles = StyleSheet.create({
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   userName: { fontSize: 20, fontWeight: '700', color: '#1C1C2E' },
   userPhone: { fontSize: 14, color: '#696969', marginTop: 2 },
+  editNameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  editNameInput: {
+    flex: 1, backgroundColor: '#FFF', borderRadius: 8,
+    paddingHorizontal: 10, paddingVertical: 6,
+    fontSize: 18, fontWeight: '700', color: '#1C1C2E',
+    borderWidth: 1.5, borderColor: Z_RED,
+  },
 
   goalCard: {
     flexDirection: 'row', alignItems: 'center',
