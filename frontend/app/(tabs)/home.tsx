@@ -233,13 +233,13 @@ export default function HomeScreen() {
         {/* ===== TODAY'S NUTRITION CARD ===== */}
         <View style={styles.nutriCard} testID="nutrition-summary-card">
           <View style={styles.nutriHeader}>
-            <Ionicons name="fitness" size={18} color={Z_RED} />
+            <Ionicons name="fitness" size={18} color={isCalorieOver ? '#FF6B6B' : Z_RED} />
             <Text style={styles.nutriTitle}>Today's Nutrition</Text>
             <Text style={styles.nutriMeals}>{summary?.meals_count || 0} meals</Text>
           </View>
           <View style={styles.nutriRow}>
             <View style={styles.nutriMain}>
-              <Text style={styles.calValue}>{Math.round(consumed.calories || 0)}</Text>
+              <Text style={[styles.calValue, isCalorieOver && { color: '#E23744' }]}>{Math.round(consumed.calories || 0)}</Text>
               <Text style={styles.calUnit}>/ {goals.daily_calories || 2000} kcal</Text>
             </View>
             <View style={styles.macroRow}>
@@ -256,8 +256,16 @@ export default function HomeScreen() {
             </View>
           </View>
           <View style={styles.progressBg}>
-            <View style={[styles.progressFill, { width: `${calPct}%` }]} />
+            <View style={[styles.progressFill, { width: `${Math.min(calPct, 100)}%` }, isCalorieOver && styles.progressFillOver]} />
           </View>
+          {isCalorieOver && (
+            <View style={styles.overGoalBanner} testID="calorie-over-banner">
+              <Ionicons name="information-circle" size={14} color="#E23744" />
+              <Text style={styles.overGoalText}>
+                {caloriesOverAmount} cal over your daily goal — you're in control!
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* ===== SCAN TABLE QR (For dine-in) ===== */}
