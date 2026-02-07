@@ -37,6 +37,7 @@ export default function MenuScreen() {
   const [search, setSearch] = useState('');
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [user, setUser] = useState<any>(null);
+  const [dietFilter, setDietFilter] = useState<'all' | 'veg' | 'non-veg'>('all');
 
   // Handle URL params for category/diet filter
   useEffect(() => {
