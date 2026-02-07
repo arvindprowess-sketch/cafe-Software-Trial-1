@@ -562,6 +562,116 @@ async def delete_product(product_id: str, user=Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Product not found")
     return {"message": "Product deleted"}
 
+# ========== CATEGORY MANAGEMENT ==========
+@api_router.get("/categories")
+async def get_categories():
+    """Get all active categories for menu sidebar"""
+    categories = await db.categories.find({"is_active": {"$ne": False}}, {"_id": 0}).sort("sort_order", 1).to_list(100)
+    return categories
+
+@api_router.get("/categories/all")
+async def get_all_categories(user=Depends(get_current_user)):
+    """Admin: Get all categories including inactive"""
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    categories = await db.categories.find({}, {"_id": 0}).sort("sort_order", 1).to_list(100)
+    return categories
+
+@api_router.post("/categories")
+async def create_category(category: CategoryCreate, user=Depends(get_current_user)):
+    """Admin: Create a new category"""
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    
+    # Generate key from name if not provided
+    key = category.key or category.name.replace(" ", "_").upper()
+    label = category.label or category.name
+    
+    cat_doc = {
+        "id": str(uuid.uuid4()),
+        "name": category.name,
+        "key": key,
+        "label": label,
+        "icon": category.icon,
+        "color": category.color,
+        "image_url": category.image_url,
+        "description": category.description,
+        "sort_order": category.sort_order,
+        "is_active": True,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_by": user["id"]
+    }
+    await db.categories.insert_one(cat_doc)
+    del cat_doc["_id"]
+    return cat_doc
+
+@api_router.put("/categories/{category_id}")
+async def update_category(category_id: str, update: CategoryUpdate, user=Depends(get_current_user)):
+    """Admin: Update a category"""
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    
+    update_data = {k: v for k, v in update.dict().items() if v is not None}
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No updates provided")
+    
+    update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+    update_data["updated_by"] = user["id"]
+    
+    result = await db.categories.update_one({"id": category_id}, {"$set": update_data})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Category not found")
+    
+    updated = await db.categories.find_one({"id": category_id}, {"_id": 0})
+    return updated
+
+@api_router.delete("/categories/{category_id}")
+async def delete_category(category_id: str, user=Depends(get_current_user)):
+    """Admin: Delete a category (soft delete)"""
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    
+    result = await db.categories.update_one(
+        {"id": category_id}, 
+        {"$set": {"is_active": False, "deleted_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Category not found")
+    return {"message": "Category deleted"}
+
+@api_router.post("/categories/seed-defaults")
+async def seed_default_categories(user=Depends(get_current_user)):
+    """Admin: Seed default categories if none exist"""
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    
+    count = await db.categories.count_documents({})
+    if count > 0:
+        return {"message": f"{count} categories already exist", "seeded": 0}
+    
+    default_categories = [
+        {"name": "Protein", "key": "Protein", "label": "High Protein", "icon": "barbell", "color": "#E23744", 
+         "image_url": "https://images.unsplash.com/photo-1632778149955-e80f8ceca2e8?w=80&h=80&fit=crop", "sort_order": 1},
+        {"name": "Carb", "key": "Carb", "label": "Healthy Carbs", "icon": "leaf", "color": "#FF9F0A",
+         "image_url": "https://images.unsplash.com/photo-1536304929831-ee1ca9d44726?w=80&h=80&fit=crop", "sort_order": 2},
+        {"name": "Fat", "key": "Fat", "label": "Good Fats", "icon": "water", "color": "#5B5FE0",
+         "image_url": "https://images.unsplash.com/photo-1523049673857-eb18f1d7b578?w=80&h=80&fit=crop", "sort_order": 3},
+        {"name": "Meal", "key": "Meal", "label": "Ready Meals", "icon": "fast-food", "color": "#267E3E",
+         "image_url": "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=80&h=80&fit=crop", "sort_order": 4},
+        {"name": "Veg", "key": "veg", "label": "Veg Only", "icon": "nutrition", "color": "#4CAF50",
+         "image_url": "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=80&h=80&fit=crop", "sort_order": 5},
+        {"name": "Non-Veg", "key": "non-veg", "label": "Non-Veg", "icon": "flame", "color": "#E23744",
+         "image_url": "https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=80&h=80&fit=crop", "sort_order": 6},
+    ]
+    
+    for cat in default_categories:
+        cat["id"] = str(uuid.uuid4())
+        cat["is_active"] = True
+        cat["created_at"] = datetime.now(timezone.utc).isoformat()
+    
+    await db.categories.insert_many(default_categories)
+    return {"message": "Default categories seeded", "seeded": len(default_categories)}
+
 # ========== FOOD IMAGE BANK ==========
 FOOD_IMAGES = {
     "chicken": "https://images.unsplash.com/photo-1632778149955-e80f8ceca2e8?w=400&h=300&fit=crop",
