@@ -117,9 +117,9 @@ export default function AuthScreen() {
         }
       });
       
-      // Save token
-      await AsyncStorage.setItem('token', result.token);
-      await AsyncStorage.setItem('user', JSON.stringify(result.user));
+      // Save token (must match keys in api.ts)
+      await AsyncStorage.setItem('auth_token', result.token);
+      await AsyncStorage.setItem('user_data', JSON.stringify(result.user));
       
       // Check if new user needs to enter name
       if (result.is_new_user && !name) {
