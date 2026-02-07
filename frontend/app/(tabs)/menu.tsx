@@ -117,7 +117,7 @@ export default function MenuScreen() {
     if (dietFilter === 'non-veg' && p.diet_type !== 'non-veg') return false;
     
     // Category filter
-    if (selectedCat === 'All') return true;
+    if (!selectedCat) return true;
     if (selectedCat === 'veg') return p.diet_type === 'veg';
     if (selectedCat === 'non-veg') return p.diet_type === 'non-veg';
     if (selectedCat === 'Meal') return p.product_type === 'ready_made' || p.category === 'Meal';
