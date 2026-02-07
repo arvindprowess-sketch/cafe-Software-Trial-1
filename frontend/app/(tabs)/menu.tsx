@@ -267,7 +267,7 @@ export default function MenuScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.sidebarContent}
         >
-          {SIDEBAR_CATS.map(renderSidebarCat)}
+          {categories.map(renderSidebarCat)}
         </ScrollView>
         
         {/* Right Product List */}
