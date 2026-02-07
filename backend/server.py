@@ -1074,6 +1074,11 @@ async def update_order_status(order_id: str, status: str, user=Depends(get_curre
     order = await db.orders.find_one({"id": order_id}, {"_id": 0})
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+    # Auto push notification on status change
+    try:
+        await notify_order_status(order_id, status)
+    except Exception:
+        pass
     return order
 
 # ========== POPULAR ITEMS (Based on Previous Day Sales) ==========
