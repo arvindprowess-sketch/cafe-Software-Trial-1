@@ -55,6 +55,8 @@ export default function AdminDashboard() {
           { title: 'Kitchen View', desc: 'View and manage active orders', icon: 'flame' as const, color: '#FF9F0A', route: '/(admin)/kitchen' },
           { title: 'Business Analytics', desc: 'Revenue, insights & AI recommendations', icon: 'analytics' as const, color: '#5B5FE0', route: '/(admin)/analytics' },
           { title: 'Manage Tables', desc: 'View café tables and QR codes', icon: 'qr-code' as const, color: '#E23744', route: '/(admin)/tables' },
+          { title: 'Manage Offers', desc: 'Create discounts, coupons & banners', icon: 'pricetag' as const, color: '#FF6B6B', route: '/(admin)/offers' },
+          { title: 'Manage Packs', desc: 'Create goal-based meal packs', icon: 'fitness' as const, color: '#4CAF50', route: '/(admin)/packs' },
         ].map(a => (
           <TouchableOpacity key={a.title} testID={`goto-${a.title.toLowerCase().replace(/ /g, '-')}`} style={styles.actionRow} onPress={() => router.push(a.route as any)}>
             <View style={[styles.actionIcon, { backgroundColor: `${a.color}15` }]}><Ionicons name={a.icon} size={22} color={a.color} /></View>
