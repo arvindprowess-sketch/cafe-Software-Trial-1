@@ -108,6 +108,8 @@ class ProductCreate(BaseModel):
     available_qty_grams: Optional[float] = 10000
     image_url: Optional[str] = None
     description: Optional[str] = None
+    category: Optional[str] = None  # Admin can select category
+    diet_type: Optional[str] = None  # "veg" or "non-veg"
 
 class ProductUpdate(BaseModel):
     name: Optional[str] = None
@@ -115,6 +117,9 @@ class ProductUpdate(BaseModel):
     available_qty_grams: Optional[float] = None
     is_active: Optional[bool] = None
     image_url: Optional[str] = None
+    category: Optional[str] = None
+    diet_type: Optional[str] = None
+    description: Optional[str] = None
 
 class OrderItem(BaseModel):
     product_id: str
