@@ -424,11 +424,6 @@ const styles = StyleSheet.create({
   productListContainer: {
     flex: 1,
   },
-  
-  // Product List
-  productList: { 
-    flex: 1,
-  },
   productListContent: { 
     padding: 8,
     paddingBottom: 100,
