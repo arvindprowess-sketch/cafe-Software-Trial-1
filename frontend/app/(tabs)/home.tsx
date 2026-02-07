@@ -189,15 +189,40 @@ export default function HomeScreen() {
             style={styles.bannerList}
             onScrollToIndexFailed={() => {}}
             renderItem={({ item }) => (
-              <View style={[styles.banner, { backgroundColor: item.color }]} testID={`banner-${item.id}`}>
-                <View style={styles.bannerContent}>
-                  <Text style={styles.bannerTitle}>{item.title}</Text>
-                  <Text style={styles.bannerSub}>{item.subtitle}</Text>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                testID={`banner-${item.id}`}
+                onPress={() => {
+                  if (item.type === 'offer' && item.offer_id) {
+                    router.push({ pathname: '/offer-detail', params: { offerId: item.offer_id } });
+                  } else if (item.type === 'pack' && item.pack_id) {
+                    router.push({ pathname: '/pack-detail', params: { packId: item.pack_id } });
+                  }
+                }}
+              >
+                <View style={[styles.banner, { backgroundColor: item.color }]}>
+                  <View style={styles.bannerContent}>
+                    <Text style={styles.bannerTitle}>{item.title}</Text>
+                    <Text style={styles.bannerSub}>{item.subtitle}</Text>
+                    {item.type === 'offer' && (
+                      <View style={styles.bannerBadge}>
+                        <Text style={styles.bannerBadgeText}>
+                          {item.discount_type === 'percentage' ? `${item.discount_value}% OFF` : `₹${item.discount_value} OFF`}
+                        </Text>
+                      </View>
+                    )}
+                    {item.type === 'pack' && (
+                      <View style={[styles.bannerBadge, { backgroundColor: 'rgba(255,255,255,0.25)' }]}>
+                        <Ionicons name="nutrition" size={12} color="#FFF" />
+                        <Text style={styles.bannerBadgeText}>View Pack</Text>
+                      </View>
+                    )}
+                  </View>
+                  <View style={styles.bannerImagePlaceholder}>
+                    <Ionicons name={item.type === 'pack' ? 'fitness' : item.type === 'offer' ? 'pricetag' : 'fast-food'} size={50} color="rgba(255,255,255,0.4)" />
+                  </View>
                 </View>
-                <View style={styles.bannerImagePlaceholder}>
-                  <Ionicons name="fast-food" size={50} color="rgba(255,255,255,0.4)" />
-                </View>
-              </View>
+              </TouchableOpacity>
             )}
           />
         )}
