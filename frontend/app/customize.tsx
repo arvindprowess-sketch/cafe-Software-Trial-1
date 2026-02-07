@@ -570,9 +570,44 @@ export default function CustomizeScreen() {
               </View>
               <TouchableOpacity testID="calorie-warning-adjust-btn" style={styles.modalAdjustBtn} onPress={() => setShowCalorieWarning(false)}>
                 <Ionicons name="create" size={18} color="#5B5FE0" />
-                <Text style={styles.modalAdjustText}>Adjust My Meal</Text>
-                <View style={styles.recommendedBadge}><Text style={styles.recommendedText}>Recommended</Text></View>
+                <Text style={styles.modalAdjustText}>Adjust Manually</Text>
               </TouchableOpacity>
+              <TouchableOpacity testID="ai-adjust-btn" style={styles.aiAdjustBtn} onPress={handleAiAdjust} disabled={aiAdjusting}>
+                {aiAdjusting ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <>
+                    <Ionicons name="sparkles" size={18} color="#FFF" />
+                    <Text style={styles.aiAdjustText}>AI Auto-Adjust</Text>
+                    <View style={styles.recommendedBadge}><Text style={styles.recommendedText}>Recommended</Text></View>
+                  </>
+                )}
+              </TouchableOpacity>
+              {/* AI Adjustment Results */}
+              {adjustedItems && (
+                <View style={styles.adjustResults} testID="ai-adjustment-results">
+                  <Text style={styles.adjustTitle}>AI Suggestion</Text>
+                  <Text style={styles.adjustSummary}>{adjustedItems.summary}</Text>
+                  {adjustedItems.adjusted_items?.map((adj: any, idx: number) => (
+                    <View key={idx} style={styles.adjustRow}>
+                      <Text style={styles.adjustName}>{adj.name}</Text>
+                      <View style={styles.adjustChange}>
+                        <Text style={styles.adjustOld}>{adj.original_grams}g</Text>
+                        <Ionicons name="arrow-forward" size={12} color="#9C9C9C" />
+                        <Text style={styles.adjustNew}>{adj.adjusted_grams}g</Text>
+                      </View>
+                    </View>
+                  ))}
+                  <View style={styles.adjustSavings}>
+                    <Ionicons name="trending-down" size={14} color="#267E3E" />
+                    <Text style={styles.adjustSavingsText}>Saves {adjustedItems.saved_calories} cal</Text>
+                  </View>
+                  <TouchableOpacity testID="apply-ai-adjust-btn" style={styles.applyBtn} onPress={applyAdjustments}>
+                    <Ionicons name="checkmark-circle" size={18} color="#FFF" />
+                    <Text style={styles.applyText}>Apply AI Adjustment</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
               <TouchableOpacity testID="calorie-warning-continue-btn" style={styles.modalContinueBtn} onPress={confirmOrder}>
                 <Text style={styles.modalContinueText}>Continue & Place Order</Text>
               </TouchableOpacity>
