@@ -661,6 +661,9 @@ const styles = StyleSheet.create({
   macroLabel: { fontSize: 10, color: '#9C9C9C', marginTop: 2 },
   progressBg: { height: 5, backgroundColor: '#F0F0F5', borderRadius: 3, marginTop: 14, overflow: 'hidden' },
   progressFill: { height: '100%', backgroundColor: Z_RED, borderRadius: 3 },
+  progressFillOver: { backgroundColor: '#FF4444' },
+  overGoalBanner: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, backgroundColor: '#FFF5F5', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8 },
+  overGoalText: { fontSize: 11, color: '#E23744', fontWeight: '600', flex: 1 },
   
   // Scan Table CTA
   scanTableCTA: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#E8F5E9', marginHorizontal: 16, marginTop: 16, borderRadius: 14, padding: 16, borderWidth: 1.5, borderColor: '#267E3E' },
