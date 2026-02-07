@@ -125,6 +125,12 @@ export default function CustomizeScreen() {
     }, { price: 0, calories: 0, protein: 0, carbs: 0, fat: 0 });
   }, [items]);
 
+  // Calculate how much over the calorie goal
+  const projectedCalories = (consumedToday.calories || 0) + totals.calories;
+  const calorieGoal = userGoals.daily_calories;
+  const caloriesOver = Math.round(projectedCalories - calorieGoal);
+  const isOverGoal = caloriesOver > 0;
+
   const extra = orderType === 'delivery' ? 30 : orderType === 'takeaway' ? 10 : 0;
 
   const getAiSuggestion = async () => {
