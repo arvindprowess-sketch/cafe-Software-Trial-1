@@ -2302,6 +2302,272 @@ async def get_profit_margins(user=Depends(get_current_user)):
         }
     }
 
+# ========== RAZORPAY PAYMENT ==========
+class PaymentCreateRequest(BaseModel):
+    order_id: str
+    amount: float  # in INR
+
+class PaymentVerifyRequest(BaseModel):
+    razorpay_order_id: str
+    razorpay_payment_id: str
+    razorpay_signature: str
+    order_id: str
+
+@api_router.post("/payments/create-order")
+async def create_payment_order(data: PaymentCreateRequest, user=Depends(get_current_user)):
+    """Create a Razorpay order for payment"""
+    import razorpay
+    key_id = os.environ.get("RAZORPAY_KEY_ID", "")
+    key_secret = os.environ.get("RAZORPAY_KEY_SECRET", "")
+    if not key_id or not key_secret:
+        # Mock mode - no keys configured
+        mock_order_id = f"order_mock_{uuid.uuid4().hex[:12]}"
+        await db.payments.insert_one({
+            "id": str(uuid.uuid4()),
+            "order_id": data.order_id,
+            "user_id": user["id"],
+            "razorpay_order_id": mock_order_id,
+            "amount": data.amount,
+            "currency": "INR",
+            "status": "created",
+            "mock": True,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+        return {
+            "razorpay_order_id": mock_order_id,
+            "amount": int(data.amount * 100),
+            "currency": "INR",
+            "key_id": "rzp_test_mock",
+            "mock": True,
+        }
+    try:
+        client_rp = razorpay.Client(auth=(key_id, key_secret))
+        rp_order = client_rp.order.create({
+            "amount": int(data.amount * 100),
+            "currency": "INR",
+            "payment_capture": 1,
+            "notes": {"diet_cafe_order": data.order_id, "user_id": user["id"]},
+        })
+        await db.payments.insert_one({
+            "id": str(uuid.uuid4()),
+            "order_id": data.order_id,
+            "user_id": user["id"],
+            "razorpay_order_id": rp_order["id"],
+            "amount": data.amount,
+            "currency": "INR",
+            "status": "created",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+        return {
+            "razorpay_order_id": rp_order["id"],
+            "amount": rp_order["amount"],
+            "currency": rp_order["currency"],
+            "key_id": key_id,
+        }
+    except Exception as e:
+        logger.error(f"Razorpay order creation failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Payment order creation failed: {str(e)}")
+
+@api_router.post("/payments/verify")
+async def verify_payment(data: PaymentVerifyRequest, user=Depends(get_current_user)):
+    """Verify Razorpay payment and update order status"""
+    payment = await db.payments.find_one({"razorpay_order_id": data.razorpay_order_id}, {"_id": 0})
+    if not payment:
+        raise HTTPException(status_code=404, detail="Payment not found")
+    if payment.get("mock"):
+        await db.payments.update_one(
+            {"razorpay_order_id": data.razorpay_order_id},
+            {"$set": {"status": "paid", "razorpay_payment_id": data.razorpay_payment_id, "paid_at": datetime.now(timezone.utc).isoformat()}}
+        )
+        await db.orders.update_one({"id": data.order_id}, {"$set": {"payment_status": "paid", "payment_method": "razorpay_mock"}})
+        return {"status": "paid", "message": "Payment verified (mock mode)"}
+    import razorpay
+    key_id = os.environ.get("RAZORPAY_KEY_ID", "")
+    key_secret = os.environ.get("RAZORPAY_KEY_SECRET", "")
+    try:
+        client_rp = razorpay.Client(auth=(key_id, key_secret))
+        client_rp.utility.verify_payment_signature({
+            "razorpay_order_id": data.razorpay_order_id,
+            "razorpay_payment_id": data.razorpay_payment_id,
+            "razorpay_signature": data.razorpay_signature,
+        })
+        await db.payments.update_one(
+            {"razorpay_order_id": data.razorpay_order_id},
+            {"$set": {"status": "paid", "razorpay_payment_id": data.razorpay_payment_id, "razorpay_signature": data.razorpay_signature, "paid_at": datetime.now(timezone.utc).isoformat()}}
+        )
+        await db.orders.update_one({"id": data.order_id}, {"$set": {"payment_status": "paid", "payment_method": "razorpay"}})
+        return {"status": "paid", "message": "Payment verified successfully"}
+    except Exception as e:
+        logger.error(f"Payment verification failed: {e}")
+        await db.payments.update_one({"razorpay_order_id": data.razorpay_order_id}, {"$set": {"status": "failed"}})
+        raise HTTPException(status_code=400, detail="Payment verification failed")
+
+# ========== APPLY COUPON TO ORDER ==========
+@api_router.post("/orders/apply-coupon")
+async def apply_coupon(coupon_code: str = Body(..., embed=True), user=Depends(get_current_user)):
+    """Apply coupon code and return discount details"""
+    offer = await db.offers.find_one({"coupon_code": coupon_code, "is_active": True}, {"_id": 0})
+    if not offer:
+        raise HTTPException(status_code=404, detail="Invalid or expired coupon code")
+    return {
+        "offer_id": offer["id"],
+        "title": offer["title"],
+        "discount_type": offer["discount_type"],
+        "discount_value": offer["discount_value"],
+        "max_discount": offer.get("max_discount"),
+        "min_order_value": offer.get("min_order_value", 0),
+        "applicable_to": offer["applicable_to"],
+        "applicable_category": offer.get("applicable_category"),
+    }
+
+# ========== SMART PORTION ADJUSTER ==========
+@api_router.post("/ai/adjust-portions")
+async def ai_adjust_portions(
+    items: List[Dict[str, Any]] = Body(...),
+    calorie_goal: float = Body(...),
+    consumed_today: float = Body(0),
+    user=Depends(get_current_user)
+):
+    """AI suggests portion adjustments to fit within calorie goal"""
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        remaining_cal = calorie_goal - consumed_today
+        items_str = "\n".join([
+            f"- {i['name']}: {i['grams']}g ({round(i['grams']/100 * i['calories_per_100g'])} cal, P:{round(i['grams']/100 * i['protein_per_100g'])}g)"
+            for i in items
+        ])
+        total_cal = sum(i['grams']/100 * i['calories_per_100g'] for i in items)
+        prompt = f"""You are a nutrition expert. The customer's meal has {round(total_cal)} calories but they only have {round(remaining_cal)} calories left in their daily budget.
+
+Current meal items:
+{items_str}
+
+Adjust the gram quantities to fit within {round(remaining_cal)} calories while:
+1. Keeping protein as high as possible
+2. Maintaining meal satisfaction (don't reduce everything to tiny amounts)
+3. Prioritize reducing high-carb/fat items before protein items
+4. Keep at least 50g minimum per item
+
+Respond ONLY in JSON: {{"adjusted_items": [{{"name": "...", "original_grams": 100, "adjusted_grams": 75, "reason": "brief reason"}}], "summary": "one line summary"}}"""
+
+        chat = LlmChat(
+            api_key=os.environ.get('EMERGENT_LLM_KEY', ''),
+            session_id=f"adjust-{uuid.uuid4().hex[:8]}",
+            system_message="You are a nutrition expert. Respond only in valid JSON."
+        ).with_model("openai", "gpt-5.2")
+        response = await chat.send_message(UserMessage(text=prompt))
+        cleaned = response.strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
+            cleaned = cleaned.rsplit("```", 1)[0]
+        result = json.loads(cleaned)
+        new_total = 0
+        for adj in result.get("adjusted_items", []):
+            item = next((i for i in items if i["name"].lower() == adj["name"].lower()), None)
+            if item:
+                adj["new_calories"] = round(adj["adjusted_grams"] / 100 * item["calories_per_100g"])
+                new_total += adj["new_calories"]
+        result["new_total_calories"] = round(new_total)
+        result["calorie_goal"] = round(remaining_cal)
+        result["saved_calories"] = round(total_cal - new_total)
+        return result
+    except Exception as e:
+        logger.error(f"AI portion adjust error: {e}")
+        # Fallback: proportional reduction
+        total_cal = sum(i['grams']/100 * i['calories_per_100g'] for i in items)
+        remaining_cal = max(calorie_goal - consumed_today, 200)
+        ratio = remaining_cal / total_cal if total_cal > 0 else 1
+        adjusted = []
+        for i in items:
+            new_grams = max(50, round(i['grams'] * ratio / 25) * 25)
+            adjusted.append({"name": i["name"], "original_grams": i["grams"], "adjusted_grams": new_grams, "reason": "Proportional reduction"})
+        return {"adjusted_items": adjusted, "summary": "Portions reduced proportionally to fit your calorie goal", "new_total_calories": round(total_cal * ratio), "calorie_goal": round(remaining_cal), "saved_calories": round(total_cal * (1 - ratio))}
+
+# ========== ENHANCED PUSH: Auto-notify on order status ==========
+async def notify_order_status(order_id: str, status: str):
+    """Send push notification when order status changes"""
+    import httpx
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        return
+    user = await db.users.find_one({"id": order["user_id"]}, {"_id": 0})
+    if not user or not user.get("expo_push_token"):
+        return
+    status_messages = {
+        "preparing": ("Your order is being prepared!", f"Order #{order_id} is now in the kitchen"),
+        "ready": ("Your order is ready!", f"Order #{order_id} is ready for pickup"),
+        "completed": ("Order completed!", f"Thanks for ordering! Order #{order_id}"),
+        "cancelled": ("Order cancelled", f"Order #{order_id} has been cancelled"),
+    }
+    if status not in status_messages:
+        return
+    title, body = status_messages[status]
+    notification = {
+        "id": str(uuid.uuid4()),
+        "user_id": user["id"],
+        "title": title,
+        "body": body,
+        "type": "order_status",
+        "order_id": order_id,
+        "read": False,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.notifications.insert_one(notification)
+    try:
+        async with httpx.AsyncClient() as hc:
+            await hc.post("https://exp.host/--/api/v2/push/send", json={
+                "to": user["expo_push_token"],
+                "title": title,
+                "body": body,
+                "data": {"type": "order_status", "order_id": order_id, "status": status}
+            })
+    except Exception as e:
+        logger.error(f"Push error: {e}")
+
+# ========== SEED DEFAULT OFFERS & PACKS ==========
+@api_router.post("/seed-offers-packs")
+async def seed_offers_and_packs():
+    """Seed default offers and packs for demo"""
+    offers_count = await db.offers.count_documents({})
+    packs_count = await db.packs.count_documents({})
+    seeded = {"offers": 0, "packs": 0}
+    if offers_count == 0:
+        products = await db.products.find({"is_active": True}, {"_id": 0}).to_list(20)
+        protein_ids = [p["id"] for p in products if p.get("category") == "Protein"]
+        default_offers = [
+            {"id": str(uuid.uuid4()), "title": "Flat 20% OFF", "subtitle": "On all protein items today", "discount_type": "percentage", "discount_value": 20, "applicable_to": "category", "applicable_category": "Protein", "applicable_product_ids": [], "banner_color": "#E23744", "coupon_code": "PROTEIN20", "min_order_value": 50, "max_discount": 100, "is_active": True, "created_at": datetime.now(timezone.utc).isoformat()},
+            {"id": str(uuid.uuid4()), "title": "₹30 OFF on Carbs", "subtitle": "Fuel your workout with healthy carbs", "discount_type": "flat", "discount_value": 30, "applicable_to": "category", "applicable_category": "Carb", "applicable_product_ids": [], "banner_color": "#FF9F0A", "coupon_code": "CARB30", "min_order_value": 100, "max_discount": None, "is_active": True, "created_at": datetime.now(timezone.utc).isoformat()},
+            {"id": str(uuid.uuid4()), "title": "Free Delivery", "subtitle": "On orders above ₹299", "discount_type": "flat", "discount_value": 30, "applicable_to": "all", "applicable_category": None, "applicable_product_ids": [], "banner_color": "#267E3E", "coupon_code": "FREEDEL", "min_order_value": 299, "max_discount": 30, "is_active": True, "created_at": datetime.now(timezone.utc).isoformat()},
+        ]
+        await db.offers.insert_many(default_offers)
+        seeded["offers"] = len(default_offers)
+    if packs_count == 0:
+        products = await db.products.find({"is_active": True}, {"_id": 0}).to_list(20)
+        p_map = {p["name"]: p["id"] for p in products}
+        default_packs = [
+            {"id": str(uuid.uuid4()), "name": "Muscle Gain Pack", "description": "High-protein combo for serious gains", "goal": "muscle_gain", "diet_type": "both", "items": [
+                {"product_id": p_map.get("Chicken Breast", ""), "product_name": "Chicken Breast", "grams": 200},
+                {"product_id": p_map.get("Brown Rice", ""), "product_name": "Brown Rice", "grams": 150},
+                {"product_id": p_map.get("Egg White", ""), "product_name": "Egg White", "grams": 150},
+                {"product_id": p_map.get("Banana", ""), "product_name": "Banana", "grams": 100},
+            ], "pack_price": 199, "banner_color": "#267E3E", "is_active": True, "created_at": datetime.now(timezone.utc).isoformat()},
+            {"id": str(uuid.uuid4()), "name": "Fat Loss Pack", "description": "Low-cal, high-protein for effective fat loss", "goal": "fat_loss", "diet_type": "both", "items": [
+                {"product_id": p_map.get("Grilled Fish", ""), "product_name": "Grilled Fish", "grams": 150},
+                {"product_id": p_map.get("Salad", ""), "product_name": "Salad", "grams": 200},
+                {"product_id": p_map.get("Greek Yogurt", ""), "product_name": "Greek Yogurt", "grams": 100},
+                {"product_id": p_map.get("Sprouts", ""), "product_name": "Sprouts", "grams": 100},
+            ], "pack_price": 179, "banner_color": "#E23744", "is_active": True, "created_at": datetime.now(timezone.utc).isoformat()},
+            {"id": str(uuid.uuid4()), "name": "Veg Power Pack", "description": "Pure vegetarian protein-rich meal", "goal": "muscle_gain", "diet_type": "veg", "items": [
+                {"product_id": p_map.get("Paneer Tikka", ""), "product_name": "Paneer Tikka", "grams": 200},
+                {"product_id": p_map.get("Quinoa", ""), "product_name": "Quinoa", "grams": 150},
+                {"product_id": p_map.get("Soya Chunks", ""), "product_name": "Soya Chunks", "grams": 100},
+                {"product_id": p_map.get("Almonds", ""), "product_name": "Almonds", "grams": 50},
+            ], "pack_price": 249, "banner_color": "#4CAF50", "is_active": True, "created_at": datetime.now(timezone.utc).isoformat()},
+        ]
+        await db.packs.insert_many(default_packs)
+        seeded["packs"] = len(default_packs)
+    return {"message": "Seeded", **seeded}
+
 app.include_router(api_router)
 
 app.add_middleware(
