@@ -184,6 +184,28 @@ class ReadyMadeOrderItem(BaseModel):
     ingredients_breakdown: List[Dict[str, Any]] = []  # Detailed ingredient info for kitchen
     customized_ingredients: Optional[List[Dict[str, Any]]] = None  # For editable dishes
 
+# ========== CATEGORY MODELS ==========
+class CategoryCreate(BaseModel):
+    name: str
+    key: Optional[str] = None  # Short key like "Protein", "Carb"
+    label: Optional[str] = None  # Display label
+    icon: str = "grid"  # Ionicons icon name
+    color: str = "#E23744"  # Hex color
+    image_url: Optional[str] = None  # Category image
+    description: Optional[str] = None
+    sort_order: int = 0  # Display order
+
+class CategoryUpdate(BaseModel):
+    name: Optional[str] = None
+    key: Optional[str] = None
+    label: Optional[str] = None
+    icon: Optional[str] = None
+    color: Optional[str] = None
+    image_url: Optional[str] = None
+    description: Optional[str] = None
+    sort_order: Optional[int] = None
+    is_active: Optional[bool] = None
+
 # ========== AUTH UTILS ==========
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
