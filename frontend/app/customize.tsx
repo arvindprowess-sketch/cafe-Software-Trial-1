@@ -27,6 +27,8 @@ export default function CustomizeScreen() {
   const [userGoals, setUserGoals] = useState<any>({ daily_calories: 2000, daily_protein: 100, daily_carbs: 250, daily_fat: 65 });
   const [consumedToday, setConsumedToday] = useState<any>({ calories: 0, protein: 0, carbs: 0, fat: 0 });
   const [showCalorieWarning, setShowCalorieWarning] = useState(false);
+  const [aiAdjusting, setAiAdjusting] = useState(false);
+  const [adjustedItems, setAdjustedItems] = useState<any>(null);
 
   useEffect(() => {
     loadUserGoals();
