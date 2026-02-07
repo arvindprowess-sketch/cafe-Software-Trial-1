@@ -139,6 +139,24 @@ export default function HomeScreen() {
           <TextInput testID="search-input" style={styles.searchInput} value={search} onChangeText={setSearch} placeholder="Search for healthy meals..." placeholderTextColor="#B0B0B0" />
         </View>
 
+        {/* ===== SCAN TABLE QR (For in-café customers) ===== */}
+        <TouchableOpacity 
+          style={styles.scanTableCTA} 
+          onPress={() => router.push('/scan-table')} 
+          activeOpacity={0.9}
+        >
+          <View style={styles.scanCtaLeft}>
+            <View style={styles.scanCtaIconBg}>
+              <Ionicons name="qr-code" size={20} color="#FFF" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.scanCtaTitle}>Dining In?</Text>
+              <Text style={styles.scanCtaSub}>Scan table QR to order from your seat</Text>
+            </View>
+          </View>
+          <Ionicons name="scan" size={24} color="#267E3E" />
+        </TouchableOpacity>
+
         {/* ===== AI QUICK MEAL BUILDER ===== */}
         {!showMealBuilder && !aiMeal && (
           <TouchableOpacity testID="open-meal-builder" style={styles.mealBuilderCTA} onPress={() => setShowMealBuilder(true)} activeOpacity={0.9}>
