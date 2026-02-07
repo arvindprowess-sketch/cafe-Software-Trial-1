@@ -61,12 +61,19 @@ export default function AuthScreen() {
 
             {!isLogin && (
               <View style={styles.roleRow}>
-                {[{ key: 'customer', label: 'Customer', icon: 'person' as const }, { key: 'admin', label: 'Cafe Owner', icon: 'storefront' as const }].map(r => (
+                {[{ key: 'customer', label: 'Customer', icon: 'person' as const, desc: 'Order healthy meals' }].map(r => (
                   <TouchableOpacity key={r.key} testID={`auth-role-${r.key}`} style={[styles.roleBtn, role === r.key && styles.roleBtnActive]} onPress={() => setRole(r.key)}>
                     <Ionicons name={r.icon} size={18} color={role === r.key ? '#FFF' : '#696969'} />
                     <Text style={[styles.roleText, role === r.key && styles.roleTextActive]}>{r.label}</Text>
                   </TouchableOpacity>
                 ))}
+              </View>
+            )}
+
+            {isLogin && (
+              <View style={styles.loginHint}>
+                <Ionicons name="information-circle" size={16} color="#9C9C9C" />
+                <Text style={styles.loginHintText}>Café owners: Use admin credentials to login</Text>
               </View>
             )}
 
