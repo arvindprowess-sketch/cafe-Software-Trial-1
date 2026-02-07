@@ -137,7 +137,7 @@ export default function MenuScreen() {
         key={cat.key || cat.id}
         testID={`sidebar-cat-${cat.key || cat.id}`}
         style={[styles.sidebarCat, isActive && styles.sidebarCatActive]}
-        onPress={() => setSelectedCat(cat.key || cat.name)}
+        onPress={() => setSelectedCat(prev => prev === (cat.key || cat.name) ? '' : (cat.key || cat.name))}
         activeOpacity={0.8}
       >
         {cat.image_url ? (
