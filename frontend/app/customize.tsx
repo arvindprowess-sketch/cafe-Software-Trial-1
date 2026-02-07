@@ -467,6 +467,27 @@ export default function CustomizeScreen() {
           <View style={{ height: 120 }} />
         </ScrollView>
 
+        {/* Calorie Goal Awareness Banner */}
+        {items.length > 0 && (
+          <View style={[styles.calorieBanner, isOverGoal ? styles.calorieBannerOver : styles.calorieBannerOk]} testID="calorie-goal-banner">
+            <View style={styles.calorieBannerLeft}>
+              <Ionicons name={isOverGoal ? 'alert-circle' : 'checkmark-circle'} size={18} color={isOverGoal ? '#E23744' : '#267E3E'} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.calorieBannerTitle, isOverGoal && { color: '#E23744' }]}>
+                  {isOverGoal ? `${caloriesOver} cal over your daily goal` : 'Within your calorie goal'}
+                </Text>
+                <Text style={styles.calorieBannerSub}>
+                  {Math.round(consumedToday.calories || 0)} eaten + {Math.round(totals.calories)} this meal = {Math.round(projectedCalories)} / {calorieGoal} cal
+                </Text>
+              </View>
+            </View>
+            <View style={styles.calorieMiniBar}>
+              <View style={[styles.calorieMiniBarFill, { width: `${Math.min((projectedCalories / calorieGoal) * 100, 100)}%` }, isOverGoal && styles.calorieMiniBarOver]} />
+              {isOverGoal && <View style={[styles.calorieMiniBarExcess, { width: `${Math.min(((caloriesOver) / calorieGoal) * 100, 40)}%` }]} />}
+            </View>
+          </View>
+        )}
+
         <View style={styles.bottomBar}>
           <View style={styles.bottomInfo}>
             <View style={styles.bottomRow}>
@@ -482,6 +503,46 @@ export default function CustomizeScreen() {
             {ordering ? <ActivityIndicator color="#FFF" /> : <Text style={styles.orderBtnText}>Place Order</Text>}
           </TouchableOpacity>
         </View>
+
+        {/* Calorie Goal Exceeded Warning Modal */}
+        <Modal visible={showCalorieWarning} transparent animationType="fade" testID="calorie-warning-modal">
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalCard}>
+              <View style={styles.modalIconRow}>
+                <View style={styles.modalIconBg}>
+                  <Ionicons name="fitness" size={28} color="#E23744" />
+                </View>
+              </View>
+              <Text style={styles.modalTitle}>Calorie Goal Exceeded</Text>
+              <Text style={styles.modalDesc}>
+                This meal will put you <Text style={styles.modalHighlight}>{caloriesOver} calories</Text> over your daily goal of {calorieGoal} cal.
+              </Text>
+              <View style={styles.modalBreakdown}>
+                <View style={styles.modalBreakdownRow}>
+                  <Text style={styles.modalBreakdownLabel}>Already eaten today</Text>
+                  <Text style={styles.modalBreakdownVal}>{Math.round(consumedToday.calories || 0)} cal</Text>
+                </View>
+                <View style={styles.modalBreakdownRow}>
+                  <Text style={styles.modalBreakdownLabel}>This meal</Text>
+                  <Text style={styles.modalBreakdownVal}>+{Math.round(totals.calories)} cal</Text>
+                </View>
+                <View style={[styles.modalBreakdownRow, styles.modalBreakdownTotal]}>
+                  <Text style={styles.modalBreakdownTotalLabel}>Total today</Text>
+                  <Text style={styles.modalBreakdownTotalVal}>{Math.round(projectedCalories)} / {calorieGoal} cal</Text>
+                </View>
+              </View>
+              <TouchableOpacity testID="calorie-warning-adjust-btn" style={styles.modalAdjustBtn} onPress={() => setShowCalorieWarning(false)}>
+                <Ionicons name="create" size={18} color="#5B5FE0" />
+                <Text style={styles.modalAdjustText}>Adjust My Meal</Text>
+                <View style={styles.recommendedBadge}><Text style={styles.recommendedText}>Recommended</Text></View>
+              </TouchableOpacity>
+              <TouchableOpacity testID="calorie-warning-continue-btn" style={styles.modalContinueBtn} onPress={confirmOrder}>
+                <Text style={styles.modalContinueText}>Continue & Place Order</Text>
+              </TouchableOpacity>
+              <Text style={styles.modalNote}>Your choice, always. Calorie goals are here to guide, not restrict.</Text>
+            </View>
+          </View>
+        </Modal>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
