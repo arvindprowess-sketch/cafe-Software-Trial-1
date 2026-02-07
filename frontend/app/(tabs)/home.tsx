@@ -578,6 +578,13 @@ const styles = StyleSheet.create({
   per100: { fontSize: 10, fontWeight: '400', color: '#9C9C9C' },
   prodCal: { fontSize: 11, color: Z_RED, fontWeight: '600' },
 
+  // Scan Table CTA
+  scanTableCTA: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#E8F5E9', marginHorizontal: 16, marginTop: 14, borderRadius: 14, padding: 14, borderWidth: 1.5, borderColor: '#267E3E' },
+  scanCtaLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+  scanCtaIconBg: { width: 40, height: 40, borderRadius: 10, backgroundColor: '#267E3E', alignItems: 'center', justifyContent: 'center' },
+  scanCtaTitle: { fontSize: 15, fontWeight: '700', color: '#267E3E' },
+  scanCtaSub: { fontSize: 12, color: '#4CAF50', marginTop: 2 },
+
   // Floating AI Button
   floatingAiBtn: { position: 'absolute', bottom: 90, right: 20, width: 56, height: 56, borderRadius: 28, backgroundColor: '#5B5FE0', alignItems: 'center', justifyContent: 'center', shadowColor: '#5B5FE0', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 10 },
   floatingAiInner: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#5B5FE0', alignItems: 'center', justifyContent: 'center' },
