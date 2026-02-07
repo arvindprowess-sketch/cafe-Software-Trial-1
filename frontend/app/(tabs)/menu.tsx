@@ -316,12 +316,12 @@ const styles = StyleSheet.create({
   vegFilterIcon: { width: 16, height: 16, borderRadius: 2, borderWidth: 2, borderColor: 'currentColor', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF' },
   vegDotFilter: { width: 8, height: 8, borderRadius: 4 },
   
-  // Category boxes (more visible but compact)
+  // Category boxes (compact pills)
   catBar: { backgroundColor: '#FFF', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#EFEFEF' },
-  catContent: { paddingHorizontal: 16, gap: 8 },
-  catBox: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5, borderColor: '#E8E8E8' },
+  catContent: { paddingHorizontal: 12, gap: 6 },
+  catBox: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, borderWidth: 1.5, borderColor: '#E8E8E8', backgroundColor: '#FFF' },
   catIconBg: { width: 22, height: 22, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
-  catBoxText: { fontSize: 12, fontWeight: '600', color: '#1C1C2E' },
+  catBoxText: { fontSize: 11, fontWeight: '600', color: '#1C1C2E' },
   catPill: { paddingHorizontal: 18, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: '#E8E8E8', backgroundColor: '#FFF' },
   catText: { fontSize: 13, fontWeight: '600', color: '#696969' },
   
