@@ -261,32 +261,34 @@ export default function MenuScreen() {
 
       {/* Main Content: Left Sidebar + Right Product List */}
       <View style={styles.mainContent}>
-        {/* Left Sidebar Categories */}
-        <ScrollView 
-          style={styles.sidebar} 
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.sidebarContent}
-        >
-          {categories.map(renderSidebarCat)}
-        </ScrollView>
+        {/* Left Sidebar Categories - Fixed Width */}
+        <View style={styles.sidebarContainer}>
+          <ScrollView 
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.sidebarContent}
+          >
+            {categories.map(renderSidebarCat)}
+          </ScrollView>
+        </View>
         
-        {/* Right Product List */}
-        <FlatList
-          data={filtered}
-          keyExtractor={i => i.id}
-          renderItem={renderProduct}
-          style={styles.productList}
-          contentContainerStyle={styles.productListContent}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Z_RED} />}
-          showsVerticalScrollIndicator={false}
-          ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
-          ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <Ionicons name="restaurant-outline" size={48} color="#D0D0D0" />
-              <Text style={styles.emptyText}>No items found</Text>
-            </View>
-          }
-        />
+        {/* Right Product List - Takes remaining space */}
+        <View style={styles.productListContainer}>
+          <FlatList
+            data={filtered}
+            keyExtractor={i => i.id}
+            renderItem={renderProduct}
+            contentContainerStyle={styles.productListContent}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Z_RED} />}
+            showsVerticalScrollIndicator={false}
+            ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+            ListEmptyComponent={
+              <View style={styles.emptyState}>
+                <Ionicons name="restaurant-outline" size={48} color="#D0D0D0" />
+                <Text style={styles.emptyText}>No items found</Text>
+              </View>
+            }
+          />
+        </View>
       </View>
 
       {/* Cart Bar */}
