@@ -39,6 +39,9 @@ export default function SideDrawer({ visible, onClose, user }: SideDrawerProps) 
 
   // Profile state
   const [showGoals, setShowGoals] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameValue, setNameValue] = useState(user?.name || 'Guest User');
+  const [savingName, setSavingName] = useState(false);
   const [goal, setGoal] = useState(user?.fitness_goal || 'maintenance');
   const [calories, setCalories] = useState(String(user?.daily_calories || 2000));
   const [protein, setProtein] = useState(String(user?.daily_protein || 100));
@@ -49,12 +52,26 @@ export default function SideDrawer({ visible, onClose, user }: SideDrawerProps) 
   useEffect(() => {
     if (user) {
       setGoal(user.fitness_goal || 'maintenance');
+      setNameValue(user.name || 'Guest User');
       setCalories(String(user.daily_calories || 2000));
       setProtein(String(user.daily_protein || 100));
       setCarbs(String(user.daily_carbs || 250));
       setFat(String(user.daily_fat || 65));
     }
   }, [user]);
+
+  const saveName = async () => {
+    if (!nameValue.trim()) return;
+    setSavingName(true);
+    try {
+      await apiCall('/user/profile', { method: 'PUT', body: { name: nameValue.trim() } });
+      setEditingName(false);
+    } catch (e: any) {
+      Alert.alert('Error', e.message);
+    } finally {
+      setSavingName(false);
+    }
+  };
 
   React.useEffect(() => {
     Animated.timing(slideAnim, {
