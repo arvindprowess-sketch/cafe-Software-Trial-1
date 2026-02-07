@@ -632,6 +632,8 @@ const styles = StyleSheet.create({
   bannerContent: { flex: 1 },
   bannerTitle: { fontSize: 22, fontWeight: '800', color: '#FFF' },
   bannerSub: { fontSize: 13, color: 'rgba(255,255,255,0.85)', marginTop: 6 },
+  bannerBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(255,255,255,0.3)', alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, marginTop: 8 },
+  bannerBadgeText: { fontSize: 11, fontWeight: '700', color: '#FFF' },
   bannerImagePlaceholder: { width: 80, height: 80, alignItems: 'center', justifyContent: 'center' },
   dots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 12 },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#D0D0D0' },
