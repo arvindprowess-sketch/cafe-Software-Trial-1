@@ -79,8 +79,9 @@ export async function register(email: string, password: string, name: string, ro
 }
 
 export async function logout() {
-  await AsyncStorage.removeItem('auth_token');
-  await AsyncStorage.removeItem('user_data');
+  // Clear both old and new keys
+  await AsyncStorage.multiRemove(['auth_token', 'user_data', 'token', 'user']);
+  console.log('[API] Logged out - cleared all auth data');
 }
 
 export async function getStoredUser() {
