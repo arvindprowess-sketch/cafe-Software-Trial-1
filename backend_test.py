@@ -160,6 +160,42 @@ async def test_admin_only_access(session):
         results.log_fail("Admin Authentication", f"Exception: {e}")
         return False
 
+async def test_ai_quick_meal_endpoint(session):
+    """Test that AI Quick Meal endpoint works for authenticated users"""
+    if not admin_token:
+        results.log_fail("AI Quick Meal Endpoint", "No admin token available")
+        return False
+    
+    try:
+        headers = {"Authorization": f"Bearer {admin_token}"}
+        payload = {
+            "diet_preference": "veg",
+            "goal": "maintenance", 
+            "budget": 150,
+            "order_type": "dine-in"
+        }
+        
+        async with session.post(f"{API_BASE}/ai/quick-meal", json=payload, headers=headers) as response:
+            if response.status == 200:
+                data = await response.json()
+                meal_items = data.get("meal_items", [])
+                totals = data.get("totals", {})
+                
+                if meal_items or totals:  # Allow empty response if no products match
+                    results.log_pass("AI Quick Meal Endpoint", 
+                        f"✓ Response received: {len(meal_items)} items, totals: {totals}")
+                    return True
+                else:
+                    results.log_pass("AI Quick Meal Endpoint", "✓ Empty response (no matching products)")
+                    return True
+            else:
+                text = await response.text()
+                results.log_fail("AI Quick Meal Endpoint", f"HTTP {response.status}: {text}")
+                return False
+    except Exception as e:
+        results.log_fail("AI Quick Meal Endpoint", f"Exception: {e}")
+        return False
+
 async def test_products_list_admin(session):
     """Test admin products list to verify new products appear"""
     if not admin_token:
