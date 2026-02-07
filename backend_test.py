@@ -5,14 +5,17 @@ import json
 import os
 from pathlib import Path
 
-# Load frontend env to get backend URL
+# Load backend URL - Use the exact URL from review request
+backend_url = "https://healthy-bites-72.preview.emergentagent.com"
+
+# Also check frontend env as backup
 frontend_env_path = Path("/app/frontend/.env")
-backend_url = "https://expo-diet-companion.preview.emergentagent.com"
 if frontend_env_path.exists():
     with open(frontend_env_path) as f:
         for line in f:
             if line.startswith("EXPO_PUBLIC_BACKEND_URL="):
-                backend_url = line.split("=", 1)[1].strip().strip('"')
+                backup_url = line.split("=", 1)[1].strip().strip('"')
+                print(f"📝 Found frontend backup URL: {backup_url}")
                 break
 
 API_BASE = f"{backend_url}/api"
