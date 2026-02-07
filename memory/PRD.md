@@ -4,7 +4,7 @@
 User has an existing Diet Cafe Expo React Native app (from GitHub repo). Wants:
 1. Frontend start script set to `expo start --tunnel`
 2. Database seeded with admin user + 16 products + 6 categories
-3. Full project context maintained from PRD
+3. Calorie goals should guide, not restrict — never block orders or disable calorie meter
 
 ## Tech Stack
 - **Frontend**: Expo (React Native) with expo-router, TypeScript, tunnel mode
@@ -28,13 +28,21 @@ User has an existing Diet Cafe Expo React Native app (from GitHub repo). Wants:
 - Order placement (dine-in/takeaway/delivery)
 - AI meal suggestions & chat
 - Admin dashboard with products, kitchen, analytics
+- Calorie goals as guidance, not restrictions
 
 ## What's Been Implemented (as of Feb 2026)
 - [x] Fixed backend .env (removed junk characters, proper format)
 - [x] Frontend start script: `expo start --tunnel` (verified running)
 - [x] Seeded 16 products + 6 categories + admin user (admin@dietcafe.com / admin123)
 - [x] All backend APIs verified: auth, products, categories, orders, AI endpoints
-- [x] All screens present: Auth, Home, Menu, Budget, Orders, Profile, AI Chat, Admin
+- [x] **Calorie Goal Awareness System** (Feb 2026):
+  - customize.tsx: Friendly warning modal when meal exceeds daily calorie goal
+  - Shows exact calories over limit with breakdown (eaten + this meal = total / goal)
+  - Two options: "Adjust My Meal" (recommended) and "Continue & Place Order"
+  - Calorie awareness banner above order button
+  - Orders NEVER blocked — tested with extreme calorie values (100% pass)
+  - home.tsx: Nutrition card shows exceeded state with red indicator, never hides/disables
+  - budget-meal.tsx: Cart summary shows calorie goal context (remaining or over)
 
 ## Seeded Data
 ### Admin User
