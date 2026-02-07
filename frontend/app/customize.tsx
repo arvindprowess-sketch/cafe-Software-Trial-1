@@ -23,6 +23,41 @@ export default function CustomizeScreen() {
   const [ordering, setOrdering] = useState(false);
   const [inputMode, setInputMode] = useState<Record<string, 'grams' | 'rupees'>>({});
 
+  // Calorie goal awareness
+  const [userGoals, setUserGoals] = useState<any>({ daily_calories: 2000, daily_protein: 100, daily_carbs: 250, daily_fat: 65 });
+  const [consumedToday, setConsumedToday] = useState<any>({ calories: 0, protein: 0, carbs: 0, fat: 0 });
+  const [showCalorieWarning, setShowCalorieWarning] = useState(false);
+
+  useEffect(() => {
+    loadUserGoals();
+  }, []);
+
+  const loadUserGoals = async () => {
+    try {
+      const [user, summary] = await Promise.all([
+        getStoredUser(),
+        apiCall('/user/nutrition-summary').catch(() => null),
+      ]);
+      if (user) {
+        setUserGoals({
+          daily_calories: user.daily_calories || 2000,
+          daily_protein: user.daily_protein || 100,
+          daily_carbs: user.daily_carbs || 250,
+          daily_fat: user.daily_fat || 65,
+        });
+      }
+      if (summary?.consumed) {
+        setConsumedToday(summary.consumed);
+      }
+    } catch {}
+  };
+
+  // Calculate how much over the calorie goal
+  const projectedCalories = (consumedToday.calories || 0) + totals.calories;
+  const calorieGoal = userGoals.daily_calories;
+  const caloriesOver = Math.round(projectedCalories - calorieGoal);
+  const isOverGoal = caloriesOver > 0;
+
   // For single products
   const updateGrams = (id: string, grams: number) => setItems(items.map(i => i.id === id ? { ...i, grams: Math.max(0, grams) } : i));
   const updateByRupees = (id: string, rupees: number) => { 
