@@ -7,7 +7,7 @@ from pathlib import Path
 
 # Load frontend env to get backend URL
 frontend_env_path = Path("/app/frontend/.env")
-backend_url = "https://resume-process.preview.emergentagent.com"
+backend_url = "https://journey-tracker-99.preview.emergentagent.com"
 if frontend_env_path.exists():
     with open(frontend_env_path) as f:
         for line in f:
