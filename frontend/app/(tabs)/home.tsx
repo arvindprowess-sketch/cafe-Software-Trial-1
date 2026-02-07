@@ -559,4 +559,9 @@ const styles = StyleSheet.create({
   prodPrice: { fontSize: 14, fontWeight: '700', color: '#1C1C2E' },
   per100: { fontSize: 10, fontWeight: '400', color: '#9C9C9C' },
   prodCal: { fontSize: 11, color: Z_RED, fontWeight: '600' },
+
+  // Floating AI Button
+  floatingAiBtn: { position: 'absolute', bottom: 90, right: 20, width: 56, height: 56, borderRadius: 28, backgroundColor: '#5B5FE0', alignItems: 'center', justifyContent: 'center', shadowColor: '#5B5FE0', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 10 },
+  floatingAiInner: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#5B5FE0', alignItems: 'center', justifyContent: 'center' },
+  floatingAiBadge: { position: 'absolute', top: -2, right: -2, width: 20, height: 20, borderRadius: 10, backgroundColor: Z_RED, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#FFF' },
 });
