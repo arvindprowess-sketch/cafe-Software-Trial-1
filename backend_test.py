@@ -110,63 +110,30 @@ async def test_categories_endpoint(session):
         results.log_fail("Categories Endpoint", f"Exception: {e}")
         return False
 
-async def test_ready_made_veg_meal(session):
-    """Test ready-made meal creation (veg)"""
+async def test_admin_products_all_endpoint(session):
+    """Test GET /api/products/all with admin token should return all products"""
     if not admin_token:
-        results.log_fail("Ready-Made Veg Meal", "No admin token available")
+        results.log_fail("Admin Products All Endpoint", "No admin token available")
         return False
     
     try:
         headers = {"Authorization": f"Bearer {admin_token}"}
-        payload = {
-            "name": "Paneer Butter Masala",
-            "ingredients": ["paneer", "butter", "tomato", "cream", "spices"],
-            "images": [],
-            "price": 179,
-            "serving_grams": 350
-        }
-        
-        async with session.post(f"{API_BASE}/products/ready-made", json=payload, headers=headers) as response:
+        async with session.get(f"{API_BASE}/products/all", headers=headers) as response:
             if response.status == 200:
                 data = await response.json()
-                
-                # Verify required fields
-                required_checks = [
-                    ("product_type", "ready_made", data.get("product_type")),
-                    ("fixed_price", 179, data.get("fixed_price")),
-                    ("serving_grams", 350, data.get("serving_grams")),
-                    ("diet_type", "veg", data.get("diet_type")),
-                    ("name", "Paneer Butter Masala", data.get("name"))
-                ]
-                
-                checks_passed = 0
-                for field, expected, actual in required_checks:
-                    if actual == expected:
-                        checks_passed += 1
-                    else:
-                        results.log_fail("Ready-Made Veg Meal", f"{field} mismatch: expected {expected}, got {actual}")
-                        
-                # Check ingredients array
-                ingredients_correct = data.get("ingredients") == payload["ingredients"]
-                has_description = bool(data.get("description"))
-                has_nutrition = all(k in data for k in ["calories_per_100g", "protein_per_100g", "carbs_per_100g", "fat_per_100g"])
-                
-                if checks_passed == 5 and ingredients_correct and has_description and has_nutrition:
-                    results.log_pass("Ready-Made Veg Meal", 
-                        f"✓ diet_type: {data['diet_type']}, ingredients: {len(data['ingredients'])}, " +
-                        f"serving: {data['serving_grams']}g, price: ₹{data['fixed_price']}, " +
-                        f"AI desc: '{data.get('description', '')[:30]}...', " +
-                        f"nutrition: {data.get('calories_per_100g')}cal")
-                    return data
+                if isinstance(data, list):
+                    total_products = len(data)
+                    results.log_pass("Admin Products All Endpoint", f"✓ {total_products} products returned with admin token")
+                    return True
                 else:
-                    results.log_fail("Ready-Made Veg Meal", f"Failed checks: ingredients={ingredients_correct}, description={has_description}, nutrition={has_nutrition}")
+                    results.log_fail("Admin Products All Endpoint", "Response is not a list")
                     return False
             else:
                 text = await response.text()
-                results.log_fail("Ready-Made Veg Meal", f"HTTP {response.status}: {text}")
+                results.log_fail("Admin Products All Endpoint", f"HTTP {response.status}: {text}")
                 return False
     except Exception as e:
-        results.log_fail("Ready-Made Veg Meal", f"Exception: {e}")
+        results.log_fail("Admin Products All Endpoint", f"Exception: {e}")
         return False
 
 async def test_ready_made_nonveg_meal(session):
