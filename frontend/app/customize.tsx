@@ -219,6 +219,8 @@ export default function CustomizeScreen() {
     const mode = inputMode[item.id] || 'grams';
     const f = item.grams / 100;
     const currentRupees = Math.round(f * item.cost_per_100g);
+    // Track rupee input value for display (synced with grams)
+    const displayRupees = currentRupees;
     
     return (
       <View key={item.id} style={styles.itemCard} testID={`customize-item-${item.id}`}>
@@ -244,24 +246,26 @@ export default function CustomizeScreen() {
           ))}
         </View>
         <View style={styles.qtyRow}>
-          <TouchableOpacity style={styles.qtyBtn} onPress={() => mode === 'grams' ? updateGrams(item.id, item.grams - 25) : updateByRupees(item.id, currentRupees - 10)}>
+          <TouchableOpacity style={styles.qtyBtn} onPress={() => mode === 'grams' ? updateGrams(item.id, item.grams - 25) : updateByRupees(item.id, displayRupees - 10)}>
             <Ionicons name="remove" size={16} color={Z_RED} />
           </TouchableOpacity>
           <TextInput testID={`qty-input-${item.id}`} style={styles.qtyInput}
-            value={mode === 'grams' ? String(item.grams) : String(currentRupees)}
+            value={mode === 'grams' ? String(item.grams) : String(displayRupees)}
             onChangeText={v => { const n = parseInt(v) || 0; mode === 'grams' ? updateGrams(item.id, n) : updateByRupees(item.id, n); }}
             keyboardType="number-pad" />
           <Text style={styles.qtyUnit}>{mode === 'grams' ? 'g' : '₹'}</Text>
-          <TouchableOpacity style={[styles.qtyBtn, { backgroundColor: Z_RED }]} onPress={() => mode === 'grams' ? updateGrams(item.id, item.grams + 25) : updateByRupees(item.id, currentRupees + 10)}>
+          <TouchableOpacity style={[styles.qtyBtn, { backgroundColor: Z_RED }]} onPress={() => mode === 'grams' ? updateGrams(item.id, item.grams + 25) : updateByRupees(item.id, displayRupees + 10)}>
             <Ionicons name="add" size={16} color="#FFF" />
           </TouchableOpacity>
         </View>
         
-        {/* Show conversion feedback when in rupees mode */}
+        {/* Show conversion feedback - always show in rupees mode with calculated grams */}
         {mode === 'rupees' && (
           <View style={styles.conversionRow}>
             <Ionicons name="swap-horizontal" size={14} color="#5B5FE0" />
-            <Text style={styles.conversionText}>₹{currentRupees} = <Text style={styles.conversionHighlight}>{item.grams}g</Text> of {item.name}</Text>
+            <Text style={styles.conversionText}>
+              ₹{displayRupees} = <Text style={styles.conversionHighlight}>{item.grams}g</Text> of {item.name}
+            </Text>
           </View>
         )}
         
