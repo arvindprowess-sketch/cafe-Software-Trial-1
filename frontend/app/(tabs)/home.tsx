@@ -7,14 +7,22 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { apiCall, getStoredUser } from '../../utils/api';
+import SideDrawer from '../components/SideDrawer';
 
 const Z_RED = '#E23744';
+const GREEN = '#267E3E';
 const { width } = Dimensions.get('window');
-const CATEGORIES = [
-  { key: 'All', icon: 'grid', color: Z_RED },
-  { key: 'Protein', icon: 'barbell', color: '#E23744' },
-  { key: 'Carb', icon: 'leaf', color: '#FF9F0A' },
-  { key: 'Fat', icon: 'water', color: '#5B5FE0' },
+
+// Category grid for BK-style menu
+const MENU_CATEGORIES = [
+  { key: 'Protein', label: 'High Protein', icon: 'barbell', color: '#E23744', image: 'https://images.unsplash.com/photo-1632778149955-e80f8ceca2e8?w=100&h=100&fit=crop' },
+  { key: 'Carb', label: 'Healthy Carbs', icon: 'leaf', color: '#FF9F0A', image: 'https://images.unsplash.com/photo-1536304929831-ee1ca9d44726?w=100&h=100&fit=crop' },
+  { key: 'Fat', label: 'Good Fats', icon: 'water', color: '#5B5FE0', image: 'https://images.unsplash.com/photo-1523049673857-eb18f1d7b578?w=100&h=100&fit=crop' },
+  { key: 'Meal', label: 'Ready Meals', icon: 'restaurant', color: '#267E3E', image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=100&h=100&fit=crop' },
+  { key: 'veg', label: 'Veg Only', icon: 'nutrition', color: '#4CAF50', image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=100&h=100&fit=crop' },
+  { key: 'non-veg', label: 'Non-Veg', icon: 'flame', color: '#E23744', image: 'https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=100&h=100&fit=crop' },
+  { key: 'budget', label: 'Budget Meals', icon: 'wallet', color: '#FF6B35', image: 'https://images.unsplash.com/photo-1490818387583-1baba5e638af?w=100&h=100&fit=crop' },
+  { key: 'ai', label: 'AI Picks', icon: 'sparkles', color: '#5B5FE0', image: null },
 ];
 
 export default function HomeScreen() {
@@ -23,12 +31,16 @@ export default function HomeScreen() {
   const [summary, setSummary] = useState<any>(null);
   const [products, setProducts] = useState<any[]>([]);
   const [banners, setBanners] = useState<any[]>([]);
-  const [selectedCat, setSelectedCat] = useState('All');
-  const [search, setSearch] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const bannerRef = useRef<FlatList>(null);
   const [bannerIdx, setBannerIdx] = useState(0);
+  
+  // Side drawer state
+  const [drawerVisible, setDrawerVisible] = useState(false);
+  
+  // Order type toggle
+  const [orderType, setOrderType] = useState<'delivery' | 'dine-in'>('dine-in');
 
   // AI Quick Meal Builder state
   const [showMealBuilder, setShowMealBuilder] = useState(false);
@@ -42,10 +54,10 @@ export default function HomeScreen() {
     try {
       const [u, s, p, b, pop] = await Promise.all([
         getStoredUser(), 
-        apiCall('/user/nutrition-summary'), 
+        apiCall('/user/nutrition-summary').catch(() => null), 
         apiCall('/products'), 
         apiCall('/banners'),
-        apiCall('/products/popular').catch(() => []), // Popular items based on sales
+        apiCall('/products/popular').catch(() => []),
       ]);
       setUser(u); setSummary(s); setProducts(pop.length > 0 ? pop : p); setBanners(b);
     } catch (e) {} finally { setLoading(false); }
@@ -66,12 +78,6 @@ export default function HomeScreen() {
 
   const onRefresh = async () => { setRefreshing(true); await loadData(); setRefreshing(false); };
 
-  const filteredProducts = products.filter(p => {
-    const catMatch = selectedCat === 'All' || p.category === selectedCat;
-    const searchMatch = !search || p.name.toLowerCase().includes(search.toLowerCase());
-    return catMatch && searchMatch && p.available_qty_grams > 0;
-  });
-
   const consumed = summary?.consumed || {};
   const goals = summary?.goals || {};
   const calPct = goals.daily_calories ? Math.min((consumed.calories / goals.daily_calories) * 100, 100) : 0;
@@ -83,12 +89,7 @@ export default function HomeScreen() {
     try {
       const result = await apiCall('/ai/quick-meal', {
         method: 'POST',
-        body: {
-          diet_preference: dietPref,
-          goal: mealGoal,
-          budget: mealBudget ? parseFloat(mealBudget) : null,
-          order_type: 'dine-in',
-        },
+        body: { diet_preference: dietPref, goal: mealGoal, budget: mealBudget ? parseFloat(mealBudget) : null, order_type: orderType },
       });
       setAiMeal(result);
     } catch (e: any) { Alert.alert('Error', e.message); }
@@ -98,64 +99,184 @@ export default function HomeScreen() {
   const orderAiMeal = () => {
     if (!aiMeal?.meal_items?.length) return;
     const cart = aiMeal.meal_items.map((item: any) => ({
-      id: item.product_id,
-      name: item.product_name,
-      grams: item.grams,
-      cost_per_100g: item.cost_per_100g,
-      calories_per_100g: item.calories_per_100g,
-      protein_per_100g: item.protein_per_100g,
-      carbs_per_100g: item.carbs_per_100g,
-      fat_per_100g: item.fat_per_100g,
-      category: item.category,
-      diet_type: item.diet_type,
-      image_url: item.image_url,
+      id: item.product_id, name: item.product_name, grams: item.grams,
+      cost_per_100g: item.cost_per_100g, calories_per_100g: item.calories_per_100g,
+      protein_per_100g: item.protein_per_100g, carbs_per_100g: item.carbs_per_100g,
+      fat_per_100g: item.fat_per_100g, category: item.category,
+      diet_type: item.diet_type, image_url: item.image_url,
     }));
-    router.push({ pathname: '/customize', params: { cart: JSON.stringify(cart), orderType: 'dine-in' } });
+    router.push({ pathname: '/customize', params: { cart: JSON.stringify(cart), orderType } });
   };
 
   const resetBuilder = () => { setAiMeal(null); setMealGoal(''); setMealBudget(''); setDietPref('both'); setShowMealBuilder(false); };
 
+  const handleCategoryPress = (cat: any) => {
+    if (cat.key === 'ai') {
+      setShowMealBuilder(true);
+    } else if (cat.key === 'budget') {
+      router.push('/(tabs)/budget-meal');
+    } else if (cat.key === 'veg' || cat.key === 'non-veg') {
+      router.push({ pathname: '/(tabs)/menu', params: { dietFilter: cat.key } });
+    } else {
+      router.push({ pathname: '/(tabs)/menu', params: { category: cat.key } });
+    }
+  };
+
   if (loading) return <SafeAreaView style={styles.safe}><View style={styles.center}><ActivityIndicator size="large" color={Z_RED} /></View></SafeAreaView>;
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Z_RED} />}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
+      {/* Side Drawer */}
+      <SideDrawer visible={drawerVisible} onClose={() => setDrawerVisible(false)} user={user} />
+      
+      <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Z_RED} />} showsVerticalScrollIndicator={false}>
+        {/* ===== HEADER WITH HAMBURGER & ORDER TYPE TOGGLE ===== */}
         <View style={styles.header}>
-          <View>
-            <View style={styles.locRow}>
-              <Ionicons name="location" size={18} color={Z_RED} />
-              <Text style={styles.locText}>Diet Cafe</Text>
-              <Ionicons name="chevron-down" size={14} color={Z_RED} />
-            </View>
-            <Text style={styles.locSub}>Healthy meals, delivered fresh</Text>
+          <TouchableOpacity testID="menu-drawer-btn" style={styles.menuBtn} onPress={() => setDrawerVisible(true)}>
+            <Ionicons name="menu" size={24} color="#1C1C2E" />
+          </TouchableOpacity>
+          
+          {/* Delivery / Dine-in Toggle */}
+          <View style={styles.orderToggle}>
+            <TouchableOpacity 
+              testID="order-delivery-toggle"
+              style={[styles.toggleBtn, orderType === 'delivery' && styles.toggleBtnActive]}
+              onPress={() => setOrderType('delivery')}
+            >
+              <Text style={[styles.toggleText, orderType === 'delivery' && styles.toggleTextActive]}>DELIVERY</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              testID="order-dinein-toggle"
+              style={[styles.toggleBtn, orderType === 'dine-in' && styles.toggleBtnActive]}
+              onPress={() => setOrderType('dine-in')}
+            >
+              <Text style={[styles.toggleText, orderType === 'dine-in' && styles.toggleTextActive]}>DINE-IN</Text>
+            </TouchableOpacity>
           </View>
+          
           <TouchableOpacity testID="profile-avatar-btn" style={styles.avatar} onPress={() => router.push('/(tabs)/profile')}>
             <Ionicons name="person" size={18} color={Z_RED} />
           </TouchableOpacity>
         </View>
 
-        <View style={styles.searchBar}>
-          <Ionicons name="search" size={18} color="#9C9C9C" />
-          <TextInput testID="search-input" style={styles.searchInput} value={search} onChangeText={setSearch} placeholder="Search for healthy meals..." placeholderTextColor="#B0B0B0" />
-        </View>
-
-        {/* ===== SCAN TABLE QR (For in-café customers) ===== */}
-        <TouchableOpacity 
-          style={styles.scanTableCTA} 
-          onPress={() => router.push('/scan-table')} 
-          activeOpacity={0.9}
-        >
-          <View style={styles.scanCtaLeft}>
-            <View style={styles.scanCtaIconBg}>
-              <Ionicons name="qr-code" size={20} color="#FFF" />
+        {/* Location Bar */}
+        {orderType === 'dine-in' && (
+          <TouchableOpacity style={styles.locationBar} onPress={() => router.push('/scan-table')}>
+            <Ionicons name="restaurant" size={18} color={Z_RED} />
+            <Text style={styles.locationText}>DINE-IN AT:</Text>
+            <View style={styles.locationValue}>
+              <Text style={styles.locationName}>Diet Cafe • Scan Table</Text>
+              <Ionicons name="chevron-down" size={16} color="#9C9C9C" />
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.scanCtaTitle}>Dining In?</Text>
-              <Text style={styles.scanCtaSub}>Scan table QR to order from your seat</Text>
+          </TouchableOpacity>
+        )}
+        
+        {orderType === 'delivery' && (
+          <View style={styles.locationBar}>
+            <Ionicons name="bicycle" size={18} color={Z_RED} />
+            <Text style={styles.locationText}>DELIVER TO:</Text>
+            <View style={styles.locationValue}>
+              <Text style={styles.locationName}>Select Address</Text>
+              <Ionicons name="chevron-down" size={16} color="#9C9C9C" />
             </View>
           </View>
-          <Ionicons name="scan" size={24} color="#267E3E" />
-        </TouchableOpacity>
+        )}
+
+        {/* ===== PROMOTIONAL BANNERS ===== */}
+        {banners.length > 0 && (
+          <FlatList
+            ref={bannerRef}
+            horizontal showsHorizontalScrollIndicator={false} pagingEnabled
+            data={banners} keyExtractor={item => item.id}
+            style={styles.bannerList}
+            onScrollToIndexFailed={() => {}}
+            renderItem={({ item }) => (
+              <View style={[styles.banner, { backgroundColor: item.color }]} testID={`banner-${item.id}`}>
+                <View style={styles.bannerContent}>
+                  <Text style={styles.bannerTitle}>{item.title}</Text>
+                  <Text style={styles.bannerSub}>{item.subtitle}</Text>
+                </View>
+                <View style={styles.bannerImagePlaceholder}>
+                  <Ionicons name="fast-food" size={50} color="rgba(255,255,255,0.4)" />
+                </View>
+              </View>
+            )}
+          />
+        )}
+        <View style={styles.dots}>
+          {banners.map((_, i) => (
+            <View key={i} style={[styles.dot, i === bannerIdx && styles.dotActive]} />
+          ))}
+        </View>
+
+        {/* ===== CATEGORY GRID (BK Style) ===== */}
+        <Text style={styles.sectionTitle}>Our Menu</Text>
+        <View style={styles.categoryGrid}>
+          {MENU_CATEGORIES.map((cat) => (
+            <TouchableOpacity
+              key={cat.key}
+              testID={`cat-grid-${cat.key}`}
+              style={styles.categoryCard}
+              onPress={() => handleCategoryPress(cat)}
+              activeOpacity={0.8}
+            >
+              {cat.image ? (
+                <Image source={{ uri: cat.image }} style={styles.categoryImage} />
+              ) : (
+                <View style={[styles.categoryImage, styles.categoryIconBg, { backgroundColor: cat.color }]}>
+                  <Ionicons name={cat.icon as any} size={28} color="#FFF" />
+                </View>
+              )}
+              <Text style={styles.categoryLabel} numberOfLines={2}>{cat.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* ===== TODAY'S NUTRITION CARD ===== */}
+        <View style={styles.nutriCard} testID="nutrition-summary-card">
+          <View style={styles.nutriHeader}>
+            <Ionicons name="fitness" size={18} color={Z_RED} />
+            <Text style={styles.nutriTitle}>Today's Nutrition</Text>
+            <Text style={styles.nutriMeals}>{summary?.meals_count || 0} meals</Text>
+          </View>
+          <View style={styles.nutriRow}>
+            <View style={styles.nutriMain}>
+              <Text style={styles.calValue}>{Math.round(consumed.calories || 0)}</Text>
+              <Text style={styles.calUnit}>/ {goals.daily_calories || 2000} kcal</Text>
+            </View>
+            <View style={styles.macroRow}>
+              {[
+                { label: 'Protein', val: consumed.protein, goal: goals.daily_protein, color: Z_RED },
+                { label: 'Carbs', val: consumed.carbs, goal: goals.daily_carbs, color: '#FF9F0A' },
+                { label: 'Fat', val: consumed.fat, goal: goals.daily_fat, color: '#5B5FE0' },
+              ].map(m => (
+                <View key={m.label} style={styles.macroItem}>
+                  <Text style={[styles.macroVal, { color: m.color }]}>{Math.round(m.val || 0)}g</Text>
+                  <Text style={styles.macroLabel}>{m.label}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+          <View style={styles.progressBg}>
+            <View style={[styles.progressFill, { width: `${calPct}%` }]} />
+          </View>
+        </View>
+
+        {/* ===== SCAN TABLE QR (For dine-in) ===== */}
+        {orderType === 'dine-in' && (
+          <TouchableOpacity style={styles.scanTableCTA} onPress={() => router.push('/scan-table')} activeOpacity={0.9}>
+            <View style={styles.scanCtaLeft}>
+              <View style={styles.scanCtaIconBg}>
+                <Ionicons name="qr-code" size={20} color="#FFF" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.scanCtaTitle}>Scan Table QR</Text>
+                <Text style={styles.scanCtaSub}>Order from your seat</Text>
+              </View>
+            </View>
+            <Ionicons name="scan" size={24} color={GREEN} />
+          </TouchableOpacity>
+        )}
 
         {/* ===== AI QUICK MEAL BUILDER ===== */}
         {!showMealBuilder && !aiMeal && (
@@ -165,11 +286,11 @@ export default function HomeScreen() {
                 <Ionicons name="sparkles" size={20} color="#FFF" />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.ctaTitle}>Build My Meal</Text>
+                <Text style={styles.ctaTitle}>AI Meal Builder</Text>
                 <Text style={styles.ctaSub}>AI picks the perfect meal for your goals</Text>
               </View>
             </View>
-            <Ionicons name="arrow-forward-circle" size={28} color={Z_RED} />
+            <Ionicons name="arrow-forward-circle" size={28} color="#5B5FE0" />
           </TouchableOpacity>
         )}
 
@@ -189,8 +310,8 @@ export default function HomeScreen() {
             <Text style={styles.builderLabel}>Diet Preference</Text>
             <View style={styles.dietRow}>
               {[
-                { key: 'veg', label: 'Veg', color: '#267E3E' },
-                { key: 'non-veg', label: 'Non-Veg', color: '#E23744' },
+                { key: 'veg', label: 'Veg', color: GREEN },
+                { key: 'non-veg', label: 'Non-Veg', color: Z_RED },
                 { key: 'both', label: 'Both', color: '#FF9F0A' },
               ].map(d => (
                 <TouchableOpacity
@@ -198,8 +319,8 @@ export default function HomeScreen() {
                   style={[styles.dietChip, dietPref === d.key && { backgroundColor: d.color, borderColor: d.color }]}
                   onPress={() => setDietPref(d.key)}
                 >
-                  {d.key === 'veg' && <View style={[styles.vegIndicator, { borderColor: '#267E3E' }]}><View style={[styles.vegDotInner, { backgroundColor: '#267E3E' }]} /></View>}
-                  {d.key === 'non-veg' && <View style={[styles.vegIndicator, { borderColor: '#E23744' }]}><View style={[styles.vegDotInner, { backgroundColor: '#E23744' }]} /></View>}
+                  {d.key === 'veg' && <View style={[styles.vegIndicator, { borderColor: GREEN }]}><View style={[styles.vegDotInner, { backgroundColor: GREEN }]} /></View>}
+                  {d.key === 'non-veg' && <View style={[styles.vegIndicator, { borderColor: Z_RED }]}><View style={[styles.vegDotInner, { backgroundColor: Z_RED }]} /></View>}
                   {d.key === 'both' && <Ionicons name="ellipse-outline" size={14} color={dietPref === d.key ? '#FFF' : '#FF9F0A'} />}
                   <Text style={[styles.dietText, dietPref === d.key && { color: '#FFF' }]}>{d.label}</Text>
                 </TouchableOpacity>
@@ -210,8 +331,8 @@ export default function HomeScreen() {
             <Text style={styles.builderLabel}>Fitness Goal</Text>
             <View style={styles.goalRow}>
               {[
-                { key: 'fat_loss', label: 'Fat Loss', icon: 'trending-down' as const, color: '#E23744' },
-                { key: 'muscle_gain', label: 'Muscle Gain', icon: 'trending-up' as const, color: '#267E3E' },
+                { key: 'fat_loss', label: 'Fat Loss', icon: 'trending-down' as const, color: Z_RED },
+                { key: 'muscle_gain', label: 'Muscle Gain', icon: 'trending-up' as const, color: GREEN },
                 { key: 'maintenance', label: 'Maintain', icon: 'swap-horizontal' as const, color: '#5B5FE0' },
               ].map(g => (
                 <TouchableOpacity
@@ -268,12 +389,11 @@ export default function HomeScreen() {
             </View>
             <Text style={styles.mealSummary}>{aiMeal.summary}</Text>
 
-            {/* Meal Items */}
             {aiMeal.meal_items.map((item: any, i: number) => (
               <View key={i} style={styles.mealItem}>
                 <View style={styles.mealItemLeft}>
-                  <View style={[styles.vegDot, { borderColor: item.diet_type === 'non-veg' ? '#E23744' : '#267E3E' }]}>
-                    <View style={[styles.vegDotFill, { backgroundColor: item.diet_type === 'non-veg' ? '#E23744' : '#267E3E' }]} />
+                  <View style={[styles.vegDot, { borderColor: item.diet_type === 'non-veg' ? Z_RED : GREEN }]}>
+                    <View style={[styles.vegDotFill, { backgroundColor: item.diet_type === 'non-veg' ? Z_RED : GREEN }]} />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.mealItemName}>{item.product_name}</Text>
@@ -287,25 +407,19 @@ export default function HomeScreen() {
               </View>
             ))}
 
-            {/* Totals */}
             <View style={styles.mealTotals}>
               <View style={styles.totalRow}>
-                <View style={styles.totalItem}>
-                  <Text style={styles.totalLabel}>Calories</Text>
-                  <Text style={[styles.totalValue, { color: Z_RED }]}>{Math.round(aiMeal.totals.calories)}</Text>
-                </View>
-                <View style={styles.totalItem}>
-                  <Text style={styles.totalLabel}>Protein</Text>
-                  <Text style={[styles.totalValue, { color: Z_RED }]}>{Math.round(aiMeal.totals.protein)}g</Text>
-                </View>
-                <View style={styles.totalItem}>
-                  <Text style={styles.totalLabel}>Carbs</Text>
-                  <Text style={[styles.totalValue, { color: '#FF9F0A' }]}>{Math.round(aiMeal.totals.carbs)}g</Text>
-                </View>
-                <View style={styles.totalItem}>
-                  <Text style={styles.totalLabel}>Fat</Text>
-                  <Text style={[styles.totalValue, { color: '#5B5FE0' }]}>{Math.round(aiMeal.totals.fat)}g</Text>
-                </View>
+                {[
+                  { label: 'Calories', val: aiMeal.totals.calories, color: Z_RED },
+                  { label: 'Protein', val: `${Math.round(aiMeal.totals.protein)}g`, color: Z_RED },
+                  { label: 'Carbs', val: `${Math.round(aiMeal.totals.carbs)}g`, color: '#FF9F0A' },
+                  { label: 'Fat', val: `${Math.round(aiMeal.totals.fat)}g`, color: '#5B5FE0' },
+                ].map(t => (
+                  <View key={t.label} style={styles.totalItem}>
+                    <Text style={styles.totalLabel}>{t.label}</Text>
+                    <Text style={[styles.totalValue, { color: t.color }]}>{typeof t.val === 'number' ? Math.round(t.val) : t.val}</Text>
+                  </View>
+                ))}
               </View>
               <View style={styles.totalPriceRow}>
                 <Text style={styles.totalPriceLabel}>Total</Text>
@@ -313,7 +427,6 @@ export default function HomeScreen() {
               </View>
             </View>
 
-            {/* Order Button */}
             <TouchableOpacity testID="order-ai-meal-btn" style={styles.orderMealBtn} onPress={orderAiMeal} activeOpacity={0.85}>
               <Ionicons name="cart" size={18} color="#FFF" />
               <Text style={styles.orderMealText}>Order This Meal</Text>
@@ -331,105 +444,44 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {banners.length > 0 && (
-          <FlatList
-            ref={bannerRef}
-            horizontal showsHorizontalScrollIndicator={false} pagingEnabled
-            data={banners} keyExtractor={item => item.id}
-            style={styles.bannerList}
-            onScrollToIndexFailed={() => {}}
-            renderItem={({ item }) => (
-              <View style={[styles.banner, { backgroundColor: item.color }]} testID={`banner-${item.id}`}>
-                <View>
-                  <Text style={styles.bannerTitle}>{item.title}</Text>
-                  <Text style={styles.bannerSub}>{item.subtitle}</Text>
-                </View>
-                <Ionicons name="arrow-forward-circle" size={32} color="rgba(255,255,255,0.6)" />
-              </View>
-            )}
-          />
-        )}
-        <View style={styles.dots}>
-          {banners.map((_, i) => (
-            <View key={i} style={[styles.dot, i === bannerIdx && styles.dotActive]} />
-          ))}
-        </View>
-
-        <View style={styles.nutriCard} testID="nutrition-summary-card">
-          <View style={styles.nutriHeader}>
-            <Ionicons name="fitness" size={18} color={Z_RED} />
-            <Text style={styles.nutriTitle}>Today's Nutrition</Text>
-            <Text style={styles.nutriMeals}>{summary?.meals_count || 0} meals</Text>
-          </View>
-          <View style={styles.nutriRow}>
-            <View style={styles.nutriMain}>
-              <Text style={styles.calValue}>{Math.round(consumed.calories || 0)}</Text>
-              <Text style={styles.calUnit}>/ {goals.daily_calories || 2000} kcal</Text>
-            </View>
-            <View style={styles.macroRow}>
-              {[
-                { label: 'Protein', val: consumed.protein, goal: goals.daily_protein, color: Z_RED },
-                { label: 'Carbs', val: consumed.carbs, goal: goals.daily_carbs, color: '#FF9F0A' },
-                { label: 'Fat', val: consumed.fat, goal: goals.daily_fat, color: '#5B5FE0' },
-              ].map(m => (
-                <View key={m.label} style={styles.macroItem}>
-                  <Text style={[styles.macroVal, { color: m.color }]}>{Math.round(m.val || 0)}g</Text>
-                  <Text style={styles.macroLabel}>{m.label}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-          <View style={styles.progressBg}>
-            <View style={[styles.progressFill, { width: `${calPct}%` }]} />
-          </View>
-        </View>
-
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.catScroll} contentContainerStyle={styles.catContent}>
-          {CATEGORIES.map(c => (
+        {/* ===== POPULAR ITEMS ===== */}
+        <Text style={styles.sectionTitle}>Popular Items</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.popularScroll}>
+          {products.slice(0, 10).map(item => (
             <TouchableOpacity
-              key={c.key} testID={`cat-${c.key}`}
-              style={[styles.catPill, selectedCat === c.key && { backgroundColor: Z_RED, borderColor: Z_RED }]}
-              onPress={() => setSelectedCat(c.key)}
+              key={item.id} testID={`popular-${item.id}`} style={styles.popularCard}
+              onPress={() => router.push('/(tabs)/menu')} activeOpacity={0.9}
             >
-              <Ionicons name={c.icon as any} size={16} color={selectedCat === c.key ? '#FFF' : '#696969'} />
-              <Text style={[styles.catText, selectedCat === c.key && { color: '#FFF' }]}>{c.key}</Text>
+              {item.image_url ? (
+                <Image source={{ uri: item.image_url }} style={styles.popularImg} />
+              ) : (
+                <View style={[styles.popularImg, styles.popularImgPlaceholder]}>
+                  <Ionicons name="restaurant" size={28} color="#D0D0D0" />
+                </View>
+              )}
+              {/* Protein Badge */}
+              <View style={styles.proteinBadge}>
+                <Text style={styles.proteinText}>{item.protein_per_100g}g</Text>
+                <Text style={styles.proteinLabel}>Protein</Text>
+              </View>
+              {/* Veg/Non-Veg indicator */}
+              <View style={[styles.vegBadge, { borderColor: item.diet_type === 'non-veg' ? Z_RED : GREEN }]}>
+                <View style={[styles.vegBadgeDot, { backgroundColor: item.diet_type === 'non-veg' ? Z_RED : GREEN }]} />
+              </View>
+              <View style={styles.popularInfo}>
+                <Text style={styles.popularName} numberOfLines={1}>{item.name}</Text>
+                <Text style={styles.popularDesc} numberOfLines={1}>{item.description || item.category}</Text>
+                <View style={styles.popularBottom}>
+                  <Text style={styles.popularPrice}>₹{item.cost_per_100g}<Text style={styles.per100}>/100g</Text></Text>
+                  <TouchableOpacity style={styles.addBtn} onPress={() => router.push('/(tabs)/menu')}>
+                    <Text style={styles.addBtnText}>Add +</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
             </TouchableOpacity>
           ))}
         </ScrollView>
 
-        <Text style={styles.sectionTitle}>Popular Items</Text>
-        <View style={styles.productsGrid}>
-          {filteredProducts.slice(0, 8).map(item => (
-            <TouchableOpacity
-              key={item.id} testID={`popular-${item.id}`} style={styles.prodCard}
-              onPress={() => router.push('/(tabs)/menu')} activeOpacity={0.9}
-            >
-              {item.image_url ? (
-                <Image source={{ uri: item.image_url }} style={styles.prodImg} />
-              ) : (
-                <View style={[styles.prodImg, styles.prodImgPlaceholder]}>
-                  <Ionicons name="restaurant" size={28} color="#D0D0D0" />
-                </View>
-              )}
-              <View style={styles.ratingBadge}>
-                <Ionicons name="star" size={10} color="#FFF" />
-                <Text style={styles.ratingText}>{item.rating || '4.2'}</Text>
-              </View>
-              {/* Veg/Non-Veg indicator */}
-              <View style={[styles.prodVegBadge, { borderColor: item.diet_type === 'non-veg' ? '#E23744' : '#267E3E' }]}>
-                <View style={[styles.prodVegDot, { backgroundColor: item.diet_type === 'non-veg' ? '#E23744' : '#267E3E' }]} />
-              </View>
-              <View style={styles.prodInfo}>
-                <Text style={styles.prodName} numberOfLines={1}>{item.name}</Text>
-                <Text style={styles.prodDesc} numberOfLines={1}>{item.description || item.category}</Text>
-                <View style={styles.prodBottom}>
-                  <Text style={styles.prodPrice}>₹{item.cost_per_100g}<Text style={styles.per100}>/100g</Text></Text>
-                  <Text style={styles.prodCal}>{item.calories_per_100g} cal</Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
         <View style={{ height: 100 }} />
       </ScrollView>
 
@@ -438,6 +490,7 @@ export default function HomeScreen() {
         style={styles.floatingAiBtn}
         onPress={() => router.push('/ai-chat')}
         activeOpacity={0.9}
+        testID="floating-ai-chat-btn"
       >
         <View style={styles.floatingAiInner}>
           <Ionicons name="chatbubbles" size={22} color="#FFF" />
@@ -453,99 +506,144 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#F8F8F8' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, backgroundColor: '#FFF' },
-  locRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  locText: { fontSize: 18, fontWeight: '700', color: '#1C1C2E' },
-  locSub: { fontSize: 12, color: '#9C9C9C', marginTop: 2, marginLeft: 22 },
-  avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#FDE8EA', alignItems: 'center', justifyContent: 'center' },
-  searchBar: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#F0F0F5', marginHorizontal: 16, marginTop: 10, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10 },
-  searchInput: { flex: 1, fontSize: 14, color: '#1C1C2E' },
-
-  // AI Meal Builder CTA
-  mealBuilderCTA: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#FFF', marginHorizontal: 16, marginTop: 14, borderRadius: 14, padding: 16, borderWidth: 1.5, borderColor: '#5B5FE0', borderStyle: 'dashed' },
-  ctaLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
-  ctaIconBg: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#5B5FE0', alignItems: 'center', justifyContent: 'center' },
-  ctaTitle: { fontSize: 16, fontWeight: '800', color: '#1C1C2E' },
-  ctaSub: { fontSize: 12, color: '#9C9C9C', marginTop: 2 },
-
-  // Builder Card
-  builderCard: { backgroundColor: '#FFF', marginHorizontal: 16, marginTop: 14, borderRadius: 16, padding: 18, borderWidth: 1, borderColor: '#5B5FE0' },
-  builderHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
-  builderTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  builderTitle: { fontSize: 17, fontWeight: '800', color: '#1C1C2E' },
-  builderLabel: { fontSize: 13, fontWeight: '700', color: '#696969', marginBottom: 8, marginTop: 4 },
-
-  // Diet preference
-  dietRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-  dietChip: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 11, borderRadius: 10, backgroundColor: '#FFF', borderWidth: 1.5, borderColor: '#E8E8E8' },
-  dietText: { fontSize: 13, fontWeight: '700', color: '#696969' },
-  vegIndicator: { width: 14, height: 14, borderRadius: 2, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  vegDotInner: { width: 7, height: 7, borderRadius: 4 },
-
-  // Goal
-  goalRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-  goalChip: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 11, borderRadius: 10, backgroundColor: '#FFF', borderWidth: 1.5, borderColor: '#E8E8E8' },
-  goalText: { fontSize: 11, fontWeight: '700', color: '#696969' },
-
-  // Budget
-  budgetInput: { backgroundColor: '#F5F5F5', borderRadius: 10, padding: 12, color: '#1C1C2E', fontSize: 15, fontWeight: '600', borderWidth: 1, borderColor: '#E8E8E8', marginBottom: 14 },
-
-  // Build button
-  buildBtn: { backgroundColor: '#5B5FE0', borderRadius: 12, paddingVertical: 15, alignItems: 'center', justifyContent: 'center' },
-  buildBtnContent: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  buildBtnText: { color: '#FFF', fontSize: 15, fontWeight: '800' },
-
-  // Meal Result
-  mealResultCard: { backgroundColor: '#FFF', marginHorizontal: 16, marginTop: 14, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#EFEFEF' },
-  mealResultHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  mealResultTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  mealResultTitle: { fontSize: 16, fontWeight: '800', color: '#1C1C2E' },
-  rebuildBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F0F0FF', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
-  rebuildText: { fontSize: 12, fontWeight: '700', color: '#5B5FE0' },
-  mealSummary: { color: '#696969', fontSize: 13, lineHeight: 18, marginBottom: 12 },
-
-  // Meal items
-  mealItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F5F5F5' },
-  mealItemLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
-  vegDot: { width: 16, height: 16, borderRadius: 2, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  vegDotFill: { width: 8, height: 8, borderRadius: 4 },
-  mealItemName: { fontSize: 14, fontWeight: '700', color: '#1C1C2E' },
-  mealItemReason: { fontSize: 11, color: '#9C9C9C', marginTop: 2 },
-  mealItemRight: { alignItems: 'flex-end' },
-  mealItemGrams: { fontSize: 14, fontWeight: '800', color: Z_RED },
-  mealItemPrice: { fontSize: 12, color: '#9C9C9C', marginTop: 1 },
-
-  // Totals
-  mealTotals: { backgroundColor: '#FAFAFA', borderRadius: 10, padding: 12, marginTop: 12 },
-  totalRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 10 },
-  totalItem: { alignItems: 'center' },
-  totalLabel: { fontSize: 10, color: '#9C9C9C', marginBottom: 2 },
-  totalValue: { fontSize: 16, fontWeight: '800' },
-  totalPriceRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#EFEFEF', paddingTop: 8 },
-  totalPriceLabel: { fontSize: 14, fontWeight: '600', color: '#696969' },
-  totalPriceValue: { fontSize: 22, fontWeight: '800', color: '#1C1C2E' },
-
-  // Order meal button
-  orderMealBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Z_RED, borderRadius: 12, paddingVertical: 14, marginTop: 14 },
-  orderMealText: { color: '#FFF', fontSize: 15, fontWeight: '800' },
-
-  // Error / retry
-  mealErrorRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  mealErrorText: { flex: 1, color: '#696969', fontSize: 13, lineHeight: 18 },
-  retryBtn: { backgroundColor: '#5B5FE0', borderRadius: 10, paddingVertical: 12, alignItems: 'center', marginTop: 12 },
-  retryText: { color: '#FFF', fontSize: 14, fontWeight: '700' },
-
-  // Existing styles
-  bannerList: { marginTop: 14 },
-  banner: { width: width - 32, marginHorizontal: 16, borderRadius: 14, padding: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  bannerTitle: { fontSize: 20, fontWeight: '800', color: '#FFF' },
-  bannerSub: { fontSize: 13, color: 'rgba(255,255,255,0.8)', marginTop: 4 },
-  dots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 10 },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#D0D0D0' },
-  dotActive: { backgroundColor: Z_RED, width: 18 },
-  nutriCard: { backgroundColor: '#FFF', marginHorizontal: 16, marginTop: 14, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#EFEFEF' },
-  nutriHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
-  nutriTitle: { flex: 1, fontSize: 14, fontWeight: '700', color: '#1C1C2E' },
+  
+  // Header with hamburger menu
+  header: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    paddingHorizontal: 16, 
+    paddingTop: 8, 
+    paddingBottom: 12, 
+    backgroundColor: '#FFF',
+  },
+  menuBtn: { 
+    width: 44, 
+    height: 44, 
+    borderRadius: 12, 
+    backgroundColor: '#F5F5F5', 
+    alignItems: 'center', 
+    justifyContent: 'center' 
+  },
+  avatar: { 
+    width: 44, 
+    height: 44, 
+    borderRadius: 22, 
+    backgroundColor: '#FDE8EA', 
+    alignItems: 'center', 
+    justifyContent: 'center' 
+  },
+  
+  // Order type toggle
+  orderToggle: { 
+    flexDirection: 'row', 
+    backgroundColor: '#F0F0F5', 
+    borderRadius: 25, 
+    padding: 4 
+  },
+  toggleBtn: { 
+    paddingHorizontal: 16, 
+    paddingVertical: 10, 
+    borderRadius: 20 
+  },
+  toggleBtnActive: { 
+    backgroundColor: Z_RED 
+  },
+  toggleText: { 
+    fontSize: 12, 
+    fontWeight: '800', 
+    color: '#9C9C9C' 
+  },
+  toggleTextActive: { 
+    color: '#FFF' 
+  },
+  
+  // Location bar
+  locationBar: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: '#FFF', 
+    paddingHorizontal: 16, 
+    paddingVertical: 12, 
+    gap: 8, 
+    borderBottomWidth: 1, 
+    borderBottomColor: '#F0F0F0' 
+  },
+  locationText: { 
+    fontSize: 11, 
+    fontWeight: '800', 
+    color: Z_RED 
+  },
+  locationValue: { 
+    flex: 1, 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between' 
+  },
+  locationName: { 
+    fontSize: 14, 
+    fontWeight: '600', 
+    color: '#1C1C2E' 
+  },
+  
+  // Banners
+  bannerList: { marginTop: 12 },
+  banner: { 
+    width: width - 32, 
+    marginHorizontal: 16, 
+    borderRadius: 16, 
+    padding: 20, 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center',
+    minHeight: 120,
+  },
+  bannerContent: { flex: 1 },
+  bannerTitle: { fontSize: 22, fontWeight: '800', color: '#FFF' },
+  bannerSub: { fontSize: 13, color: 'rgba(255,255,255,0.85)', marginTop: 6 },
+  bannerImagePlaceholder: { width: 80, height: 80, alignItems: 'center', justifyContent: 'center' },
+  dots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 12 },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#D0D0D0' },
+  dotActive: { backgroundColor: Z_RED, width: 24 },
+  
+  // Category Grid (BK style)
+  sectionTitle: { fontSize: 20, fontWeight: '800', color: '#1C1C2E', paddingHorizontal: 16, marginTop: 20, marginBottom: 14 },
+  categoryGrid: { 
+    flexDirection: 'row', 
+    flexWrap: 'wrap', 
+    paddingHorizontal: 12, 
+    gap: 10 
+  },
+  categoryCard: { 
+    width: (width - 54) / 4, 
+    alignItems: 'center', 
+    backgroundColor: '#FFF', 
+    borderRadius: 12, 
+    padding: 10, 
+    borderWidth: 1, 
+    borderColor: '#F0F0F0' 
+  },
+  categoryImage: { 
+    width: 56, 
+    height: 56, 
+    borderRadius: 28, 
+    marginBottom: 8 
+  },
+  categoryIconBg: { 
+    alignItems: 'center', 
+    justifyContent: 'center' 
+  },
+  categoryLabel: { 
+    fontSize: 11, 
+    fontWeight: '700', 
+    color: '#1C1C2E', 
+    textAlign: 'center' 
+  },
+  
+  // Nutrition Card
+  nutriCard: { backgroundColor: '#FFF', marginHorizontal: 16, marginTop: 16, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#F0F0F0' },
+  nutriHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
+  nutriTitle: { flex: 1, fontSize: 15, fontWeight: '700', color: '#1C1C2E' },
   nutriMeals: { fontSize: 12, color: '#9C9C9C' },
   nutriRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   nutriMain: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
@@ -554,37 +652,120 @@ const styles = StyleSheet.create({
   macroRow: { flexDirection: 'row', gap: 16 },
   macroItem: { alignItems: 'center' },
   macroVal: { fontSize: 16, fontWeight: '700' },
-  macroLabel: { fontSize: 10, color: '#9C9C9C', marginTop: 1 },
-  progressBg: { height: 4, backgroundColor: '#F0F0F5', borderRadius: 2, marginTop: 12, overflow: 'hidden' },
-  progressFill: { height: '100%', backgroundColor: Z_RED, borderRadius: 2 },
-  catScroll: { marginTop: 14 },
-  catContent: { paddingHorizontal: 16, gap: 8 },
-  catPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E8E8E8' },
-  catText: { fontSize: 13, fontWeight: '600', color: '#696969' },
-  sectionTitle: { fontSize: 18, fontWeight: '700', color: '#1C1C2E', paddingHorizontal: 16, marginTop: 18, marginBottom: 12 },
-  productsGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 12, gap: 8 },
-  prodCard: { width: (width - 40) / 2, backgroundColor: '#FFF', borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: '#EFEFEF' },
-  prodImg: { width: '100%', height: 120, backgroundColor: '#F5F5F5' },
-  prodImgPlaceholder: { alignItems: 'center', justifyContent: 'center' },
-  ratingBadge: { position: 'absolute', top: 100, left: 8, flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#267E3E', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-  ratingText: { fontSize: 10, fontWeight: '700', color: '#FFF' },
-  prodVegBadge: { position: 'absolute', top: 8, right: 8, width: 16, height: 16, borderRadius: 2, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF' },
-  prodVegDot: { width: 8, height: 8, borderRadius: 4 },
-  prodInfo: { padding: 10 },
-  prodName: { fontSize: 14, fontWeight: '700', color: '#1C1C2E' },
-  prodDesc: { fontSize: 11, color: '#9C9C9C', marginTop: 2 },
-  prodBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 },
-  prodPrice: { fontSize: 14, fontWeight: '700', color: '#1C1C2E' },
-  per100: { fontSize: 10, fontWeight: '400', color: '#9C9C9C' },
-  prodCal: { fontSize: 11, color: Z_RED, fontWeight: '600' },
-
+  macroLabel: { fontSize: 10, color: '#9C9C9C', marginTop: 2 },
+  progressBg: { height: 5, backgroundColor: '#F0F0F5', borderRadius: 3, marginTop: 14, overflow: 'hidden' },
+  progressFill: { height: '100%', backgroundColor: Z_RED, borderRadius: 3 },
+  
   // Scan Table CTA
-  scanTableCTA: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#E8F5E9', marginHorizontal: 16, marginTop: 14, borderRadius: 14, padding: 14, borderWidth: 1.5, borderColor: '#267E3E' },
+  scanTableCTA: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#E8F5E9', marginHorizontal: 16, marginTop: 16, borderRadius: 14, padding: 16, borderWidth: 1.5, borderColor: '#267E3E' },
   scanCtaLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
-  scanCtaIconBg: { width: 40, height: 40, borderRadius: 10, backgroundColor: '#267E3E', alignItems: 'center', justifyContent: 'center' },
-  scanCtaTitle: { fontSize: 15, fontWeight: '700', color: '#267E3E' },
+  scanCtaIconBg: { width: 44, height: 44, borderRadius: 12, backgroundColor: '#267E3E', alignItems: 'center', justifyContent: 'center' },
+  scanCtaTitle: { fontSize: 16, fontWeight: '700', color: '#267E3E' },
   scanCtaSub: { fontSize: 12, color: '#4CAF50', marginTop: 2 },
-
+  
+  // AI Meal Builder CTA
+  mealBuilderCTA: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#FFF', marginHorizontal: 16, marginTop: 16, borderRadius: 14, padding: 16, borderWidth: 1.5, borderColor: '#5B5FE0', borderStyle: 'dashed' },
+  ctaLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+  ctaIconBg: { width: 44, height: 44, borderRadius: 12, backgroundColor: '#5B5FE0', alignItems: 'center', justifyContent: 'center' },
+  ctaTitle: { fontSize: 16, fontWeight: '800', color: '#1C1C2E' },
+  ctaSub: { fontSize: 12, color: '#9C9C9C', marginTop: 2 },
+  
+  // Builder Card
+  builderCard: { backgroundColor: '#FFF', marginHorizontal: 16, marginTop: 16, borderRadius: 16, padding: 18, borderWidth: 1, borderColor: '#5B5FE0' },
+  builderHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
+  builderTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  builderTitle: { fontSize: 18, fontWeight: '800', color: '#1C1C2E' },
+  builderLabel: { fontSize: 13, fontWeight: '700', color: '#696969', marginBottom: 8, marginTop: 6 },
+  dietRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  dietChip: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 10, backgroundColor: '#FFF', borderWidth: 1.5, borderColor: '#E8E8E8' },
+  dietText: { fontSize: 13, fontWeight: '700', color: '#696969' },
+  vegIndicator: { width: 14, height: 14, borderRadius: 2, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  vegDotInner: { width: 7, height: 7, borderRadius: 4 },
+  goalRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  goalChip: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 12, borderRadius: 10, backgroundColor: '#FFF', borderWidth: 1.5, borderColor: '#E8E8E8' },
+  goalText: { fontSize: 11, fontWeight: '700', color: '#696969' },
+  budgetInput: { backgroundColor: '#F5F5F5', borderRadius: 10, padding: 14, color: '#1C1C2E', fontSize: 15, fontWeight: '600', borderWidth: 1, borderColor: '#E8E8E8', marginBottom: 14 },
+  buildBtn: { backgroundColor: '#5B5FE0', borderRadius: 12, paddingVertical: 16, alignItems: 'center', justifyContent: 'center' },
+  buildBtnContent: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  buildBtnText: { color: '#FFF', fontSize: 15, fontWeight: '800' },
+  
+  // Meal Result
+  mealResultCard: { backgroundColor: '#FFF', marginHorizontal: 16, marginTop: 16, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#EFEFEF' },
+  mealResultHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  mealResultTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  mealResultTitle: { fontSize: 17, fontWeight: '800', color: '#1C1C2E' },
+  rebuildBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F0F0FF', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+  rebuildText: { fontSize: 12, fontWeight: '700', color: '#5B5FE0' },
+  mealSummary: { color: '#696969', fontSize: 13, lineHeight: 19, marginBottom: 12 },
+  mealItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F5F5F5' },
+  mealItemLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+  vegDot: { width: 16, height: 16, borderRadius: 2, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  vegDotFill: { width: 8, height: 8, borderRadius: 4 },
+  mealItemName: { fontSize: 14, fontWeight: '700', color: '#1C1C2E' },
+  mealItemReason: { fontSize: 11, color: '#9C9C9C', marginTop: 2 },
+  mealItemRight: { alignItems: 'flex-end' },
+  mealItemGrams: { fontSize: 15, fontWeight: '800', color: Z_RED },
+  mealItemPrice: { fontSize: 12, color: '#9C9C9C', marginTop: 2 },
+  mealTotals: { backgroundColor: '#FAFAFA', borderRadius: 12, padding: 14, marginTop: 14 },
+  totalRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 12 },
+  totalItem: { alignItems: 'center' },
+  totalLabel: { fontSize: 10, color: '#9C9C9C', marginBottom: 3 },
+  totalValue: { fontSize: 16, fontWeight: '800' },
+  totalPriceRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#EFEFEF', paddingTop: 10 },
+  totalPriceLabel: { fontSize: 14, fontWeight: '600', color: '#696969' },
+  totalPriceValue: { fontSize: 24, fontWeight: '800', color: '#1C1C2E' },
+  orderMealBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Z_RED, borderRadius: 12, paddingVertical: 15, marginTop: 14 },
+  orderMealText: { color: '#FFF', fontSize: 15, fontWeight: '800' },
+  mealErrorRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  mealErrorText: { flex: 1, color: '#696969', fontSize: 13, lineHeight: 18 },
+  retryBtn: { backgroundColor: '#5B5FE0', borderRadius: 10, paddingVertical: 12, alignItems: 'center', marginTop: 14 },
+  retryText: { color: '#FFF', fontSize: 14, fontWeight: '700' },
+  
+  // Popular Items (horizontal scroll)
+  popularScroll: { paddingHorizontal: 12, gap: 12 },
+  popularCard: { 
+    width: 200, 
+    backgroundColor: '#FFF', 
+    borderRadius: 14, 
+    overflow: 'hidden', 
+    borderWidth: 1, 
+    borderColor: '#F0F0F0' 
+  },
+  popularImg: { width: '100%', height: 130, backgroundColor: '#F5F5F5' },
+  popularImgPlaceholder: { alignItems: 'center', justifyContent: 'center' },
+  proteinBadge: { 
+    position: 'absolute', 
+    top: 10, 
+    left: 10, 
+    backgroundColor: 'rgba(0,0,0,0.7)', 
+    paddingHorizontal: 8, 
+    paddingVertical: 4, 
+    borderRadius: 8 
+  },
+  proteinText: { fontSize: 14, fontWeight: '800', color: '#FFF' },
+  proteinLabel: { fontSize: 9, color: 'rgba(255,255,255,0.8)' },
+  vegBadge: { 
+    position: 'absolute', 
+    top: 10, 
+    right: 10, 
+    width: 18, 
+    height: 18, 
+    borderRadius: 3, 
+    borderWidth: 2, 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    backgroundColor: '#FFF' 
+  },
+  vegBadgeDot: { width: 9, height: 9, borderRadius: 5 },
+  popularInfo: { padding: 12 },
+  popularName: { fontSize: 15, fontWeight: '700', color: '#1C1C2E' },
+  popularDesc: { fontSize: 12, color: '#9C9C9C', marginTop: 3 },
+  popularBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 },
+  popularPrice: { fontSize: 15, fontWeight: '700', color: '#1C1C2E' },
+  per100: { fontSize: 10, fontWeight: '400', color: '#9C9C9C' },
+  addBtn: { backgroundColor: Z_RED, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
+  addBtnText: { color: '#FFF', fontSize: 13, fontWeight: '700' },
+  
   // Floating AI Button
   floatingAiBtn: { position: 'absolute', bottom: 90, right: 20, width: 56, height: 56, borderRadius: 28, backgroundColor: '#5B5FE0', alignItems: 'center', justifyContent: 'center', shadowColor: '#5B5FE0', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 10 },
   floatingAiInner: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#5B5FE0', alignItems: 'center', justifyContent: 'center' },
