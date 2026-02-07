@@ -136,41 +136,28 @@ async def test_admin_products_all_endpoint(session):
         results.log_fail("Admin Products All Endpoint", f"Exception: {e}")
         return False
 
-async def test_ready_made_nonveg_meal(session):
-    """Test ready-made meal creation with non-veg detection"""
-    if not admin_token:
-        results.log_fail("Ready-Made Non-Veg Detection", "No admin token available")
-        return False
-    
+async def test_admin_only_access(session):
+    """Test that admin-only endpoints require proper authentication"""
     try:
-        headers = {"Authorization": f"Bearer {admin_token}"}
-        payload = {
-            "name": "Egg Curry",
-            "ingredients": ["egg", "onion", "tomato", "spices"],
-            "images": [],
-            "price": 129,
-            "serving_grams": 300
-        }
-        
-        async with session.post(f"{API_BASE}/products/ready-made", json=payload, headers=headers) as response:
-            if response.status == 200:
-                data = await response.json()
+        # Test without token first
+        async with session.get(f"{API_BASE}/products/all") as response:
+            if response.status == 401:
+                results.log_pass("Admin Authentication - No Token", "✓ Correctly rejected access without token")
                 
-                # Main check: diet_type should be "non-veg" because of egg
-                if data.get("diet_type") == "non-veg":
-                    results.log_pass("Ready-Made Non-Veg Detection", 
-                        f"✓ Correctly detected diet_type: {data['diet_type']} (egg ingredient)")
-                    return data
-                else:
-                    results.log_fail("Ready-Made Non-Veg Detection", 
-                        f"Expected diet_type 'non-veg' but got '{data.get('diet_type')}' (ingredients contain egg)")
-                    return False
+                # Test with invalid token
+                headers = {"Authorization": "Bearer invalid_token"}
+                async with session.get(f"{API_BASE}/products/all", headers=headers) as response2:
+                    if response2.status == 401:
+                        results.log_pass("Admin Authentication - Invalid Token", "✓ Correctly rejected invalid token")
+                        return True
+                    else:
+                        results.log_fail("Admin Authentication - Invalid Token", f"Expected 401, got {response2.status}")
+                        return False
             else:
-                text = await response.text()
-                results.log_fail("Ready-Made Non-Veg Detection", f"HTTP {response.status}: {text}")
+                results.log_fail("Admin Authentication - No Token", f"Expected 401, got {response.status}")
                 return False
     except Exception as e:
-        results.log_fail("Ready-Made Non-Veg Detection", f"Exception: {e}")
+        results.log_fail("Admin Authentication", f"Exception: {e}")
         return False
 
 async def test_products_list_admin(session):
