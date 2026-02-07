@@ -264,6 +264,34 @@ export default function MenuScreen() {
         ) : null}
       </View>
 
+      {/* Veg / Non-Veg Toggle */}
+      <View style={styles.dietToggleRow} data-testid="diet-toggle-row">
+        <TouchableOpacity
+          testID="diet-toggle-all"
+          style={[styles.dietToggleBtn, dietFilter === 'all' && styles.dietToggleBtnAllActive]}
+          onPress={() => setDietFilter('all')}
+        >
+          <Ionicons name="apps" size={14} color={dietFilter === 'all' ? '#FFF' : '#696969'} />
+          <Text style={[styles.dietToggleText, dietFilter === 'all' && styles.dietToggleTextActive]}>All</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          testID="diet-toggle-veg"
+          style={[styles.dietToggleBtn, dietFilter === 'veg' && styles.dietToggleBtnVegActive]}
+          onPress={() => setDietFilter('veg')}
+        >
+          <View style={[styles.dietToggleDot, { backgroundColor: GREEN, borderColor: GREEN }]} />
+          <Text style={[styles.dietToggleText, dietFilter === 'veg' && { color: GREEN, fontWeight: '800' }]}>Veg</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          testID="diet-toggle-nonveg"
+          style={[styles.dietToggleBtn, dietFilter === 'non-veg' && styles.dietToggleBtnNonvegActive]}
+          onPress={() => setDietFilter('non-veg')}
+        >
+          <View style={[styles.dietToggleDot, { backgroundColor: Z_RED, borderColor: Z_RED }]} />
+          <Text style={[styles.dietToggleText, dietFilter === 'non-veg' && { color: Z_RED, fontWeight: '800' }]}>Non-Veg</Text>
+        </TouchableOpacity>
+      </View>
+
       {/* Main Content: Left Sidebar + Right Product List */}
       <View style={styles.mainContent}>
         {/* Left Sidebar Categories - Fixed Width */}
