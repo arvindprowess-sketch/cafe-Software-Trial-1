@@ -560,6 +560,11 @@ const styles = StyleSheet.create({
   macroValue: { fontSize: 18, fontWeight: '800', color: '#1C1C2E' },
   macroLabel: { fontSize: 10, color: '#9C9C9C', marginTop: 2 },
   
+  // Calorie Goal Context
+  calorieGoalRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, backgroundColor: '#F0FFF4', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8 },
+  calorieGoalRowOver: { backgroundColor: '#FFF5F5' },
+  calorieGoalText: { fontSize: 12, fontWeight: '600', color: GREEN, flex: 1 },
+  
   // Veg indicator
   vegIndicator: { width: 16, height: 16, borderRadius: 3, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   vegDot: { width: 8, height: 8, borderRadius: 4 },
