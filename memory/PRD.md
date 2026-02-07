@@ -79,3 +79,50 @@ Cure.fit-inspired AI Diet Café app redesigned with Zomato-style UI. White/red t
 ### Navigation Enhancement
 - 5-tab navigation: Home, Budget, Menu, Orders, Profile
 - Budget tab highlighted with wallet icon and active state styling
+
+## V1.3 - Full Feature Suite (CURRENT)
+
+### 1. QR Code Table Ordering
+- **Scan Table** CTA on Home screen (green card)
+- Camera-based QR scanner with frame overlay
+- Table auto-assignment when customer scans
+- Direct ordering from table with dine-in flow
+- Manual table entry fallback for web
+
+### 2. Delivery Tracking (Google Maps Ready)
+- Live order tracking screen with status timeline
+- Driver info card with call/navigate buttons
+- ETA display and real-time updates
+- Open in Maps functionality
+- Status steps: Placed → Preparing → Ready → Out for Delivery → Delivered
+
+### 3. Push Notifications
+- Device token registration endpoint
+- In-app notification storage and display
+- Mark as read functionality
+- Expo Push API integration ready
+
+### 4. Admin AI Analytics Dashboard
+- **Revenue Cards**: Today, This Week, This Month
+- **Business Stats**: Orders, Avg Order Value, Unique Customers
+- **Best Sellers**: Top 10 products by revenue
+- **Order Type Breakdown**: Dine-in, Takeaway, Delivery percentages
+- **Peak Hours Analysis**: Bar chart showing busiest hours
+- **Profit Margins**: Per-product profit calculator with recommendations
+- **Low Stock Alerts**: Products running low
+- **AI Business Insights**: GPT-5.2 powered recommendations (1-click generate)
+
+### New API Endpoints (V1.3)
+- GET /api/tables - List all café tables
+- GET /api/tables/{number} - Get table by number
+- POST /api/tables/{number}/occupy - Reserve table
+- POST /api/tables/{number}/release - Release table
+- POST /api/notifications/register - Register push token
+- POST /api/notifications/send - Send notification
+- GET /api/notifications - Get user notifications
+- GET /api/orders/{id}/tracking - Get delivery tracking
+- POST /api/orders/{id}/tracking/update - Update driver location
+- POST /api/orders/{id}/assign-driver - Assign delivery driver
+- GET /api/admin/analytics - Full business analytics
+- POST /api/admin/ai-insights - AI-powered business recommendations
+- GET /api/admin/profit-calculator - Product profit margins
