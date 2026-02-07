@@ -9,26 +9,25 @@ interface RequestOptions {
 }
 
 // Migrate old token keys to new keys (run once)
+let migrated = false;
 async function migrateTokenIfNeeded() {
-  const oldToken = await AsyncStorage.getItem('token');
-  const oldUser = await AsyncStorage.getItem('user');
-  const newToken = await AsyncStorage.getItem('auth_token');
-  
-  // If old keys exist but new keys don't, migrate
-  if (oldToken && !newToken) {
-    await AsyncStorage.setItem('auth_token', oldToken);
-    await AsyncStorage.removeItem('token');
-    console.log('[API] Migrated token to auth_token');
-  }
-  if (oldUser && !(await AsyncStorage.getItem('user_data'))) {
-    await AsyncStorage.setItem('user_data', oldUser);
-    await AsyncStorage.removeItem('user');
-    console.log('[API] Migrated user to user_data');
-  }
+  if (migrated) return;
+  if (typeof window === 'undefined') return;
+  migrated = true;
+  try {
+    const oldToken = await AsyncStorage.getItem('token');
+    const oldUser = await AsyncStorage.getItem('user');
+    const newToken = await AsyncStorage.getItem('auth_token');
+    if (oldToken && !newToken) {
+      await AsyncStorage.setItem('auth_token', oldToken);
+      await AsyncStorage.removeItem('token');
+    }
+    if (oldUser && !(await AsyncStorage.getItem('user_data'))) {
+      await AsyncStorage.setItem('user_data', oldUser);
+      await AsyncStorage.removeItem('user');
+    }
+  } catch {}
 }
-
-// Run migration on module load
-migrateTokenIfNeeded();
 
 export async function apiCall(endpoint: string, options: RequestOptions = {}) {
   // Ensure migration ran
