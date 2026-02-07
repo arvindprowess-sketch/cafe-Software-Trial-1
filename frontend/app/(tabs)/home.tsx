@@ -80,7 +80,9 @@ export default function HomeScreen() {
 
   const consumed = summary?.consumed || {};
   const goals = summary?.goals || {};
-  const calPct = goals.daily_calories ? Math.min((consumed.calories / goals.daily_calories) * 100, 100) : 0;
+  const calPct = goals.daily_calories ? (consumed.calories / goals.daily_calories) * 100 : 0;
+  const isCalorieOver = calPct > 100;
+  const caloriesOverAmount = Math.round((consumed.calories || 0) - (goals.daily_calories || 2000));
 
   // AI Quick Meal functions
   const buildMeal = async () => {
