@@ -455,6 +455,11 @@ const styles = StyleSheet.create({
   qtyInput: { flex: 1, backgroundColor: '#F5F5F5', borderRadius: 8, padding: 10, color: '#1C1C2E', fontSize: 20, fontWeight: '800', textAlign: 'center' },
   qtyUnit: { color: '#9C9C9C', fontSize: 14, fontWeight: '600' },
   
+  // Conversion feedback row
+  conversionRow: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#F0F0FF', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, marginBottom: 10 },
+  conversionText: { fontSize: 12, color: '#5B5FE0' },
+  conversionHighlight: { fontWeight: '800', color: '#1C1C2E', fontSize: 14 },
+  
   // Ready-made plate controls
   plateRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, backgroundColor: '#F8F5FF', padding: 12, borderRadius: 10 },
   plateLabel: { fontSize: 14, fontWeight: '700', color: PURPLE },
