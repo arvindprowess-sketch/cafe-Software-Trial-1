@@ -1,15 +1,18 @@
 # AI Diet Cafe App - PRD
 
 ## Original Problem Statement
-User has an existing Diet Cafe Expo React Native app (from GitHub repo). Wants UI/UX improvements and redesign. Currently previewing the app to provide specific feedback.
+User has an existing Diet Cafe Expo React Native app (from GitHub repo). Wants:
+1. Frontend start script set to `expo start --tunnel`
+2. Database seeded with admin user + 16 products + 6 categories
+3. Full project context maintained from PRD
 
 ## Tech Stack
-- **Frontend**: Expo (React Native) with expo-router, TypeScript, running on web mode (port 3000)
+- **Frontend**: Expo (React Native) with expo-router, TypeScript, tunnel mode
 - **Backend**: FastAPI (Python) with MongoDB (port 8001)
 - **AI**: OpenAI GPT-5.2 via Emergent LLM Key for meal suggestions, descriptions, image generation
 
 ## Architecture
-- Expo web mode serves on port 3000 (changed from tunnel mode)
+- Expo tunnel mode for mobile app preview
 - Backend API endpoints prefixed with `/api`
 - MongoDB for data storage
 - OTP-based auth for customers, email/password for admin
@@ -27,36 +30,36 @@ User has an existing Diet Cafe Expo React Native app (from GitHub repo). Wants U
 - Admin dashboard with products, kitchen, analytics
 
 ## What's Been Implemented (as of Feb 2026)
-- [x] Fixed Expo web mode (tunnel → --web --port 3000)
-- [x] Fixed AsyncStorage SSR crash (window is not defined)
-- [x] Seeded 16 products + 6 categories + admin user
-- [x] All screens verified working: Auth, Home, Menu, Budget, Orders, Profile, AI Chat, Admin
+- [x] Fixed backend .env (removed junk characters, proper format)
+- [x] Frontend start script: `expo start --tunnel` (verified running)
+- [x] Seeded 16 products + 6 categories + admin user (admin@dietcafe.com / admin123)
+- [x] All backend APIs verified: auth, products, categories, orders, AI endpoints
+- [x] All screens present: Auth, Home, Menu, Budget, Orders, Profile, AI Chat, Admin
+
+## Seeded Data
+### Admin User
+- Email: admin@dietcafe.com
+- Password: admin123
+
+### 16 Products
+Chicken Breast, Paneer Tikka, Egg White, Brown Rice, Dal, Oats, Kabab, Grilled Fish, Sweet Potato, Greek Yogurt, Salad, Sprouts, Quinoa, Soya Chunks, Almonds, Banana
+
+### 6 Categories
+Protein, Carb, Fat, Meal, Veg, Non-Veg
 
 ## Screens (21 files)
 ### Customer
 - index.tsx (OTP Login)
-- (tabs)/home.tsx
-- (tabs)/menu.tsx
-- (tabs)/budget-meal.tsx
-- (tabs)/orders.tsx
-- (tabs)/profile.tsx
-- customize.tsx (Cart/Meal customization)
-- ai-chat.tsx
-- scan-table.tsx
-- delivery-tracking.tsx
+- (tabs)/home.tsx, menu.tsx, budget-meal.tsx, orders.tsx, profile.tsx
+- customize.tsx, ai-chat.tsx, scan-table.tsx, delivery-tracking.tsx
 
 ### Admin
 - admin-login.tsx
-- (admin)/dashboard.tsx
-- (admin)/products.tsx
-- (admin)/kitchen.tsx
-- (admin)/categories.tsx
-- (admin)/analytics.tsx
-- (admin)/tables.tsx
+- (admin)/dashboard.tsx, products.tsx, kitchen.tsx, categories.tsx, analytics.tsx, tables.tsx
 
 ## Prioritized Backlog
 ### P0 - Awaiting User Feedback
-- UI/UX redesign (specific screens TBD based on user testing)
+- UI/UX redesign (specific screens TBD)
 
 ### P1
 - Payment integration (Razorpay/Stripe)
