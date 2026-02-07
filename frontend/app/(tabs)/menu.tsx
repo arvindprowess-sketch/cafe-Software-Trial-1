@@ -113,6 +113,10 @@ export default function MenuScreen() {
     const searchMatch = !search || p.name.toLowerCase().includes(search.toLowerCase());
     if (!searchMatch) return false;
     
+    // Diet type filter (veg/non-veg toggle)
+    if (dietFilter === 'veg' && p.diet_type !== 'veg') return false;
+    if (dietFilter === 'non-veg' && p.diet_type !== 'non-veg') return false;
+    
     // Category filter
     if (selectedCat === 'All') return true;
     if (selectedCat === 'veg') return p.diet_type === 'veg';
