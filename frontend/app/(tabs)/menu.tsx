@@ -46,15 +46,21 @@ export default function MenuScreen() {
 
   const loadProducts = useCallback(async () => {
     try { 
-      const [data, u] = await Promise.all([
+      const [data, u, cats] = await Promise.all([
         apiCall('/products'),
-        getStoredUser()
+        getStoredUser(),
+        apiCall('/categories').catch(() => [])
       ]);
       setUser(u);
       setProducts(data.filter((p: any) => {
         if (p.product_type === 'ready_made') return p.is_active !== false;
         return p.available_qty_grams > 0;
-      })); 
+      }));
+      // Merge DB categories with defaults
+      if (cats && cats.length > 0) {
+        const allCat = { key: 'All', label: 'All Items', icon: 'grid', color: '#1C1C2E', image_url: null };
+        setCategories([allCat, ...cats]);
+      }
     }
     catch (e) {} finally { setLoading(false); }
   }, []);
