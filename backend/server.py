@@ -222,6 +222,193 @@ def match_nutrition(product_name: str) -> Dict:
     return {"calories": 100, "protein": 5, "carbs": 15, "fat": 3, "category": "Other", "diet_type": detect_diet_type(product_name)}
 
 # ========== AUTH ROUTES ==========
+
+# OTP Storage (in production, use Redis with TTL)
+otp_store: Dict[str, Dict] = {}
+
+def generate_otp() -> str:
+    """Generate 6-digit OTP"""
+    import random
+    return str(random.randint(100000, 999999))
+
+async def send_otp_sms(phone: str, otp: str) -> bool:
+    """Send OTP via SMS - Mock for now, can switch to MSG91 later"""
+    # TODO: Uncomment below for MSG91 integration
+    # import httpx
+    # MSG91_AUTH_KEY = os.environ.get("MSG91_AUTH_KEY")
+    # MSG91_TEMPLATE_ID = os.environ.get("MSG91_TEMPLATE_ID")
+    # MSG91_SENDER_ID = os.environ.get("MSG91_SENDER_ID", "DIETCF")
+    # 
+    # if MSG91_AUTH_KEY and MSG91_TEMPLATE_ID:
+    #     try:
+    #         async with httpx.AsyncClient() as client:
+    #             response = await client.post(
+    #                 "https://api.msg91.com/api/v5/otp",
+    #                 headers={"authkey": MSG91_AUTH_KEY},
+    #                 json={
+    #                     "template_id": MSG91_TEMPLATE_ID,
+    #                     "mobile": f"91{phone}",
+    #                     "otp": otp,
+    #                     "sender": MSG91_SENDER_ID,
+    #                 }
+    #             )
+    #             return response.status_code == 200
+    #     except Exception as e:
+    #         logger.error(f"MSG91 error: {e}")
+    #         return False
+    
+    # Mock OTP - In production, remove this and use MSG91 above
+    logger.info(f"📱 MOCK OTP for {phone}: {otp}")
+    return True
+
+class OTPSendRequest(BaseModel):
+    phone: str
+    name: Optional[str] = None  # For new user registration
+
+class OTPVerifyRequest(BaseModel):
+    phone: str
+    otp: str
+    name: Optional[str] = None  # For new user registration
+
+@api_router.post("/auth/otp/send")
+async def send_otp(data: OTPSendRequest):
+    """Send OTP to phone number"""
+    phone = data.phone.strip().replace(" ", "").replace("-", "")
+    
+    # Validate phone number (10 digits for India)
+    if not phone.isdigit() or len(phone) != 10:
+        raise HTTPException(status_code=400, detail="Invalid phone number. Enter 10 digits.")
+    
+    # Generate OTP
+    otp = generate_otp()
+    
+    # Store OTP with expiry (5 minutes)
+    otp_store[phone] = {
+        "otp": otp,
+        "expires_at": datetime.now(timezone.utc).timestamp() + 300,  # 5 minutes
+        "attempts": 0,
+        "name": data.name
+    }
+    
+    # Send OTP via SMS
+    sent = await send_otp_sms(phone, otp)
+    
+    if not sent:
+        raise HTTPException(status_code=500, detail="Failed to send OTP. Please try again.")
+    
+    # For DEMO: Return OTP in response (REMOVE IN PRODUCTION!)
+    return {
+        "message": "OTP sent successfully",
+        "phone": phone,
+        "demo_otp": otp,  # REMOVE THIS IN PRODUCTION
+        "expires_in": 300
+    }
+
+@api_router.post("/auth/otp/verify")
+async def verify_otp(data: OTPVerifyRequest):
+    """Verify OTP and login/register user"""
+    phone = data.phone.strip().replace(" ", "").replace("-", "")
+    
+    # Check if OTP exists
+    if phone not in otp_store:
+        raise HTTPException(status_code=400, detail="OTP expired or not sent. Please request new OTP.")
+    
+    stored = otp_store[phone]
+    
+    # Check expiry
+    if datetime.now(timezone.utc).timestamp() > stored["expires_at"]:
+        del otp_store[phone]
+        raise HTTPException(status_code=400, detail="OTP expired. Please request new OTP.")
+    
+    # Check attempts (max 3)
+    if stored["attempts"] >= 3:
+        del otp_store[phone]
+        raise HTTPException(status_code=400, detail="Too many wrong attempts. Please request new OTP.")
+    
+    # Verify OTP
+    if data.otp != stored["otp"]:
+        otp_store[phone]["attempts"] += 1
+        remaining = 3 - otp_store[phone]["attempts"]
+        raise HTTPException(status_code=400, detail=f"Invalid OTP. {remaining} attempts remaining.")
+    
+    # OTP verified - clean up
+    del otp_store[phone]
+    
+    # Check if user exists
+    user = await db.users.find_one({"phone": phone}, {"_id": 0})
+    
+    if user:
+        # Existing user - login
+        token = create_token(user["id"], user["role"])
+        return {
+            "token": token,
+            "user": {
+                "id": user["id"], 
+                "phone": user["phone"], 
+                "name": user["name"],
+                "email": user.get("email"),
+                "role": user["role"], 
+                "fitness_goal": user.get("fitness_goal", "maintenance"),
+                "daily_calories": user.get("daily_calories", 2000),
+                "daily_protein": user.get("daily_protein", 100),
+                "daily_carbs": user.get("daily_carbs", 250),
+                "daily_fat": user.get("daily_fat", 65)
+            },
+            "is_new_user": False
+        }
+    else:
+        # New user - register
+        user_id = str(uuid.uuid4())
+        name = data.name or stored.get("name") or f"User{phone[-4:]}"
+        
+        new_user = {
+            "id": user_id,
+            "phone": phone,
+            "name": name,
+            "email": None,
+            "role": "customer",
+            "fitness_goal": "maintenance",
+            "daily_calories": 2000,
+            "daily_protein": 100,
+            "daily_carbs": 250,
+            "daily_fat": 65,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.users.insert_one(new_user)
+        
+        token = create_token(user_id, "customer")
+        return {
+            "token": token,
+            "user": {
+                "id": user_id, 
+                "phone": phone, 
+                "name": name,
+                "email": None,
+                "role": "customer", 
+                "fitness_goal": "maintenance",
+                "daily_calories": 2000,
+                "daily_protein": 100,
+                "daily_carbs": 250,
+                "daily_fat": 65
+            },
+            "is_new_user": True
+        }
+
+@api_router.post("/auth/otp/resend")
+async def resend_otp(data: OTPSendRequest):
+    """Resend OTP to phone number"""
+    phone = data.phone.strip().replace(" ", "").replace("-", "")
+    
+    # Rate limiting - check if previous OTP was sent within 30 seconds
+    if phone in otp_store:
+        time_diff = otp_store[phone]["expires_at"] - 300 + 30  # Original send time + 30 sec
+        if datetime.now(timezone.utc).timestamp() < time_diff:
+            raise HTTPException(status_code=429, detail="Please wait 30 seconds before requesting new OTP.")
+    
+    # Generate and send new OTP
+    return await send_otp(data)
+
+# Keep existing email/password login for admin
 @api_router.post("/auth/register")
 async def register(data: UserRegister):
     existing = await db.users.find_one({"email": data.email}, {"_id": 0})
