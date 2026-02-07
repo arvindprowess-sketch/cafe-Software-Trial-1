@@ -1,32 +1,57 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity, Image, RefreshControl,
-  Alert, ActivityIndicator, ScrollView
+  Alert, ActivityIndicator, ScrollView, TextInput, Dimensions
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { apiCall } from '../../utils/api';
+import SideDrawer from '../components/SideDrawer';
+import { getStoredUser } from '../../utils/api';
 
 const Z_RED = '#E23744';
 const GREEN = '#267E3E';
 const PURPLE = '#5B5FE0';
-const CATS = ['All', 'Protein', 'Carb', 'Fat', 'Meal'];
+const { width, height } = Dimensions.get('window');
+
+// Left sidebar categories with images
+const SIDEBAR_CATS = [
+  { key: 'All', label: 'All Items', icon: 'grid', color: '#1C1C2E', image: 'https://images.unsplash.com/photo-1490818387583-1baba5e638af?w=80&h=80&fit=crop' },
+  { key: 'Protein', label: 'High Protein', icon: 'barbell', color: Z_RED, image: 'https://images.unsplash.com/photo-1632778149955-e80f8ceca2e8?w=80&h=80&fit=crop' },
+  { key: 'Carb', label: 'Healthy Carbs', icon: 'leaf', color: '#FF9F0A', image: 'https://images.unsplash.com/photo-1536304929831-ee1ca9d44726?w=80&h=80&fit=crop' },
+  { key: 'Fat', label: 'Good Fats', icon: 'water', color: PURPLE, image: 'https://images.unsplash.com/photo-1523049673857-eb18f1d7b578?w=80&h=80&fit=crop' },
+  { key: 'Meal', label: 'Ready Meals', icon: 'fast-food', color: GREEN, image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=80&h=80&fit=crop' },
+  { key: 'veg', label: 'Veg Only', icon: 'nutrition', color: GREEN, image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=80&h=80&fit=crop' },
+  { key: 'non-veg', label: 'Non-Veg', icon: 'flame', color: Z_RED, image: 'https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=80&h=80&fit=crop' },
+];
 
 export default function MenuScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const [products, setProducts] = useState<any[]>([]);
   const [cart, setCart] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [orderType, setOrderType] = useState('dine-in');
   const [selectedCat, setSelectedCat] = useState('All');
-  const [dietFilter, setDietFilter] = useState('all'); // 'all', 'veg', 'non-veg'
+  const [search, setSearch] = useState('');
+  const [drawerVisible, setDrawerVisible] = useState(false);
+  const [user, setUser] = useState<any>(null);
+
+  // Handle URL params for category/diet filter
+  useEffect(() => {
+    if (params.category) setSelectedCat(params.category as string);
+    if (params.dietFilter) setSelectedCat(params.dietFilter as string);
+  }, [params]);
 
   const loadProducts = useCallback(async () => {
     try { 
-      const data = await apiCall('/products'); 
-      // Include both single products with stock AND ready-made dishes
+      const [data, u] = await Promise.all([
+        apiCall('/products'),
+        getStoredUser()
+      ]);
+      setUser(u);
       setProducts(data.filter((p: any) => {
         if (p.product_type === 'ready_made') return p.is_active !== false;
         return p.available_qty_grams > 0;
@@ -38,10 +63,9 @@ export default function MenuScreen() {
   useEffect(() => { loadProducts(); }, []);
   const onRefresh = async () => { setRefreshing(true); await loadProducts(); setRefreshing(false); };
 
-  // Add single product to cart (by grams)
+  // Add to cart
   const addToCart = (product: any) => {
     if (product.product_type === 'ready_made') {
-      // Ready-made: add by plates
       const exists = cart.find(c => c.id === product.id);
       if (exists) {
         setCart(cart.map(c => c.id === product.id ? { ...c, quantity: c.quantity + 1 } : c));
@@ -49,14 +73,11 @@ export default function MenuScreen() {
         setCart([...cart, { ...product, quantity: 1, grams: product.serving_grams || 300 }]);
       }
     } else {
-      // Single product: add by grams
       const exists = cart.find(c => c.id === product.id);
       if (exists) setCart(cart.map(c => c.id === product.id ? { ...c, grams: c.grams + 100 } : c));
       else setCart([...cart, { ...product, grams: 100, quantity: 1 }]);
     }
   };
-  
-  const removeFromCart = (id: string) => setCart(cart.filter(c => c.id !== id));
   
   const updateQty = (id: string, delta: number, isReadyMade: boolean = false) => {
     setCart(cart.map(c => {
@@ -71,7 +92,6 @@ export default function MenuScreen() {
     }).filter(c => c.grams > 0 || (c.quantity || 0) > 0));
   };
 
-  // Calculate cart total
   const cartTotal = cart.reduce((s, i) => {
     if (i.product_type === 'ready_made') {
       const price = i.fixed_price || (i.cost_per_100g * (i.serving_grams || 300) / 100);
@@ -81,23 +101,18 @@ export default function MenuScreen() {
   }, 0);
   const cartItems = cart.length;
 
-  // Filter by both category AND diet type
+  // Filter products
   const filtered = products.filter(p => {
-    // Category matching
-    let catMatch = selectedCat === 'All';
-    if (selectedCat === 'Meal') {
-      // Meal = ready-made dishes
-      catMatch = p.product_type === 'ready_made' || p.category === 'Meal';
-    } else if (selectedCat !== 'All') {
-      // For Protein/Carb/Fat - check if category matches OR if it's in the name
-      catMatch = p.category === selectedCat || 
-                 (p.name && p.name.toLowerCase().includes(selectedCat.toLowerCase()));
-    }
+    // Search filter
+    const searchMatch = !search || p.name.toLowerCase().includes(search.toLowerCase());
+    if (!searchMatch) return false;
     
-    // Diet type matching
-    const dietMatch = dietFilter === 'all' || p.diet_type === dietFilter;
-    
-    return catMatch && dietMatch;
+    // Category filter
+    if (selectedCat === 'All') return true;
+    if (selectedCat === 'veg') return p.diet_type === 'veg';
+    if (selectedCat === 'non-veg') return p.diet_type === 'non-veg';
+    if (selectedCat === 'Meal') return p.product_type === 'ready_made' || p.category === 'Meal';
+    return p.category === selectedCat;
   });
 
   const goCustomize = () => {
@@ -105,95 +120,99 @@ export default function MenuScreen() {
     router.push({ pathname: '/customize', params: { cart: JSON.stringify(cart), orderType } });
   };
 
+  // Render left sidebar category card
+  const renderSidebarCat = (cat: typeof SIDEBAR_CATS[0], index: number) => {
+    const isActive = selectedCat === cat.key;
+    return (
+      <TouchableOpacity
+        key={cat.key}
+        testID={`sidebar-cat-${cat.key}`}
+        style={[styles.sidebarCat, isActive && styles.sidebarCatActive]}
+        onPress={() => setSelectedCat(cat.key)}
+        activeOpacity={0.8}
+      >
+        {cat.image ? (
+          <Image source={{ uri: cat.image }} style={styles.sidebarCatImg} />
+        ) : (
+          <View style={[styles.sidebarCatIcon, { backgroundColor: cat.color }]}>
+            <Ionicons name={cat.icon as any} size={20} color="#FFF" />
+          </View>
+        )}
+        <Text style={[styles.sidebarCatLabel, isActive && { color: cat.color, fontWeight: '800' }]} numberOfLines={2}>
+          {cat.label}
+        </Text>
+        {isActive && <View style={[styles.sidebarActiveBar, { backgroundColor: cat.color }]} />}
+      </TouchableOpacity>
+    );
+  };
+
+  // Render product card (BK style - large image with protein badge)
   const renderProduct = ({ item }: { item: any }) => {
     const inCart = cart.find(c => c.id === item.id);
     const isReadyMade = item.product_type === 'ready_made';
-    const isEditable = item.is_editable;
-    
-    // Price display
     const displayPrice = isReadyMade 
       ? (item.fixed_price || Math.round(item.cost_per_100g * (item.serving_grams || 300) / 100))
       : item.cost_per_100g;
-    const priceUnit = isReadyMade ? '/plate' : '/100g';
-    
-    // Nutrition display
-    const displayCal = isReadyMade ? (item.total_calories_per_serving || item.calories_per_100g) : item.calories_per_100g;
+    const priceUnit = isReadyMade ? '' : '/100g';
     
     return (
-      <View style={styles.itemCard} testID={`product-${item.id}`}>
-        <View style={styles.itemInfo}>
-          <View style={styles.itemTopRow}>
-            <View style={[styles.vegBox, { borderColor: item.diet_type === 'non-veg' ? Z_RED : GREEN }]}>
-              <View style={[styles.vegDotSmall, { backgroundColor: item.diet_type === 'non-veg' ? Z_RED : GREEN }]} />
-            </View>
-            {isReadyMade && (
-              <View style={[styles.editBadge, isEditable ? styles.editBadgeYes : styles.editBadgeNo]}>
-                <Ionicons name={isEditable ? 'create' : 'lock-closed'} size={9} color="#FFF" />
-                <Text style={styles.editBadgeText}>{isEditable ? 'Customizable' : 'Fixed'}</Text>
-              </View>
-            )}
-          </View>
-          <Text style={styles.itemName}>{item.name}</Text>
-          <Text style={styles.itemDesc} numberOfLines={2}>
-            {item.description || `${item.category} • ${Math.round(displayCal)} cal${priceUnit}`}
-          </Text>
-          {isReadyMade && item.ingredients && item.ingredients.length > 0 && (
-            <Text style={styles.ingredientsList} numberOfLines={1}>
-              {item.ingredients.map((ing: any) => typeof ing === 'object' ? ing.name : ing).join(', ')}
-            </Text>
-          )}
-          <View style={styles.itemMeta}>
-            <Text style={styles.itemPrice}>₹{displayPrice}</Text>
-            <Text style={styles.itemPer}>{priceUnit}</Text>
-          </View>
-          <View style={styles.nutriBadges}>
-            <View style={styles.nutriBadge}><Text style={styles.nbText}>P: {isReadyMade ? Math.round(item.total_protein_per_serving || item.protein_per_100g) : item.protein_per_100g}g</Text></View>
-            <View style={styles.nutriBadge}><Text style={styles.nbText}>C: {isReadyMade ? Math.round(item.total_carbs_per_serving || item.carbs_per_100g) : item.carbs_per_100g}g</Text></View>
-            <View style={styles.nutriBadge}><Text style={styles.nbText}>F: {isReadyMade ? Math.round(item.total_fat_per_serving || item.fat_per_100g) : item.fat_per_100g}g</Text></View>
-          </View>
-        </View>
-        <View style={styles.itemRight}>
+      <View style={styles.productCard} testID={`product-${item.id}`}>
+        {/* Product Image with Protein Badge */}
+        <View style={styles.productImageWrapper}>
           {item.image_url ? (
-            <Image source={{ uri: item.image_url }} style={styles.itemImg} />
+            <Image source={{ uri: item.image_url }} style={styles.productImage} />
           ) : (
-            <View style={[styles.itemImg, styles.imgPlaceholder]}>
-              <Ionicons name={isReadyMade ? 'fast-food' : 'restaurant'} size={24} color="#D0D0D0" />
+            <View style={[styles.productImage, styles.productImagePlaceholder]}>
+              <Ionicons name={isReadyMade ? 'fast-food' : 'restaurant'} size={32} color="#D0D0D0" />
             </View>
           )}
-          <View style={styles.ratingRow}>
-            <Ionicons name="star" size={10} color="#FFF" />
-            <Text style={styles.ratingNum}>{item.rating || '4.2'}</Text>
+          {/* Protein Badge (BK style) */}
+          <View style={styles.proteinBadge}>
+            <Text style={styles.proteinValue}>{item.protein_per_100g}g</Text>
+            <Text style={styles.proteinLabel}>Protein</Text>
           </View>
-          {inCart ? (
-            isReadyMade ? (
-              // Ready-made: plate counter
-              <View style={[styles.qtyBox, { backgroundColor: PURPLE }]}>
-                <TouchableOpacity testID={`minus-${item.id}`} style={styles.qtyBtn} onPress={() => updateQty(item.id, -1, true)}>
-                  <Ionicons name="remove" size={16} color="#FFF" />
+          {/* NEW badge for ready-made */}
+          {isReadyMade && (
+            <View style={styles.newBadge}>
+              <Text style={styles.newBadgeText}>MEAL</Text>
+            </View>
+          )}
+        </View>
+        
+        {/* Product Info */}
+        <View style={styles.productInfo}>
+          <View style={styles.productHeader}>
+            <Text style={styles.productName} numberOfLines={2}>{item.name}</Text>
+            {/* Veg/Non-veg indicator */}
+            <View style={[styles.vegIndicator, { borderColor: item.diet_type === 'non-veg' ? Z_RED : GREEN }]}>
+              <View style={[styles.vegDot, { backgroundColor: item.diet_type === 'non-veg' ? Z_RED : GREEN }]} />
+            </View>
+          </View>
+          
+          <Text style={styles.productDesc} numberOfLines={2}>
+            {item.description || `${item.category} • ${item.calories_per_100g} cal${priceUnit}`}
+          </Text>
+          
+          {/* Price and Add Button Row */}
+          <View style={styles.productFooter}>
+            <Text style={styles.productPrice}>₹ {displayPrice}{priceUnit && <Text style={styles.priceUnit}>{priceUnit}</Text>}</Text>
+            
+            {inCart ? (
+              <View style={[styles.qtyBox, isReadyMade && { backgroundColor: PURPLE }]}>
+                <TouchableOpacity testID={`minus-${item.id}`} style={styles.qtyBtn} onPress={() => updateQty(item.id, isReadyMade ? -1 : -50, isReadyMade)}>
+                  <Ionicons name="remove" size={14} color="#FFF" />
                 </TouchableOpacity>
-                <Text style={styles.qtyText}>{inCart.quantity || 1}</Text>
-                <TouchableOpacity testID={`plus-${item.id}`} style={styles.qtyBtn} onPress={() => updateQty(item.id, 1, true)}>
-                  <Ionicons name="add" size={16} color="#FFF" />
+                <Text style={styles.qtyText}>{isReadyMade ? inCart.quantity : `${inCart.grams}g`}</Text>
+                <TouchableOpacity testID={`plus-${item.id}`} style={styles.qtyBtn} onPress={() => updateQty(item.id, isReadyMade ? 1 : 50, isReadyMade)}>
+                  <Ionicons name="add" size={14} color="#FFF" />
                 </TouchableOpacity>
               </View>
             ) : (
-              // Single product: gram counter
-              <View style={styles.qtyBox}>
-                <TouchableOpacity testID={`minus-${item.id}`} style={styles.qtyBtn} onPress={() => updateQty(item.id, -50, false)}>
-                  <Ionicons name="remove" size={16} color="#FFF" />
-                </TouchableOpacity>
-                <Text style={styles.qtyText}>{inCart.grams}g</Text>
-                <TouchableOpacity testID={`plus-${item.id}`} style={styles.qtyBtn} onPress={() => updateQty(item.id, 50, false)}>
-                  <Ionicons name="add" size={16} color="#FFF" />
-                </TouchableOpacity>
-              </View>
-            )
-          ) : (
-            <TouchableOpacity testID={`add-${item.id}`} style={[styles.addBtn, isReadyMade && styles.addBtnReadyMade]} onPress={() => addToCart(item)}>
-              <Text style={[styles.addText, isReadyMade && { color: PURPLE }]}>ADD</Text>
-              <Ionicons name="add" size={14} color={isReadyMade ? PURPLE : Z_RED} />
-            </TouchableOpacity>
-          )}
+              <TouchableOpacity testID={`add-${item.id}`} style={styles.addBtn} onPress={() => addToCart(item)}>
+                <Text style={styles.addBtnText}>Add +</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       </View>
     );
@@ -202,82 +221,69 @@ export default function MenuScreen() {
   if (loading) return <SafeAreaView style={styles.safe}><View style={styles.center}><ActivityIndicator size="large" color={Z_RED} /></View></SafeAreaView>;
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
+      {/* Side Drawer */}
+      <SideDrawer visible={drawerVisible} onClose={() => setDrawerVisible(false)} user={user} />
+      
+      {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Menu</Text>
-        <View style={styles.typeRow}>
-          {['dine-in', 'takeaway', 'delivery'].map(t => (
-            <TouchableOpacity key={t} testID={`order-type-${t}`} style={[styles.typeChip, orderType === t && styles.typeChipActive]} onPress={() => setOrderType(t)}>
-              <Ionicons name={t === 'dine-in' ? 'restaurant' : t === 'takeaway' ? 'bag-handle' : 'bicycle'} size={14} color={orderType === t ? '#FFF' : '#696969'} />
-              <Text style={[styles.typeText, orderType === t && { color: '#FFF' }]}>{t === 'dine-in' ? 'Dine In' : t === 'takeaway' ? 'Takeaway' : 'Delivery'}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-
-      {/* ===== VEG / NON-VEG FILTER (HIGHLIGHTED AT TOP) ===== */}
-      <View style={styles.dietFilterRow}>
-        <TouchableOpacity 
-          testID="diet-all"
-          style={[styles.dietFilterBtn, dietFilter === 'all' && styles.dietFilterBtnActive]}
-          onPress={() => setDietFilter('all')}
-        >
-          <Ionicons name="apps" size={16} color={dietFilter === 'all' ? '#FFF' : '#696969'} />
-          <Text style={[styles.dietFilterText, dietFilter === 'all' && { color: '#FFF' }]}>All</Text>
+        <TouchableOpacity style={styles.menuBtn} onPress={() => setDrawerVisible(true)}>
+          <Ionicons name="menu" size={24} color="#1C1C2E" />
         </TouchableOpacity>
-        <TouchableOpacity 
-          testID="diet-veg"
-          style={[styles.dietFilterBtn, styles.vegFilterBtn, dietFilter === 'veg' && styles.vegFilterBtnActive]}
-          onPress={() => setDietFilter('veg')}
-        >
-          <View style={styles.vegFilterIcon}>
-            <View style={[styles.vegDotFilter, { backgroundColor: GREEN }]} />
-          </View>
-          <Text style={[styles.dietFilterText, dietFilter === 'veg' && { color: '#FFF' }]}>Veg</Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          testID="diet-nonveg"
-          style={[styles.dietFilterBtn, styles.nonVegFilterBtn, dietFilter === 'non-veg' && styles.nonVegFilterBtnActive]}
-          onPress={() => setDietFilter('non-veg')}
-        >
-          <View style={styles.vegFilterIcon}>
-            <View style={[styles.vegDotFilter, { backgroundColor: Z_RED }]} />
-          </View>
-          <Text style={[styles.dietFilterText, dietFilter === 'non-veg' && { color: '#FFF' }]}>Non-Veg</Text>
+        <Text style={styles.title}>Our Menu</Text>
+        <TouchableOpacity style={styles.searchBtn} onPress={() => {}}>
+          <Ionicons name="search" size={22} color={Z_RED} />
         </TouchableOpacity>
       </View>
+      
+      {/* Search Bar (collapsible) */}
+      <View style={styles.searchBar}>
+        <Ionicons name="search" size={18} color="#9C9C9C" />
+        <TextInput
+          style={styles.searchInput}
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Search menu..."
+          placeholderTextColor="#B0B0B0"
+        />
+        {search ? (
+          <TouchableOpacity onPress={() => setSearch('')}>
+            <Ionicons name="close-circle" size={18} color="#9C9C9C" />
+          </TouchableOpacity>
+        ) : null}
+      </View>
 
-      {/* ===== CATEGORY BOXES (COMPACT) ===== */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.catBar} contentContainerStyle={styles.catContent}>
-        {CATS.map(c => {
-          const isActive = selectedCat === c;
-          const icon = c === 'All' ? 'grid' : c === 'Protein' ? 'barbell' : c === 'Carb' ? 'leaf' : c === 'Fat' ? 'water' : 'fast-food';
-          const activeColor = c === 'Protein' ? Z_RED : c === 'Carb' ? '#FF9F0A' : c === 'Fat' ? PURPLE : c === 'Meal' ? GREEN : '#1C1C2E';
-          
-          return (
-            <TouchableOpacity 
-              key={c} 
-              testID={`menu-cat-${c}`} 
-              style={[
-                styles.catBox, 
-                isActive && { backgroundColor: activeColor, borderColor: activeColor }
-              ]} 
-              onPress={() => setSelectedCat(c)}
-            >
-              <Ionicons name={icon as any} size={14} color={isActive ? '#FFF' : activeColor} />
-              <Text style={[styles.catBoxText, isActive && { color: '#FFF' }]}>{c}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
+      {/* Main Content: Left Sidebar + Right Product List */}
+      <View style={styles.mainContent}>
+        {/* Left Sidebar Categories */}
+        <ScrollView 
+          style={styles.sidebar} 
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.sidebarContent}
+        >
+          {SIDEBAR_CATS.map(renderSidebarCat)}
+        </ScrollView>
+        
+        {/* Right Product List */}
+        <FlatList
+          data={filtered}
+          keyExtractor={i => i.id}
+          renderItem={renderProduct}
+          style={styles.productList}
+          contentContainerStyle={styles.productListContent}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Z_RED} />}
+          showsVerticalScrollIndicator={false}
+          ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <Ionicons name="restaurant-outline" size={48} color="#D0D0D0" />
+              <Text style={styles.emptyText}>No items found</Text>
+            </View>
+          }
+        />
+      </View>
 
-      <FlatList
-        data={filtered} keyExtractor={i => i.id} renderItem={renderProduct}
-        contentContainerStyle={styles.list}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Z_RED} />}
-        ItemSeparatorComponent={() => <View style={styles.sep} />}
-      />
-
+      {/* Cart Bar */}
       {cart.length > 0 && (
         <TouchableOpacity testID="customize-btn" style={styles.cartBar} onPress={goCustomize} activeOpacity={0.95}>
           <View>
@@ -286,7 +292,7 @@ export default function MenuScreen() {
           </View>
           <View style={styles.cartRight}>
             <Text style={styles.cartAction}>View Cart</Text>
-            <Ionicons name="cart" size={18} color="#FFF" />
+            <Ionicons name="arrow-forward" size={18} color="#FFF" />
           </View>
         </TouchableOpacity>
       )}
@@ -294,73 +300,271 @@ export default function MenuScreen() {
   );
 }
 
+const SIDEBAR_WIDTH = 90;
+
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F8F8F8' },
+  safe: { flex: 1, backgroundColor: '#F5F5F5' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: { backgroundColor: '#FFF', paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12 },
-  title: { fontSize: 24, fontWeight: '800', color: '#1C1C2E', marginBottom: 10 },
-  typeRow: { flexDirection: 'row', gap: 8 },
-  typeChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, backgroundColor: '#F5F5F5', borderWidth: 1, borderColor: '#E8E8E8' },
-  typeChipActive: { backgroundColor: Z_RED, borderColor: Z_RED },
-  typeText: { fontSize: 12, fontWeight: '600', color: '#696969' },
   
-  // Diet filter (Veg/Non-Veg)
-  dietFilterRow: { flexDirection: 'row', backgroundColor: '#FFF', paddingHorizontal: 16, paddingVertical: 12, gap: 10, borderBottomWidth: 1, borderBottomColor: '#EFEFEF' },
-  dietFilterBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, borderRadius: 12, backgroundColor: '#F5F5F5', borderWidth: 2, borderColor: '#E8E8E8' },
-  dietFilterBtnActive: { backgroundColor: '#1C1C2E', borderColor: '#1C1C2E' },
-  vegFilterBtn: { borderColor: '#D0F0D0' },
-  vegFilterBtnActive: { backgroundColor: GREEN, borderColor: GREEN },
-  nonVegFilterBtn: { borderColor: '#FFE0E0' },
-  nonVegFilterBtnActive: { backgroundColor: Z_RED, borderColor: Z_RED },
-  dietFilterText: { fontSize: 14, fontWeight: '700', color: '#696969' },
-  vegFilterIcon: { width: 16, height: 16, borderRadius: 2, borderWidth: 2, borderColor: 'currentColor', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF' },
-  vegDotFilter: { width: 8, height: 8, borderRadius: 4 },
+  // Header
+  header: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between',
+    backgroundColor: '#FFF', 
+    paddingHorizontal: 16, 
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  menuBtn: { 
+    width: 40, 
+    height: 40, 
+    borderRadius: 10, 
+    backgroundColor: '#F5F5F5', 
+    alignItems: 'center', 
+    justifyContent: 'center' 
+  },
+  title: { fontSize: 20, fontWeight: '800', color: '#1C1C2E' },
+  searchBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FDE8EA',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   
-  // Category boxes (compact pills - horizontal)
-  catBar: { backgroundColor: '#FFF', maxHeight: 50, borderBottomWidth: 1, borderBottomColor: '#EFEFEF' },
-  catContent: { paddingHorizontal: 12, paddingVertical: 8, gap: 8, flexDirection: 'row', alignItems: 'center' },
-  catBox: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 18, borderWidth: 1.5, borderColor: '#E8E8E8', backgroundColor: '#FFF', minHeight: 32, maxHeight: 34 },
-  catIconBg: { width: 22, height: 22, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
-  catBoxText: { fontSize: 12, fontWeight: '600', color: '#1C1C2E' },
-  catPill: { paddingHorizontal: 18, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: '#E8E8E8', backgroundColor: '#FFF' },
-  catText: { fontSize: 13, fontWeight: '600', color: '#696969' },
+  // Search Bar
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF',
+    marginHorizontal: 16,
+    marginVertical: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
+  },
+  searchInput: { flex: 1, fontSize: 14, color: '#1C1C2E' },
   
-  list: { padding: 16, paddingBottom: 100 },
-  sep: { height: 10 },
-  itemCard: { flexDirection: 'row', backgroundColor: '#FFF', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#EFEFEF' },
-  itemInfo: { flex: 1, paddingRight: 12 },
-  itemTopRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
-  itemVeg: { marginBottom: 4 },
-  vegDot: { width: 12, height: 12, borderRadius: 2, borderWidth: 1.5, borderColor: 'transparent' },
-  vegBox: { width: 14, height: 14, borderRadius: 2, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  vegDotSmall: { width: 7, height: 7, borderRadius: 4 },
-  editBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-  editBadgeYes: { backgroundColor: GREEN },
-  editBadgeNo: { backgroundColor: '#9C9C9C' },
-  editBadgeText: { fontSize: 9, fontWeight: '700', color: '#FFF' },
-  itemName: { fontSize: 16, fontWeight: '700', color: '#1C1C2E' },
-  itemDesc: { fontSize: 12, color: '#9C9C9C', marginTop: 3, lineHeight: 16 },
-  ingredientsList: { fontSize: 10, color: PURPLE, marginTop: 3, fontStyle: 'italic' },
-  itemMeta: { flexDirection: 'row', alignItems: 'baseline', marginTop: 6, gap: 2 },
-  itemPrice: { fontSize: 16, fontWeight: '700', color: '#1C1C2E' },
-  itemPer: { fontSize: 11, color: '#9C9C9C' },
-  nutriBadges: { flexDirection: 'row', gap: 6, marginTop: 6 },
-  nutriBadge: { backgroundColor: '#F5F5F5', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-  nbText: { fontSize: 10, fontWeight: '600', color: '#696969' },
-  itemRight: { width: 110, alignItems: 'center' },
-  itemImg: { width: 110, height: 90, borderRadius: 10, backgroundColor: '#F5F5F5' },
-  imgPlaceholder: { alignItems: 'center', justifyContent: 'center' },
-  ratingRow: { position: 'absolute', top: 70, flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: GREEN, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 3 },
-  ratingNum: { fontSize: 10, fontWeight: '700', color: '#FFF' },
-  addBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 8, paddingVertical: 7, paddingHorizontal: 24, borderRadius: 8, borderWidth: 1.5, borderColor: Z_RED, backgroundColor: '#FDE8EA' },
-  addBtnReadyMade: { borderColor: PURPLE, backgroundColor: '#F0F0FF' },
-  addText: { fontSize: 14, fontWeight: '800', color: Z_RED },
-  qtyBox: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8, backgroundColor: Z_RED, borderRadius: 8, overflow: 'hidden' },
-  qtyBtn: { paddingHorizontal: 10, paddingVertical: 7 },
-  qtyText: { color: '#FFF', fontSize: 13, fontWeight: '700', minWidth: 36, textAlign: 'center' },
-  cartBar: { position: 'absolute', bottom: 0, left: 16, right: 16, backgroundColor: Z_RED, borderRadius: 14, paddingHorizontal: 20, paddingVertical: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, elevation: 8 },
+  // Main Content Layout
+  mainContent: { 
+    flex: 1, 
+    flexDirection: 'row',
+  },
+  
+  // Left Sidebar
+  sidebar: { 
+    width: SIDEBAR_WIDTH, 
+    backgroundColor: '#FFF',
+    borderRightWidth: 1,
+    borderRightColor: '#F0F0F0',
+  },
+  sidebarContent: { 
+    paddingVertical: 8,
+  },
+  sidebarCat: { 
+    alignItems: 'center', 
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: 'transparent',
+    position: 'relative',
+  },
+  sidebarCatActive: { 
+    backgroundColor: '#FFF8F0',
+  },
+  sidebarActiveBar: {
+    position: 'absolute',
+    left: 0,
+    top: 8,
+    bottom: 8,
+    width: 3,
+    borderRadius: 2,
+  },
+  sidebarCatImg: { 
+    width: 50, 
+    height: 50, 
+    borderRadius: 10,
+    marginBottom: 6,
+  },
+  sidebarCatIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  sidebarCatLabel: { 
+    fontSize: 10, 
+    fontWeight: '600', 
+    color: '#696969', 
+    textAlign: 'center',
+    lineHeight: 13,
+  },
+  
+  // Product List
+  productList: { 
+    flex: 1,
+  },
+  productListContent: { 
+    padding: 12,
+    paddingBottom: 100,
+  },
+  
+  // Product Card (BK style)
+  productCard: { 
+    backgroundColor: '#FFF', 
+    borderRadius: 14, 
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
+  },
+  productImageWrapper: {
+    position: 'relative',
+    width: '100%',
+    height: 140,
+  },
+  productImage: { 
+    width: '100%', 
+    height: '100%',
+    backgroundColor: '#F5F5F5',
+  },
+  productImagePlaceholder: { 
+    alignItems: 'center', 
+    justifyContent: 'center' 
+  },
+  proteinBadge: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  proteinValue: { fontSize: 16, fontWeight: '800', color: '#FFF' },
+  proteinLabel: { fontSize: 9, color: 'rgba(255,255,255,0.8)', marginTop: 1 },
+  newBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: GREEN,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  newBadgeText: { fontSize: 9, fontWeight: '800', color: '#FFF' },
+  
+  productInfo: { 
+    padding: 14,
+  },
+  productHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  productName: { 
+    flex: 1,
+    fontSize: 16, 
+    fontWeight: '700', 
+    color: '#1C1C2E',
+    lineHeight: 20,
+  },
+  vegIndicator: {
+    width: 18,
+    height: 18,
+    borderRadius: 3,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFF',
+  },
+  vegDot: { width: 9, height: 9, borderRadius: 5 },
+  productDesc: { 
+    fontSize: 12, 
+    color: '#9C9C9C', 
+    marginTop: 6,
+    lineHeight: 16,
+  },
+  productFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  productPrice: { 
+    fontSize: 18, 
+    fontWeight: '800', 
+    color: '#1C1C2E' 
+  },
+  priceUnit: { 
+    fontSize: 12, 
+    fontWeight: '400', 
+    color: '#9C9C9C' 
+  },
+  addBtn: { 
+    backgroundColor: Z_RED, 
+    paddingHorizontal: 20, 
+    paddingVertical: 10, 
+    borderRadius: 10,
+  },
+  addBtnText: { 
+    color: '#FFF', 
+    fontSize: 14, 
+    fontWeight: '700' 
+  },
+  qtyBox: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: Z_RED, 
+    borderRadius: 10, 
+    overflow: 'hidden' 
+  },
+  qtyBtn: { paddingHorizontal: 12, paddingVertical: 10 },
+  qtyText: { color: '#FFF', fontSize: 13, fontWeight: '700', minWidth: 40, textAlign: 'center' },
+  
+  // Empty State
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#9C9C9C',
+    marginTop: 12,
+  },
+  
+  // Cart Bar
+  cartBar: { 
+    position: 'absolute', 
+    bottom: 0, 
+    left: 16, 
+    right: 16, 
+    backgroundColor: Z_RED, 
+    borderRadius: 14, 
+    paddingHorizontal: 20, 
+    paddingVertical: 14, 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    marginBottom: 6, 
+    elevation: 8,
+    shadowColor: Z_RED,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
   cartItems: { color: '#FFF', fontSize: 12, fontWeight: '500' },
-  cartTotal: { color: '#FFF', fontSize: 18, fontWeight: '800' },
-  cartRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  cartTotal: { color: '#FFF', fontSize: 20, fontWeight: '800' },
+  cartRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   cartAction: { color: '#FFF', fontSize: 15, fontWeight: '700' },
 });
