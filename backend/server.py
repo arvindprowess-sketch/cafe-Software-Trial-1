@@ -967,6 +967,147 @@ Respond ONLY in this exact JSON format (no other text):
         logger.error(f"AI quick-meal error: {e}")
         return {"meal_items": [], "summary": "AI meal builder unavailable. Please try the manual menu.", "totals": {}}
 
+# ========== AI CHAT ASSISTANT ==========
+class AIChatRequest(BaseModel):
+    message: str
+    budget: Optional[float] = None
+    goal: Optional[str] = "maintenance"
+    diet_preference: Optional[str] = "both"
+    current_cart: Optional[List[Dict]] = []
+
+@api_router.post("/ai/chat")
+async def ai_chat(data: AIChatRequest, user=Depends(get_current_user)):
+    """Conversational AI assistant for meal planning and nutrition advice"""
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        
+        # Get available products
+        query = {"is_active": True, "available_qty_grams": {"$gt": 50}}
+        if data.diet_preference == "veg":
+            query["diet_type"] = "veg"
+        elif data.diet_preference == "non-veg":
+            query["diet_type"] = "non-veg"
+        
+        products = await db.products.find(query, {"_id": 0}).to_list(100)
+        
+        # Get user's nutrition summary
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        summary = await db.meal_history.find_one({"user_id": user["id"], "date": today}, {"_id": 0})
+        consumed_today = {
+            "calories": summary.get("total_calories", 0) if summary else 0,
+            "protein": summary.get("total_protein", 0) if summary else 0,
+            "carbs": summary.get("total_carbs", 0) if summary else 0,
+            "fat": summary.get("total_fat", 0) if summary else 0,
+        }
+        
+        # Current cart summary
+        cart_summary = ""
+        cart_total = {"price": 0, "calories": 0, "protein": 0}
+        if data.current_cart:
+            cart_items = []
+            for item in data.current_cart:
+                grams = item.get("grams", 0)
+                f = grams / 100
+                cart_items.append(f"- {item.get('name', 'Unknown')}: {grams}g (₹{round(f * item.get('cost_per_100g', 0))})")
+                cart_total["price"] += f * item.get("cost_per_100g", 0)
+                cart_total["calories"] += f * item.get("calories_per_100g", 0)
+                cart_total["protein"] += f * item.get("protein_per_100g", 0)
+            cart_summary = f"\n\nCurrent Cart ({len(data.current_cart)} items, ₹{round(cart_total['price'])}):\n" + "\n".join(cart_items)
+        
+        menu_str = "\n".join([
+            f"- {p['name']} ({p.get('diet_type','veg')}): ₹{p['cost_per_100g']}/100g | {p['calories_per_100g']}cal, P:{p['protein_per_100g']}g"
+            for p in products[:20]  # Limit to avoid token overflow
+        ])
+        
+        budget_str = f"Budget: ₹{data.budget}" if data.budget else "No specific budget"
+        
+        system_prompt = f"""You are a friendly AI nutritionist at Diet Café. Help customers build healthy, budget-friendly meals.
+
+USER INFO:
+- Name: {user.get('name', 'Customer')}
+- Goal: {data.goal} ({user.get('fitness_goal', 'maintenance')})
+- Diet: {data.diet_preference}
+- {budget_str}
+- Consumed today: {consumed_today['calories']} cal, {consumed_today['protein']}g protein
+- Daily targets: {user.get('daily_calories', 2000)} cal, {user.get('daily_protein', 100)}g protein
+{cart_summary}
+
+AVAILABLE MENU (₹ per 100g):
+{menu_str}
+
+RULES:
+1. Be friendly, brief (2-3 sentences max unless asked for details)
+2. When suggesting items, always include: name, grams, and price
+3. Keep suggestions within budget when specified
+4. For fat_loss: prioritize high protein, low carb
+5. For muscle_gain: high protein, moderate carbs
+6. Always use EXACT product names from menu
+7. If asked about nutrition, give practical advice
+8. If asked to add items, respond with JSON at the end like: {{\"add\": [{{\"name\": \"Product Name\", \"grams\": 100}}]}}
+9. If customer says "order" or "checkout", respond with: {{\"action\": \"checkout\"}}
+10. Keep Indian food culture in mind"""
+
+        chat = LlmChat(
+            api_key=os.environ.get('EMERGENT_LLM_KEY', ''),
+            session_id=f"chat-{user['id']}-{uuid.uuid4().hex[:8]}",
+            system_message=system_prompt
+        ).with_model("openai", "gpt-5.2")
+        
+        response = await chat.send_message(UserMessage(text=data.message))
+        
+        # Parse any actions from response
+        actions = None
+        try:
+            # Check if response contains JSON action
+            if "{" in response and "}" in response:
+                json_start = response.rfind("{")
+                json_end = response.rfind("}") + 1
+                json_str = response[json_start:json_end]
+                actions = json.loads(json_str)
+                # Remove JSON from displayed message
+                response = response[:json_start].strip()
+        except:
+            pass
+        
+        # If action is to add items, enrich with product data
+        if actions and "add" in actions:
+            enriched_add = []
+            for item in actions["add"]:
+                product = next((p for p in products if p["name"].lower() == item["name"].lower()), None)
+                if not product:
+                    product = next((p for p in products if item["name"].lower() in p["name"].lower()), None)
+                if product:
+                    grams = item.get("grams", 100)
+                    factor = grams / 100
+                    enriched_add.append({
+                        "product_id": product["id"],
+                        "name": product["name"],
+                        "grams": grams,
+                        "price": round(factor * product["cost_per_100g"], 2),
+                        "calories": round(factor * product["calories_per_100g"], 1),
+                        "protein": round(factor * product["protein_per_100g"], 1),
+                        "cost_per_100g": product["cost_per_100g"],
+                        "calories_per_100g": product["calories_per_100g"],
+                        "protein_per_100g": product["protein_per_100g"],
+                        "carbs_per_100g": product["carbs_per_100g"],
+                        "fat_per_100g": product["fat_per_100g"],
+                        "diet_type": product.get("diet_type", "veg"),
+                        "image_url": product.get("image_url"),
+                    })
+            if enriched_add:
+                actions["add"] = enriched_add
+        
+        return {
+            "message": response,
+            "actions": actions,
+        }
+    except Exception as e:
+        logger.error(f"AI chat error: {e}")
+        return {
+            "message": "I'm having trouble right now. Please try again or use the Budget Meal Builder!",
+            "actions": None
+        }
+
 # ========== REORDER ==========
 @api_router.post("/orders/{order_id}/reorder")
 async def reorder(order_id: str, user=Depends(get_current_user)):
