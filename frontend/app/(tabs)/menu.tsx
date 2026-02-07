@@ -392,6 +392,53 @@ const styles = StyleSheet.create({
   },
   searchInput: { flex: 1, fontSize: 13, color: '#1C1C2E' },
   
+  // Diet Toggle (Veg / Non-Veg)
+  dietToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 10,
+    paddingBottom: 8,
+  },
+  dietToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#FFF',
+    borderWidth: 1.5,
+    borderColor: '#E8E8E8',
+  },
+  dietToggleBtnAllActive: {
+    backgroundColor: '#1C1C2E',
+    borderColor: '#1C1C2E',
+  },
+  dietToggleBtnVegActive: {
+    backgroundColor: '#E8F5E9',
+    borderColor: GREEN,
+  },
+  dietToggleBtnNonvegActive: {
+    backgroundColor: '#FDE8EA',
+    borderColor: Z_RED,
+  },
+  dietToggleDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 2,
+  },
+  dietToggleText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#696969',
+  },
+  dietToggleTextActive: {
+    color: '#FFF',
+    fontWeight: '800',
+  },
+  
   // Main Content Layout
   mainContent: { 
     flex: 1, 
