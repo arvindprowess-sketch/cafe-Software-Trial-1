@@ -24,10 +24,24 @@ export default function BudgetMealScreen() {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiSuggestions, setAiSuggestions] = useState<any[]>([]);
   const [orderType, setOrderType] = useState('dine-in');
+  const [userGoals, setUserGoals] = useState<any>({ daily_calories: 2000 });
+  const [consumedToday, setConsumedToday] = useState(0);
 
   useEffect(() => {
     loadProducts();
+    loadCalorieContext();
   }, []);
+
+  const loadCalorieContext = async () => {
+    try {
+      const [user, summary] = await Promise.all([
+        apiCall('/auth/me').catch(() => null),
+        apiCall('/user/nutrition-summary').catch(() => null),
+      ]);
+      if (user) setUserGoals({ daily_calories: user.daily_calories || 2000 });
+      if (summary?.consumed) setConsumedToday(summary.consumed.calories || 0);
+    } catch {}
+  };
 
   const loadProducts = async () => {
     try {
