@@ -8,7 +8,32 @@ interface RequestOptions {
   headers?: Record<string, string>;
 }
 
+// Migrate old token keys to new keys (run once)
+async function migrateTokenIfNeeded() {
+  const oldToken = await AsyncStorage.getItem('token');
+  const oldUser = await AsyncStorage.getItem('user');
+  const newToken = await AsyncStorage.getItem('auth_token');
+  
+  // If old keys exist but new keys don't, migrate
+  if (oldToken && !newToken) {
+    await AsyncStorage.setItem('auth_token', oldToken);
+    await AsyncStorage.removeItem('token');
+    console.log('[API] Migrated token to auth_token');
+  }
+  if (oldUser && !(await AsyncStorage.getItem('user_data'))) {
+    await AsyncStorage.setItem('user_data', oldUser);
+    await AsyncStorage.removeItem('user');
+    console.log('[API] Migrated user to user_data');
+  }
+}
+
+// Run migration on module load
+migrateTokenIfNeeded();
+
 export async function apiCall(endpoint: string, options: RequestOptions = {}) {
+  // Ensure migration ran
+  await migrateTokenIfNeeded();
+  
   const token = await AsyncStorage.getItem('auth_token');
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -18,6 +43,8 @@ export async function apiCall(endpoint: string, options: RequestOptions = {}) {
     headers['Authorization'] = `Bearer ${token}`;
   }
   const url = `${BACKEND_URL}/api${endpoint}`;
+  console.log(`[API] ${options.method || 'GET'} ${endpoint} | Auth: ${token ? 'Yes' : 'No'}`);
+  
   const response = await fetch(url, {
     method: options.method || 'GET',
     headers,
@@ -25,6 +52,7 @@ export async function apiCall(endpoint: string, options: RequestOptions = {}) {
   });
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Request failed' }));
+    console.log(`[API] Error: ${error.detail || response.status}`);
     throw new Error(error.detail || `HTTP ${response.status}`);
   }
   return response.json();
