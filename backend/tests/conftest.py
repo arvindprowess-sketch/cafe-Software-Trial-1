@@ -2,7 +2,7 @@ import pytest
 import requests
 import os
 
-BASE_URL = "https://journey-tracker-99.preview.emergentagent.com"
+BASE_URL = "https://emergent-mobile-21.preview.emergentagent.com"
 
 @pytest.fixture
 def api_client():
