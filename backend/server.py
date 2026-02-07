@@ -1283,6 +1283,428 @@ async def get_banners():
         {"id": "4", "title": "AI Meal Planner", "subtitle": "Get personalized diet suggestions", "color": "#5B5FE0"},
     ]
 
+# ========== QR CODE TABLE ORDERING ==========
+class TableOrderRequest(BaseModel):
+    table_number: int
+    items: List[Dict[str, Any]]
+    special_instructions: Optional[str] = ""
+
+@api_router.get("/tables")
+async def get_tables():
+    """Get all café tables with their status"""
+    tables = await db.tables.find({}, {"_id": 0}).to_list(50)
+    if not tables:
+        # Create default tables
+        for i in range(1, 11):
+            table = {
+                "id": str(uuid.uuid4()),
+                "table_number": i,
+                "seats": 4 if i <= 6 else 2,
+                "status": "available",  # available, occupied, reserved
+                "current_order_id": None,
+                "qr_code": f"DIETCAFE-TABLE-{i}",
+            }
+            await db.tables.insert_one(table)
+        tables = await db.tables.find({}, {"_id": 0}).to_list(50)
+    return tables
+
+@api_router.get("/tables/{table_number}")
+async def get_table(table_number: int):
+    """Get table info by scanning QR code"""
+    table = await db.tables.find_one({"table_number": table_number}, {"_id": 0})
+    if not table:
+        raise HTTPException(status_code=404, detail="Table not found")
+    # Get current order if any
+    current_order = None
+    if table.get("current_order_id"):
+        current_order = await db.orders.find_one({"id": table["current_order_id"]}, {"_id": 0})
+    return {**table, "current_order": current_order}
+
+@api_router.post("/tables/{table_number}/occupy")
+async def occupy_table(table_number: int, user=Depends(get_current_user)):
+    """Mark table as occupied when customer scans QR"""
+    table = await db.tables.find_one({"table_number": table_number}, {"_id": 0})
+    if not table:
+        raise HTTPException(status_code=404, detail="Table not found")
+    if table["status"] == "occupied" and table.get("occupied_by") != user["id"]:
+        raise HTTPException(status_code=400, detail="Table already occupied by another customer")
+    await db.tables.update_one(
+        {"table_number": table_number},
+        {"$set": {"status": "occupied", "occupied_by": user["id"], "occupied_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    return {"message": f"Table {table_number} is now yours!", "table_number": table_number}
+
+@api_router.post("/tables/{table_number}/release")
+async def release_table(table_number: int, user=Depends(get_current_user)):
+    """Release table after payment"""
+    await db.tables.update_one(
+        {"table_number": table_number},
+        {"$set": {"status": "available", "occupied_by": None, "current_order_id": None, "occupied_at": None}}
+    )
+    return {"message": f"Table {table_number} released"}
+
+# ========== PUSH NOTIFICATIONS ==========
+class PushTokenRequest(BaseModel):
+    expo_push_token: str
+    device_type: Optional[str] = "unknown"
+
+@api_router.post("/notifications/register")
+async def register_push_token(data: PushTokenRequest, user=Depends(get_current_user)):
+    """Register device for push notifications"""
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {"expo_push_token": data.expo_push_token, "device_type": data.device_type}}
+    )
+    return {"message": "Push token registered"}
+
+@api_router.post("/notifications/send")
+async def send_notification(title: str, body: str, user_id: str = None, user=Depends(get_current_user)):
+    """Send push notification (admin only or to self)"""
+    import httpx
+    
+    if user["role"] != "admin" and user_id != user["id"]:
+        raise HTTPException(status_code=403, detail="Cannot send to other users")
+    
+    target_user = await db.users.find_one({"id": user_id or user["id"]}, {"_id": 0})
+    if not target_user or not target_user.get("expo_push_token"):
+        return {"message": "User has no push token registered"}
+    
+    # Store notification in DB
+    notification = {
+        "id": str(uuid.uuid4()),
+        "user_id": target_user["id"],
+        "title": title,
+        "body": body,
+        "read": False,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.notifications.insert_one(notification)
+    
+    # Send via Expo Push API
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://exp.host/--/api/v2/push/send",
+                json={
+                    "to": target_user["expo_push_token"],
+                    "title": title,
+                    "body": body,
+                    "data": {"notificationId": notification["id"]}
+                }
+            )
+            logger.info(f"Push sent: {response.status_code}")
+    except Exception as e:
+        logger.error(f"Push notification error: {e}")
+    
+    return {"message": "Notification sent", "notification_id": notification["id"]}
+
+@api_router.get("/notifications")
+async def get_notifications(user=Depends(get_current_user)):
+    """Get user's notifications"""
+    notifications = await db.notifications.find(
+        {"user_id": user["id"]}, {"_id": 0}
+    ).sort("created_at", -1).to_list(50)
+    return notifications
+
+@api_router.put("/notifications/{notification_id}/read")
+async def mark_notification_read(notification_id: str, user=Depends(get_current_user)):
+    """Mark notification as read"""
+    await db.notifications.update_one(
+        {"id": notification_id, "user_id": user["id"]},
+        {"$set": {"read": True}}
+    )
+    return {"message": "Marked as read"}
+
+# ========== DELIVERY TRACKING (GOOGLE MAPS) ==========
+class DeliveryLocationUpdate(BaseModel):
+    order_id: str
+    latitude: float
+    longitude: float
+
+@api_router.get("/orders/{order_id}/tracking")
+async def get_delivery_tracking(order_id: str, user=Depends(get_current_user)):
+    """Get delivery tracking info for an order"""
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if order["user_id"] != user["id"] and user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    tracking = await db.delivery_tracking.find_one({"order_id": order_id}, {"_id": 0})
+    
+    # Default café location (can be configured)
+    cafe_location = {"latitude": 28.6139, "longitude": 77.2090, "name": "Diet Café"}  # Delhi coords
+    
+    return {
+        "order_id": order_id,
+        "order_status": order["status"],
+        "order_type": order.get("order_type", "dine-in"),
+        "delivery_address": order.get("delivery_address"),
+        "cafe_location": cafe_location,
+        "driver_location": tracking.get("current_location") if tracking else None,
+        "driver_name": tracking.get("driver_name") if tracking else None,
+        "estimated_arrival": tracking.get("eta") if tracking else None,
+        "tracking_updates": tracking.get("updates", []) if tracking else []
+    }
+
+@api_router.post("/orders/{order_id}/tracking/update")
+async def update_delivery_location(order_id: str, data: DeliveryLocationUpdate, user=Depends(get_current_user)):
+    """Update delivery driver location (driver/admin only)"""
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin/Driver only")
+    
+    update = {
+        "latitude": data.latitude,
+        "longitude": data.longitude,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.delivery_tracking.update_one(
+        {"order_id": order_id},
+        {
+            "$set": {"current_location": update, "updated_at": datetime.now(timezone.utc).isoformat()},
+            "$push": {"updates": update}
+        },
+        upsert=True
+    )
+    
+    return {"message": "Location updated"}
+
+@api_router.post("/orders/{order_id}/assign-driver")
+async def assign_driver(order_id: str, driver_name: str, user=Depends(get_current_user)):
+    """Assign driver to delivery order (admin only)"""
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    
+    await db.delivery_tracking.update_one(
+        {"order_id": order_id},
+        {
+            "$set": {
+                "order_id": order_id,
+                "driver_name": driver_name,
+                "assigned_at": datetime.now(timezone.utc).isoformat(),
+                "eta": "25-35 mins"
+            }
+        },
+        upsert=True
+    )
+    
+    # Update order status
+    await db.orders.update_one({"id": order_id}, {"$set": {"status": "out_for_delivery", "driver_name": driver_name}})
+    
+    return {"message": f"Driver {driver_name} assigned"}
+
+# ========== ADMIN AI ANALYTICS ==========
+@api_router.get("/admin/analytics")
+async def get_admin_analytics(user=Depends(get_current_user)):
+    """Get comprehensive business analytics for admin"""
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    
+    # Get date ranges
+    today = datetime.now(timezone.utc)
+    today_str = today.strftime("%Y-%m-%d")
+    week_ago = (today - __import__('datetime').timedelta(days=7)).strftime("%Y-%m-%d")
+    month_ago = (today - __import__('datetime').timedelta(days=30)).strftime("%Y-%m-%d")
+    
+    # Today's stats
+    today_orders = await db.orders.find({"created_at": {"$regex": f"^{today_str}"}}, {"_id": 0}).to_list(1000)
+    today_revenue = sum(o.get("total_price", 0) for o in today_orders)
+    today_orders_count = len(today_orders)
+    
+    # Week stats
+    week_orders = await db.orders.find({"created_at": {"$gte": week_ago}}, {"_id": 0}).to_list(1000)
+    week_revenue = sum(o.get("total_price", 0) for o in week_orders)
+    
+    # Month stats
+    month_orders = await db.orders.find({"created_at": {"$gte": month_ago}}, {"_id": 0}).to_list(5000)
+    month_revenue = sum(o.get("total_price", 0) for o in month_orders)
+    
+    # Best selling products
+    product_sales = {}
+    for order in month_orders:
+        for item in order.get("items", []):
+            pid = item.get("product_id", item.get("product_name", "unknown"))
+            if pid not in product_sales:
+                product_sales[pid] = {"name": item.get("product_name", "Unknown"), "quantity_grams": 0, "revenue": 0, "orders": 0}
+            product_sales[pid]["quantity_grams"] += item.get("grams", 0)
+            product_sales[pid]["revenue"] += item.get("price", 0)
+            product_sales[pid]["orders"] += 1
+    
+    best_sellers = sorted(product_sales.values(), key=lambda x: x["revenue"], reverse=True)[:10]
+    
+    # Order type breakdown
+    order_types = {"dine-in": 0, "takeaway": 0, "delivery": 0}
+    for order in month_orders:
+        ot = order.get("order_type", "dine-in")
+        order_types[ot] = order_types.get(ot, 0) + 1
+    
+    # Peak hours analysis
+    hourly_orders = {}
+    for order in week_orders:
+        try:
+            hour = datetime.fromisoformat(order["created_at"].replace("Z", "+00:00")).hour
+            hourly_orders[hour] = hourly_orders.get(hour, 0) + 1
+        except:
+            pass
+    peak_hours = sorted(hourly_orders.items(), key=lambda x: x[1], reverse=True)[:5]
+    
+    # Average order value
+    avg_order_value = month_revenue / len(month_orders) if month_orders else 0
+    
+    # Customer stats
+    unique_customers = len(set(o.get("user_id") for o in month_orders if o.get("user_id")))
+    
+    # Low stock alerts
+    low_stock = await db.products.find({"available_qty_grams": {"$lt": 500}, "is_active": True}, {"_id": 0}).to_list(20)
+    
+    return {
+        "today": {
+            "orders": today_orders_count,
+            "revenue": round(today_revenue, 2),
+        },
+        "week": {
+            "orders": len(week_orders),
+            "revenue": round(week_revenue, 2),
+        },
+        "month": {
+            "orders": len(month_orders),
+            "revenue": round(month_revenue, 2),
+            "avg_order_value": round(avg_order_value, 2),
+            "unique_customers": unique_customers,
+        },
+        "best_sellers": best_sellers,
+        "order_types": order_types,
+        "peak_hours": [{"hour": h, "orders": c} for h, c in peak_hours],
+        "low_stock_alerts": [{"name": p["name"], "stock": p["available_qty_grams"]} for p in low_stock],
+    }
+
+@api_router.post("/admin/ai-insights")
+async def get_ai_business_insights(user=Depends(get_current_user)):
+    """Get AI-powered business insights and recommendations"""
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        
+        # Gather analytics data
+        analytics = await get_admin_analytics(user)
+        
+        # Get product profit margins
+        products = await db.products.find({"is_active": True}, {"_id": 0}).to_list(100)
+        product_data = "\n".join([
+            f"- {p['name']}: Sells at ₹{p['cost_per_100g']}/100g, Category: {p.get('category', 'N/A')}"
+            for p in products[:20]
+        ])
+        
+        prompt = f"""You are a business analyst for Diet Café, a fitness-focused café in India. Analyze this data and provide actionable insights.
+
+BUSINESS DATA:
+- Today: {analytics['today']['orders']} orders, ₹{analytics['today']['revenue']} revenue
+- This Week: {analytics['week']['orders']} orders, ₹{analytics['week']['revenue']} revenue
+- This Month: {analytics['month']['orders']} orders, ₹{analytics['month']['revenue']} revenue
+- Average Order Value: ₹{analytics['month']['avg_order_value']}
+- Unique Customers (month): {analytics['month']['unique_customers']}
+
+TOP SELLERS:
+{json.dumps(analytics['best_sellers'][:5], indent=2)}
+
+ORDER TYPES:
+{json.dumps(analytics['order_types'], indent=2)}
+
+PEAK HOURS: {analytics['peak_hours']}
+
+LOW STOCK ALERTS: {analytics['low_stock_alerts']}
+
+MENU ITEMS:
+{product_data}
+
+Provide:
+1. 3 KEY INSIGHTS about current business performance
+2. 3 ACTIONABLE RECOMMENDATIONS to increase revenue
+3. 1 PRICING SUGGESTION (which item to adjust price)
+4. 1 INVENTORY TIP
+5. Overall business health score (1-10)
+
+Be specific with numbers and percentages. Keep it concise and actionable."""
+
+        chat = LlmChat(
+            api_key=os.environ.get('EMERGENT_LLM_KEY', ''),
+            session_id=f"admin-insights-{uuid.uuid4().hex[:8]}",
+            system_message="You are a business analytics AI. Provide data-driven insights in a clear, actionable format."
+        ).with_model("openai", "gpt-5.2")
+        
+        response = await chat.send_message(UserMessage(text=prompt))
+        
+        return {
+            "insights": response,
+            "analytics_summary": {
+                "today_revenue": analytics['today']['revenue'],
+                "month_revenue": analytics['month']['revenue'],
+                "avg_order_value": analytics['month']['avg_order_value'],
+                "top_product": analytics['best_sellers'][0]['name'] if analytics['best_sellers'] else "N/A"
+            },
+            "generated_at": datetime.now(timezone.utc).isoformat()
+        }
+    except Exception as e:
+        logger.error(f"AI insights error: {e}")
+        return {
+            "insights": "Unable to generate AI insights at this time. Please check the analytics dashboard for raw data.",
+            "error": str(e)
+        }
+
+# ========== ADMIN PROFIT CALCULATOR ==========
+@api_router.get("/admin/profit-calculator")
+async def get_profit_margins(user=Depends(get_current_user)):
+    """Calculate profit margins for all products"""
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    
+    # Estimated cost prices (admin can customize later)
+    COST_ESTIMATES = {
+        "chicken": 25, "paneer": 20, "egg": 8, "dal": 5, "oats": 4,
+        "fish": 35, "kabab": 30, "rice": 3, "potato": 2, "yogurt": 12,
+        "salad": 3, "sprouts": 4, "quinoa": 15, "soya": 6, "almonds": 50, "banana": 2
+    }
+    
+    products = await db.products.find({"is_active": True}, {"_id": 0}).to_list(100)
+    margins = []
+    
+    for p in products:
+        # Estimate cost based on product name
+        cost = 10  # default
+        for key, val in COST_ESTIMATES.items():
+            if key in p["name"].lower():
+                cost = val
+                break
+        
+        selling_price = p["cost_per_100g"]
+        profit = selling_price - cost
+        margin_pct = (profit / selling_price) * 100 if selling_price > 0 else 0
+        
+        margins.append({
+            "product_id": p["id"],
+            "name": p["name"],
+            "selling_price": selling_price,
+            "estimated_cost": cost,
+            "profit_per_100g": round(profit, 2),
+            "margin_percentage": round(margin_pct, 1),
+            "recommendation": "Good" if margin_pct >= 50 else "Review pricing" if margin_pct >= 30 else "Low margin - increase price"
+        })
+    
+    # Sort by margin
+    margins.sort(key=lambda x: x["margin_percentage"], reverse=True)
+    
+    return {
+        "products": margins,
+        "summary": {
+            "avg_margin": round(sum(m["margin_percentage"] for m in margins) / len(margins), 1) if margins else 0,
+            "best_margin": margins[0] if margins else None,
+            "worst_margin": margins[-1] if margins else None,
+        }
+    }
+
 app.include_router(api_router)
 
 app.add_middleware(
