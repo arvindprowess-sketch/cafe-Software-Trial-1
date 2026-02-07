@@ -254,25 +254,41 @@ async def test_products_list_admin(session):
         results.log_fail("Products List (Admin)", f"Exception: {e}")
         return False
 
-async def test_existing_products_endpoint(session):
-    """Test that existing GET /api/products still works"""
+async def test_products_health_check(session):
+    """Test GET /api/products should return 16 products (per review request)"""
     try:
         async with session.get(f"{API_BASE}/products") as response:
             if response.status == 200:
                 data = await response.json()
                 if isinstance(data, list):
-                    active_products = [p for p in data if p.get("is_active", True)]
-                    results.log_pass("Existing Products Endpoint", f"✓ {len(active_products)} active products returned")
-                    return True
+                    product_count = len(data)
+                    # Check for expected 16 products
+                    if product_count == 16:
+                        results.log_pass("Backend Health Check - Products Count", f"✓ Found exactly {product_count} products as expected")
+                        
+                        # Verify product structure
+                        sample_product = data[0] if data else {}
+                        required_fields = ['id', 'name', 'category', 'diet_type', 'calories_per_100g', 'protein_per_100g', 'carbs_per_100g', 'fat_per_100g', 'cost_per_100g']
+                        missing_fields = [field for field in required_fields if field not in sample_product]
+                        
+                        if not missing_fields:
+                            results.log_pass("Product Structure Validation", "✓ Products have all required fields")
+                            return True
+                        else:
+                            results.log_fail("Product Structure Validation", f"Missing fields: {missing_fields}")
+                            return False
+                    else:
+                        results.log_fail("Backend Health Check - Products Count", f"Expected 16 products, got {product_count}")
+                        return False
                 else:
-                    results.log_fail("Existing Products Endpoint", "Response is not a list")
+                    results.log_fail("Backend Health Check - Products", "Response is not a list")
                     return False
             else:
                 text = await response.text()
-                results.log_fail("Existing Products Endpoint", f"HTTP {response.status}: {text}")
+                results.log_fail("Backend Health Check - Products", f"HTTP {response.status}: {text}")
                 return False
     except Exception as e:
-        results.log_fail("Existing Products Endpoint", f"Exception: {e}")
+        results.log_fail("Backend Health Check - Products", f"Exception: {e}")
         return False
 
 async def test_ai_quick_meal_endpoint(session):
