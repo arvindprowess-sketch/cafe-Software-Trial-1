@@ -191,11 +191,21 @@ export default function CustomizeScreen() {
     setAiSuggestion(null);
   };
 
-  const placeOrder = async () => {
+  const handlePlaceOrder = () => {
     if (items.length === 0 || items.every(i => i.grams === 0 && (i.quantity || 0) === 0)) { 
       Alert.alert('Empty', 'Add items with quantities'); 
       return; 
     }
+    // Check if over calorie goal — warn but never block
+    if (isOverGoal) {
+      setShowCalorieWarning(true);
+      return;
+    }
+    confirmOrder();
+  };
+
+  const confirmOrder = async () => {
+    setShowCalorieWarning(false);
     setOrdering(true);
     try {
       const orderItems = items.filter(i => i.grams > 0 || (i.quantity || 0) > 0).map(i => {
