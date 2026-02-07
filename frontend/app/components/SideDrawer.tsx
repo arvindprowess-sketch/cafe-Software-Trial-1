@@ -140,10 +140,30 @@ export default function SideDrawer({ visible, onClose, user }: SideDrawerProps) 
               <Ionicons name="person" size={28} color={Z_RED} />
             </View>
             <View style={styles.userInfo}>
-              <View style={styles.nameRow}>
-                <Text style={styles.userName}>{user?.name || 'Guest User'}</Text>
-                <Ionicons name="pencil" size={14} color="#9C9C9C" />
-              </View>
+              {editingName ? (
+                <View style={styles.editNameRow}>
+                  <TextInput
+                    style={styles.editNameInput}
+                    value={nameValue}
+                    onChangeText={setNameValue}
+                    autoFocus
+                    data-testid="drawer-edit-name-input"
+                  />
+                  <TouchableOpacity onPress={saveName} disabled={savingName} data-testid="drawer-save-name-btn">
+                    <Ionicons name="checkmark-circle" size={28} color={GREEN} />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => { setEditingName(false); setNameValue(user?.name || 'Guest User'); }}>
+                    <Ionicons name="close-circle" size={28} color="#9C9C9C" />
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <View style={styles.nameRow}>
+                  <Text style={styles.userName}>{nameValue}</Text>
+                  <TouchableOpacity onPress={() => setEditingName(true)} data-testid="drawer-edit-name-btn">
+                    <Ionicons name="pencil" size={14} color="#9C9C9C" />
+                  </TouchableOpacity>
+                </View>
+              )}
               <Text style={styles.userPhone}>{user?.phone || user?.email || ''}</Text>
             </View>
           </View>
