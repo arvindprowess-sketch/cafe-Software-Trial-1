@@ -198,12 +198,47 @@ export default function CustomizeScreen() {
       Alert.alert('Empty', 'Add items with quantities'); 
       return; 
     }
-    // Check if over calorie goal — warn but never block
     if (isOverGoal) {
       setShowCalorieWarning(true);
+      setAdjustedItems(null);
       return;
     }
     confirmOrder();
+  };
+
+  const handleAiAdjust = async () => {
+    setAiAdjusting(true);
+    try {
+      const payload = {
+        items: items.filter(i => i.grams > 0).map(i => ({
+          name: i.name,
+          grams: i.grams,
+          calories_per_100g: i.calories_per_100g,
+          protein_per_100g: i.protein_per_100g,
+        })),
+        calorie_goal: calorieGoal,
+        consumed_today: consumedToday.calories || 0,
+      };
+      const result = await apiCall('/ai/adjust-portions', 'POST', payload);
+      setAdjustedItems(result);
+    } catch (e) {
+      Alert.alert('Error', 'Could not get AI suggestions. Try adjusting manually.');
+    } finally {
+      setAiAdjusting(false);
+    }
+  };
+
+  const applyAdjustments = () => {
+    if (!adjustedItems?.adjusted_items) return;
+    const newItems = items.map(item => {
+      const adj = adjustedItems.adjusted_items.find(
+        (a: any) => a.name.toLowerCase() === item.name.toLowerCase()
+      );
+      return adj ? { ...item, grams: adj.adjusted_grams } : item;
+    });
+    setItems(newItems);
+    setShowCalorieWarning(false);
+    setAdjustedItems(null);
   };
 
   const confirmOrder = async () => {
