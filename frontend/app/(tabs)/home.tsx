@@ -154,8 +154,8 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
           
-          <TouchableOpacity testID="profile-avatar-btn" style={styles.avatar} onPress={() => router.push('/(tabs)/profile')}>
-            <Ionicons name="person" size={18} color={Z_RED} />
+          <TouchableOpacity testID="profile-avatar-btn" style={styles.avatar} onPress={() => setDrawerVisible(true)}>
+            <Ionicons name="ellipsis-vertical" size={18} color="#1C1C2E" />
           </TouchableOpacity>
         </View>
 
