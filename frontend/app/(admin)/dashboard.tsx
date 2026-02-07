@@ -51,6 +51,7 @@ export default function AdminDashboard() {
         <Text style={styles.section}>Quick Actions</Text>
         {[
           { title: 'Manage Products', desc: 'Add, edit, or remove menu items', icon: 'add-circle' as const, color: '#267E3E', route: '/(admin)/products' },
+          { title: 'Manage Categories', desc: 'Create & customize menu categories', icon: 'grid' as const, color: '#9C27B0', route: '/(admin)/categories' },
           { title: 'Kitchen View', desc: 'View and manage active orders', icon: 'flame' as const, color: '#FF9F0A', route: '/(admin)/kitchen' },
           { title: 'Business Analytics', desc: 'Revenue, insights & AI recommendations', icon: 'analytics' as const, color: '#5B5FE0', route: '/(admin)/analytics' },
           { title: 'Manage Tables', desc: 'View café tables and QR codes', icon: 'qr-code' as const, color: '#E23744', route: '/(admin)/tables' },
