@@ -70,13 +70,6 @@ export default function AuthScreen() {
               </View>
             )}
 
-            {isLogin && (
-              <View style={styles.loginHint}>
-                <Ionicons name="information-circle" size={16} color="#9C9C9C" />
-                <Text style={styles.loginHintText}>Café owners: Use admin credentials to login</Text>
-              </View>
-            )}
-
             {error ? <Text testID="auth-error" style={styles.error}>{error}</Text> : null}
 
             <TouchableOpacity testID="auth-submit-btn" style={styles.submitBtn} onPress={handleSubmit} disabled={loading} activeOpacity={0.85}>
