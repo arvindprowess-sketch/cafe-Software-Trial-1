@@ -413,14 +413,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   productListContent: { 
-    padding: 12,
+    padding: 8,
     paddingBottom: 100,
   },
   
-  // Product Card (BK style)
+  // Product Card (BK style - compact)
   productCard: { 
     backgroundColor: '#FFF', 
-    borderRadius: 14, 
+    borderRadius: 12, 
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: '#F0F0F0',
@@ -428,7 +428,7 @@ const styles = StyleSheet.create({
   productImageWrapper: {
     position: 'relative',
     width: '100%',
-    height: 140,
+    height: 110,
   },
   productImage: { 
     width: '100%', 
@@ -441,95 +441,95 @@ const styles = StyleSheet.create({
   },
   proteinBadge: {
     position: 'absolute',
-    top: 10,
-    left: 10,
+    top: 8,
+    left: 8,
     backgroundColor: 'rgba(0,0,0,0.75)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  proteinValue: { fontSize: 16, fontWeight: '800', color: '#FFF' },
-  proteinLabel: { fontSize: 9, color: 'rgba(255,255,255,0.8)', marginTop: 1 },
-  newBadge: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    backgroundColor: GREEN,
     paddingHorizontal: 8,
     paddingVertical: 4,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  proteinValue: { fontSize: 14, fontWeight: '800', color: '#FFF' },
+  proteinLabel: { fontSize: 8, color: 'rgba(255,255,255,0.8)', marginTop: 1 },
+  newBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: GREEN,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
     borderRadius: 4,
   },
-  newBadgeText: { fontSize: 9, fontWeight: '800', color: '#FFF' },
+  newBadgeText: { fontSize: 8, fontWeight: '800', color: '#FFF' },
   
   productInfo: { 
-    padding: 14,
+    padding: 10,
   },
   productHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    gap: 10,
+    gap: 8,
   },
   productName: { 
     flex: 1,
-    fontSize: 16, 
+    fontSize: 14, 
     fontWeight: '700', 
     color: '#1C1C2E',
-    lineHeight: 20,
+    lineHeight: 18,
   },
   vegIndicator: {
-    width: 18,
-    height: 18,
-    borderRadius: 3,
+    width: 16,
+    height: 16,
+    borderRadius: 2,
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#FFF',
   },
-  vegDot: { width: 9, height: 9, borderRadius: 5 },
+  vegDot: { width: 8, height: 8, borderRadius: 4 },
   productDesc: { 
-    fontSize: 12, 
+    fontSize: 11, 
     color: '#9C9C9C', 
-    marginTop: 6,
-    lineHeight: 16,
+    marginTop: 4,
+    lineHeight: 14,
   },
   productFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 12,
+    marginTop: 10,
   },
   productPrice: { 
-    fontSize: 18, 
+    fontSize: 16, 
     fontWeight: '800', 
     color: '#1C1C2E' 
   },
   priceUnit: { 
-    fontSize: 12, 
+    fontSize: 10, 
     fontWeight: '400', 
     color: '#9C9C9C' 
   },
   addBtn: { 
     backgroundColor: Z_RED, 
-    paddingHorizontal: 20, 
-    paddingVertical: 10, 
-    borderRadius: 10,
+    paddingHorizontal: 16, 
+    paddingVertical: 8, 
+    borderRadius: 8,
   },
   addBtnText: { 
     color: '#FFF', 
-    fontSize: 14, 
+    fontSize: 13, 
     fontWeight: '700' 
   },
   qtyBox: { 
     flexDirection: 'row', 
     alignItems: 'center', 
     backgroundColor: Z_RED, 
-    borderRadius: 10, 
+    borderRadius: 8, 
     overflow: 'hidden' 
   },
-  qtyBtn: { paddingHorizontal: 12, paddingVertical: 10 },
-  qtyText: { color: '#FFF', fontSize: 13, fontWeight: '700', minWidth: 40, textAlign: 'center' },
+  qtyBtn: { paddingHorizontal: 10, paddingVertical: 8 },
+  qtyText: { color: '#FFF', fontSize: 12, fontWeight: '700', minWidth: 36, textAlign: 'center' },
   
   // Empty State
   emptyState: {
