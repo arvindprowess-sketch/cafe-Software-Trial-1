@@ -52,12 +52,6 @@ export default function CustomizeScreen() {
     } catch {}
   };
 
-  // Calculate how much over the calorie goal
-  const projectedCalories = (consumedToday.calories || 0) + totals.calories;
-  const calorieGoal = userGoals.daily_calories;
-  const caloriesOver = Math.round(projectedCalories - calorieGoal);
-  const isOverGoal = caloriesOver > 0;
-
   // For single products
   const updateGrams = (id: string, grams: number) => setItems(items.map(i => i.id === id ? { ...i, grams: Math.max(0, grams) } : i));
   const updateByRupees = (id: string, rupees: number) => { 
