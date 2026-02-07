@@ -1,128 +1,73 @@
-# AI Diet Café App - PRD
+# AI Diet Cafe App - PRD
 
-## Overview
-Cure.fit-inspired AI Diet Café app redesigned with Zomato-style UI. White/red theme (#E23744), food cards with images, horizontal category scroll, cart bar, order timeline tracking.
+## Original Problem Statement
+User has an existing Diet Cafe Expo React Native app (from GitHub repo). Wants UI/UX improvements and redesign. Currently previewing the app to provide specific feedback.
 
 ## Tech Stack
-- **Frontend**: Expo (React Native) with expo-router
-- **Backend**: FastAPI (Python) with MongoDB
-- **AI**: OpenAI GPT-5.2 via Emergent LLM Key
+- **Frontend**: Expo (React Native) with expo-router, TypeScript, running on web mode (port 3000)
+- **Backend**: FastAPI (Python) with MongoDB (port 8001)
+- **AI**: OpenAI GPT-5.2 via Emergent LLM Key for meal suggestions, descriptions, image generation
 
-## Features (V1 MVP - Zomato Redesign)
+## Architecture
+- Expo web mode serves on port 3000 (changed from tunnel mode)
+- Backend API endpoints prefixed with `/api`
+- MongoDB for data storage
+- OTP-based auth for customers, email/password for admin
 
-### Authentication
-- Zomato-style login/register with role selection (customer/admin)
-- Demo admin: admin@dietcafe.com / admin123
+## User Personas
+- **Customer**: Orders food, tracks nutrition, uses AI suggestions
+- **Admin/Cafe Owner**: Manages products, categories, kitchen orders, analytics
 
-### Customer Flow
-- **Home**: Location bar, search, banner carousel (4 promotional), category filter pills, popular items grid with food images & ratings, nutrition summary card
-- **Menu**: Zomato-style food cards with images, ADD buttons (+/- counter), order type chips (dine-in/takeaway/delivery), category filtering, floating cart bar
-- **Customize**: Fitness goal selector, budget input, grams/rupees toggle, real-time calorie/macro/price calc, AI meal suggestions (GPT-5.2)
-- **Orders**: Timeline tracking (Placed→Preparing→Ready→Completed), nutrition breakdown, order history
-- **Profile**: Fitness goals, daily macro targets, save settings
+## Core Requirements
+- Phone OTP login for customers
+- Menu browsing with categories
+- Cart + Customize meal (grams/rupees toggle)
+- Order placement (dine-in/takeaway/delivery)
+- AI meal suggestions & chat
+- Admin dashboard with products, kitchen, analytics
 
-### Admin Flow
-- **Dashboard**: Stats cards (products, pending orders, revenue), quick actions
-- **Products**: Add with auto-nutrition detection (40+ foods), toggle active, delete
-- **Kitchen**: Live orders with exact gram measurements, status workflow buttons
+## What's Been Implemented (as of Feb 2026)
+- [x] Fixed Expo web mode (tunnel → --web --port 3000)
+- [x] Fixed AsyncStorage SSR crash (window is not defined)
+- [x] Seeded 16 products + 6 categories + admin user
+- [x] All screens verified working: Auth, Home, Menu, Budget, Orders, Profile, AI Chat, Admin
 
-### Core Systems
-- 16 seeded products with food images, descriptions, ratings
-- Auto inventory deduction, low-stock auto-hide
-- Order type charges (dine-in: free, takeaway: ₹10, delivery: ₹30)
-- Daily meal history & nutrition tracking
+## Screens (21 files)
+### Customer
+- index.tsx (OTP Login)
+- (tabs)/home.tsx
+- (tabs)/menu.tsx
+- (tabs)/budget-meal.tsx
+- (tabs)/orders.tsx
+- (tabs)/profile.tsx
+- customize.tsx (Cart/Meal customization)
+- ai-chat.tsx
+- scan-table.tsx
+- delivery-tracking.tsx
 
-## API Endpoints
-- GET /api/banners, GET /api/products, POST /api/products
-- POST /api/orders, GET /api/orders, GET /api/orders/kitchen
-- PUT /api/orders/{id}/status, POST /api/ai/suggest
-- GET /api/user/nutrition-summary, PUT /api/user/goals
+### Admin
+- admin-login.tsx
+- (admin)/dashboard.tsx
+- (admin)/products.tsx
+- (admin)/kitchen.tsx
+- (admin)/categories.tsx
+- (admin)/analytics.tsx
+- (admin)/tables.tsx
 
-## V2 Roadmap
-- Razorpay payment, push notifications, Google OAuth, order analytics
+## Prioritized Backlog
+### P0 - Awaiting User Feedback
+- UI/UX redesign (specific screens TBD based on user testing)
 
-## V1.1 - AI Quick Meal Builder (SHIPPED)
-### New Features
-- **AI Quick Meal Builder** on Home screen: Diet preference (Veg/Non-Veg/Both) + Goal + Budget → AI builds complete meal → Order
-- **Veg/Non-Veg indicators** on all product cards across Home and Menu screens
-- **Re-order button** on every past order in Orders tab
-- **diet_type field** added to all products (auto-detected: chicken/fish/egg/kabab = non-veg)
+### P1
+- Payment integration (Razorpay/Stripe)
+- Push notifications
+- Order analytics improvements
 
-### New API Endpoints
-- POST /api/ai/quick-meal (diet_preference, goal, budget, order_type → AI-built meal)
-- POST /api/orders/{order_id}/reorder (validates availability, returns cart-ready items)
-- POST /api/migrate/diet-type (one-time migration for existing products)
+### P2
+- Google OAuth
+- Weekly meal planning
+- Loyalty/rewards system
 
-## V1.2 - Budget Control & AI Chat (CURRENT)
-### New Features - UNIQUE VALUE PROPOSITION
-- **Budget Meal Builder Tab**: Dedicated tab for budget-controlled meal building
-  - Set your budget (₹) upfront
-  - Real-time budget progress bar showing spent/remaining
-  - Diet filters (Veg/Non-Veg/Both) + Goal filters (Fat Loss/Muscle/Maintain)
-  - "Fits in ₹X" section showing what you can add within budget
-  - Quick-add cards with one-tap "+100g" buttons
-  - Smart protein-per-rupee sorting for best value items
-  - Real-time nutrition totals as you add items
-
-- **AI Chat Assistant**: Conversational meal planning
-  - Natural language meal requests ("Build me high protein under ₹150")
-  - AI understands context (budget, goals, dietary preferences)
-  - Auto-adds suggested items to cart
-  - Quick prompts for common requests
-  - Real-time cart tracking in chat
-
-- **Floating AI Button**: Purple chat button on Home screen for quick AI access
-
-### New API Endpoints
-- POST /api/ai/chat (message, budget, goal, diet_preference, current_cart → AI response with actions)
-
-### Navigation Enhancement
-- 5-tab navigation: Home, Budget, Menu, Orders, Profile
-- Budget tab highlighted with wallet icon and active state styling
-
-## V1.3 - Full Feature Suite (CURRENT)
-
-### 1. QR Code Table Ordering
-- **Scan Table** CTA on Home screen (green card)
-- Camera-based QR scanner with frame overlay
-- Table auto-assignment when customer scans
-- Direct ordering from table with dine-in flow
-- Manual table entry fallback for web
-
-### 2. Delivery Tracking (Google Maps Ready)
-- Live order tracking screen with status timeline
-- Driver info card with call/navigate buttons
-- ETA display and real-time updates
-- Open in Maps functionality
-- Status steps: Placed → Preparing → Ready → Out for Delivery → Delivered
-
-### 3. Push Notifications
-- Device token registration endpoint
-- In-app notification storage and display
-- Mark as read functionality
-- Expo Push API integration ready
-
-### 4. Admin AI Analytics Dashboard
-- **Revenue Cards**: Today, This Week, This Month
-- **Business Stats**: Orders, Avg Order Value, Unique Customers
-- **Best Sellers**: Top 10 products by revenue
-- **Order Type Breakdown**: Dine-in, Takeaway, Delivery percentages
-- **Peak Hours Analysis**: Bar chart showing busiest hours
-- **Profit Margins**: Per-product profit calculator with recommendations
-- **Low Stock Alerts**: Products running low
-- **AI Business Insights**: GPT-5.2 powered recommendations (1-click generate)
-
-### New API Endpoints (V1.3)
-- GET /api/tables - List all café tables
-- GET /api/tables/{number} - Get table by number
-- POST /api/tables/{number}/occupy - Reserve table
-- POST /api/tables/{number}/release - Release table
-- POST /api/notifications/register - Register push token
-- POST /api/notifications/send - Send notification
-- GET /api/notifications - Get user notifications
-- GET /api/orders/{id}/tracking - Get delivery tracking
-- POST /api/orders/{id}/tracking/update - Update driver location
-- POST /api/orders/{id}/assign-driver - Assign delivery driver
-- GET /api/admin/analytics - Full business analytics
-- POST /api/admin/ai-insights - AI-powered business recommendations
-- GET /api/admin/profit-calculator - Product profit margins
+## Next Tasks
+- Wait for user's screen-specific UI/UX feedback
+- Apply targeted redesign based on feedback
