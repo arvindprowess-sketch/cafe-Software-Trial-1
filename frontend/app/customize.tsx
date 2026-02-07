@@ -478,7 +478,7 @@ export default function CustomizeScreen() {
               {extra > 0 && <Text style={styles.extraText}>incl. ₹{extra} {orderType}</Text>}
             </View>
           </View>
-          <TouchableOpacity testID="place-order-btn" style={styles.orderBtn} onPress={placeOrder} disabled={ordering}>
+          <TouchableOpacity testID="place-order-btn" style={styles.orderBtn} onPress={handlePlaceOrder} disabled={ordering}>
             {ordering ? <ActivityIndicator color="#FFF" /> : <Text style={styles.orderBtnText}>Place Order</Text>}
           </TouchableOpacity>
         </View>
