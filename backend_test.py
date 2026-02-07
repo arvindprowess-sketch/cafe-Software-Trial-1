@@ -268,33 +268,40 @@ async def test_ai_quick_meal_endpoint(session):
         return False
 
 async def main():
-    print("🧪 Starting Backend API Tests...")
+    print("🧪 Starting Diet Cafe Backend API Tests...")
     print(f"🌐 Backend URL: {API_BASE}")
+    print("📋 Testing seeded database as per review request:")
+    print("   - 16 products expected")
+    print("   - 6 categories expected") 
+    print("   - Admin user: admin@dietcafe.com / admin123")
     
     # Create session with proper timeout
     timeout = aiohttp.ClientTimeout(total=60)
     async with aiohttp.ClientSession(timeout=timeout) as session:
         
-        # Test sequence following the review request
-        print("\n1️⃣ Testing Admin Login...")
+        # Test sequence following the review request exactly
+        print("\n1️⃣ Testing Backend Health Check - Products (16 expected)...")
+        await test_products_health_check(session)
+        
+        print("\n2️⃣ Testing Admin Login (admin@dietcafe.com / admin123)...")
         login_success = await test_admin_login(session)
         
-        if login_success:
-            print("\n2️⃣ Testing Single Product Creation...")
-            await test_single_product_creation(session)
-            
-            print("\n3️⃣ Testing Ready-Made Veg Meal Creation...")
-            await test_ready_made_veg_meal(session)
-            
-            print("\n4️⃣ Testing Non-Veg Detection for Ready-Made Meals...")
-            await test_ready_made_nonveg_meal(session)
-            
-            print("\n5️⃣ Testing Products List (Admin)...")
-            await test_products_list_admin(session)
+        print("\n3️⃣ Testing Categories Endpoint (6 expected)...")
+        await test_categories_endpoint(session)
         
-        print("\n6️⃣ Testing Existing Endpoints...")
-        await test_existing_products_endpoint(session)
-        await test_ai_quick_meal_endpoint(session)
+        if login_success:
+            print("\n4️⃣ Testing Admin-Only Products Endpoint...")
+            await test_admin_products_all_endpoint(session)
+            
+            print("\n5️⃣ Testing Admin Authentication...")
+            await test_admin_only_access(session)
+        else:
+            print("⚠️ Skipping admin-only tests due to login failure")
+        
+        # Optional AI test (as it was in original)
+        if login_success:
+            print("\n6️⃣ Testing AI Quick Meal Endpoint...")
+            await test_ai_quick_meal_endpoint(session)
     
     # Print final results
     results.print_summary()
