@@ -335,6 +335,23 @@ export default function BudgetMealScreen() {
                   <Text style={styles.macroLabel}>Fat</Text>
                 </View>
               </View>
+              {/* Calorie Goal Context */}
+              {(() => {
+                const projected = consumedToday + totals.calories;
+                const dailyCal = userGoals.daily_calories;
+                const isOver = projected > dailyCal;
+                const overBy = Math.round(projected - dailyCal);
+                return (
+                  <View style={[styles.calorieGoalRow, isOver && styles.calorieGoalRowOver]} testID="budget-calorie-goal">
+                    <Ionicons name={isOver ? 'alert-circle' : 'checkmark-circle'} size={14} color={isOver ? Z_RED : GREEN} />
+                    <Text style={[styles.calorieGoalText, isOver && { color: Z_RED }]}>
+                      {isOver 
+                        ? `${overBy} cal over daily goal (${dailyCal})` 
+                        : `${Math.round(dailyCal - projected)} cal remaining today`}
+                    </Text>
+                  </View>
+                );
+              })()}
             </View>
           </View>
         )}
