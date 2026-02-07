@@ -52,3 +52,30 @@ Cure.fit-inspired AI Diet Café app redesigned with Zomato-style UI. White/red t
 - POST /api/ai/quick-meal (diet_preference, goal, budget, order_type → AI-built meal)
 - POST /api/orders/{order_id}/reorder (validates availability, returns cart-ready items)
 - POST /api/migrate/diet-type (one-time migration for existing products)
+
+## V1.2 - Budget Control & AI Chat (CURRENT)
+### New Features - UNIQUE VALUE PROPOSITION
+- **Budget Meal Builder Tab**: Dedicated tab for budget-controlled meal building
+  - Set your budget (₹) upfront
+  - Real-time budget progress bar showing spent/remaining
+  - Diet filters (Veg/Non-Veg/Both) + Goal filters (Fat Loss/Muscle/Maintain)
+  - "Fits in ₹X" section showing what you can add within budget
+  - Quick-add cards with one-tap "+100g" buttons
+  - Smart protein-per-rupee sorting for best value items
+  - Real-time nutrition totals as you add items
+
+- **AI Chat Assistant**: Conversational meal planning
+  - Natural language meal requests ("Build me high protein under ₹150")
+  - AI understands context (budget, goals, dietary preferences)
+  - Auto-adds suggested items to cart
+  - Quick prompts for common requests
+  - Real-time cart tracking in chat
+
+- **Floating AI Button**: Purple chat button on Home screen for quick AI access
+
+### New API Endpoints
+- POST /api/ai/chat (message, budget, goal, diet_preference, current_cart → AI response with actions)
+
+### Navigation Enhancement
+- 5-tab navigation: Home, Budget, Menu, Orders, Profile
+- Budget tab highlighted with wallet icon and active state styling
