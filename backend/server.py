@@ -198,13 +198,14 @@ class ReadyMadeOrderItem(BaseModel):
 # ========== CATEGORY MODELS ==========
 class CategoryCreate(BaseModel):
     name: str
-    key: Optional[str] = None  # Short key like "Protein", "Carb"
-    label: Optional[str] = None  # Display label
-    icon: str = "grid"  # Ionicons icon name
-    color: str = "#E23744"  # Hex color
-    image_url: Optional[str] = None  # Category image
+    key: Optional[str] = None
+    label: Optional[str] = None
+    icon: str = "grid"
+    color: str = "#E23744"
+    image_url: Optional[str] = None
     description: Optional[str] = None
-    sort_order: int = 0  # Display order
+    sort_order: int = 0
+    font_style: Optional[str] = "default"  # default, bold, italic, mono
 
 class CategoryUpdate(BaseModel):
     name: Optional[str] = None
@@ -216,6 +217,7 @@ class CategoryUpdate(BaseModel):
     description: Optional[str] = None
     sort_order: Optional[int] = None
     is_active: Optional[bool] = None
+    font_style: Optional[str] = None
 
 # ========== AUTH UTILS ==========
 def hash_password(password: str) -> str:
