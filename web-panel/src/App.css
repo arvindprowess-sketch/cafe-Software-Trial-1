@@ -208,6 +208,33 @@ input, select { font-family: inherit; }
 .empty-state h3 { font-size: 18px; font-weight: 700; color: var(--dark); }
 .empty-state p { margin-top: 4px; }
 
+/* Stats grid */
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-bottom: 24px; }
+.stat-card { background: var(--white); border-radius: 14px; padding: 18px; border: 1px solid var(--border); text-align: center; }
+.stat-icon { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; margin: 0 auto 10px; }
+.stat-value { font-size: 28px; font-weight: 800; color: var(--dark); }
+.stat-label { font-size: 12px; color: var(--gray); font-weight: 600; margin-top: 2px; }
+
+/* Quick actions */
+.quick-actions { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; margin-bottom: 20px; }
+.action-card { display: flex; gap: 14px; align-items: center; background: var(--white); border-radius: 12px; padding: 16px; border: 1px solid var(--border); text-decoration: none; color: inherit; transition: all 0.15s; }
+.action-card:hover { border-color: var(--purple); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
+.action-icon { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.action-title { font-size: 14px; font-weight: 700; }
+.action-desc { font-size: 12px; color: var(--gray); }
+
+/* Data table */
+.data-table { width: 100%; border-collapse: separate; border-spacing: 0; background: var(--white); border-radius: 12px; border: 1px solid var(--border); overflow: hidden; }
+.data-table thead { background: #FAFAFA; }
+.data-table th { padding: 10px 14px; font-size: 12px; font-weight: 700; color: var(--gray); text-align: left; border-bottom: 1px solid var(--border); text-transform: uppercase; letter-spacing: 0.5px; }
+.data-table td { padding: 12px 14px; font-size: 13px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.data-table tr:last-child td { border-bottom: none; }
+.data-table tr:hover td { background: #FAFAFA; }
+
+/* Button danger */
+.btn-danger { background: var(--red); color: white; border: none; }
+.btn-danger:hover { opacity: 0.9; }
+
 /* AI Modal */
 .ai-options { display: flex; gap: 8px; margin-bottom: 16px; }
 .ai-option { flex: 1; padding: 10px; border-radius: 10px; border: 2px solid var(--border); background: var(--white); text-align: center; font-size: 13px; font-weight: 600; color: var(--gray); }
