@@ -328,10 +328,10 @@ async def main():
         print("\n2️⃣ FIX #5: Testing Active Offers for Banner...")
         await test_get_active_offers(session)
         
-        print("\n3️⃣ FIX #5: Testing Apply Coupon Integration...")
-        await test_apply_coupon(session)
-        
         if login_success:
+            print("\n3️⃣ FIX #5: Testing Apply Coupon Integration...")
+            await test_apply_coupon(session)
+            
             print("\n4️⃣ FIX #1: Testing AI ₹300 Budget Accuracy...")
             await test_ai_quick_meal_budget_accuracy(session)
             
