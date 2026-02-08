@@ -59,6 +59,7 @@ export default function AdminDashboard() {
           { to: '/admin/offers', title: 'Offers', desc: 'Discounts & coupons', icon: '🏷', color: '#FF6B6B' },
           { to: '/admin/analytics', title: 'Analytics', desc: 'Revenue & insights', icon: '📈', color: '#5B5FE0' },
           { to: '/admin/tables', title: 'Tables', desc: 'Cafe table management', icon: '🪑', color: '#E23744' },
+          { to: '/admin/shifts', title: 'Shifts', desc: 'Staff shift scheduling', icon: '🕐', color: '#00BCD4' },
         ].map(a => (
           <Link to={a.to} className="action-card" key={a.to} data-testid={`goto-${a.title.toLowerCase().replace(/ /g,'-')}`}>
             <div className="action-icon" style={{ background: `${a.color}15` }}>{a.icon}</div>
