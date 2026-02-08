@@ -6,9 +6,9 @@ import { useRouter } from 'expo-router';
 import { apiCall } from '../../utils/api';
 
 const Z_RED = '#E23744';
-const STEPS = ['pending', 'preparing', 'ready', 'completed'];
-const STEP_LABELS: Record<string, string> = { pending: 'Order Placed', preparing: 'Being Prepared', ready: 'Ready', completed: 'Completed' };
-const STEP_ICONS: Record<string, string> = { pending: 'checkmark-circle', preparing: 'flame', ready: 'bag-check', completed: 'checkmark-done-circle' };
+const STEPS = ['scheduled', 'pending', 'preparing', 'ready', 'completed'];
+const STEP_LABELS: Record<string, string> = { scheduled: 'Scheduled', pending: 'Order Placed', preparing: 'Being Prepared', ready: 'Ready', completed: 'Completed' };
+const STEP_ICONS: Record<string, string> = { scheduled: 'time', pending: 'checkmark-circle', preparing: 'flame', ready: 'bag-check', completed: 'checkmark-done-circle' };
 
 export default function OrdersScreen() {
   const router = useRouter();
