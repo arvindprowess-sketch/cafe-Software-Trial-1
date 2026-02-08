@@ -591,6 +591,21 @@ async def delete_product(product_id: str, user=Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Product not found")
     return {"message": "Product deleted"}
 
+@api_router.post("/upload/image")
+async def upload_image(body: dict = Body(...), user=Depends(get_current_user)):
+    """Upload base64 image and store it. Returns the data URI."""
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    image_data = body.get("image")
+    if not image_data:
+        raise HTTPException(status_code=400, detail="No image provided")
+    # If it already starts with data:, it's a data URI
+    if not image_data.startswith("data:"):
+        image_data = f"data:image/png;base64,{image_data}"
+    image_id = str(uuid.uuid4())
+    await db.uploads.insert_one({"id": image_id, "data": image_data, "created_at": datetime.now(timezone.utc).isoformat()})
+    return {"id": image_id, "url": image_data}
+
 # ========== CATEGORY MANAGEMENT ==========
 @api_router.get("/categories")
 async def get_categories():
