@@ -1326,66 +1326,70 @@ Respond ONLY in this exact JSON format (no other text):
 
         totals = {k: round(v, 1) for k, v in totals.items()}
 
-        # Post-process: If budget specified and total is under 85%, scale up portions proportionally
-        if data.budget and totals["price"] > 0 and totals["price"] < data.budget * 0.85:
-            scale = min(data.budget * 0.95 / totals["price"], 2.5)  # Cap at 2.5x to avoid absurd portions
-            for item in enriched_items:
-                new_grams = round(item["grams"] * scale / 25) * 25  # Round to nearest 25g
-                if new_grams < 25:
-                    new_grams = 25
-                factor = new_grams / 100
-                item["grams"] = new_grams
-                item["price"] = round(factor * item["cost_per_100g"], 2)
-                item["calories"] = round(factor * item["calories_per_100g"], 1)
-                item["protein"] = round(factor * item["protein_per_100g"], 1)
-                item["carbs"] = round(factor * item["carbs_per_100g"], 1)
-                item["fat"] = round(factor * item["fat_per_100g"], 1)
-            # Recalculate totals
-            totals = {"price": 0, "calories": 0, "protein": 0, "carbs": 0, "fat": 0}
-            for item in enriched_items:
-                totals["price"] += item["price"]
-                totals["calories"] += item["calories"]
-                totals["protein"] += item["protein"]
-                totals["carbs"] += item["carbs"]
-                totals["fat"] += item["fat"]
-            totals = {k: round(v, 1) for k, v in totals.items()}
+        # Post-process: Force total to match budget exactly (98-100%)
+        if data.budget and totals["price"] > 0 and enriched_items:
+            target = data.budget * 0.98
+            if totals["price"] < target or totals["price"] > data.budget:
+                # Scale all items proportionally to hit target
+                scale = target / totals["price"]
+                for item in enriched_items:
+                    new_grams = max(25, round(item["grams"] * scale / 25) * 25)
+                    factor = new_grams / 100
+                    item["grams"] = new_grams
+                    item["price"] = round(factor * item["cost_per_100g"], 2)
+                    item["calories"] = round(factor * item["calories_per_100g"], 1)
+                    item["protein"] = round(factor * item["protein_per_100g"], 1)
+                    item["carbs"] = round(factor * item["carbs_per_100g"], 1)
+                    item["fat"] = round(factor * item["fat_per_100g"], 1)
+                # Recalculate
+                totals = {"price": 0, "calories": 0, "protein": 0, "carbs": 0, "fat": 0}
+                for item in enriched_items:
+                    for k in totals:
+                        totals[k] += item[k]
+                totals = {k: round(v, 1) for k, v in totals.items()}
 
-            # If still under budget, add grams to the cheapest item to fill gap
-            if totals["price"] < data.budget * 0.90 and enriched_items:
-                gap = data.budget * 0.95 - totals["price"]
-                cheapest = min(enriched_items, key=lambda x: x["cost_per_100g"])
-                extra_grams = round((gap / cheapest["cost_per_100g"]) * 100 / 25) * 25
+            # Fine-tune: fill remaining gap with the protein-rich item
+            gap = data.budget - totals["price"]
+            if gap >= 1 and enriched_items:
+                # Pick the best item to add grams to (prefer protein source)
+                protein_items = [i for i in enriched_items if i.get("protein_per_100g", 0) > 15]
+                filler = protein_items[0] if protein_items else enriched_items[0]
+                extra_grams = max(25, round((gap / filler["cost_per_100g"]) * 100 / 25) * 25)
+                # Check we don't overshoot
+                extra_cost = extra_grams / 100 * filler["cost_per_100g"]
+                if extra_cost > gap + 5:  # allow ₹5 tolerance
+                    extra_grams = max(0, extra_grams - 25)
                 if extra_grams >= 25:
-                    cheapest["grams"] += extra_grams
-                    factor = cheapest["grams"] / 100
-                    cheapest["price"] = round(factor * cheapest["cost_per_100g"], 2)
-                    cheapest["calories"] = round(factor * cheapest["calories_per_100g"], 1)
-                    cheapest["protein"] = round(factor * cheapest["protein_per_100g"], 1)
-                    cheapest["carbs"] = round(factor * cheapest["carbs_per_100g"], 1)
-                    cheapest["fat"] = round(factor * cheapest["fat_per_100g"], 1)
+                    filler["grams"] += extra_grams
+                    factor = filler["grams"] / 100
+                    filler["price"] = round(factor * filler["cost_per_100g"], 2)
+                    filler["calories"] = round(factor * filler["calories_per_100g"], 1)
+                    filler["protein"] = round(factor * filler["protein_per_100g"], 1)
+                    filler["carbs"] = round(factor * filler["carbs_per_100g"], 1)
+                    filler["fat"] = round(factor * filler["fat_per_100g"], 1)
                     totals = {"price": 0, "calories": 0, "protein": 0, "carbs": 0, "fat": 0}
                     for item in enriched_items:
                         for k in totals:
                             totals[k] += item[k]
                     totals = {k: round(v, 1) for k, v in totals.items()}
 
-        # Post-process: If over budget, scale down
-        if data.budget and totals["price"] > data.budget:
-            scale = data.budget * 0.98 / totals["price"]
-            for item in enriched_items:
-                new_grams = max(25, round(item["grams"] * scale / 25) * 25)
-                factor = new_grams / 100
-                item["grams"] = new_grams
-                item["price"] = round(factor * item["cost_per_100g"], 2)
-                item["calories"] = round(factor * item["calories_per_100g"], 1)
-                item["protein"] = round(factor * item["protein_per_100g"], 1)
-                item["carbs"] = round(factor * item["carbs_per_100g"], 1)
-                item["fat"] = round(factor * item["fat_per_100g"], 1)
-            totals = {"price": 0, "calories": 0, "protein": 0, "carbs": 0, "fat": 0}
-            for item in enriched_items:
-                for k in totals:
-                    totals[k] += item[k]
-            totals = {k: round(v, 1) for k, v in totals.items()}
+            # Final safety: if still over budget, trim the largest item
+            if totals["price"] > data.budget:
+                largest = max(enriched_items, key=lambda x: x["price"])
+                overshoot = totals["price"] - data.budget
+                reduce_grams = max(25, round((overshoot / largest["cost_per_100g"]) * 100 / 25) * 25)
+                largest["grams"] = max(25, largest["grams"] - reduce_grams)
+                factor = largest["grams"] / 100
+                largest["price"] = round(factor * largest["cost_per_100g"], 2)
+                largest["calories"] = round(factor * largest["calories_per_100g"], 1)
+                largest["protein"] = round(factor * largest["protein_per_100g"], 1)
+                largest["carbs"] = round(factor * largest["carbs_per_100g"], 1)
+                largest["fat"] = round(factor * largest["fat_per_100g"], 1)
+                totals = {"price": 0, "calories": 0, "protein": 0, "carbs": 0, "fat": 0}
+                for item in enriched_items:
+                    for k in totals:
+                        totals[k] += item[k]
+                totals = {k: round(v, 1) for k, v in totals.items()}
 
         return {
             "meal_items": enriched_items,
