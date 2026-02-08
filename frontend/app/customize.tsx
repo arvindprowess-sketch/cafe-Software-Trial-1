@@ -884,4 +884,29 @@ const styles = StyleSheet.create({
   modalContinueBtn: { backgroundColor: '#1C1C2E', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 20, width: '100%', alignItems: 'center', marginBottom: 12 },
   modalContinueText: { fontSize: 15, fontWeight: '700', color: '#FFF' },
   modalNote: { fontSize: 11, color: '#B0B0B0', textAlign: 'center', fontStyle: 'italic' },
+
+  // Order type selector
+  orderTypeRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
+  orderTypeChip: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 12, backgroundColor: '#FFF', borderWidth: 1.5, borderColor: '#E8E8E8' },
+  orderTypeChipActive: { backgroundColor: Z_RED, borderColor: Z_RED },
+  orderTypeChipText: { fontSize: 13, fontWeight: '700', color: '#696969' },
+
+  // Schedule section
+  scheduleSection: { backgroundColor: '#FFF', borderRadius: 12, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: '#EFEFEF' },
+  scheduleToggleRow: { flexDirection: 'row', alignItems: 'center' },
+  scheduleLabel: { fontSize: 15, fontWeight: '700', color: '#1C1C2E' },
+  scheduleHint: { fontSize: 11, color: '#9C9C9C', marginTop: 2 },
+  scheduleToggle: { width: 50, height: 28, borderRadius: 14, backgroundColor: '#E0E0E0', justifyContent: 'center', paddingHorizontal: 3 },
+  scheduleToggleActive: { backgroundColor: '#5B5FE0' },
+  scheduleToggleThumb: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#FFF' },
+  scheduleToggleThumbActive: { alignSelf: 'flex-end' },
+  timePickerContainer: { marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: '#F0F0F0' },
+  timePickerLabel: { fontSize: 13, fontWeight: '600', color: '#696969', marginBottom: 8 },
+  timeInputRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  timeInput: { width: 60, height: 48, backgroundColor: '#F5F5F5', borderRadius: 10, fontSize: 22, fontWeight: '800', color: '#1C1C2E', textAlign: 'center', borderWidth: 1.5, borderColor: '#E0E0E0' },
+  timeColon: { fontSize: 24, fontWeight: '800', color: '#1C1C2E', marginHorizontal: 4 },
+  alertInfoRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, backgroundColor: '#F0F0FF', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
+  alertInfoText: { fontSize: 12, color: '#5B5FE0', fontWeight: '500', flex: 1 },
+  scheduledBadgeBottom: { fontSize: 11, color: '#5B5FE0', fontWeight: '700', marginLeft: 8 },
+  orderBtnScheduled: { backgroundColor: '#5B5FE0' },
 });
