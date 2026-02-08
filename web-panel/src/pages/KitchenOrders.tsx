@@ -3,11 +3,16 @@ import { api } from '../utils/api';
 
 export default function KitchenOrders() {
   const [orders, setOrders] = useState<any[]>([]);
+  const [scheduledOrders, setScheduledOrders] = useState<any[]>([]);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [lastOrderCount, setLastOrderCount] = useState(0);
   const [showTicket, setShowTicket] = useState<any>(null);
+  const [alertOrder, setAlertOrder] = useState<any>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [activeTab, setActiveTab] = useState<'active' | 'upcoming'>('active');
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const prevOrderIdsRef = useRef<Set<string>>(new Set());
+  const alertedOrdersRef = useRef<Set<string>>(new Set());
 
   // Create notification sound using Web Audio API
   const playAlertSound = useCallback((priority: string) => {
