@@ -899,6 +899,13 @@ async def create_ready_made_meal(data: ReadyMadeMealCreate, user=Depends(get_cur
     all_ingredients_text = " ".join(ingredient_names).lower()
     is_nonveg = any(kw in all_ingredients_text for kw in NON_VEG_KEYWORDS) or detect_diet_type(data.name) == "non-veg"
     
+    # Resolve category from category_id or fallback to nutrition
+    category_name = nutrition["category"]
+    if data.category_id:
+        cat = await db.categories.find_one({"id": data.category_id}, {"_id": 0})
+        if cat:
+            category_name = cat["name"]
+
     product_id = str(uuid.uuid4())
     product = {
         "id": product_id,
@@ -907,11 +914,12 @@ async def create_ready_made_meal(data: ReadyMadeMealCreate, user=Depends(get_cur
         "cost_per_100g": cost_per_100g,
         "fixed_price": data.price,
         "serving_grams": data.serving_grams,
-        "ingredients": linked_ingredients,  # Now stores grams per serving with product links
+        "ingredients": linked_ingredients,
         "images": data.images,
-        "is_editable": data.is_editable,  # Whether customer can modify
-        "available_servings": 20,  # Number of plates available (will check ingredient stock)
-        "category": nutrition["category"],
+        "is_editable": data.is_editable,
+        "available_servings": 20,
+        "category": category_name,
+        "category_id": data.category_id,
         "diet_type": "non-veg" if is_nonveg else "veg",
         "calories_per_100g": nutrition["calories"],
         "protein_per_100g": nutrition["protein"],
