@@ -537,10 +537,13 @@ async def create_product(data: ProductCreate, user=Depends(get_current_user)):
 
 @api_router.get("/products")
 async def list_products():
-    products = await db.products.find({"is_active": True}, {"_id": 0}).to_list(100)
-    for p in products:
-        if p.get("available_qty_grams", 0) <= 0:
-            continue
+    # Get active category names
+    active_cats = await db.categories.find({"is_active": {"$ne": False}}, {"_id": 0, "name": 1}).to_list(100)
+    active_cat_names = {c["name"] for c in active_cats}
+    products = await db.products.find({"is_active": True}, {"_id": 0}).to_list(200)
+    # Filter: only show products in active categories (or with no category set)
+    if active_cat_names:
+        products = [p for p in products if p.get("category", "") in active_cat_names or not p.get("category")]
     return products
 
 @api_router.get("/products/all")
