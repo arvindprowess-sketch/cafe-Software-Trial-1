@@ -209,12 +209,13 @@ async def test_create_offer_admin(session):
         headers = {"Authorization": f"Bearer {admin_token}"}
         payload = {
             "title": "Test Offer 50% OFF",
-            "description": "Testing offer creation",
+            "subtitle": "Testing offer creation",
             "discount_type": "percentage",
             "discount_value": 50,
-            "min_order_value": 100,
-            "applicable_categories": ["Protein"],
+            "applicable_to": "category",
+            "applicable_category": "Protein",
             "coupon_code": "TEST50",
+            "min_order_value": 100,
             "max_discount": 100,
             "is_active": True
         }
