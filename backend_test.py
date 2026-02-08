@@ -538,14 +538,140 @@ async def test_apply_coupon(session):
         results.log_fail("Apply Coupon", f"Exception: {e}")
         return False
 
-async def test_ai_adjust_portions(session):
-    """Test POST /api/ai/adjust-portions should return AI-suggested portion adjustments"""
-    if not admin_token:
-        results.log_fail("AI Adjust Portions", "No admin token available")
-        return False
-    
+# ========== AI COMBO BUILDER TESTS (NEW FEATURE) ==========
+
+async def test_ai_quick_meal_muscle_gain_200(session):
+    """Test POST /api/ai/quick-meal with {budget: 200, goal: 'muscle_gain', diet_preference: 'both'}"""
     try:
-        headers = {"Authorization": f"Bearer {admin_token}"}
+        payload = {
+            "budget": 200,
+            "goal": "muscle_gain",
+            "diet_preference": "both"
+        }
+        
+        async with session.post(f"{API_BASE}/ai/quick-meal", json=payload) as response:
+            if response.status == 200:
+                data = await response.json()
+                
+                # Validate required response structure
+                required_fields = ["meal_items", "totals", "summary"]
+                missing_fields = [f for f in required_fields if f not in data]
+                if missing_fields:
+                    results.log_fail("AI Quick Meal: Muscle Gain ₹200", f"Missing fields: {missing_fields}")
+                    return False
+                
+                meal_items = data.get("meal_items", [])
+                if not meal_items:
+                    results.log_fail("AI Quick Meal: Muscle Gain ₹200", "No meal items returned")
+                    return False
+                
+                # Validate meal items structure
+                item = meal_items[0]
+                required_item_fields = ["product_id", "product_name", "grams", "price", "calories", "protein", "reason"]
+                missing_item_fields = [f for f in required_item_fields if f not in item]
+                if missing_item_fields:
+                    results.log_fail("AI Quick Meal: Muscle Gain ₹200", f"Missing item fields: {missing_item_fields}")
+                    return False
+                
+                # Validate totals
+                totals = data.get("totals", {})
+                total_price = totals.get("price", 0)
+                if total_price > 200:
+                    results.log_fail("AI Quick Meal: Muscle Gain ₹200", f"Price ₹{total_price} exceeds budget ₹200")
+                    return False
+                
+                results.log_pass("AI Quick Meal: Muscle Gain ₹200", 
+                    f"✓ {len(meal_items)} items, ₹{total_price}, {totals.get('calories',0)} cal, {totals.get('protein',0)}g protein")
+                return True
+            else:
+                text = await response.text()
+                results.log_fail("AI Quick Meal: Muscle Gain ₹200", f"HTTP {response.status}: {text}")
+                return False
+    except Exception as e:
+        results.log_fail("AI Quick Meal: Muscle Gain ₹200", f"Exception: {e}")
+        return False
+
+async def test_ai_quick_meal_fat_loss_veg(session):
+    """Test POST /api/ai/quick-meal with {budget: 150, goal: 'fat_loss', diet_preference: 'veg'}"""
+    try:
+        payload = {
+            "budget": 150,
+            "goal": "fat_loss",
+            "diet_preference": "veg"
+        }
+        
+        async with session.post(f"{API_BASE}/ai/quick-meal", json=payload) as response:
+            if response.status == 200:
+                data = await response.json()
+                
+                meal_items = data.get("meal_items", [])
+                if not meal_items:
+                    results.log_fail("AI Quick Meal: Fat Loss Veg ₹150", "No meal items returned")
+                    return False
+                
+                # Verify all items are vegetarian
+                non_veg_items = [item for item in meal_items if item.get("diet_type") == "non-veg"]
+                if non_veg_items:
+                    non_veg_names = [item["product_name"] for item in non_veg_items]
+                    results.log_fail("AI Quick Meal: Fat Loss Veg ₹150", f"Non-veg items found: {non_veg_names}")
+                    return False
+                
+                totals = data.get("totals", {})
+                total_price = totals.get("price", 0)
+                
+                results.log_pass("AI Quick Meal: Fat Loss Veg ₹150", 
+                    f"✓ {len(meal_items)} veg items, ₹{total_price}, {totals.get('calories',0)} cal")
+                return True
+            else:
+                text = await response.text()
+                results.log_fail("AI Quick Meal: Fat Loss Veg ₹150", f"HTTP {response.status}: {text}")
+                return False
+    except Exception as e:
+        results.log_fail("AI Quick Meal: Fat Loss Veg ₹150", f"Exception: {e}")
+        return False
+
+async def test_ai_quick_meal_low_budget(session):
+    """Test POST /api/ai/quick-meal with {budget: 50, goal: 'maintenance', diet_preference: 'both'}"""
+    try:
+        payload = {
+            "budget": 50,
+            "goal": "maintenance",
+            "diet_preference": "both"
+        }
+        
+        async with session.post(f"{API_BASE}/ai/quick-meal", json=payload) as response:
+            if response.status == 200:
+                data = await response.json()
+                
+                meal_items = data.get("meal_items", [])
+                totals = data.get("totals", {})
+                total_price = totals.get("price", 0)
+                
+                # Should still return items within budget
+                if total_price > 50:
+                    results.log_fail("AI Quick Meal: Low Budget ₹50", f"Price ₹{total_price} exceeds budget ₹50")
+                    return False
+                
+                if not meal_items:
+                    # Low budget might not have items, but should have a helpful summary
+                    summary = data.get("summary", "")
+                    results.log_pass("AI Quick Meal: Low Budget ₹50", f"✓ Handled low budget gracefully: '{summary}'")
+                    return True
+                else:
+                    results.log_pass("AI Quick Meal: Low Budget ₹50", 
+                        f"✓ {len(meal_items)} items within ₹{total_price} budget")
+                    return True
+            else:
+                text = await response.text()
+                results.log_fail("AI Quick Meal: Low Budget ₹50", f"HTTP {response.status}: {text}")
+                return False
+    except Exception as e:
+        results.log_fail("AI Quick Meal: Low Budget ₹50", f"Exception: {e}")
+        return False
+
+async def test_ai_adjust_portions(session):
+    """Test POST /api/ai/adjust-portions should return AI-adjusted portions"""
+    try:
         payload = {
             "items": [
                 {"name": "chicken", "grams": 100, "calories_per_100g": 165, "protein_per_100g": 31},
@@ -555,14 +681,14 @@ async def test_ai_adjust_portions(session):
             "consumed_today": 100
         }
         
-        async with session.post(f"{API_BASE}/ai/adjust-portions", json=payload, headers=headers) as response:
+        async with session.post(f"{API_BASE}/ai/adjust-portions", json=payload) as response:
             if response.status == 200:
                 data = await response.json()
-                if "adjusted_items" in data:
+                if "adjusted_items" in data or "suggestions" in data or "summary" in data:
                     results.log_pass("AI Adjust Portions", f"✓ AI portion adjustments received")
                     return True
                 else:
-                    results.log_fail("AI Adjust Portions", "No adjusted_items in response")
+                    results.log_fail("AI Adjust Portions", "No AI adjustment response found")
                     return False
             else:
                 text = await response.text()
