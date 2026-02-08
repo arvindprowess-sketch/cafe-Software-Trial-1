@@ -135,9 +135,14 @@ async def test_get_active_offers(session):
 
 async def test_apply_coupon(session):
     """Test FIX #5 INTEGRATION: Apply coupon code functionality"""
+    if not cashier_token:
+        results.log_fail("FIX #5: Apply Coupon", "No cashier token available")
+        return False
+    
     try:
+        headers = {"Authorization": f"Bearer {cashier_token}"}
         payload = {"coupon_code": "PROTEIN20"}  # Based on default seeded offers
-        async with session.post(f"{API_BASE}/orders/apply-coupon", json=payload) as response:
+        async with session.post(f"{API_BASE}/orders/apply-coupon", json=payload, headers=headers) as response:
             if response.status == 200:
                 data = await response.json()
                 if "discount_type" in data and "discount_value" in data:
