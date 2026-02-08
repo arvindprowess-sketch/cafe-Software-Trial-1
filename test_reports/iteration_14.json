@@ -1,0 +1,60 @@
+{
+  "summary": "Comprehensive testing of Scheduled Order feature completed successfully. Backend APIs 100% passing (9/9 tests). Frontend Kitchen Orders page verified with Active/Upcoming tabs and blocking popup for scheduled orders with alert_triggered.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "passed_tests": [
+    "✅ POST /api/orders with is_scheduled=true creates scheduled order with status='scheduled'",
+    "✅ Kitchen alert time 10min for dine-in orders",
+    "✅ Kitchen alert time 10min for takeaway orders",
+    "✅ Kitchen alert time 20min for delivery orders",
+    "✅ POST /api/orders without is_scheduled creates normal orders with status='preparing'",
+    "✅ GET /api/orders/scheduled returns all scheduled orders with alert_triggered flag",
+    "✅ Scheduled orders sorted by scheduled_ready_time",
+    "✅ POST /api/orders/{order_id}/confirm-scheduled changes status to 'preparing' and sets schedule_confirmed=true",
+    "✅ POST /api/orders/{order_id}/confirm-scheduled rejects non-scheduled orders with 400",
+    "✅ Kitchen orders page has Active and Upcoming tabs",
+    "✅ Kitchen orders page shows blocking popup for scheduled orders with alert_triggered=true",
+    "✅ Blocking popup shows Order ID, Order Type, Ready At time, Customer name, Items with grams",
+    "✅ Confirm & Start button in popup works and moves order to active queue"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_scheduled_orders.py",
+    "/app/test_reports/pytest/scheduled_orders_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_scheduled_orders.py"
+  ],
+  "success_rate": {
+    "backend": "100% - 9/9 tests passed",
+    "frontend": "100% - All Kitchen Orders features verified"
+  },
+  "seed_data_creation": "Created test scheduled orders for dine-in, takeaway, and delivery types",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Scheduled orders feature is fully implemented and working. Backend APIs at /api/orders with is_scheduled=true and /api/orders/scheduled and /api/orders/{id}/confirm-scheduled all functional. Frontend Kitchen Orders page at /kitchen shows Active (immediate orders) and Upcoming (scheduled orders) tabs. Blocking popup appears for scheduled orders when kitchen_alert_time has passed (alert_triggered=true). Kitchen PIN login is 1234.",
+  "test_credentials": {
+    "kitchen_pin": "1234",
+    "cashier_pin": "5678"
+  },
+  "feature_verification": {
+    "scheduled_order_creation": "PASS - is_scheduled=true, scheduled_ready_time creates scheduled order with status='scheduled'",
+    "kitchen_alert_calculation": "PASS - 10min before for dine-in/takeaway, 20min before for delivery",
+    "normal_order_creation": "PASS - Without is_scheduled, orders go directly to status='preparing'",
+    "scheduled_orders_api": "PASS - GET /api/orders/scheduled returns orders with alert_triggered flag",
+    "confirm_scheduled_api": "PASS - POST confirms order and moves to 'preparing' status",
+    "confirm_reject_non_scheduled": "PASS - Returns 400 for non-scheduled orders",
+    "kitchen_active_tab": "PASS - Shows immediate orders in preparation",
+    "kitchen_upcoming_tab": "PASS - Shows scheduled orders with ready time, alert time, time until",
+    "blocking_popup": "PASS - Shows for alert_triggered orders with all required info",
+    "popup_confirm_button": "PASS - Moves order to active queue"
+  }
+}
