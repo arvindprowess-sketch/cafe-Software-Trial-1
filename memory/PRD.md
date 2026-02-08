@@ -1,79 +1,85 @@
 # AI Diet Cafe App - PRD
 
 ## Original Problem Statement
-Diet Cafe app with Expo React Native (TypeScript) frontend + FastAPI backend + MongoDB. Uses Emergent LLM Key for AI features (GPT-5.2).
+Build a Diet Cafe management system with:
+- Customer-facing MOBILE APP (Expo React Native)
+- Admin/Kitchen/Cashier WEB PANEL (React + Vite)
+- Shared FastAPI backend + MongoDB
 
 ## Architecture
-### Platform Separation (Implemented Feb 2026)
-- **Customer Mobile App** (Expo React Native, port 8081/tunnel): Menu browsing, meal customization, calorie tracking, order placement
-- **Web Management Panel** (React+Vite, port 3000): Admin dashboard, kitchen display, cashier POS
-- **Backend** (FastAPI, port 8001): Shared API serving both platforms
-- **Database**: MongoDB (shared)
-
-### Role System
-| Role | Platform | Auth Method | Features |
-|------|----------|-------------|----------|
-| Customer | Mobile App | Phone OTP | Menu, AI meals, orders, calorie tracking |
-| Admin | Web Panel | Email/Password | Dashboard, products, categories, staff, offers, analytics, tables, kitchen view |
-| Kitchen | Web Panel | PIN (4-6 digits) | Orders with priority flags, inventory |
-| Cashier | Web Panel | PIN (4-6 digits) | POS terminal, AI suggestions, cart, billing, orders, tables |
+- **Backend**: FastAPI on port 8001, MongoDB
+- **Web Panel**: React + Vite on port 3000 (Admin, Kitchen, Cashier)
+- **Mobile App**: Expo React Native with tunnel
+- **Auth**: Email/password for admin, PIN for staff, OTP for customers
 
 ## User Personas
-1. **Customer** - Health-conscious diners using mobile app for diet-friendly ordering
-2. **Admin** - Cafe owner managing menu, staff, analytics via web dashboard
-3. **Kitchen Staff** - Cooks viewing/prioritizing orders, monitoring inventory
-4. **Cashier** - Counter staff processing walk-in orders with full POS
+1. **Admin**: Full system management (products, staff, categories, offers, tables, shifts, analytics)
+2. **Kitchen Staff**: Order management, inventory, stock control, ticket printing
+3. **Cashier**: POS system, order placement, coupon application, receipt generation
+4. **Customer** (Mobile): Browse menu, AI meal suggestions, place orders, track calories, loyalty rewards
 
 ## Core Requirements (Static)
-- Diet-focused menu with per-gram pricing & macro tracking
-- AI meal builder (GPT-5.2) for goal-based suggestions
-- Multi-role access control with separate platforms
-- Real-time kitchen order management with priority flags
-- POS terminal for offline/walk-in customers
+- Role-based access control
+- Real-time order flow (customer → kitchen → ready → completed)
+- Nutrition tracking (calories, protein, carbs, fat per item)
+- AI-powered meal suggestions (GPT-5.2 via Emergent LLM key)
 
 ## What's Been Implemented
-### Session 1 (Feb 2026)
-- Initial setup, seeded admin (admin@dietcafe.com/admin123), 16 products, 6 categories
-- 3-role system: Admin (email/password), Kitchen (PIN), Cashier (PIN)
-- Admin staff management (create/edit/delete kitchen & cashier staff)
-- Backend: /api/staff CRUD, /api/auth/pin-login, /api/orders/{id}/priority, /api/inventory
 
-### Session 2 (Feb 2026) - Platform Separation
-- Created React+Vite web panel at /app/web-panel/ (port 3000)
-- Admin: Sidebar navigation, dashboard with stats, products table, staff management, categories, kitchen view, offers, analytics, tables
-- Kitchen: Orders with priority flags (urgent/high/normal), inventory with stock status
-- Cashier: Full POS terminal with product grid, cart, AI meal builder, order type toggle, table management
-- Login: Tab-based (Admin email/password, Staff PIN)
-- Cleaned Expo mobile app: removed admin/kitchen/cashier screens, customer-only
-- Startup script runs both web panel (port 3000) and Expo tunnel (port 8081)
-- Testing: 100% pass rate (15/15 frontend tests, 92.9% backend tests)
+### Session 1 (Initial Build)
+- Full backend with products, categories, orders, users, payments
+- Mobile app: Menu, AI meals, orders, calorie tracking
+- Web panel: Admin dashboard, Kitchen display, Cashier POS
+- OTP auth for customers, email/PIN for staff
+- Razorpay mock payment integration
+- QR table scanning, offers/packs
 
-### Seeded Data
-- Admin: admin@dietcafe.com / admin123
-- Kitchen: Raju Kitchen (PIN: 1234)
-- Cashier: Priya Cashier (PIN: 5678)
-- 16 products, 6 categories
+### Session 2 (Feb 8, 2026) - All Backlogs Implemented
+**P0 - Critical:**
+- Stock quantity management (add/remove stock with reason tracking)
+- Stock change logs with history
+
+**P1 - Important:**
+- Notification system (create on new orders, list, mark read)
+- Order receipt/bill generation with nutrition summary
+- Coupon code application at checkout (PROTEIN20, CARB30, FREEDEL)
+- Sound/vibration alerts for kitchen (Web Audio API, toggle ON/OFF)
+- Kitchen ticket printing (print-friendly format)
+- Active orders API for kitchen/cashier
+
+**P2 - Nice to Have:**
+- Shift management (CRUD, status: scheduled → active → completed)
+- Loyalty/rewards system (earn 1 pt per ₹10, redeem 10 pts = ₹1)
+- Weekly meal planning (manual + AI-generated via GPT-5.2)
+- Daily streak tracker (auto-updates on order placement)
+- All auto-integrated: orders auto-earn loyalty + update streaks + notify kitchen
+
+## Testing Status
+- All backend APIs: 100% passing
+- All frontend flows: 100% passing (Admin, Kitchen, Cashier)
+- PIN login fixed and working for staff
+- Stock management, coupon codes, receipt generation all tested
 
 ## Prioritized Backlog
-### P0 (Critical)
-- Razorpay real key integration for payments
-- Stock quantity management (add/remove stock from admin/kitchen)
+### P0 - None remaining
 
-### P1 (Important)
-- Push notification for new orders
-- Order receipt/bill generation
-- Coupon code application at checkout (cashier POS)
-- Sound/vibration alerts for urgent kitchen orders
+### P1 - Future
+- Push notifications (device-level for mobile customers)
+- Real Razorpay key integration (currently mock)
+- Google OAuth for admin login
 
-### P2 (Nice to have)
-- Weekly meal planning
-- Loyalty/rewards program
-- Google OAuth
-- Shift management for staff
-- Print kitchen ticket
-- Daily streak tracker for customer retention
+### P2 - Future
+- Weekly meal planning UI in mobile app
+- Loyalty/rewards display in mobile app
+- Daily streak visualization in mobile app
+- Print kitchen ticket (physical printer integration)
+- SMS/WhatsApp order notifications for customers
+- Customer feedback/ratings system
+- Multi-branch support
+- Ingredient cost tracking & profit analytics
 
 ## Next Tasks
-- User testing feedback on mobile app + web panel
-- Razorpay integration
-- Stock management UI for kitchen/admin
+1. Mobile app: Add loyalty rewards, streak tracker, weekly meal planning screens
+2. Push notifications setup for order status updates
+3. Razorpay real key integration when keys are available
+4. Customer feedback system after order completion
