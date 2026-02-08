@@ -5,7 +5,7 @@
     "flaky_endpoints": [
       {
         "endpoint": "External URL routing",
-        "issue": "https://next-phase-mobile.preview.emergentagent.com/api routes return 404",
+        "issue": "https://cashier-hub-8.preview.emergentagent.com/api routes return 404",
         "symptoms": "External URL /api endpoints not accessible, but localhost:8001/api works fine",
         "workaround": "Backend runs correctly on localhost:8001",
         "fix_priority": "MEDIUM"
@@ -36,7 +36,7 @@
     "Order creation and management system functional"
   ],
   "test_report_links": ["/app/backend_test.py"],
-  "action_item_for_main_agent": "Fix external URL routing issue - /api endpoints should be accessible via https://next-phase-mobile.preview.emergentagent.com/api (likely Kubernetes ingress configuration issue). All backend functionality is working correctly on internal port 8001.",
+  "action_item_for_main_agent": "Fix external URL routing issue - /api endpoints should be accessible via https://cashier-hub-8.preview.emergentagent.com/api (likely Kubernetes ingress configuration issue). All backend functionality is working correctly on internal port 8001.",
   "updated_files": ["/app/backend_test.py"],
   "success_percentage": {
     "backend": "100% (16/16 tests passed)",
