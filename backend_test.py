@@ -701,51 +701,62 @@ async def test_ai_adjust_portions(session):
 async def main():
     print("🧪 Starting Diet Cafe Expo Backend Tests...")
     print(f"🌐 Backend URL: {API_BASE}")
-    print("📋 Testing new features as per review request:")
-    print("   - Offers/Banners system with admin CRUD")
-    print("   - Goal Packs with admin CRUD") 
-    print("   - Dynamic Banners from offers + packs (6 total)")
-    print("   - Razorpay payment endpoints (mock mode)")
-    print("   - Smart Portion Adjuster (AI-powered)")
-    print("   - Coupon code application")
+    print("🎯 FOCUS: AI Combo Builder & Offers/Banners System")
+    print("📋 Testing key features from review request:")
+    print("   - POST /api/ai/quick-meal (AI Combo Builder - MAIN FEATURE)")
+    print("   - GET /api/banners (from offers + packs)")
+    print("   - GET /api/offers, /api/packs endpoints") 
+    print("   - GET /api/packs/{pack_id} with savings")
+    print("   - GET /api/offers/{offer_id}/products with discounts")
+    print("   - POST /api/ai/adjust-portions (AI portion adjuster)")
     print("   - Admin: admin@dietcafe.com / admin123")
+    print("="*70)
     
     # Create session with proper timeout
     timeout = aiohttp.ClientTimeout(total=60)
     async with aiohttp.ClientSession(timeout=timeout) as session:
         
-        # Test sequence following the review request features
+        # Test sequence focusing on review request priorities
         print("\n1️⃣ Testing Admin Login...")
         login_success = await test_admin_login(session)
         
         if login_success:
-            print("\n2️⃣ Seeding Offers & Packs...")
+            print("\n🤖 PRIORITY: AI COMBO BUILDER TESTS")
+            print("="*50)
+            print("2️⃣ Testing AI Quick-Meal: Muscle Gain ₹200 Budget...")
+            await test_ai_quick_meal_muscle_gain_200(session)
+            
+            print("\n3️⃣ Testing AI Quick-Meal: Fat Loss Veg ₹150...")
+            await test_ai_quick_meal_fat_loss_veg(session)
+            
+            print("\n4️⃣ Testing AI Quick-Meal: Low Budget ₹50...")
+            await test_ai_quick_meal_low_budget(session)
+            
+            print("\n🎯 OFFERS & BANNERS SYSTEM TESTS")
+            print("="*50)
+            print("5️⃣ Seeding test data...")
             await test_seed_offers_packs(session)
             
-            print("\n3️⃣ Testing Dynamic Banners (6 expected: 3 offers + 3 packs)...")
+            print("\n6️⃣ Testing GET /api/banners...")
             await test_get_banners(session)
             
-            print("\n4️⃣ Testing Offers Endpoints...")
+            print("\n7️⃣ Testing GET /api/offers...")
             await test_get_offers(session)
-            await test_get_offers_all_admin(session)
+            
+            print("\n8️⃣ Testing GET /api/offers/{offer_id}/products...")
             await test_get_offer_products(session)
-            await test_create_offer_admin(session)
-            await test_update_offer_admin(session)
             
-            print("\n5️⃣ Testing Packs Endpoints...")
+            print("\n📦 GOAL PACKS TESTS")
+            print("="*50)
+            print("9️⃣ Testing GET /api/packs...")
             await test_get_packs(session)
+            
+            print("\n🔟 Testing GET /api/packs/{pack_id} with savings...")
             await test_get_pack_detail(session)
-            await test_create_pack_admin(session)
             
-            print("\n6️⃣ Testing Payment Endpoints (Mock Mode)...")
-            await test_create_mock_order_for_payment(session)
-            await test_create_payment_order(session)
-            await test_verify_payment(session)
-            
-            print("\n7️⃣ Testing Coupon System...")
-            await test_apply_coupon(session)
-            
-            print("\n8️⃣ Testing AI Portion Adjuster...")
+            print("\n⚖️  AI PORTION ADJUSTER TEST")
+            print("="*50)
+            print("1️⃣1️⃣ Testing POST /api/ai/adjust-portions...")
             await test_ai_adjust_portions(session)
         
         else:
