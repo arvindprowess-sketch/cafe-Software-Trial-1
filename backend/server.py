@@ -1087,30 +1087,41 @@ async def create_order(data: OrderCreate, user=Depends(get_current_user)):
 
 @api_router.get("/orders")
 async def list_orders(user=Depends(get_current_user)):
-    orders = await db.orders.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    """Customer: own orders. Cashier/Admin: all orders. Kitchen: active orders."""
+    if user["role"] in ("cashier", "admin"):
+        orders = await db.orders.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    elif user["role"] == "kitchen":
+        orders = await db.orders.find(
+            {"status": {"$in": ["pending", "preparing", "ready"]}},
+            {"_id": 0}
+        ).sort("created_at", 1).to_list(100)
+    else:
+        orders = await db.orders.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(50)
     return orders
 
 @api_router.get("/orders/kitchen")
 async def kitchen_orders(user=Depends(get_current_user)):
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
+    """Kitchen/Admin: all active orders from both app and walk-in"""
+    if user["role"] not in ("admin", "kitchen"):
+        raise HTTPException(status_code=403, detail="Kitchen/Admin only")
     orders = await db.orders.find(
         {"status": {"$in": ["pending", "preparing"]}},
         {"_id": 0}
-    ).sort("created_at", 1).to_list(50)
+    ).sort("created_at", 1).to_list(100)
     return orders
 
 @api_router.get("/orders/all")
 async def all_orders(user=Depends(get_current_user)):
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
+    if user["role"] not in ("admin", "cashier"):
+        raise HTTPException(status_code=403, detail="Admin/Cashier only")
     orders = await db.orders.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
     return orders
 
 @api_router.put("/orders/{order_id}/status")
 async def update_order_status(order_id: str, status: str, user=Depends(get_current_user)):
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
+    """Admin/Kitchen/Cashier: update order status"""
+    if user["role"] not in ("admin", "kitchen", "cashier"):
+        raise HTTPException(status_code=403, detail="Staff only")
     valid_statuses = ["pending", "preparing", "ready", "completed", "cancelled"]
     if status not in valid_statuses:
         raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {valid_statuses}")
