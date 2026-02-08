@@ -362,9 +362,16 @@ export default function CashierPOS() {
         {/* Fix #4: Only admin-created categories */}
         <div className="pos-categories">
           <button className={`pos-cat ${selectedCat === 'All' ? 'active' : ''}`} onClick={() => setSelectedCat('All')} data-testid="cat-All">All</button>
-          {categories.filter(c => c.is_active).map(c => (
-            <button key={c.id || c.key} className={`pos-cat ${selectedCat === c.key ? 'active' : ''}`} onClick={() => setSelectedCat(c.key)} data-testid={`cat-${c.key}`}>{c.name}</button>
-          ))}
+          {categories.filter(c => c.is_active).map(c => {
+            const fontStyle = c.font_style === 'bold' ? { fontWeight: 800 } as const : c.font_style === 'italic' ? { fontStyle: 'italic' } as const : c.font_style === 'mono' ? { fontFamily: 'monospace' } as const : {};
+            return (
+              <button key={c.id || c.key} className={`pos-cat ${selectedCat === c.key ? 'active' : ''}`}
+                onClick={() => setSelectedCat(c.key)} data-testid={`cat-${c.key}`}
+                style={{ ...fontStyle, borderColor: selectedCat === c.key ? (c.color || '#5B5FE0') : undefined }}>
+                {c.name}
+              </button>
+            );
+          })}
         </div>
 
         <div className="pos-products">
