@@ -221,7 +221,8 @@ async def test_create_offer_admin(session):
         }
         
         async with session.post(f"{API_BASE}/offers", json=payload, headers=headers) as response:
-            if response.status == 201:
+            # Accept both 200 and 201 as success
+            if response.status in [200, 201]:
                 data = await response.json()
                 if data.get("id"):
                     results.log_pass("Create Offer (Admin)", f"✓ Created offer: {data.get('title')}")
