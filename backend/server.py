@@ -146,6 +146,10 @@ class OrderCreate(BaseModel):
     total_fat: float
     fitness_goal: Optional[str] = None
     budget: Optional[float] = None
+    payment_mode: Optional[str] = "cash"  # cash, upi, card, other
+    coupon_code: Optional[str] = None
+    discount: Optional[float] = 0
+    customer_name: Optional[str] = None  # For walk-in customers
 
 class AISuggestRequest(BaseModel):
     goal: str
