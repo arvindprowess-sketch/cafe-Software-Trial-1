@@ -574,13 +574,14 @@ const styles = StyleSheet.create({
   vegDotTiny: { width: 6, height: 6, borderRadius: 3 },
   
   // AI Suggestions
-  suggestionItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F8F5FF', borderRadius: 12, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: '#E8E0FF' },
-  suggestionLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+  suggestionItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F8F5FF', borderRadius: 12, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: '#E8E0FF', gap: 10 },
+  suggestionLeft: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, flex: 1, flexShrink: 1 },
   suggestionName: { fontSize: 14, fontWeight: '700', color: '#1C1C2E' },
-  suggestionReason: { fontSize: 11, color: PURPLE, marginTop: 2 },
-  suggestionRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  suggestionGrams: { fontSize: 13, fontWeight: '700', color: '#1C1C2E' },
-  suggestionPrice: { fontSize: 12, color: '#696969' },
+  suggestionReason: { fontSize: 11, color: PURPLE, marginTop: 2, lineHeight: 15 },
+  suggestionRight: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 },
+  suggestionGramsBox: { alignItems: 'flex-end' },
+  suggestionGrams: { fontSize: 14, fontWeight: '700', color: '#1C1C2E' },
+  suggestionPrice: { fontSize: 11, color: '#696969', marginTop: 1 },
   
   // Quick Add Grid
   quickAddGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
