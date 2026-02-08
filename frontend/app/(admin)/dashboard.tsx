@@ -51,10 +51,11 @@ export default function AdminDashboard() {
         <Text style={styles.section}>Quick Actions</Text>
         {[
           { title: 'Manage Products', desc: 'Add, edit, or remove menu items', icon: 'add-circle' as const, color: '#267E3E', route: '/(admin)/products' },
+          { title: 'Staff Management', desc: 'Manage kitchen & cashier staff', icon: 'people' as const, color: '#5B5FE0', route: '/(admin)/staff' },
           { title: 'Manage Categories', desc: 'Create & customize menu categories', icon: 'grid' as const, color: '#9C27B0', route: '/(admin)/categories' },
           { title: 'Kitchen View', desc: 'View and manage active orders', icon: 'flame' as const, color: '#FF9F0A', route: '/(admin)/kitchen' },
           { title: 'Business Analytics', desc: 'Revenue, insights & AI recommendations', icon: 'analytics' as const, color: '#5B5FE0', route: '/(admin)/analytics' },
-          { title: 'Manage Tables', desc: 'View café tables and QR codes', icon: 'qr-code' as const, color: '#E23744', route: '/(admin)/tables' },
+          { title: 'Manage Tables', desc: 'View cafe tables and QR codes', icon: 'qr-code' as const, color: '#E23744', route: '/(admin)/tables' },
           { title: 'Manage Offers', desc: 'Create discounts, coupons & banners', icon: 'pricetag' as const, color: '#FF6B6B', route: '/(admin)/offers' },
           { title: 'Manage Packs', desc: 'Create goal-based meal packs', icon: 'fitness' as const, color: '#4CAF50', route: '/(admin)/packs' },
         ].map(a => (
