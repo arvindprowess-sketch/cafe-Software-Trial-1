@@ -93,6 +93,14 @@ export default function OrdersScreen() {
               <Text style={styles.metaDot}>•</Text>
               <Text style={styles.metaText}>{new Date(item.created_at).toLocaleDateString()}</Text>
             </View>
+            {item.is_scheduled && item.scheduled_ready_time && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                <Ionicons name="time" size={12} color="#5B5FE0" />
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#5B5FE0' }}>
+                  Ready at {new Date(item.scheduled_ready_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </Text>
+              </View>
+            )}
           </View>
           <Text style={styles.orderPrice}>₹{Math.round(item.total_price)}</Text>
         </View>
