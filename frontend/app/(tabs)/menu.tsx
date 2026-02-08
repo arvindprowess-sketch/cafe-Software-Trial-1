@@ -132,6 +132,7 @@ export default function MenuScreen() {
   const renderSidebarCat = (cat: any, index: number) => {
     const isActive = selectedCat === cat.key;
     const catColor = cat.color || '#1C1C2E';
+    const fontStyleProp = cat.font_style === 'bold' ? { fontWeight: '800' as const } : cat.font_style === 'italic' ? { fontStyle: 'italic' as const } : cat.font_style === 'mono' ? { fontFamily: 'monospace' } : {};
     return (
       <TouchableOpacity
         key={cat.key || cat.id}
@@ -147,7 +148,7 @@ export default function MenuScreen() {
             <Ionicons name={(cat.icon || 'grid') as any} size={18} color="#FFF" />
           </View>
         )}
-        <Text style={[styles.sidebarCatLabel, isActive && { color: catColor, fontWeight: '800' }]} numberOfLines={2}>
+        <Text style={[styles.sidebarCatLabel, isActive && { color: catColor, fontWeight: '800' }, fontStyleProp]} numberOfLines={2}>
           {cat.label || cat.name}
         </Text>
         {isActive && <View style={[styles.sidebarActiveBar, { backgroundColor: catColor }]} />}
