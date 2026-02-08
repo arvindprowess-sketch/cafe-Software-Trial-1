@@ -1002,7 +1002,6 @@ async def create_order(data: OrderCreate, user=Depends(get_current_user)):
     
     # Determine status based on scheduled or immediate
     is_scheduled = data.is_scheduled and data.scheduled_ready_time
-    logging.info(f"[SCHEDULED DEBUG] is_scheduled={data.is_scheduled}, ready_time={data.scheduled_ready_time}, result={is_scheduled}")
     if is_scheduled:
         order_status = "scheduled"
         # Calculate kitchen alert time based on order type
