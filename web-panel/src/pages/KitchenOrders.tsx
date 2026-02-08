@@ -179,9 +179,12 @@ export default function KitchenOrders() {
                 </div>
               </div>
               <div className="order-meta">
-                <span>{o.user_name}</span>
+                <span>{o.user_name || o.customer_name}</span>
                 <span>{timeSince(o.created_at)}</span>
                 <span className="badge badge-purple">{o.order_type}</span>
+                <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: o.order_source === 'app' ? '#5B5FE015' : '#FF9F0A15', color: o.order_source === 'app' ? '#5B5FE0' : '#FF9F0A' }}>
+                  {o.order_source === 'app' ? 'APP' : 'WALK-IN'}
+                </span>
               </div>
               <div className="priority-btns">
                 {['normal', 'high', 'urgent'].map(pr => (
