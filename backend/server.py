@@ -1246,7 +1246,7 @@ async def ai_quick_meal(data: QuickMealRequest, user=Depends(get_current_user)):
             f"- {p['name']} ({p.get('diet_type','veg')}): ₹{p['cost_per_100g']}/100g | {p['calories_per_100g']}cal, {p['protein_per_100g']}g protein, {p['carbs_per_100g']}g carbs, {p['fat_per_100g']}g fat per 100g | Stock: {p['available_qty_grams']}g"
             for p in products
         ])
-        budget_str = f"Budget: ₹{data.budget}. STRICTLY stay within this budget." if data.budget else "No budget limit, but keep meal reasonable (₹100-₹400 range)."
+        budget_str = f"Budget: ₹{data.budget}. You MUST use as close to ₹{data.budget} as possible (aim for 90-100% utilization). DO NOT go under ₹{int(data.budget * 0.85)}. DO NOT exceed ₹{data.budget}. Increase gram portions to fill the budget." if data.budget else "No budget limit, but keep meal reasonable (₹100-₹400 range)."
         diet_pref_str = {"veg": "VEGETARIAN ONLY", "non-veg": "NON-VEGETARIAN ONLY", "both": "Both veg and non-veg allowed"}.get(data.diet_preference, "Both")
 
         prompt = f"""You are a nutrition expert at a fitness café in India. Build a COMPLETE single meal for this customer.
