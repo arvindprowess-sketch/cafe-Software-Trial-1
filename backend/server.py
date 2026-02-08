@@ -2573,6 +2573,143 @@ async def seed_offers_and_packs():
         seeded["packs"] = len(default_packs)
     return {"message": "Seeded", **seeded}
 
+# ========== STAFF MANAGEMENT (PIN-based auth) ==========
+class StaffCreate(BaseModel):
+    name: str
+    role: str  # "kitchen" or "cashier"
+    pin: str  # 4-6 digit PIN
+
+class StaffUpdate(BaseModel):
+    name: Optional[str] = None
+    pin: Optional[str] = None
+    is_active: Optional[bool] = None
+
+class PinLogin(BaseModel):
+    pin: str
+
+@api_router.post("/staff")
+async def create_staff(data: StaffCreate, user=Depends(get_current_user)):
+    """Admin creates kitchen/cashier staff with PIN"""
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    if data.role not in ("kitchen", "cashier"):
+        raise HTTPException(status_code=400, detail="Role must be 'kitchen' or 'cashier'")
+    if not data.pin.isdigit() or len(data.pin) < 4 or len(data.pin) > 6:
+        raise HTTPException(status_code=400, detail="PIN must be 4-6 digits")
+    # Check PIN uniqueness
+    existing = await db.users.find_one({"pin_hash": {"$exists": True}, "pin_plain": data.pin}, {"_id": 0})
+    if existing:
+        raise HTTPException(status_code=400, detail="This PIN is already in use")
+    staff_id = str(uuid.uuid4())
+    staff = {
+        "id": staff_id,
+        "name": data.name,
+        "role": data.role,
+        "pin_hash": hash_password(data.pin),
+        "pin_plain": data.pin,  # For admin display (in production, remove this)
+        "is_active": True,
+        "created_by": user["id"],
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.users.insert_one(staff)
+    return {"id": staff_id, "name": data.name, "role": data.role, "pin": data.pin, "is_active": True}
+
+@api_router.get("/staff")
+async def list_staff(user=Depends(get_current_user)):
+    """Admin lists all staff"""
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    staff = await db.users.find({"role": {"$in": ["kitchen", "cashier"]}}, {"_id": 0}).to_list(100)
+    return [{"id": s["id"], "name": s["name"], "role": s["role"], "pin": s.get("pin_plain", "****"), "is_active": s.get("is_active", True), "created_at": s.get("created_at")} for s in staff]
+
+@api_router.put("/staff/{staff_id}")
+async def update_staff(staff_id: str, data: StaffUpdate, user=Depends(get_current_user)):
+    """Admin updates staff"""
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    update_data = {}
+    if data.name is not None:
+        update_data["name"] = data.name
+    if data.pin is not None:
+        if not data.pin.isdigit() or len(data.pin) < 4 or len(data.pin) > 6:
+            raise HTTPException(status_code=400, detail="PIN must be 4-6 digits")
+        update_data["pin_hash"] = hash_password(data.pin)
+        update_data["pin_plain"] = data.pin
+    if data.is_active is not None:
+        update_data["is_active"] = data.is_active
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No updates provided")
+    result = await db.users.update_one({"id": staff_id, "role": {"$in": ["kitchen", "cashier"]}}, {"$set": update_data})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Staff not found")
+    return {"message": "Staff updated"}
+
+@api_router.delete("/staff/{staff_id}")
+async def delete_staff(staff_id: str, user=Depends(get_current_user)):
+    """Admin deletes staff"""
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    result = await db.users.delete_one({"id": staff_id, "role": {"$in": ["kitchen", "cashier"]}})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Staff not found")
+    return {"message": "Staff deleted"}
+
+@api_router.post("/auth/pin-login")
+async def pin_login(data: PinLogin):
+    """PIN-based login for kitchen/cashier staff"""
+    if not data.pin.isdigit() or len(data.pin) < 4 or len(data.pin) > 6:
+        raise HTTPException(status_code=400, detail="Invalid PIN format")
+    # Find staff by PIN
+    staff_list = await db.users.find({"role": {"$in": ["kitchen", "cashier"]}, "is_active": True}, {"_id": 0}).to_list(100)
+    matched_staff = None
+    for s in staff_list:
+        if s.get("pin_hash") and verify_password(data.pin, s["pin_hash"]):
+            matched_staff = s
+            break
+    if not matched_staff:
+        raise HTTPException(status_code=401, detail="Invalid PIN")
+    token = create_token(matched_staff["id"], matched_staff["role"])
+    return {
+        "token": token,
+        "user": {
+            "id": matched_staff["id"],
+            "name": matched_staff["name"],
+            "role": matched_staff["role"]
+        }
+    }
+
+# ========== ORDER PRIORITY ==========
+@api_router.put("/orders/{order_id}/priority")
+async def set_order_priority(order_id: str, priority: str = Body(..., embed=True), user=Depends(get_current_user)):
+    """Set priority flag on order (kitchen/admin)"""
+    if user["role"] not in ("admin", "kitchen"):
+        raise HTTPException(status_code=403, detail="Kitchen/Admin only")
+    if priority not in ("normal", "high", "urgent"):
+        raise HTTPException(status_code=400, detail="Priority must be: normal, high, urgent")
+    result = await db.orders.update_one({"id": order_id}, {"$set": {"priority": priority}})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Order not found")
+    return {"message": f"Priority set to {priority}"}
+
+# ========== INVENTORY FOR KITCHEN ==========
+@api_router.get("/inventory")
+async def get_inventory(user=Depends(get_current_user)):
+    """Kitchen/Admin: Get stock levels for all products"""
+    if user["role"] not in ("admin", "kitchen"):
+        raise HTTPException(status_code=403, detail="Kitchen/Admin only")
+    products = await db.products.find({}, {"_id": 0}).to_list(200)
+    inventory = []
+    for p in products:
+        stock = p.get("available_qty_grams", 0)
+        status = "in_stock" if stock > 500 else "low" if stock > 0 else "out_of_stock"
+        inventory.append({
+            "id": p["id"], "name": p["name"], "category": p.get("category", ""),
+            "diet_type": p.get("diet_type", "veg"), "available_qty_grams": stock,
+            "product_type": p.get("product_type", "single"), "is_active": p.get("is_active", True),
+            "status": status
+        })
+    return inventory
+
 app.include_router(api_router)
 
 app.add_middleware(
