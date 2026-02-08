@@ -9,32 +9,53 @@ from pathlib import Path
 backend_url = "http://localhost:8001"
 
 API_BASE = f"{backend_url}/api"
-print(f"🌐 Testing backend at: {API_BASE}")
+print(f"🌐 Testing Diet Cafe Expo Backend at: {API_BASE}")
+print(f"🎯 Focus: AI Combo Builder & Offers/Banners System")
 
 class TestResults:
     def __init__(self):
         self.passed = []
         self.failed = []
+        self.ai_tests_passed = []
+        self.critical_issues = []
         
     def log_pass(self, test_name, details=""):
         self.passed.append(f"✅ {test_name} {details}".strip())
         print(f"✅ {test_name} {details}".strip())
+        if "AI" in test_name or "quick-meal" in test_name.lower():
+            self.ai_tests_passed.append(test_name)
         
     def log_fail(self, test_name, error):
         self.failed.append(f"❌ {test_name}: {error}")
         print(f"❌ {test_name}: {error}")
+        if "AI" in test_name or any(critical in test_name.lower() for critical in ["login", "quick-meal", "combo"]):
+            self.critical_issues.append(f"{test_name}: {error}")
         
     def print_summary(self):
-        print("\n" + "="*60)
-        print(f"📊 BACKEND TEST RESULTS - Diet Cafe Expo")
-        print("="*60)
+        success_rate = len(self.passed) / (len(self.passed) + len(self.failed)) * 100 if (len(self.passed) + len(self.failed)) > 0 else 0
+        print("\n" + "="*70)
+        print(f"📊 DIET CAFE EXPO BACKEND TEST RESULTS")
+        print("="*70)
         print(f"✅ PASSED: {len(self.passed)}")
         print(f"❌ FAILED: {len(self.failed)}")
+        print(f"📈 SUCCESS RATE: {success_rate:.1f}%")
+        print(f"🤖 AI FEATURES WORKING: {len(self.ai_tests_passed)}")
+        
+        if self.ai_tests_passed:
+            print(f"\n🚀 AI COMBO BUILDER STATUS:")
+            for ai_test in self.ai_tests_passed:
+                print(f"  ✅ {ai_test}")
+        
+        if self.critical_issues:
+            print(f"\n🔥 CRITICAL ISSUES:")
+            for issue in self.critical_issues:
+                print(f"  ❌ {issue}")
+                
         if self.failed:
-            print("\n🔥 FAILURES:")
+            print(f"\n📝 ALL FAILURES:")
             for failure in self.failed:
                 print(f"  {failure}")
-        print("="*60)
+        print("="*70)
 
 results = TestResults()
 admin_token = None
