@@ -1263,7 +1263,7 @@ RULES:
 - ONLY use items from the available menu above
 - Use the EXACT product names as listed
 - Suggest specific gram quantities (multiples of 25g)
-- Keep within budget if specified
+- BUDGET IS CRITICAL: Calculate total cost = sum(grams/100 * cost_per_100g) for each item. The total MUST be between 90% and 100% of the budget. If total is too low, increase portions or add more items. If total exceeds budget, reduce portions.
 - For {data.goal}:
   * fat_loss: High protein, low carb, ~400-600 cal total, prioritize lean proteins
   * muscle_gain: High protein, moderate-high carbs, ~700-1000 cal, include carb sources
