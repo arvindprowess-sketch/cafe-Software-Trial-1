@@ -542,14 +542,19 @@ async def test_apply_coupon(session):
 
 async def test_ai_quick_meal_muscle_gain_200(session):
     """Test POST /api/ai/quick-meal with {budget: 200, goal: 'muscle_gain', diet_preference: 'both'}"""
+    if not admin_token:
+        results.log_fail("AI Quick Meal: Muscle Gain ₹200", "No admin token available")
+        return False
+    
     try:
+        headers = {"Authorization": f"Bearer {admin_token}"}
         payload = {
             "budget": 200,
             "goal": "muscle_gain",
             "diet_preference": "both"
         }
         
-        async with session.post(f"{API_BASE}/ai/quick-meal", json=payload) as response:
+        async with session.post(f"{API_BASE}/ai/quick-meal", json=payload, headers=headers) as response:
             if response.status == 200:
                 data = await response.json()
                 
@@ -593,14 +598,19 @@ async def test_ai_quick_meal_muscle_gain_200(session):
 
 async def test_ai_quick_meal_fat_loss_veg(session):
     """Test POST /api/ai/quick-meal with {budget: 150, goal: 'fat_loss', diet_preference: 'veg'}"""
+    if not admin_token:
+        results.log_fail("AI Quick Meal: Fat Loss Veg ₹150", "No admin token available")
+        return False
+    
     try:
+        headers = {"Authorization": f"Bearer {admin_token}"}
         payload = {
             "budget": 150,
             "goal": "fat_loss",
             "diet_preference": "veg"
         }
         
-        async with session.post(f"{API_BASE}/ai/quick-meal", json=payload) as response:
+        async with session.post(f"{API_BASE}/ai/quick-meal", json=payload, headers=headers) as response:
             if response.status == 200:
                 data = await response.json()
                 
@@ -632,14 +642,19 @@ async def test_ai_quick_meal_fat_loss_veg(session):
 
 async def test_ai_quick_meal_low_budget(session):
     """Test POST /api/ai/quick-meal with {budget: 50, goal: 'maintenance', diet_preference: 'both'}"""
+    if not admin_token:
+        results.log_fail("AI Quick Meal: Low Budget ₹50", "No admin token available")
+        return False
+    
     try:
+        headers = {"Authorization": f"Bearer {admin_token}"}
         payload = {
             "budget": 50,
             "goal": "maintenance",
             "diet_preference": "both"
         }
         
-        async with session.post(f"{API_BASE}/ai/quick-meal", json=payload) as response:
+        async with session.post(f"{API_BASE}/ai/quick-meal", json=payload, headers=headers) as response:
             if response.status == 200:
                 data = await response.json()
                 
@@ -671,7 +686,12 @@ async def test_ai_quick_meal_low_budget(session):
 
 async def test_ai_adjust_portions(session):
     """Test POST /api/ai/adjust-portions should return AI-adjusted portions"""
+    if not admin_token:
+        results.log_fail("AI Adjust Portions", "No admin token available")
+        return False
+    
     try:
+        headers = {"Authorization": f"Bearer {admin_token}"}
         payload = {
             "items": [
                 {"name": "chicken", "grams": 100, "calories_per_100g": 165, "protein_per_100g": 31},
@@ -681,7 +701,7 @@ async def test_ai_adjust_portions(session):
             "consumed_today": 100
         }
         
-        async with session.post(f"{API_BASE}/ai/adjust-portions", json=payload) as response:
+        async with session.post(f"{API_BASE}/ai/adjust-portions", json=payload, headers=headers) as response:
             if response.status == 200:
                 data = await response.json()
                 if "adjusted_items" in data or "suggestions" in data or "summary" in data:
