@@ -11,37 +11,36 @@ Diet Cafe management: Mobile App (customers) + Web Panel (admin/kitchen/cashier)
 
 ## What's Been Implemented
 
-### Session 1: Initial Build
-- Full backend, mobile app, web panel, auth, Razorpay mock, QR tables, offers/packs
-
-### Session 2: All Backlogs (P0/P1/P2)
-- Stock management, notifications, receipts, coupons, sound alerts, shifts, loyalty, meal planning, streaks
-
-### Session 3: Cashier POS Overhaul
-- Build by grams/MRP, GST breakup, Cash/UPI/Card/Other payments, walk-in customers, ready-made support
-
-### Session 4: 5 Critical Fixes (Feb 8, 2026)
-1. **AI Budget Exact**: Post-processing scales portions to match budget precisely.
-2. **Hold Bills**: Cart can be held and resumed with full cart restore.
-3. **AI Cart Merging**: AI items merge into single entries. Each cart item editable.
-4. **Admin-Only Categories**: POS shows only admin-created categories.
-5. **Offers Visible to Cashier**: Active offers shown as banner with auto-fill coupon code.
+### Session 1-4: Core + Backlogs + Cashier POS Overhaul
+- Full backend, mobile app, web panel, auth, stock mgmt, shifts, loyalty, sound alerts
+- Cashier POS with Build-by-grams/MRP, GST, Hold Bills, AI cart merge, offers
+- AI budget exact matching, admin categories, order source tracking
 
 ### Session 5: Scheduled Orders (Feb 8, 2026)
-1. **Customer-side (Mobile)**: Order type selector (Dine-in/Takeaway/Delivery), schedule toggle with time picker, shows kitchen alert time preview.
-2. **Backend**: `is_scheduled`, `scheduled_ready_time`, `kitchen_alert_time` fields on orders. Alert time = ready_time - 10min (dine-in/takeaway) or 20min (delivery).
-3. **Kitchen (Web Panel)**: Active/Upcoming tabs, blocking popup at alert time with order details + ingredient-wise grams, "Confirm & Start" to move to preparing.
-4. **APIs**: `GET /api/orders/scheduled` (with alert_triggered flag), `POST /api/orders/{id}/confirm-scheduled`.
-5. **Mobile orders screen**: Shows "scheduled" step in timeline, displays scheduled ready time.
+1. Customer-side (Mobile): Order type selector, schedule toggle with time picker
+2. Backend: `is_scheduled`, `scheduled_ready_time`, `kitchen_alert_time` fields
+3. Kitchen (Web Panel): Active/Upcoming tabs, blocking popup at alert time
+4. APIs: `GET /api/orders/scheduled`, `POST /api/orders/{id}/confirm-scheduled`
+
+### Session 5b: Hybrid AI Meal Builder (Feb 8, 2026)
+1. **AI picks WHAT items** — based on fitness goal, diet preference, nutrition balance
+2. **System calculates HOW MUCH** — exact grams per item using deterministic math:
+   - Hits budget within ₹1 (tested: ₹0-0.60 variance)
+   - Respects real stock limits (never exceeds available_qty_grams)
+   - 5g rounding for clean portions
+   - Multi-round iterative adjustment to close budget gap
+3. AI now outputs `budget_share_percent` per item (not grams)
+4. Works for both Cashier POS and Customer mobile app (same endpoint)
 
 ## Testing Status
-- All 14 iterations passing
-- Backend: 100%, Frontend: 100%
+- iteration_14: Scheduled orders 100% pass
+- iteration_15: AI meal builder 100% pass (10/10 tests)
 
 ## Key APIs
-- `POST /api/orders` - Create order (supports is_scheduled + scheduled_ready_time)
-- `GET /api/orders/scheduled` - Kitchen: get scheduled orders with alert_triggered flag
-- `POST /api/orders/{id}/confirm-scheduled` - Kitchen confirms and starts scheduled order
+- `POST /api/ai/quick-meal` - Hybrid AI meal builder (AI picks + system portions)
+- `POST /api/orders` - Create order (supports scheduled)
+- `GET /api/orders/scheduled` - Kitchen scheduled orders
+- `POST /api/orders/{id}/confirm-scheduled` - Kitchen confirms scheduled
 - `POST /api/auth/pin-login` - Staff PIN login (kitchen: 1234, cashier: 5678)
 
 ## Next Tasks
