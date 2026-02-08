@@ -69,7 +69,10 @@ export default function KitchenOrders() {
 
   const load = async () => {
     try {
-      const data = await api('/orders/kitchen');
+      const [data, scheduled] = await Promise.all([
+        api('/orders/kitchen'),
+        api('/orders/scheduled').catch(() => [])
+      ]);
       const pOrder: Record<string, number> = { urgent: 0, high: 1, normal: 2 };
       data.sort((a: any, b: any) => (pOrder[a.priority || 'normal'] ?? 2) - (pOrder[b.priority || 'normal'] ?? 2));
 
@@ -77,7 +80,6 @@ export default function KitchenOrders() {
       const currentIds = new Set(data.map((o: any) => o.id));
       const newOrders = data.filter((o: any) => !prevOrderIdsRef.current.has(o.id));
       if (newOrders.length > 0 && prevOrderIdsRef.current.size > 0) {
-        // Play sound for highest priority new order
         const highestPriority = newOrders.reduce((acc: string, o: any) => {
           const p = o.priority || 'normal';
           if (p === 'urgent') return 'urgent';
