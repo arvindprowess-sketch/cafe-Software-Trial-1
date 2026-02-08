@@ -1,63 +1,79 @@
 # AI Diet Cafe App - PRD
 
 ## Original Problem Statement
-Diet Cafe app built with Expo React Native (TypeScript) frontend + FastAPI Python backend + MongoDB. Uses Emergent LLM Key for AI features (GPT-5.2).
+Diet Cafe app with Expo React Native (TypeScript) frontend + FastAPI backend + MongoDB. Uses Emergent LLM Key for AI features (GPT-5.2).
 
-## Tech Stack
-- **Frontend**: Expo (React Native), TypeScript, expo-router, tunnel mode
-- **Backend**: FastAPI (Python), MongoDB (port 8001)
-- **AI**: OpenAI GPT-5.2 via Emergent LLM Key
-- **Payment**: Razorpay (MOCK MODE — no keys configured)
+## Architecture
+### Platform Separation (Implemented Feb 2026)
+- **Customer Mobile App** (Expo React Native, port 8081/tunnel): Menu browsing, meal customization, calorie tracking, order placement
+- **Web Management Panel** (React+Vite, port 3000): Admin dashboard, kitchen display, cashier POS
+- **Backend** (FastAPI, port 8001): Shared API serving both platforms
+- **Database**: MongoDB (shared)
 
-## What's Been Implemented (Feb 2026)
+### Role System
+| Role | Platform | Auth Method | Features |
+|------|----------|-------------|----------|
+| Customer | Mobile App | Phone OTP | Menu, AI meals, orders, calorie tracking |
+| Admin | Web Panel | Email/Password | Dashboard, products, categories, staff, offers, analytics, tables, kitchen view |
+| Kitchen | Web Panel | PIN (4-6 digits) | Orders with priority flags, inventory |
+| Cashier | Web Panel | PIN (4-6 digits) | POS terminal, AI suggestions, cart, billing, orders, tables |
 
-### Phase 1 — Setup & Seeding
-- [x] expo start --tunnel, 16 products, 6 categories, admin user
+## User Personas
+1. **Customer** - Health-conscious diners using mobile app for diet-friendly ordering
+2. **Admin** - Cafe owner managing menu, staff, analytics via web dashboard
+3. **Kitchen Staff** - Cooks viewing/prioritizing orders, monitoring inventory
+4. **Cashier** - Counter staff processing walk-in orders with full POS
 
-### Phase 2 — Calorie Goal Awareness
-- [x] Warning modal (never blocks), exceeded state on home, goal context in budget-meal
+## Core Requirements (Static)
+- Diet-focused menu with per-gram pricing & macro tracking
+- AI meal builder (GPT-5.2) for goal-based suggestions
+- Multi-role access control with separate platforms
+- Real-time kitchen order management with priority flags
+- POS terminal for offline/walk-in customers
 
-### Phase 3 — High Impact Features
-- [x] **Offers & Banners System**: Admin CRUD, dynamic banners, filtered discounted products, coupon codes
-- [x] **Goal Packs System**: Admin CRUD, pack detail with nutrition/savings, one-tap order
-- [x] **Smart Portion Adjuster**: AI GPT-5.2 suggests gram reductions, one-tap apply
-- [x] **Razorpay Payment**: Mock mode backend (create-order, verify)
-- [x] **Push Notifications**: Auto-notify on order status changes
+## What's Been Implemented
+### Session 1 (Feb 2026)
+- Initial setup, seeded admin (admin@dietcafe.com/admin123), 16 products, 6 categories
+- 3-role system: Admin (email/password), Kitchen (PIN), Cashier (PIN)
+- Admin staff management (create/edit/delete kitchen & cashier staff)
+- Backend: /api/staff CRUD, /api/auth/pin-login, /api/orders/{id}/priority, /api/inventory
 
-### Phase 4 — AI Combo Builder
-- [x] **Dedicated combo-builder.tsx screen** with 3-step flow:
-  - Step 1: Set budget (₹100-500)
-  - Step 2: Choose goal (Muscle Gain / Fat Loss / Maintenance)
-  - Step 3: Diet preference (Veg / Non-Veg / Both)
-  - AI generates optimal combo → shows items, nutrition, price vs budget
-  - One-tap "Order Combo" sends to customize screen
-  - Retry button for regeneration
-  - Animated transitions, loading states, step dots
+### Session 2 (Feb 2026) - Platform Separation
+- Created React+Vite web panel at /app/web-panel/ (port 3000)
+- Admin: Sidebar navigation, dashboard with stats, products table, staff management, categories, kitchen view, offers, analytics, tables
+- Kitchen: Orders with priority flags (urgent/high/normal), inventory with stock status
+- Cashier: Full POS terminal with product grid, cart, AI meal builder, order type toggle, table management
+- Login: Tab-based (Admin email/password, Staff PIN)
+- Cleaned Expo mobile app: removed admin/kitchen/cashier screens, customer-only
+- Startup script runs both web panel (port 3000) and Expo tunnel (port 8081)
+- Testing: 100% pass rate (15/15 frontend tests, 92.9% backend tests)
 
-## Screens Added This Session
-- combo-builder.tsx — AI Combo Builder (3-step → result → order)
-- offer-detail.tsx — Filtered products with discounts
-- pack-detail.tsx — Pack items, nutrition, savings
-- (admin)/offers.tsx — Admin offer management
-- (admin)/packs.tsx — Admin pack management
-
-## API Endpoints
-- POST /api/ai/quick-meal — AI combo generation (GPT-5.2)
-- POST /api/ai/adjust-portions — Smart portion adjuster
-- CRUD /api/offers, /api/packs
-- GET /api/banners (dynamic from offers + packs)
-- POST /api/payments/create-order, /api/payments/verify
-- POST /api/orders/apply-coupon
-
-## Test Results
-- All backend tests: 100% (11/11 passed)
-- AI Quick Meal tested with muscle_gain/fat_loss/maintenance, veg/non-veg/both, budgets ₹50-200
-
-## Seeded Data
+### Seeded Data
 - Admin: admin@dietcafe.com / admin123
-- 16 Products, 6 Categories, 6 Offers, 6 Packs
+- Kitchen: Raju Kitchen (PIN: 1234)
+- Cashier: Priya Cashier (PIN: 5678)
+- 16 products, 6 categories
 
-## Backlog
-### P0: Razorpay real keys, Frontend payment WebView
-### P1: Order receipt UI, Push notification deep-linking
-### P2: Weekly meal planning, Loyalty/rewards, Google OAuth
+## Prioritized Backlog
+### P0 (Critical)
+- Razorpay real key integration for payments
+- Stock quantity management (add/remove stock from admin/kitchen)
+
+### P1 (Important)
+- Push notification for new orders
+- Order receipt/bill generation
+- Coupon code application at checkout (cashier POS)
+- Sound/vibration alerts for urgent kitchen orders
+
+### P2 (Nice to have)
+- Weekly meal planning
+- Loyalty/rewards program
+- Google OAuth
+- Shift management for staff
+- Print kitchen ticket
+- Daily streak tracker for customer retention
+
+## Next Tasks
+- User testing feedback on mobile app + web panel
+- Razorpay integration
+- Stock management UI for kitchen/admin
