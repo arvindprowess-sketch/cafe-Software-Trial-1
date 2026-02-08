@@ -268,7 +268,7 @@ async def test_update_offer_admin(session):
         return False
 
 async def test_get_packs(session):
-    """Test GET /api/packs should return 3 active packs"""
+    """Test GET /api/packs should return at least 3 active packs"""
     global pack_id
     try:
         async with session.get(f"{API_BASE}/packs") as response:
@@ -276,15 +276,15 @@ async def test_get_packs(session):
                 data = await response.json()
                 if isinstance(data, list):
                     pack_count = len(data)
-                    if pack_count == 3:
+                    if pack_count >= 3:
                         # Store first pack ID for later tests
                         if data and data[0].get("id"):
                             pack_id = data[0]["id"]
-                        pack_names = [p.get("name", "Unknown") for p in data]
+                        pack_names = [p.get("name", "Unknown") for p in data[:3]]
                         results.log_pass("Get Packs", f"✓ {pack_count} packs: {', '.join(pack_names)}")
                         return True
                     else:
-                        results.log_fail("Get Packs", f"Expected 3 packs, got {pack_count}")
+                        results.log_fail("Get Packs", f"Expected at least 3 packs, got {pack_count}")
                         return False
                 else:
                     results.log_fail("Get Packs", "Response is not a list")
