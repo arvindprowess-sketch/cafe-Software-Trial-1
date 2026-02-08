@@ -2,12 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../utils/api';
 
 const STATUS_COLORS: Record<string, string> = { pending: 'badge-orange', preparing: 'badge-purple', ready: 'badge-green', completed: 'badge-gray', cancelled: 'badge-red' };
+const PAYMENT_COLORS: Record<string, string> = { paid: '#267E3E', unpaid: '#E23744', pending: '#FF9F0A' };
 
 export default function CashierOrders() {
   const [orders, setOrders] = useState<any[]>([]);
   const [heldBills, setHeldBills] = useState<any[]>([]);
   const [showReceipt, setShowReceipt] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'orders' | 'held'>('orders');
+  const [filter, setFilter] = useState('all'); // all, app, walk_in
 
   const load = async () => {
     try {
@@ -16,7 +18,9 @@ export default function CashierOrders() {
       setHeldBills(h);
     } catch {}
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); const iv = setInterval(load, 10000); return () => clearInterval(iv); }, []);
+
+  const filteredOrders = filter === 'all' ? orders : orders.filter(o => o.order_source === filter);
 
   const viewReceipt = async (orderId: string) => {
     try { setShowReceipt(await api(`/orders/${orderId}/receipt`)); } catch (err: any) { alert(err.message); }
@@ -27,7 +31,7 @@ export default function CashierOrders() {
     if (!el) return;
     const w = window.open('', '_blank', 'width=400,height=600');
     if (!w) return;
-    w.document.write(`<html><head><title>Receipt</title><style>body{font-family:monospace;padding:16px;font-size:13px;max-width:300px;margin:0 auto}h2{text-align:center;margin:0}.dashed{border-top:1px dashed #000;margin:8px 0}.row{display:flex;justify-content:space-between}.big{font-size:16px;font-weight:bold}</style></head><body>`);
+    w.document.write(`<html><head><title>Receipt</title><style>body{font-family:monospace;padding:16px;font-size:13px;max-width:300px;margin:0 auto}h2{text-align:center;margin:0}.dashed{border-top:1px dashed #000;margin:8px 0}.row{display:flex;justify-content:space-between}</style></head><body>`);
     w.document.write(el.innerHTML);
     w.document.write('</body></html>');
     w.document.close();
@@ -35,7 +39,6 @@ export default function CashierOrders() {
   };
 
   const resumeHeldBill = (bill: any) => {
-    // Navigate to POS with the held bill data in URL params
     const data = encodeURIComponent(JSON.stringify(bill));
     window.location.href = `/cashier?resume=${data}`;
   };
@@ -45,15 +48,23 @@ export default function CashierOrders() {
     try { await api(`/held-bills/${billId}`, { method: 'DELETE' }); load(); } catch (err: any) { alert(err.message); }
   };
 
+  const appOrders = orders.filter(o => o.order_source === 'app');
+  const walkInOrders = orders.filter(o => o.order_source !== 'app');
+  const pendingCount = orders.filter(o => ['pending', 'preparing'].includes(o.status)).length;
+
   return (
     <div>
       <div className="page-header">
-        <div><h1>Orders</h1><p>{orders.length} orders · {heldBills.length} held</p></div>
+        <div>
+          <h1>Orders</h1>
+          <p>{orders.length} total · {pendingCount} active · {heldBills.length} held</p>
+        </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className={`btn btn-sm ${activeTab === 'orders' ? 'btn-purple' : 'btn-secondary'}`} onClick={() => setActiveTab('orders')} data-testid="tab-orders">Orders ({orders.length})</button>
+          <button className={`btn btn-sm ${activeTab === 'orders' ? 'btn-purple' : 'btn-secondary'}`} onClick={() => setActiveTab('orders')} data-testid="tab-orders">
+            Orders ({orders.length})
+          </button>
           <button className={`btn btn-sm ${activeTab === 'held' ? 'btn-orange' : 'btn-secondary'}`} onClick={() => setActiveTab('held')} data-testid="tab-held">
-            Hold ({heldBills.length})
-            {heldBills.length > 0 && <span style={{ background: '#FF9F0A', color: '#fff', borderRadius: '50%', padding: '1px 6px', fontSize: 10, marginLeft: 4 }}>{heldBills.length}</span>}
+            Hold {heldBills.length > 0 && <span style={{ background: '#FF9F0A', color: '#fff', borderRadius: '50%', padding: '1px 6px', fontSize: 10, marginLeft: 4 }}>{heldBills.length}</span>}
           </button>
           <button className="btn btn-secondary" onClick={load} data-testid="refresh-orders-btn">Refresh</button>
         </div>
@@ -65,8 +76,7 @@ export default function CashierOrders() {
           {heldBills.length === 0 && (
             <div className="empty-state">
               <div className="empty-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#9C9C9C" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M10 15V9l5 3-5 3z"/></svg></div>
-              <h3>No held bills</h3>
-              <p>Bills put on hold from POS will appear here</p>
+              <h3>No held bills</h3><p>Bills on hold from POS appear here</p>
             </div>
           )}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 14 }}>
@@ -92,14 +102,9 @@ export default function CashierOrders() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: 16, borderTop: '1px solid #EFEFEF', paddingTop: 8, marginBottom: 10 }}>
                     <span>Total</span><span>₹{Math.round(billTotal)}</span>
                   </div>
-                  {bill.coupon_code && <div style={{ fontSize: 12, color: '#267E3E', marginBottom: 8 }}>Coupon: {bill.coupon_code} (-₹{bill.coupon_discount})</div>}
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button className="btn btn-green" style={{ flex: 2 }} onClick={() => resumeHeldBill(bill)} data-testid={`resume-${bill.id}`}>
-                      Resume Order
-                    </button>
-                    <button className="btn btn-danger" style={{ flex: 1 }} onClick={() => discardHeldBill(bill.id)} data-testid={`discard-${bill.id}`}>
-                      Discard
-                    </button>
+                    <button className="btn btn-green" style={{ flex: 2 }} onClick={() => resumeHeldBill(bill)} data-testid={`resume-${bill.id}`}>Resume</button>
+                    <button className="btn btn-danger" style={{ flex: 1 }} onClick={() => discardHeldBill(bill.id)} data-testid={`discard-${bill.id}`}>Discard</button>
                   </div>
                 </div>
               );
@@ -111,30 +116,65 @@ export default function CashierOrders() {
       {/* Orders Tab */}
       {activeTab === 'orders' && (
         <>
-          {orders.length === 0 && (
-            <div className="empty-state">
-              <div className="empty-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#9C9C9C" strokeWidth="2"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M8 7h8M8 11h6M8 15h4"/></svg></div>
-              <h3>No orders yet</h3>
-            </div>
+          {/* Source filter */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+            {[
+              { key: 'all', label: `All (${orders.length})` },
+              { key: 'app', label: `App Orders (${appOrders.length})` },
+              { key: 'walk_in', label: `Walk-in (${walkInOrders.length})` },
+            ].map(f => (
+              <button key={f.key} className={`btn btn-sm ${filter === f.key ? 'btn-purple' : 'btn-secondary'}`}
+                onClick={() => setFilter(f.key)} data-testid={`filter-${f.key}`}>{f.label}</button>
+            ))}
+          </div>
+
+          {filteredOrders.length === 0 && (
+            <div className="empty-state"><h3>No orders</h3></div>
           )}
           <table className="data-table">
-            <thead><tr><th>Order #</th><th>Customer</th><th>Type</th><th>Items</th><th>Total</th><th>Payment</th><th>Status</th><th>Time</th><th>Actions</th></tr></thead>
+            <thead>
+              <tr>
+                <th>Order #</th><th>Source</th><th>Customer</th><th>Type</th><th>Items</th>
+                <th>Total</th><th>Payment</th><th>Status</th><th>Time</th><th>Actions</th>
+              </tr>
+            </thead>
             <tbody>
-              {orders.map(o => (
-                <tr key={o.id}>
-                  <td style={{ fontWeight: 800 }}>#{o.id}</td>
-                  <td>{o.customer_name || o.user_name}</td>
-                  <td><span className="badge badge-purple">{o.order_type}</span></td>
-                  <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.items?.map((i: any) => i.product_name).join(', ')}</td>
-                  <td style={{ fontWeight: 700 }}>₹{Math.round(o.total_price)}</td>
-                  <td><span style={{ fontWeight: 600, textTransform: 'uppercase', fontSize: 12 }}>{o.payment_mode || 'cash'}</span></td>
-                  <td><span className={`badge ${STATUS_COLORS[o.status] || 'badge-gray'}`}>{o.status}</span></td>
-                  <td style={{ fontSize: 12, color: '#9C9C9C' }}>{new Date(o.created_at).toLocaleString()}</td>
-                  <td>
-                    <button className="btn btn-sm btn-secondary" onClick={() => viewReceipt(o.id)} data-testid={`receipt-${o.id}`}>Receipt</button>
-                  </td>
-                </tr>
-              ))}
+              {filteredOrders.map(o => {
+                const isApp = o.order_source === 'app';
+                return (
+                  <tr key={o.id}>
+                    <td style={{ fontWeight: 800 }}>#{o.id}</td>
+                    <td>
+                      <span style={{
+                        fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 4,
+                        background: isApp ? '#5B5FE015' : '#FF9F0A15',
+                        color: isApp ? '#5B5FE0' : '#FF9F0A',
+                      }}>
+                        {isApp ? 'APP' : 'WALK-IN'}
+                      </span>
+                    </td>
+                    <td>{o.customer_name || o.user_name}</td>
+                    <td><span className="badge badge-purple">{o.order_type}</span></td>
+                    <td style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {o.items?.map((i: any) => i.product_name).join(', ')}
+                    </td>
+                    <td style={{ fontWeight: 700 }}>₹{Math.round(o.total_price)}</td>
+                    <td>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <span style={{ fontWeight: 600, textTransform: 'uppercase', fontSize: 11 }}>{o.payment_mode || 'cash'}</span>
+                        <span style={{ fontSize: 10, fontWeight: 700, color: PAYMENT_COLORS[o.payment_status] || '#9C9C9C' }}>
+                          {o.payment_status === 'paid' ? 'PAID' : 'PENDING'}
+                        </span>
+                      </div>
+                    </td>
+                    <td><span className={`badge ${STATUS_COLORS[o.status] || 'badge-gray'}`}>{o.status}</span></td>
+                    <td style={{ fontSize: 12, color: '#9C9C9C' }}>{new Date(o.created_at).toLocaleString()}</td>
+                    <td>
+                      <button className="btn btn-sm btn-secondary" onClick={() => viewReceipt(o.id)} data-testid={`receipt-${o.id}`}>Receipt</button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </>
