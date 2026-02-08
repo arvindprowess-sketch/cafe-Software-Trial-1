@@ -23,6 +23,13 @@ export default function CustomizeScreen() {
   const [ordering, setOrdering] = useState(false);
   const [inputMode, setInputMode] = useState<Record<string, 'grams' | 'rupees'>>({});
 
+  // Scheduled order state
+  const [selectedOrderType, setSelectedOrderType] = useState(orderType);
+  const [isScheduled, setIsScheduled] = useState(false);
+  const [scheduledHour, setScheduledHour] = useState('');
+  const [scheduledMinute, setScheduledMinute] = useState('');
+  const [showTimePicker, setShowTimePicker] = useState(false);
+
   // Calorie goal awareness
   const [userGoals, setUserGoals] = useState<any>({ daily_calories: 2000, daily_protein: 100, daily_carbs: 250, daily_fat: 65 });
   const [consumedToday, setConsumedToday] = useState<any>({ calories: 0, protein: 0, carbs: 0, fat: 0 });
