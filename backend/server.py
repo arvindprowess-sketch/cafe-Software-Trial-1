@@ -1082,7 +1082,6 @@ async def create_order(data: OrderCreate, user=Depends(get_current_user)):
         upsert=True
     )
     # Auto-update streak
-    from datetime import timedelta
     yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
     streak_data = await db.streaks.find_one({"user_id": user["id"]}, {"_id": 0})
     if not streak_data:
@@ -1169,7 +1168,6 @@ async def update_order_status(order_id: str, status: str, user=Depends(get_curre
 @api_router.get("/products/popular")
 async def get_popular_products(user=Depends(get_current_user)):
     """Get popular products based on previous day orders"""
-    from datetime import timedelta
     
     # Get yesterday's date range
     today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
@@ -3281,7 +3279,6 @@ async def get_streak(user=Depends(get_current_user)):
 async def update_streak(user=Depends(get_current_user)):
     """Update streak after placing an order"""
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    from datetime import timedelta
     yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
     
     streak_data = await db.streaks.find_one({"user_id": user["id"]}, {"_id": 0})
