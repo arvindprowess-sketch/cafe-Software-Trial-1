@@ -520,22 +520,22 @@ async def test_ai_adjust_portions(session):
     try:
         headers = {"Authorization": f"Bearer {admin_token}"}
         payload = {
-            "current_items": [
-                {"name": "chicken", "grams": 100},
-                {"name": "rice", "grams": 150}
+            "items": [
+                {"name": "chicken", "grams": 100, "calories_per_100g": 165, "protein_per_100g": 31},
+                {"name": "rice", "grams": 150, "calories_per_100g": 130, "protein_per_100g": 2.7}
             ],
-            "target_calories": 500,
-            "fitness_goal": "muscle_gain"
+            "calorie_goal": 400,
+            "consumed_today": 100
         }
         
         async with session.post(f"{API_BASE}/ai/adjust-portions", json=payload, headers=headers) as response:
             if response.status == 200:
                 data = await response.json()
-                if "adjustments" in data or "suggestions" in data:
-                    results.log_pass("AI Adjust Portions", f"✓ AI suggestions received")
+                if "adjusted_items" in data:
+                    results.log_pass("AI Adjust Portions", f"✓ AI portion adjustments received")
                     return True
                 else:
-                    results.log_fail("AI Adjust Portions", "No adjustments or suggestions in response")
+                    results.log_fail("AI Adjust Portions", "No adjusted_items in response")
                     return False
             else:
                 text = await response.text()
