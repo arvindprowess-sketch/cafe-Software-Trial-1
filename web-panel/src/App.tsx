@@ -54,6 +54,7 @@ export default function App() {
         <Route path="analytics" element={<AdminAnalytics />} />
         <Route path="tables" element={<AdminTables />} />
         <Route path="offers" element={<AdminOffers />} />
+        <Route path="shifts" element={<AdminShifts />} />
       </Route>
 
       <Route path="/kitchen" element={<ProtectedRoute roles={['kitchen']}><KitchenLayout /></ProtectedRoute>}>
