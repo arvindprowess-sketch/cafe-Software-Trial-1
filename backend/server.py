@@ -1326,70 +1326,63 @@ Respond ONLY in this exact JSON format (no other text):
 
         totals = {k: round(v, 1) for k, v in totals.items()}
 
-        # Post-process: Force total to match budget exactly (98-100%)
+        # ===== Post-process: Force total to EXACTLY match budget =====
+        def recalc_item(item: dict, grams: int):
+            f = grams / 100
+            item["grams"] = grams
+            item["price"] = round(f * item["cost_per_100g"], 2)
+            item["calories"] = round(f * item["calories_per_100g"], 1)
+            item["protein"] = round(f * item["protein_per_100g"], 1)
+            item["carbs"] = round(f * item["carbs_per_100g"], 1)
+            item["fat"] = round(f * item["fat_per_100g"], 1)
+
+        def recalc_totals(items: list):
+            t = {"price": 0, "calories": 0, "protein": 0, "carbs": 0, "fat": 0}
+            for it in items:
+                for k in t:
+                    t[k] += it[k]
+            return {k: round(v, 1) for k, v in t.items()}
+
         if data.budget and totals["price"] > 0 and enriched_items:
-            target = data.budget * 0.98
-            if totals["price"] < target or totals["price"] > data.budget:
-                # Scale all items proportionally to hit target
-                scale = target / totals["price"]
-                for item in enriched_items:
-                    new_grams = max(25, round(item["grams"] * scale / 25) * 25)
-                    factor = new_grams / 100
-                    item["grams"] = new_grams
-                    item["price"] = round(factor * item["cost_per_100g"], 2)
-                    item["calories"] = round(factor * item["calories_per_100g"], 1)
-                    item["protein"] = round(factor * item["protein_per_100g"], 1)
-                    item["carbs"] = round(factor * item["carbs_per_100g"], 1)
-                    item["fat"] = round(factor * item["fat_per_100g"], 1)
-                # Recalculate
-                totals = {"price": 0, "calories": 0, "protein": 0, "carbs": 0, "fat": 0}
-                for item in enriched_items:
-                    for k in totals:
-                        totals[k] += item[k]
-                totals = {k: round(v, 1) for k, v in totals.items()}
+            budget = data.budget
 
-            # Fine-tune: fill remaining gap with the protein-rich item
-            gap = data.budget - totals["price"]
-            if gap >= 1 and enriched_items:
-                # Pick the best item to add grams to (prefer protein source)
-                protein_items = [i for i in enriched_items if i.get("protein_per_100g", 0) > 15]
-                filler = protein_items[0] if protein_items else enriched_items[0]
-                extra_grams = max(25, round((gap / filler["cost_per_100g"]) * 100 / 25) * 25)
-                # Check we don't overshoot
-                extra_cost = extra_grams / 100 * filler["cost_per_100g"]
-                if extra_cost > gap + 5:  # allow ₹5 tolerance
-                    extra_grams = max(0, extra_grams - 25)
-                if extra_grams >= 25:
-                    filler["grams"] += extra_grams
-                    factor = filler["grams"] / 100
-                    filler["price"] = round(factor * filler["cost_per_100g"], 2)
-                    filler["calories"] = round(factor * filler["calories_per_100g"], 1)
-                    filler["protein"] = round(factor * filler["protein_per_100g"], 1)
-                    filler["carbs"] = round(factor * filler["carbs_per_100g"], 1)
-                    filler["fat"] = round(factor * filler["fat_per_100g"], 1)
-                    totals = {"price": 0, "calories": 0, "protein": 0, "carbs": 0, "fat": 0}
-                    for item in enriched_items:
-                        for k in totals:
-                            totals[k] += item[k]
-                    totals = {k: round(v, 1) for k, v in totals.items()}
-
-            # Final safety: if still over budget, trim the largest item
-            if totals["price"] > data.budget:
-                largest = max(enriched_items, key=lambda x: x["price"])
-                overshoot = totals["price"] - data.budget
-                reduce_grams = max(25, round((overshoot / largest["cost_per_100g"]) * 100 / 25) * 25)
-                largest["grams"] = max(25, largest["grams"] - reduce_grams)
-                factor = largest["grams"] / 100
-                largest["price"] = round(factor * largest["cost_per_100g"], 2)
-                largest["calories"] = round(factor * largest["calories_per_100g"], 1)
-                largest["protein"] = round(factor * largest["protein_per_100g"], 1)
-                largest["carbs"] = round(factor * largest["carbs_per_100g"], 1)
-                largest["fat"] = round(factor * largest["fat_per_100g"], 1)
-                totals = {"price": 0, "calories": 0, "protein": 0, "carbs": 0, "fat": 0}
+            # Step 1: Scale all items proportionally (10g rounding for precision)
+            if totals["price"] < budget * 0.90 or totals["price"] > budget:
+                scale = budget * 0.95 / totals["price"]
                 for item in enriched_items:
-                    for k in totals:
-                        totals[k] += item[k]
-                totals = {k: round(v, 1) for k, v in totals.items()}
+                    new_g = max(10, round(item["grams"] * scale / 10) * 10)
+                    recalc_item(item, new_g)
+                totals = recalc_totals(enriched_items)
+
+            # Step 2: Exact fill — adjust ONE item to 1g precision to close the gap
+            gap = round(budget - totals["price"], 2)
+            if abs(gap) > 0.01 and enriched_items:
+                # Pick the largest-portion item (most room to adjust)
+                adjuster = max(enriched_items, key=lambda x: x["grams"])
+                # Calculate exact grams needed to add/remove to close gap
+                exact_extra_grams = round(gap / adjuster["cost_per_100g"] * 100)
+                new_g = max(10, adjuster["grams"] + exact_extra_grams)
+                recalc_item(adjuster, new_g)
+                totals = recalc_totals(enriched_items)
+
+            # Step 3: Final micro-adjust if still off by a few rupees (due to rounding)
+            final_gap = round(budget - totals["price"], 2)
+            if abs(final_gap) > 0.5 and enriched_items:
+                adjuster = max(enriched_items, key=lambda x: x["grams"])
+                micro_grams = round(final_gap / adjuster["cost_per_100g"] * 100)
+                if micro_grams != 0:
+                    new_g = max(10, adjuster["grams"] + micro_grams)
+                    recalc_item(adjuster, new_g)
+                    totals = recalc_totals(enriched_items)
+
+            # Step 4: Hard cap — if over budget, trim from largest
+            if totals["price"] > budget:
+                adjuster = max(enriched_items, key=lambda x: x["price"])
+                over = totals["price"] - budget
+                trim_g = max(1, round(over / adjuster["cost_per_100g"] * 100) + 1)
+                new_g = max(10, adjuster["grams"] - trim_g)
+                recalc_item(adjuster, new_g)
+                totals = recalc_totals(enriched_items)
 
         return {
             "meal_items": enriched_items,
