@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { path: '/admin/offers', label: 'Offers', icon: '🏷' },
   { path: '/admin/analytics', label: 'Analytics', icon: '📈' },
   { path: '/admin/tables', label: 'Tables', icon: '🪑' },
+  { path: '/admin/shifts', label: 'Shifts', icon: '🕐' },
 ];
 
 export default function AdminLayout() {
