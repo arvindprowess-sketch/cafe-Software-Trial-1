@@ -4,91 +4,60 @@
 Diet Cafe app built with Expo React Native (TypeScript) frontend + FastAPI Python backend + MongoDB. Uses Emergent LLM Key for AI features (GPT-5.2).
 
 ## Tech Stack
-- **Frontend**: Expo (React Native) with expo-router, TypeScript, tunnel mode
-- **Backend**: FastAPI (Python) with MongoDB (port 8001)
+- **Frontend**: Expo (React Native), TypeScript, expo-router, tunnel mode
+- **Backend**: FastAPI (Python), MongoDB (port 8001)
 - **AI**: OpenAI GPT-5.2 via Emergent LLM Key
-- **Payment**: Razorpay (mock mode — no keys configured yet)
+- **Payment**: Razorpay (MOCK MODE — no keys configured)
 
-## User Personas
-- **Customer**: Orders food, tracks nutrition, uses AI suggestions
-- **Admin/Cafe Owner**: Manages products, categories, offers, packs, kitchen orders, analytics
-
-## What's Been Implemented (as of Feb 2026)
+## What's Been Implemented (Feb 2026)
 
 ### Phase 1 — Setup & Seeding
-- [x] Frontend start script: `expo start --tunnel`
-- [x] Seeded 16 products + 6 categories + admin user (admin@dietcafe.com / admin123)
+- [x] expo start --tunnel, 16 products, 6 categories, admin user
 
 ### Phase 2 — Calorie Goal Awareness
-- [x] customize.tsx: Warning modal when meal exceeds daily calorie goal (never blocks orders)
-- [x] home.tsx: Nutrition card shows exceeded state with red indicator
-- [x] budget-meal.tsx: Cart summary shows calorie goal context
+- [x] Warning modal (never blocks), exceeded state on home, goal context in budget-meal
 
-### Phase 3 — High Impact Features (Current)
-- [x] **Offers & Banners System** (Admin-managed)
-  - Admin CRUD: Create/Edit/Delete offers with discount type, value, categories, coupon codes
-  - Dynamic banners from active offers + packs
-  - Customer: Click banner → see filtered products with discounted prices
-  - Coupon code application at checkout
-  - 3 default offers seeded: "Flat 20% OFF" (PROTEIN20), "₹30 OFF on Carbs" (CARB30), "Free Delivery" (FREEDEL)
-- [x] **Goal Packs System** (Admin-managed)
-  - Admin CRUD: Create meal packs with specific products, quantities, goal type, pricing
-  - Customer: Click pack banner → see pack detail with items, nutrition, savings
-  - 3 default packs seeded: Muscle Gain Pack (₹199), Fat Loss Pack (₹179), Veg Power Pack (₹249)
-- [x] **Smart Portion Adjuster**
-  - AI-powered (GPT-5.2) portion suggestions in calorie warning modal
-  - Shows adjusted grams per item with calories saved
-  - One-tap "Apply AI Adjustment" to update cart
-- [x] **Razorpay Payment Integration** (MOCK MODE — no real keys)
-  - Backend: Create order, verify payment endpoints
-  - Mock payment flow works end-to-end
-- [x] **Enhanced Push Notifications**
-  - Auto-notify on order status changes (preparing, ready, completed, cancelled)
-  - Uses Expo Push Notification service
+### Phase 3 — High Impact Features
+- [x] **Offers & Banners System**: Admin CRUD, dynamic banners, filtered discounted products, coupon codes
+- [x] **Goal Packs System**: Admin CRUD, pack detail with nutrition/savings, one-tap order
+- [x] **Smart Portion Adjuster**: AI GPT-5.2 suggests gram reductions, one-tap apply
+- [x] **Razorpay Payment**: Mock mode backend (create-order, verify)
+- [x] **Push Notifications**: Auto-notify on order status changes
 
-## Seeded Data
-### Admin: admin@dietcafe.com / admin123
-### 16 Products, 6 Categories, 3 Offers, 3 Goal Packs
+### Phase 4 — AI Combo Builder
+- [x] **Dedicated combo-builder.tsx screen** with 3-step flow:
+  - Step 1: Set budget (₹100-500)
+  - Step 2: Choose goal (Muscle Gain / Fat Loss / Maintenance)
+  - Step 3: Diet preference (Veg / Non-Veg / Both)
+  - AI generates optimal combo → shows items, nutrition, price vs budget
+  - One-tap "Order Combo" sends to customize screen
+  - Retry button for regeneration
+  - Animated transitions, loading states, step dots
 
-## New Screens Added
-- offer-detail.tsx — Shows filtered products with discounts when clicking offer banner
-- pack-detail.tsx — Shows pack items, nutrition, savings when clicking pack banner
-- (admin)/offers.tsx — Admin offer management (CRUD)
-- (admin)/packs.tsx — Admin pack management with product picker (CRUD)
+## Screens Added This Session
+- combo-builder.tsx — AI Combo Builder (3-step → result → order)
+- offer-detail.tsx — Filtered products with discounts
+- pack-detail.tsx — Pack items, nutrition, savings
+- (admin)/offers.tsx — Admin offer management
+- (admin)/packs.tsx — Admin pack management
 
-## API Endpoints Added
-- GET/POST /api/offers, PUT/DELETE /api/offers/{id}
-- GET /api/offers/{id}/products (filtered + discounted)
-- GET/POST /api/packs, PUT/DELETE /api/packs/{id}
-- GET /api/packs/{id} (enriched detail)
-- POST /api/payments/create-order, POST /api/payments/verify
+## API Endpoints
+- POST /api/ai/quick-meal — AI combo generation (GPT-5.2)
+- POST /api/ai/adjust-portions — Smart portion adjuster
+- CRUD /api/offers, /api/packs
+- GET /api/banners (dynamic from offers + packs)
+- POST /api/payments/create-order, /api/payments/verify
 - POST /api/orders/apply-coupon
-- POST /api/ai/adjust-portions
-- POST /api/seed-offers-packs
-- GET /api/banners (now dynamic from offers + packs)
 
 ## Test Results
-- Backend: 100% (16/16 tests passed)
-- All CRUD operations verified for offers and packs
-- Razorpay mock payment flow verified
-- AI portion adjuster verified
-- Coupon validation verified
+- All backend tests: 100% (11/11 passed)
+- AI Quick Meal tested with muscle_gain/fat_loss/maintenance, veg/non-veg/both, budgets ₹50-200
 
-## Prioritized Backlog
-### P0
-- Razorpay real key configuration (user needs to provide keys)
-- Frontend Razorpay WebView checkout integration
+## Seeded Data
+- Admin: admin@dietcafe.com / admin123
+- 16 Products, 6 Categories, 6 Offers, 6 Packs
 
-### P1
-- Payment flow UI in customize.tsx
-- Order receipt with payment status
-- Push notification deep-linking
-
-### P2
-- Weekly meal planning
-- Loyalty/rewards system
-- Google OAuth
-
-## Next Tasks
-- User to provide Razorpay test keys for live payment flow
-- UI/UX redesign based on user testing feedback
+## Backlog
+### P0: Razorpay real keys, Frontend payment WebView
+### P1: Order receipt UI, Push notification deep-linking
+### P2: Weekly meal planning, Loyalty/rewards, Google OAuth
