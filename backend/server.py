@@ -688,6 +688,48 @@ async def seed_default_categories(user=Depends(get_current_user)):
     await db.categories.insert_many(default_categories)
     return {"message": "Default categories seeded", "seeded": len(default_categories)}
 
+@api_router.get("/admin/dashboard-stats")
+async def admin_dashboard_stats(user=Depends(get_current_user)):
+    """Admin dashboard: aggregated stats"""
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    products_count = await db.products.count_documents({"is_active": True})
+    categories_count = await db.categories.count_documents({"is_active": {"$ne": False}})
+    today_orders = await db.orders.find({"created_at": {"$regex": f"^{today}"}}, {"_id": 0, "total_price": 1, "status": 1}).to_list(500)
+    low_stock = await db.products.find({"is_active": True, "product_type": {"$ne": "ready_made"}, "available_qty_grams": {"$lte": 500}}, {"_id": 0, "id": 1, "name": 1, "available_qty_grams": 1, "category": 1}).to_list(50)
+    pending_orders = await db.orders.count_documents({"status": {"$in": ["pending", "preparing"]}})
+    revenue = sum(o.get("total_price", 0) for o in today_orders)
+    return {
+        "products": products_count,
+        "categories": categories_count,
+        "today_orders": len(today_orders),
+        "pending_orders": pending_orders,
+        "revenue": round(revenue, 2),
+        "low_stock_alerts": low_stock
+    }
+
+@api_router.get("/admin/staff-accounts")
+async def admin_staff_accounts(user=Depends(get_current_user)):
+    """Admin: list kitchen & cashier accounts"""
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    staff = await db.users.find({"role": {"$in": ["kitchen", "cashier"]}}, {"_id": 0, "password": 0}).to_list(20)
+    return staff
+
+@api_router.put("/admin/staff/{staff_id}/reset-pin")
+async def admin_reset_staff_pin(staff_id: str, body: dict = Body(...), user=Depends(get_current_user)):
+    """Admin: reset a staff member's PIN"""
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    new_pin = body.get("pin")
+    if not new_pin or len(new_pin) < 4:
+        raise HTTPException(status_code=400, detail="PIN must be at least 4 digits")
+    result = await db.users.update_one({"id": staff_id}, {"$set": {"pin": new_pin}})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Staff not found")
+    return {"message": "PIN updated"}
+
 # ========== FOOD IMAGE BANK ==========
 FOOD_IMAGES = {
     "chicken": "https://images.unsplash.com/photo-1632778149955-e80f8ceca2e8?w=400&h=300&fit=crop",
