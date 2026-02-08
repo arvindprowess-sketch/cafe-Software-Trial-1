@@ -6,7 +6,7 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 3000,
-    allowedHosts: 'all',
+    allowedHosts: ['localhost', '.preview.emergentagent.com', '.ngrok.io', '.ngrok-free.app'],
     proxy: {
       '/api': {
         target: 'http://localhost:8001',
