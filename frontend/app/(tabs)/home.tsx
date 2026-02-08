@@ -317,8 +317,8 @@ export default function HomeScreen() {
                 <Ionicons name="sparkles" size={20} color="#FFF" />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.ctaTitle}>AI Meal Builder</Text>
-                <Text style={styles.ctaSub}>AI picks the perfect meal for your goals</Text>
+                <Text style={styles.ctaTitle}>AI Combo Builder</Text>
+                <Text style={styles.ctaSub}>Budget + Goal = Perfect meal in seconds</Text>
               </View>
             </View>
             <Ionicons name="arrow-forward-circle" size={28} color="#5B5FE0" />
