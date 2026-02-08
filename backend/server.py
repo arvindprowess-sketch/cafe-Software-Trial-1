@@ -1015,10 +1015,11 @@ async def create_order(data: OrderCreate, user=Depends(get_current_user)):
         "coupon_code": data.coupon_code,
         "discount": data.discount or 0,
         "customer_name": data.customer_name or user["name"],
+        "order_source": "walk_in" if user["role"] in ("cashier", "admin") else "app",
         "gst_percent": 5,
         "gst_amount": round((data.total_price + extra_charge) * 5 / 105, 2),
         "base_amount": round((data.total_price + extra_charge) * 100 / 105, 2),
-        "status": "pending",
+        "status": "preparing" if getattr(data, 'payment_mode', None) in ("cash", "upi", "card", "other") else "pending",
         "payment_status": "paid" if getattr(data, 'payment_mode', None) in ("cash", "upi", "card", "other") else "unpaid",
         "created_at": datetime.now(timezone.utc).isoformat()
     }
