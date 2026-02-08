@@ -134,7 +134,18 @@ export default function CustomizeScreen() {
   const caloriesOver = Math.round(projectedCalories - calorieGoal);
   const isOverGoal = caloriesOver > 0;
 
-  const extra = orderType === 'delivery' ? 30 : orderType === 'takeaway' ? 10 : 0;
+  const extra = selectedOrderType === 'delivery' ? 30 : selectedOrderType === 'takeaway' ? 10 : 0;
+
+  // Build scheduled ready time ISO string
+  const getScheduledReadyTime = (): string | null => {
+    if (!isScheduled || !scheduledHour || !scheduledMinute) return null;
+    const now = new Date();
+    const scheduled = new Date(now.getFullYear(), now.getMonth(), now.getDate(), parseInt(scheduledHour), parseInt(scheduledMinute), 0);
+    if (scheduled.getTime() <= now.getTime()) {
+      scheduled.setDate(scheduled.getDate() + 1);
+    }
+    return scheduled.toISOString();
+  };
 
   const getAiSuggestion = async () => {
     if (!goal) { Alert.alert('Set Goal', 'Select a fitness goal first'); return; }
