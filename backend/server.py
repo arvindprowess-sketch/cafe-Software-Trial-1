@@ -2710,6 +2710,444 @@ async def get_inventory(user=Depends(get_current_user)):
         })
     return inventory
 
+# ========== P0: STOCK MANAGEMENT ==========
+class StockUpdateRequest(BaseModel):
+    product_id: str
+    quantity_grams: float  # positive to add, negative to remove
+    reason: Optional[str] = ""
+
+@api_router.post("/inventory/update-stock")
+async def update_stock(data: StockUpdateRequest, user=Depends(get_current_user)):
+    """Admin/Kitchen: Add or remove stock for a product"""
+    if user["role"] not in ("admin", "kitchen"):
+        raise HTTPException(status_code=403, detail="Kitchen/Admin only")
+    product = await db.products.find_one({"id": data.product_id}, {"_id": 0})
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    new_qty = product.get("available_qty_grams", 0) + data.quantity_grams
+    if new_qty < 0:
+        raise HTTPException(status_code=400, detail="Cannot reduce stock below 0")
+    await db.products.update_one({"id": data.product_id}, {"$set": {"available_qty_grams": new_qty}})
+    # Re-activate product if stock was added and was inactive
+    if new_qty > 0 and not product.get("is_active", True):
+        await db.products.update_one({"id": data.product_id}, {"$set": {"is_active": True}})
+    # Log stock change
+    await db.stock_logs.insert_one({
+        "id": str(uuid.uuid4()),
+        "product_id": data.product_id,
+        "product_name": product["name"],
+        "change_grams": data.quantity_grams,
+        "new_total": new_qty,
+        "reason": data.reason or ("Stock added" if data.quantity_grams > 0 else "Stock removed"),
+        "user_id": user["id"],
+        "user_name": user["name"],
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    return {"product_id": data.product_id, "new_qty_grams": new_qty, "status": "in_stock" if new_qty > 500 else "low" if new_qty > 0 else "out_of_stock"}
+
+@api_router.get("/inventory/stock-logs")
+async def get_stock_logs(user=Depends(get_current_user)):
+    """Admin: Get stock change history"""
+    if user["role"] not in ("admin", "kitchen"):
+        raise HTTPException(status_code=403, detail="Kitchen/Admin only")
+    logs = await db.stock_logs.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return logs
+
+# ========== P1: NOTIFICATIONS ==========
+@api_router.get("/notifications")
+async def get_notifications(user=Depends(get_current_user)):
+    """Get user notifications"""
+    query = {}
+    if user["role"] == "customer":
+        query["user_id"] = user["id"]
+    # Admin/kitchen/cashier see all notifications
+    notifications = await db.notifications.find(query, {"_id": 0}).sort("created_at", -1).to_list(50)
+    return notifications
+
+@api_router.put("/notifications/{notif_id}/read")
+async def mark_notification_read(notif_id: str, user=Depends(get_current_user)):
+    await db.notifications.update_one({"id": notif_id}, {"$set": {"read": True}})
+    return {"message": "Marked as read"}
+
+@api_router.put("/notifications/read-all")
+async def mark_all_notifications_read(user=Depends(get_current_user)):
+    query = {"read": False}
+    if user["role"] == "customer":
+        query["user_id"] = user["id"]
+    await db.notifications.update_many(query, {"$set": {"read": True}})
+    return {"message": "All marked as read"}
+
+# ========== P1: ORDER RECEIPT / BILL GENERATION ==========
+@api_router.get("/orders/{order_id}/receipt")
+async def get_order_receipt(order_id: str, user=Depends(get_current_user)):
+    """Generate receipt data for an order"""
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    # Only allow owner or admin/cashier to view receipt
+    if user["role"] == "customer" and order.get("user_id") != user["id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    payment = await db.payments.find_one({"order_id": order_id}, {"_id": 0})
+    receipt = {
+        "cafe_name": "Diet Cafe",
+        "cafe_tagline": "Healthy Eating, Happy Living",
+        "order_id": order["id"],
+        "order_type": order.get("order_type", "dine-in"),
+        "customer_name": order.get("user_name", "Walk-in"),
+        "date": order.get("created_at", ""),
+        "items": [],
+        "subtotal": 0,
+        "extra_charge": order.get("extra_charge", 0),
+        "extra_charge_label": "Takeaway" if order.get("order_type") == "takeaway" else "Delivery" if order.get("order_type") == "delivery" else None,
+        "discount": order.get("discount", 0),
+        "coupon_code": order.get("coupon_code"),
+        "total": order.get("total_price", 0),
+        "payment_status": payment.get("status", "unpaid") if payment else order.get("payment_status", "unpaid"),
+        "payment_method": payment.get("mock", False) and "Cash (Mock)" or "Razorpay" if payment else "Cash",
+        "nutrition_summary": {
+            "calories": order.get("total_calories", 0),
+            "protein": order.get("total_protein", 0),
+            "carbs": order.get("total_carbs", 0),
+            "fat": order.get("total_fat", 0),
+        },
+        "status": order.get("status", "pending"),
+    }
+    subtotal = 0
+    for item in order.get("items", []):
+        line = {
+            "name": item.get("product_name", ""),
+            "quantity": f"{item.get('grams', 0)}g" if item.get("product_type") != "ready_made" else f"x{item.get('quantity', 1)}",
+            "price": item.get("price", 0),
+            "calories": item.get("calories", 0),
+        }
+        receipt["items"].append(line)
+        subtotal += item.get("price", 0)
+    receipt["subtotal"] = round(subtotal, 2)
+    return receipt
+
+# ========== P1: KITCHEN ORDERS FOR KITCHEN/CASHIER ROLES ==========
+@api_router.get("/orders/active")
+async def active_orders(user=Depends(get_current_user)):
+    """Kitchen/Cashier/Admin: Get all active orders"""
+    if user["role"] not in ("admin", "kitchen", "cashier"):
+        raise HTTPException(status_code=403, detail="Staff only")
+    orders = await db.orders.find(
+        {"status": {"$in": ["pending", "preparing", "ready"]}},
+        {"_id": 0}
+    ).sort("created_at", 1).to_list(100)
+    return orders
+
+# ========== P2: SHIFT MANAGEMENT ==========
+class ShiftCreate(BaseModel):
+    staff_id: str
+    date: str  # YYYY-MM-DD
+    start_time: str  # HH:MM
+    end_time: str  # HH:MM
+    notes: Optional[str] = ""
+
+class ShiftUpdate(BaseModel):
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    status: Optional[str] = None  # scheduled, active, completed, cancelled
+    notes: Optional[str] = None
+
+@api_router.post("/shifts")
+async def create_shift(data: ShiftCreate, user=Depends(get_current_user)):
+    """Admin: Create a shift for staff"""
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    staff = await db.users.find_one({"id": data.staff_id, "role": {"$in": ["kitchen", "cashier"]}}, {"_id": 0})
+    if not staff:
+        raise HTTPException(status_code=404, detail="Staff not found")
+    shift_id = str(uuid.uuid4())
+    shift = {
+        "id": shift_id,
+        "staff_id": data.staff_id,
+        "staff_name": staff["name"],
+        "staff_role": staff["role"],
+        "date": data.date,
+        "start_time": data.start_time,
+        "end_time": data.end_time,
+        "status": "scheduled",
+        "notes": data.notes or "",
+        "created_by": user["id"],
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.shifts.insert_one(shift)
+    return {k: v for k, v in shift.items() if k != "_id"}
+
+@api_router.get("/shifts")
+async def list_shifts(date: Optional[str] = None, user=Depends(get_current_user)):
+    """Admin/Staff: List shifts"""
+    if user["role"] not in ("admin", "kitchen", "cashier"):
+        raise HTTPException(status_code=403, detail="Staff only")
+    query: Dict[str, Any] = {}
+    if date:
+        query["date"] = date
+    if user["role"] != "admin":
+        query["staff_id"] = user["id"]
+    shifts = await db.shifts.find(query, {"_id": 0}).sort("date", -1).to_list(100)
+    return shifts
+
+@api_router.put("/shifts/{shift_id}")
+async def update_shift(shift_id: str, data: ShiftUpdate, user=Depends(get_current_user)):
+    """Admin: Update shift"""
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    update_data = {k: v for k, v in data.dict().items() if v is not None}
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No updates")
+    update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+    result = await db.shifts.update_one({"id": shift_id}, {"$set": update_data})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Shift not found")
+    shift = await db.shifts.find_one({"id": shift_id}, {"_id": 0})
+    return shift
+
+@api_router.delete("/shifts/{shift_id}")
+async def delete_shift(shift_id: str, user=Depends(get_current_user)):
+    """Admin: Delete shift"""
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    result = await db.shifts.delete_one({"id": shift_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Shift not found")
+    return {"message": "Shift deleted"}
+
+# ========== P2: LOYALTY / REWARDS ==========
+@api_router.get("/loyalty/points")
+async def get_loyalty_points(user=Depends(get_current_user)):
+    """Get user's loyalty points"""
+    loyalty = await db.loyalty.find_one({"user_id": user["id"]}, {"_id": 0})
+    if not loyalty:
+        loyalty = {
+            "user_id": user["id"],
+            "points": 0,
+            "total_earned": 0,
+            "total_redeemed": 0,
+            "tier": "Bronze",
+            "history": []
+        }
+    # Calculate tier
+    total = loyalty.get("total_earned", 0)
+    tier = "Bronze" if total < 500 else "Silver" if total < 1500 else "Gold" if total < 5000 else "Platinum"
+    loyalty["tier"] = tier
+    return loyalty
+
+@api_router.post("/loyalty/earn")
+async def earn_loyalty_points(order_id: str = Body(..., embed=True), user=Depends(get_current_user)):
+    """Earn points from an order (1 point per ₹10 spent)"""
+    order = await db.orders.find_one({"id": order_id, "user_id": user["id"]}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    # Check if already earned
+    existing = await db.loyalty.find_one({"user_id": user["id"], "history.order_id": order_id}, {"_id": 0})
+    if existing:
+        return {"message": "Points already earned for this order"}
+    points = max(1, int(order.get("total_price", 0) / 10))
+    await db.loyalty.update_one(
+        {"user_id": user["id"]},
+        {
+            "$inc": {"points": points, "total_earned": points},
+            "$push": {"history": {"order_id": order_id, "points": points, "type": "earned", "date": datetime.now(timezone.utc).isoformat()}}
+        },
+        upsert=True
+    )
+    return {"points_earned": points, "message": f"Earned {points} points!"}
+
+@api_router.post("/loyalty/redeem")
+async def redeem_loyalty_points(points: int = Body(..., embed=True), user=Depends(get_current_user)):
+    """Redeem loyalty points (10 points = ₹1 discount)"""
+    loyalty = await db.loyalty.find_one({"user_id": user["id"]}, {"_id": 0})
+    if not loyalty or loyalty.get("points", 0) < points:
+        raise HTTPException(status_code=400, detail="Insufficient points")
+    if points < 50:
+        raise HTTPException(status_code=400, detail="Minimum 50 points to redeem")
+    discount = round(points / 10, 2)
+    await db.loyalty.update_one(
+        {"user_id": user["id"]},
+        {
+            "$inc": {"points": -points, "total_redeemed": points},
+            "$push": {"history": {"points": -points, "discount": discount, "type": "redeemed", "date": datetime.now(timezone.utc).isoformat()}}
+        }
+    )
+    return {"points_redeemed": points, "discount": discount, "message": f"Redeemed {points} points for ₹{discount} discount"}
+
+# ========== P2: WEEKLY MEAL PLANNING ==========
+class MealPlanCreate(BaseModel):
+    name: str
+    goal: str  # fat_loss, muscle_gain, maintenance
+    diet_preference: str  # veg, non-veg, both
+    days: List[Dict[str, Any]]  # [{day: "Monday", meals: [{product_id, product_name, grams, meal_type}]}]
+
+@api_router.post("/meal-plans")
+async def create_meal_plan(data: MealPlanCreate, user=Depends(get_current_user)):
+    """Create a weekly meal plan"""
+    plan_id = str(uuid.uuid4())
+    plan = {
+        "id": plan_id,
+        "user_id": user["id"],
+        "name": data.name,
+        "goal": data.goal,
+        "diet_preference": data.diet_preference,
+        "days": data.days,
+        "is_active": True,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.meal_plans.insert_one(plan)
+    return {k: v for k, v in plan.items() if k != "_id"}
+
+@api_router.get("/meal-plans")
+async def list_meal_plans(user=Depends(get_current_user)):
+    """Get user's meal plans"""
+    plans = await db.meal_plans.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(20)
+    return plans
+
+@api_router.post("/ai/generate-meal-plan")
+async def ai_generate_meal_plan(
+    goal: str = Body(...),
+    diet_preference: str = Body(...),
+    budget_per_day: Optional[float] = Body(None),
+    user=Depends(get_current_user)
+):
+    """AI generates a weekly meal plan"""
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        products = await db.products.find({"is_active": True, "available_qty_grams": {"$gt": 50}}, {"_id": 0}).to_list(100)
+        query_filter = {}
+        if diet_preference == "veg":
+            query_filter = {"diet_type": "veg"}
+        elif diet_preference == "non-veg":
+            query_filter = {"diet_type": "non-veg"}
+        
+        filtered_products = [p for p in products if not query_filter or p.get("diet_type") == query_filter.get("diet_type", p.get("diet_type"))]
+        menu_str = "\n".join([f"- {p['name']}: ₹{p['cost_per_100g']}/100g | {p['calories_per_100g']}cal, P:{p['protein_per_100g']}g per 100g" for p in filtered_products[:25]])
+        budget_str = f"Daily budget: ₹{budget_per_day}" if budget_per_day else "No budget limit"
+        
+        prompt = f"""Create a 7-day meal plan for a customer with goal: {goal}, diet: {diet_preference}.
+{budget_str}
+
+Available menu items:
+{menu_str}
+
+For each day (Monday-Sunday), suggest 2-3 meals (lunch/dinner/snack) using ONLY items from the menu above.
+
+Respond in JSON:
+{{"plan_name": "...", "days": [{{"day": "Monday", "meals": [{{"meal_type": "lunch", "items": [{{"product_name": "Exact Name", "grams": 150}}], "summary": "Brief"}}]}}]}}"""
+
+        chat = LlmChat(
+            api_key=os.environ.get('EMERGENT_LLM_KEY', ''),
+            session_id=f"mealplan-{uuid.uuid4()}",
+            system_message="You are a nutrition expert. Respond in valid JSON only."
+        ).with_model("openai", "gpt-5.2")
+        response = await chat.send_message(UserMessage(text=prompt))
+        cleaned = response.strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
+            cleaned = cleaned.rsplit("```", 1)[0]
+        result = json.loads(cleaned)
+        
+        # Enrich with product data
+        for day in result.get("days", []):
+            for meal in day.get("meals", []):
+                for item in meal.get("items", []):
+                    product = next((p for p in filtered_products if p["name"].lower() == item["product_name"].lower()), None)
+                    if not product:
+                        product = next((p for p in filtered_products if item["product_name"].lower() in p["name"].lower()), None)
+                    if product:
+                        f = item.get("grams", 100) / 100
+                        item["product_id"] = product["id"]
+                        item["price"] = round(f * product["cost_per_100g"], 2)
+                        item["calories"] = round(f * product["calories_per_100g"], 1)
+                        item["protein"] = round(f * product["protein_per_100g"], 1)
+        return result
+    except Exception as e:
+        logger.error(f"AI meal plan error: {e}")
+        return {"plan_name": "Default Plan", "days": [], "error": "AI unavailable, please try again"}
+
+@api_router.delete("/meal-plans/{plan_id}")
+async def delete_meal_plan(plan_id: str, user=Depends(get_current_user)):
+    result = await db.meal_plans.delete_one({"id": plan_id, "user_id": user["id"]})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Meal plan not found")
+    return {"message": "Meal plan deleted"}
+
+# ========== P2: DAILY STREAK TRACKER ==========
+@api_router.get("/streak")
+async def get_streak(user=Depends(get_current_user)):
+    """Get user's daily ordering streak"""
+    streak_data = await db.streaks.find_one({"user_id": user["id"]}, {"_id": 0})
+    if not streak_data:
+        return {"current_streak": 0, "longest_streak": 0, "last_order_date": None, "total_orders": 0}
+    return streak_data
+
+@api_router.post("/streak/update")
+async def update_streak(user=Depends(get_current_user)):
+    """Update streak after placing an order"""
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    from datetime import timedelta
+    yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
+    
+    streak_data = await db.streaks.find_one({"user_id": user["id"]}, {"_id": 0})
+    if not streak_data:
+        streak_data = {"user_id": user["id"], "current_streak": 0, "longest_streak": 0, "last_order_date": None, "total_orders": 0}
+    
+    last_date = streak_data.get("last_order_date")
+    if last_date == today:
+        return streak_data  # Already counted today
+    
+    if last_date == yesterday:
+        streak_data["current_streak"] = streak_data.get("current_streak", 0) + 1
+    else:
+        streak_data["current_streak"] = 1
+    
+    streak_data["last_order_date"] = today
+    streak_data["total_orders"] = streak_data.get("total_orders", 0) + 1
+    streak_data["longest_streak"] = max(streak_data.get("longest_streak", 0), streak_data["current_streak"])
+    
+    await db.streaks.update_one(
+        {"user_id": user["id"]},
+        {"$set": streak_data},
+        upsert=True
+    )
+    return {k: v for k, v in streak_data.items() if k != "_id"}
+
+# ========== P2: KITCHEN TICKET (Print-friendly data) ==========
+@api_router.get("/orders/{order_id}/kitchen-ticket")
+async def get_kitchen_ticket(order_id: str, user=Depends(get_current_user)):
+    """Get print-friendly kitchen ticket data"""
+    if user["role"] not in ("admin", "kitchen", "cashier"):
+        raise HTTPException(status_code=403, detail="Staff only")
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    ticket = {
+        "order_id": order["id"],
+        "order_type": order.get("order_type", "dine-in"),
+        "customer": order.get("user_name", "Walk-in"),
+        "time": order.get("created_at", ""),
+        "priority": order.get("priority", "normal"),
+        "items": [],
+        "special_notes": order.get("notes", ""),
+        "table": order.get("table_number"),
+    }
+    for item in order.get("items", []):
+        ticket_item = {
+            "name": item.get("product_name", ""),
+            "quantity": f"{item.get('grams', 0)}g" if item.get("product_type") != "ready_made" else f"x{item.get('quantity', 1)} plates",
+        }
+        # Include ingredient breakdown for ready-made items
+        if item.get("ingredients_breakdown"):
+            ticket_item["ingredients"] = [
+                {"name": ing["name"], "grams": ing.get("total_grams", ing.get("grams_per_serving", 0))}
+                for ing in item["ingredients_breakdown"]
+            ]
+        if item.get("customized_ingredients"):
+            ticket_item["customized"] = True
+            ticket_item["custom_ingredients"] = item["customized_ingredients"]
+        ticket["items"].append(ticket_item)
+    return ticket
+
 app.include_router(api_router)
 
 app.add_middleware(
