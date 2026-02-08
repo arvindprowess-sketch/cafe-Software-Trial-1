@@ -18,38 +18,30 @@ Diet Cafe management: Mobile App (customers) + Web Panel (admin/kitchen/cashier)
 
 ### Scheduled Orders (Feb 8, 2026)
 - Customer schedule toggle + time picker, Kitchen alert popup (blocking), Confirm & Start flow
-- APIs: GET /api/orders/scheduled, POST /api/orders/{id}/confirm-scheduled
 
 ### Hybrid AI Meal Builder (Feb 8, 2026)
 - AI picks items + budget_share_percent → System calculates exact grams (budget ±₹1, stock-aware)
-- Works for both Cashier POS and Customer mobile
 
-### Admin Panel Overhaul (Feb 8, 2026)
-1. **Dashboard**: Stats grid (Products, Categories, Orders, Revenue, Pending, Low Stock), Quick Actions, Staff Accounts with inline PIN reset
-2. **Manage Categories (Full CRUD)**: Add/Edit modal with icon picker, color presets, font style (default/bold/italic/mono), display order, active toggle, live preview. Inactive categories auto-hidden from customer & cashier
-3. **Manage Products (Full CRUD)**: Type tabs (All/Single/Ready-Made), Single Product form (name, category*, price, stock, diet), Ready-Made Meal form (name, category*, ingredients+grams, price, serving, editable toggle). AI auto-generates description, nutrition, images. Admin cannot manually edit nutrition
-4. **Product List**: Name, Type, Category, Diet, Price, Stock, Status, Edit/Disable/Delete. Products in inactive categories hidden from public
-5. **Sidebar**: Dashboard, Categories, Products, Orders, Kitchen Monitor, Offers, Tables
-6. **Staff simplified**: No staff management/shifts page. Just Kitchen + Cashier accounts shown with Reset PIN
+### Admin Panel Overhaul v1 (Feb 8, 2026)
+- Dashboard: Stats grid, Quick Actions, Staff Accounts with PIN reset
+- Categories: Full CRUD with icon, color, font_style, sort_order, active toggle
+- Products: Type tabs, Single/Ready-Made forms, mandatory category, AI auto-generate
+
+### Admin Panel v2 — Shortcomings Fixed (Feb 8, 2026)
+1. **Photo upload for Ready-Made Meals**: Image upload via base64 + file picker, stored in DB
+2. **Edit modal: Category change**: Dropdown to reassign any product to a different category
+3. **Ready-Made meal edit**: Price per plate, available plates, customizable toggle all editable
+4. **Product search**: Real-time filtering by name or category
+5. **Font_style propagation**: Category font_style (bold/italic/mono/default) renders in Cashier POS sidebar and Mobile app menu
+6. **AI result feedback**: After creating a product, shows AI-generated image, description, nutrition breakdown before closing
+7. **Low stock alerts**: Dashboard shows red-highlighted alerts for products < 500g stock
+8. **Inactive category filter**: Products in inactive categories auto-hidden from customer & cashier public endpoints
 
 ## Testing Status
 - iteration_14: Scheduled orders 100% pass
-- iteration_15: AI meal builder 100% pass (10/10)
-- iteration_16: Admin panel 100% pass (17/17 backend, full frontend)
-
-## Key APIs
-- `POST /api/orders` - Create order (supports scheduled)
-- `GET /api/orders/scheduled` - Kitchen scheduled orders
-- `POST /api/orders/{id}/confirm-scheduled` - Kitchen confirms scheduled
-- `GET /api/admin/dashboard-stats` - Dashboard stats (admin)
-- `GET /api/admin/staff-accounts` - Kitchen/Cashier accounts (admin)
-- `PUT /api/admin/staff/{id}/reset-pin` - Reset staff PIN (admin)
-- `POST /api/categories` - Create category with font_style
-- `GET /api/categories` - Active categories (public)
-- `GET /api/categories/all` - All categories (admin)
-- `POST /api/products/single` - Create single product with category_id
-- `POST /api/products/ready-made` - Create ready-made meal with category_id
-- `POST /api/ai/quick-meal` - Hybrid AI meal builder
+- iteration_15: AI meal builder 100% pass
+- iteration_16: Admin panel v1 100% pass
+- iteration_17: Admin panel v2 shortcomings 100% pass (15 features)
 
 ## Credentials
 - Admin: admin@dietcafe.com / admin123
