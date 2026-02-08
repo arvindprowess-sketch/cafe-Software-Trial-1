@@ -5,8 +5,8 @@ import json
 import os
 from pathlib import Path
 
-# Load backend URL from review request
-backend_url = "https://healthy-bites-72.preview.emergentagent.com"
+# Load backend URL - using localhost since external routing has issues
+backend_url = "http://localhost:8001"
 
 API_BASE = f"{backend_url}/api"
 print(f"🌐 Testing backend at: {API_BASE}")
