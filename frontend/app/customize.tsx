@@ -649,11 +649,18 @@ export default function CustomizeScreen() {
             </View>
             <View style={styles.bottomRow}>
               <Text style={styles.bottomPrice}>₹{Math.round(totals.price + extra)}</Text>
-              {extra > 0 && <Text style={styles.extraText}>incl. ₹{extra} {orderType}</Text>}
+              {extra > 0 && <Text style={styles.extraText}>incl. ₹{extra} {selectedOrderType}</Text>}
+              {isScheduled && scheduledHour && scheduledMinute && (
+                <Text style={styles.scheduledBadgeBottom}>
+                  <Ionicons name="time" size={11} color="#5B5FE0" /> {scheduledHour}:{scheduledMinute.padStart(2, '0')}
+                </Text>
+              )}
             </View>
           </View>
-          <TouchableOpacity testID="place-order-btn" style={styles.orderBtn} onPress={handlePlaceOrder} disabled={ordering}>
-            {ordering ? <ActivityIndicator color="#FFF" /> : <Text style={styles.orderBtnText}>Place Order</Text>}
+          <TouchableOpacity testID="place-order-btn" style={[styles.orderBtn, isScheduled && styles.orderBtnScheduled]} onPress={handlePlaceOrder} disabled={ordering}>
+            {ordering ? <ActivityIndicator color="#FFF" /> : (
+              <Text style={styles.orderBtnText}>{isScheduled ? 'Schedule Order' : 'Place Order'}</Text>
+            )}
           </TouchableOpacity>
         </View>
 
