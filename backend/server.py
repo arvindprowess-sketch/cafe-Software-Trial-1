@@ -114,12 +114,17 @@ class ProductCreate(BaseModel):
 class ProductUpdate(BaseModel):
     name: Optional[str] = None
     cost_per_100g: Optional[float] = None
+    fixed_price: Optional[float] = None
     available_qty_grams: Optional[float] = None
+    available_servings: Optional[int] = None
     is_active: Optional[bool] = None
     image_url: Optional[str] = None
+    images: Optional[List[str]] = None
     category: Optional[str] = None
+    category_id: Optional[str] = None
     diet_type: Optional[str] = None
     description: Optional[str] = None
+    is_editable: Optional[bool] = None
 
 class OrderItem(BaseModel):
     product_id: str
