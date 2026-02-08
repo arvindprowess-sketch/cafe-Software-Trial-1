@@ -58,6 +58,27 @@ export default function CashierPOS() {
         setOffers(o.filter((of: any) => of.is_active));
       } catch {}
     })();
+    // Check for resumed held bill
+    const params = new URLSearchParams(window.location.search);
+    const resumeData = params.get('resume');
+    if (resumeData) {
+      try {
+        const bill = JSON.parse(decodeURIComponent(resumeData));
+        setCustomerName(bill.customer_name || '');
+        setOrderType(bill.order_type || 'dine-in');
+        setActiveHoldId(bill.id);
+        if (bill.coupon_code) setCouponCode(bill.coupon_code);
+        // Restore cart items
+        if (bill.items?.length) {
+          setCart(bill.items.map((item: any) => ({
+            ...item,
+            cartKey: item.product_type === 'ready_made' ? `${item.id}_rm_${Date.now()}_${Math.random()}` : undefined,
+          })));
+        }
+        // Clean URL
+        window.history.replaceState({}, '', '/cashier');
+      } catch {}
+    }
   }, []);
 
   const singleProducts = products.filter(p => p.product_type !== 'ready_made');
