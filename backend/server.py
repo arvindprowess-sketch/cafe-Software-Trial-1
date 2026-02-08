@@ -1097,13 +1097,21 @@ async def create_order(data: OrderCreate, user=Depends(get_current_user)):
         streak_data["total_orders"] = streak_data.get("total_orders", 0) + 1
         streak_data["longest_streak"] = max(streak_data.get("longest_streak", 0), streak_data["current_streak"])
         await db.streaks.update_one({"user_id": user["id"]}, {"$set": streak_data}, upsert=True)
-    # Notify kitchen about new order
-    await db.notifications.insert_one({
-        "id": str(uuid.uuid4()), "user_id": "kitchen", "title": "New Order!",
-        "body": f"Order #{order_id} from {user['name']} ({data.order_type})",
-        "type": "new_order", "order_id": order_id, "read": False,
-        "created_at": datetime.now(timezone.utc).isoformat()
-    })
+    # Notify kitchen about new order (skip for scheduled - kitchen gets alerted at alert time)
+    if not is_scheduled:
+        await db.notifications.insert_one({
+            "id": str(uuid.uuid4()), "user_id": "kitchen", "title": "New Order!",
+            "body": f"Order #{order_id} from {user['name']} ({data.order_type})",
+            "type": "new_order", "order_id": order_id, "read": False,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        })
+    else:
+        await db.notifications.insert_one({
+            "id": str(uuid.uuid4()), "user_id": "kitchen", "title": "Scheduled Order",
+            "body": f"Order #{order_id} scheduled for {data.scheduled_ready_time} ({data.order_type})",
+            "type": "scheduled_order", "order_id": order_id, "read": False,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        })
     return {k: v for k, v in order.items() if k != "_id"}
 
 @api_router.get("/orders")
