@@ -333,7 +333,7 @@ export default function CashierPOS() {
         </div>
 
         <div className="pos-categories">
-          {[{ key: 'All', name: 'All' }, { key: 'veg', name: 'Veg' }, { key: 'non-veg', name: 'Non-Veg' }, ...categories].map(c => (
+          {[{ key: 'All', name: 'All' }, { key: 'veg', name: 'Veg' }, { key: 'non-veg', name: 'Non-Veg' }, ...categories.filter(c => !['veg','non-veg'].includes(c.key))].map(c => (
             <button key={c.key || c.name} className={`pos-cat ${selectedCat === (c.key || c.name) ? 'active' : ''}`} onClick={() => setSelectedCat(c.key || c.name)} data-testid={`cat-${c.key || c.name}`}>{c.name}</button>
           ))}
         </div>
