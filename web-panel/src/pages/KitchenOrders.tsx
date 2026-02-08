@@ -176,7 +176,7 @@ export default function KitchenOrders() {
   return (
     <div>
       <div className="page-header" style={{ marginBottom: 16 }}>
-        <div><h1>Orders</h1><p>{orders.length} active</p></div>
+        <div><h1>Orders</h1><p>{orders.length} active{scheduledOrders.length > 0 ? ` • ${scheduledOrders.length} upcoming` : ''}</p></div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button
             className={`btn btn-sm ${soundEnabled ? 'btn-green' : 'btn-secondary'}`}
@@ -195,6 +195,29 @@ export default function KitchenOrders() {
           </button>
           <button className="btn btn-secondary" onClick={load} data-testid="refresh-orders-btn">Refresh</button>
         </div>
+      </div>
+
+      {/* Tabs: Active / Upcoming */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 16, background: '#F0F0F0', borderRadius: 10, padding: 3 }} data-testid="kitchen-tabs">
+        <button
+          className={`btn btn-sm ${activeTab === 'active' ? 'btn-green' : ''}`}
+          style={{ flex: 1, borderRadius: 8, fontWeight: activeTab === 'active' ? 700 : 500, background: activeTab === 'active' ? '#267E3E' : 'transparent', color: activeTab === 'active' ? '#FFF' : '#696969' }}
+          onClick={() => setActiveTab('active')}
+          data-testid="tab-active"
+        >
+          Active ({orders.length})
+        </button>
+        <button
+          className={`btn btn-sm ${activeTab === 'upcoming' ? 'btn-purple' : ''}`}
+          style={{ flex: 1, borderRadius: 8, fontWeight: activeTab === 'upcoming' ? 700 : 500, background: activeTab === 'upcoming' ? '#5B5FE0' : 'transparent', color: activeTab === 'upcoming' ? '#FFF' : '#696969', position: 'relative' }}
+          onClick={() => setActiveTab('upcoming')}
+          data-testid="tab-upcoming"
+        >
+          Upcoming ({scheduledOrders.length})
+          {scheduledOrders.some(o => o.alert_triggered) && (
+            <span style={{ position: 'absolute', top: 2, right: 8, width: 8, height: 8, borderRadius: 4, background: '#E23744', animation: 'pulse 1s infinite' }} />
+          )}
+        </button>
       </div>
 
       {orders.length === 0 && (
