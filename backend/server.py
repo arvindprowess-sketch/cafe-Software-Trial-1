@@ -2800,6 +2800,53 @@ async def set_order_priority(order_id: str, priority: str = Body(..., embed=True
         raise HTTPException(status_code=404, detail="Order not found")
     return {"message": f"Priority set to {priority}"}
 
+# ========== HOLD BILLS (Cashier) ==========
+class HoldBillCreate(BaseModel):
+    customer_name: Optional[str] = "Walk-in"
+    order_type: str = "dine-in"
+    items: List[Dict[str, Any]]
+    coupon_code: Optional[str] = None
+    coupon_discount: Optional[float] = 0
+
+@api_router.post("/held-bills")
+async def hold_bill(data: HoldBillCreate, user=Depends(get_current_user)):
+    """Cashier: Save cart as a held bill"""
+    if user["role"] not in ("cashier", "admin"):
+        raise HTTPException(status_code=403, detail="Cashier/Admin only")
+    bill_id = str(uuid.uuid4())
+    bill = {
+        "id": bill_id,
+        "cashier_id": user["id"],
+        "cashier_name": user["name"],
+        "customer_name": data.customer_name or "Walk-in",
+        "order_type": data.order_type,
+        "items": data.items,
+        "coupon_code": data.coupon_code,
+        "coupon_discount": data.coupon_discount or 0,
+        "status": "held",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.held_bills.insert_one(bill)
+    return {k: v for k, v in bill.items() if k != "_id"}
+
+@api_router.get("/held-bills")
+async def list_held_bills(user=Depends(get_current_user)):
+    """Cashier: List all held bills"""
+    if user["role"] not in ("cashier", "admin"):
+        raise HTTPException(status_code=403, detail="Cashier/Admin only")
+    bills = await db.held_bills.find({"status": "held"}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    return bills
+
+@api_router.delete("/held-bills/{bill_id}")
+async def delete_held_bill(bill_id: str, user=Depends(get_current_user)):
+    """Cashier: Remove a held bill (after resuming or discarding)"""
+    if user["role"] not in ("cashier", "admin"):
+        raise HTTPException(status_code=403, detail="Cashier/Admin only")
+    result = await db.held_bills.delete_one({"id": bill_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Held bill not found")
+    return {"message": "Held bill removed"}
+
 # ========== INVENTORY FOR KITCHEN ==========
 @api_router.get("/inventory")
 async def get_inventory(user=Depends(get_current_user)):
