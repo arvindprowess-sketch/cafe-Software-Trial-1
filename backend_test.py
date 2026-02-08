@@ -144,6 +144,7 @@ async def test_create_cashier_staff(session):
 
 async def test_list_all_staff(session):
     """Test GET /api/staff - Admin lists all staff"""
+    global kitchen_staff_id, cashier_staff_id
     if not admin_token:
         results.log_fail("List All Staff", "No admin token available")
         return False
@@ -158,6 +159,13 @@ async def test_list_all_staff(session):
                     if staff_count >= 2:  # Should have at least our 2 test staff
                         kitchen_staff = [s for s in data if s.get("role") == "kitchen"]
                         cashier_staff = [s for s in data if s.get("role") == "cashier"]
+                        
+                        # Store IDs for later tests
+                        if kitchen_staff and not kitchen_staff_id:
+                            kitchen_staff_id = kitchen_staff[0].get("id")
+                        if cashier_staff and not cashier_staff_id:
+                            cashier_staff_id = cashier_staff[0].get("id")
+                        
                         results.log_pass("List All Staff", f"✓ {staff_count} staff ({len(kitchen_staff)} kitchen, {len(cashier_staff)} cashier)")
                         return True
                     else:
