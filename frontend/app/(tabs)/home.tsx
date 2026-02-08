@@ -311,7 +311,7 @@ export default function HomeScreen() {
 
         {/* ===== AI QUICK MEAL BUILDER ===== */}
         {!showMealBuilder && !aiMeal && (
-          <TouchableOpacity testID="open-meal-builder" style={styles.mealBuilderCTA} onPress={() => setShowMealBuilder(true)} activeOpacity={0.9}>
+          <TouchableOpacity testID="open-meal-builder" style={styles.mealBuilderCTA} onPress={() => router.push('/combo-builder')} activeOpacity={0.9}>
             <View style={styles.ctaLeft}>
               <View style={styles.ctaIconBg}>
                 <Ionicons name="sparkles" size={20} color="#FFF" />
