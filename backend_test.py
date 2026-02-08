@@ -422,17 +422,18 @@ async def test_create_mock_order_for_payment(session):
 
 async def test_create_payment_order(session):
     """Test POST /api/payments/create-order should create mock Razorpay order"""
-    if not order_id:
-        results.log_fail("Create Payment Order", "No order ID available")
+    if not order_id or not admin_token:
+        results.log_fail("Create Payment Order", "No order ID or admin token available")
         return False
     
     try:
+        headers = {"Authorization": f"Bearer {admin_token}"}
         payload = {
             "order_id": order_id,
             "amount": 50
         }
         
-        async with session.post(f"{API_BASE}/payments/create-order", json=payload) as response:
+        async with session.post(f"{API_BASE}/payments/create-order", json=payload, headers=headers) as response:
             if response.status == 200:
                 data = await response.json()
                 if data.get("razorpay_order_id"):
