@@ -15,14 +15,8 @@ Build a Diet Cafe management system with:
 ## User Personas
 1. **Admin**: Full system management (products, staff, categories, offers, tables, shifts, analytics)
 2. **Kitchen Staff**: Order management, inventory, stock control, ticket printing
-3. **Cashier**: POS system, order placement, coupon application, receipt generation
+3. **Cashier**: POS system, order placement, coupon application, payment handling, receipt generation
 4. **Customer** (Mobile): Browse menu, AI meal suggestions, place orders, track calories, loyalty rewards
-
-## Core Requirements (Static)
-- Role-based access control
-- Real-time order flow (customer → kitchen → ready → completed)
-- Nutrition tracking (calories, protein, carbs, fat per item)
-- AI-powered meal suggestions (GPT-5.2 via Emergent LLM key)
 
 ## What's Been Implemented
 
@@ -34,52 +28,50 @@ Build a Diet Cafe management system with:
 - Razorpay mock payment integration
 - QR table scanning, offers/packs
 
-### Session 2 (Feb 8, 2026) - All Backlogs Implemented
-**P0 - Critical:**
-- Stock quantity management (add/remove stock with reason tracking)
-- Stock change logs with history
+### Session 2 (Feb 8, 2026) - All Backlogs
+- **P0**: Stock management, stock logs
+- **P1**: Notifications, receipt generation, coupons, sound alerts, kitchen tickets
+- **P2**: Shift management, loyalty/rewards, weekly meal planning, daily streak
 
-**P1 - Important:**
-- Notification system (create on new orders, list, mark read)
-- Order receipt/bill generation with nutrition summary
-- Coupon code application at checkout (PROTEIN20, CARB30, FREEDEL)
-- Sound/vibration alerts for kitchen (Web Audio API, toggle ON/OFF)
-- Kitchen ticket printing (print-friendly format)
-- Active orders API for kitchen/cashier
+### Session 3 (Feb 8, 2026) - Cashier POS Overhaul
+**Cashier CAN do:**
+- Create orders for walk-in customers (customer name field)
+- Build-your-own meals by **grams** or **MRP (₹)** with live preview
+- Ready-made meal ordering by plate count
+- AI-guided meal suggestions for customer assistance
+- Edit cart before payment (inline gram edit buttons)
+- View **GST + price breakup** (Base Amount, CGST 2.5%, SGST 2.5%)
+- Handle payments: **Cash, UPI, Card, Other** offline modes
+- Apply coupon codes at checkout
+- After payment → auto-sends to kitchen with payment_status: paid
+- Print receipt with full breakup
 
-**P2 - Nice to Have:**
-- Shift management (CRUD, status: scheduled → active → completed)
-- Loyalty/rewards system (earn 1 pt per ₹10, redeem 10 pts = ₹1)
-- Weekly meal planning (manual + AI-generated via GPT-5.2)
-- Daily streak tracker (auto-updates on order placement)
-- All auto-integrated: orders auto-earn loyalty + update streaks + notify kitchen
+**Cashier CANNOT do:**
+- Change recipes or ingredients of non-editable ready-made meals
+- Access inventory management (removed from nav)
+- Change prices or admin settings
 
 ## Testing Status
-- All backend APIs: 100% passing
-- All frontend flows: 100% passing (Admin, Kitchen, Cashier)
-- PIN login fixed and working for staff
-- Stock management, coupon codes, receipt generation all tested
+- Backend APIs: 100% passing (all iterations)
+- Frontend flows: 100% passing (all 15 Cashier POS features verified)
+- Kitchen PIN (1234), Cashier PIN (5678) both working
 
 ## Prioritized Backlog
-### P0 - None remaining
+### P0 - None
 
 ### P1 - Future
-- Push notifications (device-level for mobile customers)
-- Real Razorpay key integration (currently mock)
-- Google OAuth for admin login
+- Real Razorpay key integration
+- Push notifications for mobile customers
+- Google OAuth for admin
 
 ### P2 - Future
-- Weekly meal planning UI in mobile app
-- Loyalty/rewards display in mobile app
-- Daily streak visualization in mobile app
-- Print kitchen ticket (physical printer integration)
-- SMS/WhatsApp order notifications for customers
+- Mobile app: loyalty rewards UI, streak tracker, weekly meal planning screens
+- Physical printer integration for kitchen tickets
 - Customer feedback/ratings system
 - Multi-branch support
 - Ingredient cost tracking & profit analytics
 
 ## Next Tasks
-1. Mobile app: Add loyalty rewards, streak tracker, weekly meal planning screens
-2. Push notifications setup for order status updates
-3. Razorpay real key integration when keys are available
-4. Customer feedback system after order completion
+1. Mobile app screens for loyalty, streak, meal planning
+2. Push notifications for order updates
+3. Real payment gateway integration
