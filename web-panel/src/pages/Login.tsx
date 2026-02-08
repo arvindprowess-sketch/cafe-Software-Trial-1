@@ -81,34 +81,20 @@ export default function Login() {
           <form onSubmit={handlePinLogin}>
             <div className="form-group">
               <label style={{ textAlign: 'center', display: 'block' }}>Enter your staff PIN</label>
-              <div className="pin-inputs">
-                {[0,1,2,3,4,5].map(i => (
-                  <input
-                    key={i}
-                    type="password"
-                    inputMode="numeric"
-                    maxLength={1}
-                    value={pin[i] || ''}
-                    data-testid={`pin-input-${i}`}
-                    onChange={e => {
-                      const v = e.target.value.replace(/\D/g, '');
-                      const newPin = pin.split('');
-                      newPin[i] = v;
-                      setPin(newPin.join(''));
-                      if (v && i < 5) {
-                        const next = e.target.parentElement?.children[i+1] as HTMLInputElement;
-                        next?.focus();
-                      }
-                    }}
-                    onKeyDown={e => {
-                      if (e.key === 'Backspace' && !pin[i] && i > 0) {
-                        const prev = (e.target as HTMLElement).parentElement?.children[i-1] as HTMLInputElement;
-                        prev?.focus();
-                      }
-                    }}
-                  />
-                ))}
-              </div>
+              <input
+                type="password"
+                inputMode="numeric"
+                maxLength={6}
+                value={pin}
+                placeholder="Enter 4-6 digit PIN"
+                data-testid="pin-input"
+                style={{ textAlign: 'center', fontSize: 24, fontWeight: 800, letterSpacing: 12 }}
+                onChange={e => {
+                  const v = e.target.value.replace(/\D/g, '').slice(0, 6);
+                  setPin(v);
+                }}
+                autoFocus
+              />
             </div>
             <button type="submit" className="login-btn" disabled={loading || pin.length < 4} data-testid="pin-login-btn">
               {loading ? 'Verifying...' : 'Login with PIN'}
