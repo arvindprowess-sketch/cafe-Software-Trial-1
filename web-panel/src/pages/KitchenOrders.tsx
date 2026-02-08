@@ -90,6 +90,17 @@ export default function KitchenOrders() {
       }
       prevOrderIdsRef.current = currentIds;
       setOrders(data);
+      setScheduledOrders(scheduled);
+
+      // Check for scheduled orders that need alert (alert_triggered && not yet shown)
+      if (!alertOrder) {
+        const alertReady = scheduled.find((o: any) => o.alert_triggered && !alertedOrdersRef.current.has(o.id));
+        if (alertReady) {
+          setAlertOrder(alertReady);
+          alertedOrdersRef.current.add(alertReady.id);
+          playAlertSound('urgent');
+        }
+      }
     } catch {}
   };
 
