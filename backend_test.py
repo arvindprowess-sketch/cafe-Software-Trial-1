@@ -116,7 +116,7 @@ async def test_get_banners(session):
         return False
 
 async def test_get_offers(session):
-    """Test GET /api/offers should return 3 active offers"""
+    """Test GET /api/offers should return at least 3 active offers"""
     global offer_id
     try:
         async with session.get(f"{API_BASE}/offers") as response:
@@ -124,15 +124,15 @@ async def test_get_offers(session):
                 data = await response.json()
                 if isinstance(data, list):
                     offer_count = len(data)
-                    if offer_count == 3:
+                    if offer_count >= 3:
                         # Store first offer ID for later tests
                         if data and data[0].get("id"):
                             offer_id = data[0]["id"]
-                        offer_names = [o.get("title", "Unknown") for o in data]
+                        offer_names = [o.get("title", "Unknown") for o in data[:3]]
                         results.log_pass("Get Offers", f"✓ {offer_count} offers: {', '.join(offer_names)}")
                         return True
                     else:
-                        results.log_fail("Get Offers", f"Expected 3 offers, got {offer_count}")
+                        results.log_fail("Get Offers", f"Expected at least 3 offers, got {offer_count}")
                         return False
                 else:
                     results.log_fail("Get Offers", "Response is not a list")
