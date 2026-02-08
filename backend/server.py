@@ -821,9 +821,18 @@ async def create_single_product(data: SingleProductCreate, user=Depends(get_curr
     import random
     nutrition = match_nutrition(data.name)
     cost_per_100g = round((data.price / data.grams) * 100, 2)
-    # AI generates description and image in parallel
     description = await ai_generate_description(data.name, "single")
     image_url = await ai_generate_food_image(data.name, "single")
+    
+    # Resolve category from category_id or fallback to nutrition
+    category_name = nutrition["category"]
+    if data.category_id:
+        cat = await db.categories.find_one({"id": data.category_id}, {"_id": 0})
+        if cat:
+            category_name = cat["name"]
+
+    diet_type = data.diet_type or nutrition.get("diet_type", detect_diet_type(data.name))
+
     product_id = str(uuid.uuid4())
     product = {
         "id": product_id,
@@ -833,8 +842,9 @@ async def create_single_product(data: SingleProductCreate, user=Depends(get_curr
         "base_price": data.price,
         "base_grams": data.grams,
         "available_qty_grams": data.grams,
-        "category": nutrition["category"],
-        "diet_type": nutrition.get("diet_type", detect_diet_type(data.name)),
+        "category": category_name,
+        "category_id": data.category_id,
+        "diet_type": diet_type,
         "calories_per_100g": nutrition["calories"],
         "protein_per_100g": nutrition["protein"],
         "carbs_per_100g": nutrition["carbs"],
