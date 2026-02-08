@@ -1,0 +1,124 @@
+import React, { useState } from 'react';
+import { useAuth } from '../context/AuthContext';
+
+export default function Login() {
+  const { loginEmail, loginPin } = useAuth();
+  const [tab, setTab] = useState<'admin' | 'staff'>('admin');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [pin, setPin] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleAdminLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      await loginEmail(email, password);
+    } catch (err: any) {
+      setError(err.message || 'Login failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePinLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (pin.length < 4) { setError('Enter at least 4 digits'); return; }
+    setError('');
+    setLoading(true);
+    try {
+      await loginPin(pin);
+    } catch (err: any) {
+      setError(err.message || 'Invalid PIN');
+      setPin('');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="login-page">
+      <div className="login-card">
+        <div className="login-logo">
+          <div className="icon-bg">🍽</div>
+          <h1>Diet Cafe</h1>
+          <p>Management Panel</p>
+        </div>
+
+        <div className="login-tabs">
+          <button className={`login-tab ${tab === 'admin' ? 'active' : ''}`} onClick={() => { setTab('admin'); setError(''); }} data-testid="tab-admin">
+            Admin Login
+          </button>
+          <button className={`login-tab ${tab === 'staff' ? 'active' : ''}`} onClick={() => { setTab('staff'); setError(''); }} data-testid="tab-staff">
+            Staff PIN
+          </button>
+        </div>
+
+        {error && <p className="login-error">{error}</p>}
+
+        {tab === 'admin' ? (
+          <form onSubmit={handleAdminLogin}>
+            <div className="form-group">
+              <label>Email</label>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="admin@dietcafe.com" data-testid="email-input" />
+            </div>
+            <div className="form-group">
+              <label>Password</label>
+              <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Password" data-testid="password-input" />
+            </div>
+            <button type="submit" className="login-btn" disabled={loading || !email || !password} data-testid="admin-login-btn">
+              {loading ? 'Logging in...' : 'Login as Admin'}
+            </button>
+            <div className="login-demo">
+              <button type="button" onClick={() => { setEmail('admin@dietcafe.com'); setPassword('admin123'); }} data-testid="demo-btn">
+                Use demo credentials
+              </button>
+            </div>
+          </form>
+        ) : (
+          <form onSubmit={handlePinLogin}>
+            <div className="form-group">
+              <label style={{ textAlign: 'center', display: 'block' }}>Enter your staff PIN</label>
+              <div className="pin-inputs">
+                {[0,1,2,3,4,5].map(i => (
+                  <input
+                    key={i}
+                    type="password"
+                    inputMode="numeric"
+                    maxLength={1}
+                    value={pin[i] || ''}
+                    data-testid={`pin-input-${i}`}
+                    onChange={e => {
+                      const v = e.target.value.replace(/\D/g, '');
+                      const newPin = pin.split('');
+                      newPin[i] = v;
+                      setPin(newPin.join(''));
+                      if (v && i < 5) {
+                        const next = e.target.parentElement?.children[i+1] as HTMLInputElement;
+                        next?.focus();
+                      }
+                    }}
+                    onKeyDown={e => {
+                      if (e.key === 'Backspace' && !pin[i] && i > 0) {
+                        const prev = (e.target as HTMLElement).parentElement?.children[i-1] as HTMLInputElement;
+                        prev?.focus();
+                      }
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+            <button type="submit" className="login-btn" disabled={loading || pin.length < 4} data-testid="pin-login-btn">
+              {loading ? 'Verifying...' : 'Login with PIN'}
+            </button>
+            <p style={{ textAlign: 'center', fontSize: 13, color: '#9C9C9C', marginTop: 16 }}>
+              Kitchen & Cashier staff use PIN login
+            </p>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
