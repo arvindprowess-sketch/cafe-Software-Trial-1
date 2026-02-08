@@ -1039,6 +1039,37 @@ async def create_order(data: OrderCreate, user=Depends(get_current_user)):
                   "total_carbs": data.total_carbs, "total_fat": data.total_fat}},
         upsert=True
     )
+    # Auto-earn loyalty points (1 point per ₹10)
+    points = max(1, int(order["total_price"] / 10))
+    await db.loyalty.update_one(
+        {"user_id": user["id"]},
+        {"$inc": {"points": points, "total_earned": points},
+         "$push": {"history": {"order_id": order_id, "points": points, "type": "earned", "date": datetime.now(timezone.utc).isoformat()}}},
+        upsert=True
+    )
+    # Auto-update streak
+    from datetime import timedelta
+    yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
+    streak_data = await db.streaks.find_one({"user_id": user["id"]}, {"_id": 0})
+    if not streak_data:
+        streak_data = {"user_id": user["id"], "current_streak": 0, "longest_streak": 0, "last_order_date": None, "total_orders": 0}
+    last_date = streak_data.get("last_order_date")
+    if last_date != today:
+        if last_date == yesterday:
+            streak_data["current_streak"] = streak_data.get("current_streak", 0) + 1
+        else:
+            streak_data["current_streak"] = 1
+        streak_data["last_order_date"] = today
+        streak_data["total_orders"] = streak_data.get("total_orders", 0) + 1
+        streak_data["longest_streak"] = max(streak_data.get("longest_streak", 0), streak_data["current_streak"])
+        await db.streaks.update_one({"user_id": user["id"]}, {"$set": streak_data}, upsert=True)
+    # Notify kitchen about new order
+    await db.notifications.insert_one({
+        "id": str(uuid.uuid4()), "user_id": "kitchen", "title": "New Order!",
+        "body": f"Order #{order_id} from {user['name']} ({data.order_type})",
+        "type": "new_order", "order_id": order_id, "read": False,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
     return {k: v for k, v in order.items() if k != "_id"}
 
 @api_router.get("/orders")
