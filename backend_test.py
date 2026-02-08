@@ -7,8 +7,8 @@ from pathlib import Path
 
 # Use the public endpoint from the review request
 API_BASE = "https://next-phase-mobile.preview.emergentagent.com/api"
-print(f"🌐 Testing Diet Cafe Staff Management System at: {API_BASE}")
-print(f"🎯 Focus: Staff Management, PIN Login, Order Priority, Inventory")
+print(f"🌐 Testing Diet Cafe Cashier POS System at: {API_BASE}")
+print(f"🎯 Focus: Cashier PIN Login, Product Management, Order Creation with GST, Payment Modes")
 
 class TestResults:
     def __init__(self):
