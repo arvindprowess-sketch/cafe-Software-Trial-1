@@ -89,20 +89,20 @@ async def test_seed_offers_packs(session):
         return False
 
 async def test_get_banners(session):
-    """Test GET /api/banners should return 6 banners (3 offers + 3 packs)"""
+    """Test GET /api/banners should return dynamic banners from offers + packs (at least 6)"""
     try:
         async with session.get(f"{API_BASE}/banners") as response:
             if response.status == 200:
                 data = await response.json()
                 if isinstance(data, list):
                     banner_count = len(data)
-                    if banner_count == 6:
+                    if banner_count >= 6:
                         offers_count = sum(1 for b in data if b.get("type") == "offer")
                         packs_count = sum(1 for b in data if b.get("type") == "pack")
                         results.log_pass("Get Banners", f"✓ {banner_count} banners ({offers_count} offers, {packs_count} packs)")
                         return True
                     else:
-                        results.log_fail("Get Banners", f"Expected 6 banners, got {banner_count}")
+                        results.log_fail("Get Banners", f"Expected at least 6 banners, got {banner_count}")
                         return False
                 else:
                     results.log_fail("Get Banners", "Response is not a list")
