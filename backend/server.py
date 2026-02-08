@@ -1000,6 +1000,21 @@ async def create_order(data: OrderCreate, user=Depends(get_current_user)):
         
         processed_items.append(item_data)
     
+    # Determine status based on scheduled or immediate
+    is_scheduled = data.is_scheduled and data.scheduled_ready_time
+    if is_scheduled:
+        order_status = "scheduled"
+        # Calculate kitchen alert time based on order type
+        ready_dt = datetime.fromisoformat(data.scheduled_ready_time.replace('Z', '+00:00'))
+        if data.order_type == "delivery":
+            alert_minutes = 20
+        else:  # dine-in or takeaway
+            alert_minutes = 10
+        kitchen_alert_time = (ready_dt - timedelta(minutes=alert_minutes)).isoformat()
+    else:
+        order_status = "preparing" if getattr(data, 'payment_mode', None) in ("cash", "upi", "card", "other") else "pending"
+        kitchen_alert_time = None
+
     order = {
         "id": order_id,
         "user_id": user["id"],
@@ -1021,8 +1036,12 @@ async def create_order(data: OrderCreate, user=Depends(get_current_user)):
         "gst_percent": 5,
         "gst_amount": round((data.total_price + extra_charge) * 5 / 105, 2),
         "base_amount": round((data.total_price + extra_charge) * 100 / 105, 2),
-        "status": "preparing" if getattr(data, 'payment_mode', None) in ("cash", "upi", "card", "other") else "pending",
+        "status": order_status,
         "payment_status": "paid" if getattr(data, 'payment_mode', None) in ("cash", "upi", "card", "other") else "unpaid",
+        "is_scheduled": bool(is_scheduled),
+        "scheduled_ready_time": data.scheduled_ready_time if is_scheduled else None,
+        "kitchen_alert_time": kitchen_alert_time,
+        "schedule_confirmed": False if is_scheduled else None,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.orders.insert_one(order)
