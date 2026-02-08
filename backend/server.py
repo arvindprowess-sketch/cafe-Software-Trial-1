@@ -169,19 +169,22 @@ class SingleProductCreate(BaseModel):
     name: str
     price: float
     grams: float
+    category_id: Optional[str] = None
+    diet_type: Optional[str] = None
 
 class IngredientItem(BaseModel):
     name: str
     grams_per_serving: float
-    product_id: Optional[str] = None  # links to single product for stock deduction
+    product_id: Optional[str] = None
 
 class ReadyMadeMealCreate(BaseModel):
     name: str
-    ingredients: List[IngredientItem]  # Now includes grams per serving
-    images: List[str] = []  # base64 encoded images
+    ingredients: List[IngredientItem]
+    images: List[str] = []
     price: float
     serving_grams: float = 300
-    is_editable: bool = False  # Whether customer can modify ingredients
+    is_editable: bool = False
+    category_id: Optional[str] = None
 
 class ReadyMadeOrderItem(BaseModel):
     product_id: str
