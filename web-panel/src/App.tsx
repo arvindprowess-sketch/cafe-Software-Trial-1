@@ -13,6 +13,7 @@ import AdminCategories from './pages/AdminCategories';
 import AdminAnalytics from './pages/AdminAnalytics';
 import AdminTables from './pages/AdminTables';
 import AdminOffers from './pages/AdminOffers';
+import AdminShifts from './pages/AdminShifts';
 import KitchenOrders from './pages/KitchenOrders';
 import KitchenInventory from './pages/KitchenInventory';
 import CashierPOS from './pages/CashierPOS';
