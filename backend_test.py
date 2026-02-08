@@ -327,31 +327,46 @@ async def test_create_pack_admin(session):
         return False
     
     try:
+        # First get some products to create a valid pack
         headers = {"Authorization": f"Bearer {admin_token}"}
-        payload = {
-            "name": "Test Pack",
-            "description": "Testing pack creation",
-            "items": [
-                {"product_name": "chicken", "grams": 150},
-                {"product_name": "rice", "grams": 100}
-            ],
-            "original_price": 200,
-            "discounted_price": 150,
-            "is_active": True
-        }
-        
-        async with session.post(f"{API_BASE}/packs", json=payload, headers=headers) as response:
-            if response.status == 201:
-                data = await response.json()
-                if data.get("id"):
-                    results.log_pass("Create Pack (Admin)", f"✓ Created pack: {data.get('name')}")
-                    return True
+        async with session.get(f"{API_BASE}/products", headers=headers) as prod_response:
+            if prod_response.status == 200:
+                products = await prod_response.json()
+                if len(products) >= 2:
+                    chicken_product = next((p for p in products if "chicken" in p["name"].lower()), products[0])
+                    rice_product = next((p for p in products if "rice" in p["name"].lower()), products[1])
+                    
+                    payload = {
+                        "name": "Test Pack",
+                        "description": "Testing pack creation",
+                        "goal": "muscle_gain",
+                        "diet_type": "both",
+                        "items": [
+                            {"product_id": chicken_product["id"], "product_name": chicken_product["name"], "grams": 150},
+                            {"product_id": rice_product["id"], "product_name": rice_product["name"], "grams": 100}
+                        ],
+                        "pack_price": 150,
+                        "is_active": True
+                    }
+                    
+                    async with session.post(f"{API_BASE}/packs", json=payload, headers=headers) as response:
+                        if response.status == 201:
+                            data = await response.json()
+                            if data.get("id"):
+                                results.log_pass("Create Pack (Admin)", f"✓ Created pack: {data.get('name')}")
+                                return True
+                            else:
+                                results.log_fail("Create Pack (Admin)", "No ID in response")
+                                return False
+                        else:
+                            text = await response.text()
+                            results.log_fail("Create Pack (Admin)", f"HTTP {response.status}: {text}")
+                            return False
                 else:
-                    results.log_fail("Create Pack (Admin)", "No ID in response")
+                    results.log_fail("Create Pack (Admin)", "Not enough products available")
                     return False
             else:
-                text = await response.text()
-                results.log_fail("Create Pack (Admin)", f"HTTP {response.status}: {text}")
+                results.log_fail("Create Pack (Admin)", "Could not fetch products")
                 return False
     except Exception as e:
         results.log_fail("Create Pack (Admin)", f"Exception: {e}")
