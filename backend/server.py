@@ -1145,6 +1145,41 @@ async def all_orders(user=Depends(get_current_user)):
     orders = await db.orders.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
     return orders
 
+@api_router.get("/orders/scheduled")
+async def get_scheduled_orders(user=Depends(get_current_user)):
+    """Kitchen/Admin: get all scheduled orders (upcoming + alert-ready)"""
+    if user["role"] not in ("admin", "kitchen"):
+        raise HTTPException(status_code=403, detail="Kitchen/Admin only")
+    orders = await db.orders.find(
+        {"is_scheduled": True, "status": "scheduled"},
+        {"_id": 0}
+    ).sort("scheduled_ready_time", 1).to_list(100)
+    now = datetime.now(timezone.utc).isoformat()
+    for o in orders:
+        o["alert_triggered"] = o.get("kitchen_alert_time", "") <= now if o.get("kitchen_alert_time") else False
+    return orders
+
+@api_router.post("/orders/{order_id}/confirm-scheduled")
+async def confirm_scheduled_order(order_id: str, user=Depends(get_current_user)):
+    """Kitchen confirms a scheduled order and moves it to preparing"""
+    if user["role"] not in ("admin", "kitchen"):
+        raise HTTPException(status_code=403, detail="Kitchen/Admin only")
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if order.get("status") != "scheduled":
+        raise HTTPException(status_code=400, detail="Order is not in scheduled status")
+    await db.orders.update_one(
+        {"id": order_id},
+        {"$set": {"status": "preparing", "schedule_confirmed": True, "confirmed_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    updated = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    try:
+        await notify_order_status(order_id, "preparing")
+    except Exception:
+        pass
+    return updated
+
 @api_router.put("/orders/{order_id}/status")
 async def update_order_status(order_id: str, status: str, user=Depends(get_current_user)):
     """Admin/Kitchen/Cashier: update order status"""
