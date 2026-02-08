@@ -261,6 +261,18 @@ export default function CustomizeScreen() {
 
   const confirmOrder = async () => {
     setShowCalorieWarning(false);
+    // Validate scheduled time if scheduling
+    if (isScheduled) {
+      if (!scheduledHour || !scheduledMinute) {
+        Alert.alert('Set Time', 'Please select a ready time for your scheduled order');
+        return;
+      }
+      const readyTime = getScheduledReadyTime();
+      if (!readyTime) {
+        Alert.alert('Invalid Time', 'Please select a valid future time');
+        return;
+      }
+    }
     setOrdering(true);
     try {
       const orderItems = items.filter(i => i.grams > 0 || (i.quantity || 0) > 0).map(i => {
@@ -295,21 +307,27 @@ export default function CustomizeScreen() {
         }
       });
       
-      await apiCall('/orders', { 
-        method: 'POST', 
-        body: { 
-          order_type: orderType, 
-          items: orderItems, 
-          total_price: totals.price, 
-          total_calories: totals.calories, 
-          total_protein: totals.protein, 
-          total_carbs: totals.carbs, 
-          total_fat: totals.fat, 
-          fitness_goal: goal || null, 
-          budget: budget ? parseFloat(budget) : null 
-        } 
-      });
-      Alert.alert('Order Placed!', `Total: ₹${Math.round(totals.price + extra)}`);
+      const orderBody: any = { 
+        order_type: selectedOrderType, 
+        items: orderItems, 
+        total_price: totals.price, 
+        total_calories: totals.calories, 
+        total_protein: totals.protein, 
+        total_carbs: totals.carbs, 
+        total_fat: totals.fat, 
+        fitness_goal: goal || null, 
+        budget: budget ? parseFloat(budget) : null,
+        is_scheduled: isScheduled,
+      };
+      if (isScheduled) {
+        orderBody.scheduled_ready_time = getScheduledReadyTime();
+      }
+
+      await apiCall('/orders', { method: 'POST', body: orderBody });
+      const msg = isScheduled 
+        ? `Scheduled for ${scheduledHour}:${scheduledMinute.padStart(2, '0')}` 
+        : `Total: ₹${Math.round(totals.price + extra)}`;
+      Alert.alert(isScheduled ? 'Order Scheduled!' : 'Order Placed!', msg);
       setTimeout(() => router.replace('/(tabs)/orders'), 1500);
     } catch (e: any) { Alert.alert('Error', e.message); } finally { setOrdering(false); }
   };
