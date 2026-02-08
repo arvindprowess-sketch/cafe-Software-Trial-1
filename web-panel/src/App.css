@@ -33,6 +33,8 @@ input, select { font-family: inherit; }
 .form-group label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--dark); }
 .form-group input { width: 100%; padding: 12px 14px; border-radius: var(--radius); border: 2px solid var(--border); font-size: 15px; outline: none; transition: border-color 0.2s; }
 .form-group input:focus { border-color: var(--dark); }
+.form-group select { width: 100%; padding: 12px 14px; border-radius: var(--radius); border: 2px solid var(--border); font-size: 15px; outline: none; transition: border-color 0.2s; background: var(--white); }
+.form-group select:focus { border-color: var(--dark); }
 .pin-inputs { display: flex; gap: 8px; justify-content: center; }
 .pin-inputs input { width: 48px; height: 56px; text-align: center; font-size: 24px; font-weight: 800; border-radius: 12px; border: 2px solid var(--border); outline: none; }
 .pin-inputs input:focus { border-color: var(--dark); }
