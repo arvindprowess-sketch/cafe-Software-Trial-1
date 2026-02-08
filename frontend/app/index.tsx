@@ -415,6 +415,10 @@ const styles = StyleSheet.create({
   adminBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#FDE8EA', borderRadius: 12, paddingVertical: 14 },
   adminBtnText: { fontSize: 14, fontWeight: '600', color: Z_RED },
   
+  // Staff button
+  staffBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#F5F5F5', borderRadius: 12, paddingVertical: 14, marginTop: 10 },
+  staffBtnText: { fontSize: 14, fontWeight: '600', color: '#1C1C2E' },
+  
   // Error
   error: { color: Z_RED, fontSize: 13, textAlign: 'center', marginBottom: 12 },
   
