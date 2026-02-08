@@ -181,14 +181,15 @@ async def test_get_offer_products(session):
         async with session.get(f"{API_BASE}/offers/{offer_id}/products") as response:
             if response.status == 200:
                 data = await response.json()
-                if isinstance(data, list):
-                    product_count = len(data)
+                if isinstance(data, dict) and "products" in data:
+                    products = data.get("products", [])
+                    product_count = len(products)
                     # Check if products have discounted prices
-                    has_discounted = any("discounted_price" in p for p in data) if data else False
+                    has_discounted = any("discounted_price" in p for p in products) if products else False
                     results.log_pass("Get Offer Products", f"✓ {product_count} products, has discounts: {has_discounted}")
                     return True
                 else:
-                    results.log_fail("Get Offer Products", "Response is not a list")
+                    results.log_fail("Get Offer Products", f"Unexpected response format: {type(data)}")
                     return False
             else:
                 text = await response.text()
