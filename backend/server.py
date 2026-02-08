@@ -150,6 +150,8 @@ class OrderCreate(BaseModel):
     coupon_code: Optional[str] = None
     discount: Optional[float] = 0
     customer_name: Optional[str] = None  # For walk-in customers
+    is_scheduled: Optional[bool] = False
+    scheduled_ready_time: Optional[str] = None  # ISO datetime string
 
 class AISuggestRequest(BaseModel):
     goal: str
