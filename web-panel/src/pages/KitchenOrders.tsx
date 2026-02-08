@@ -129,6 +129,29 @@ export default function KitchenOrders() {
     } catch (e: any) { alert(e.message); }
   };
 
+  const confirmScheduledOrder = async (orderId: string) => {
+    setConfirming(true);
+    try {
+      await api(`/orders/${orderId}/confirm-scheduled`, { method: 'POST' });
+      setAlertOrder(null);
+      load();
+    } catch (e: any) { alert(e.message); } finally { setConfirming(false); }
+  };
+
+  const formatTime = (iso: string) => {
+    if (!iso) return '';
+    try { return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); } catch { return iso; }
+  };
+
+  const timeUntil = (iso: string) => {
+    if (!iso) return '';
+    const diff = new Date(iso).getTime() - Date.now();
+    if (diff < 0) return 'NOW';
+    const m = Math.floor(diff / 60000);
+    if (m < 60) return `${m}m`;
+    return `${Math.floor(m / 60)}h ${m % 60}m`;
+  };
+
   const handlePrint = () => {
     const printContent = document.getElementById('kitchen-ticket-print');
     if (!printContent) return;
