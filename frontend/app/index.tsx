@@ -154,7 +154,8 @@ export default function AuthScreen() {
   };
 
   const handleAdminLogin = () => {
-    router.push('/admin-login');
+    // Admin/Staff now use web panel at diet-expo-mobile.preview.emergentagent.com
+    Alert.alert('Web Panel', 'Admin & staff login is available on the web panel.\n\nOpen your browser to access the management dashboard.');
   };
 
   // Phone Input Step
