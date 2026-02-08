@@ -211,7 +211,12 @@ export default function AuthScreen() {
 
       <TouchableOpacity style={styles.adminBtn} onPress={handleAdminLogin}>
         <Ionicons name="storefront" size={18} color={Z_RED} />
-        <Text style={styles.adminBtnText}>Café Owner Login</Text>
+        <Text style={styles.adminBtnText}>Cafe Owner Login</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.staffBtn} onPress={() => router.push('/staff-login')}>
+        <Ionicons name="keypad" size={18} color="#1C1C2E" />
+        <Text style={styles.staffBtnText}>Staff Login (PIN)</Text>
       </TouchableOpacity>
     </>
   );
