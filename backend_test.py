@@ -452,17 +452,23 @@ async def test_create_payment_order(session):
 
 async def test_verify_payment(session):
     """Test POST /api/payments/verify should verify mock payment"""
+    if not admin_token:
+        results.log_fail("Verify Payment", "No admin token available")
+        return False
+    
     try:
+        headers = {"Authorization": f"Bearer {admin_token}"}
         payload = {
             "razorpay_order_id": "mock_order_123",
             "razorpay_payment_id": "mock_payment_456",
-            "razorpay_signature": "mock_signature"
+            "razorpay_signature": "mock_signature",
+            "order_id": order_id or "test_order"
         }
         
-        async with session.post(f"{API_BASE}/payments/verify", json=payload) as response:
+        async with session.post(f"{API_BASE}/payments/verify", json=payload, headers=headers) as response:
             if response.status == 200:
                 data = await response.json()
-                if data.get("status") == "success":
+                if data.get("status") == "paid":
                     results.log_pass("Verify Payment", f"✓ Payment verified successfully")
                     return True
                 else:
