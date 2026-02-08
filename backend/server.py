@@ -1304,53 +1304,52 @@ Respond in this exact JSON format:
 async def ai_quick_meal(data: QuickMealRequest, user=Depends(get_current_user)):
     try:
         from emergentintegrations.llm.chat import LlmChat, UserMessage
-        # Build product filter
+
+        # Step 0: Fetch available products with real stock
         query = {"is_active": True, "available_qty_grams": {"$gt": 50}}
         if data.diet_preference == "veg":
             query["diet_type"] = "veg"
         elif data.diet_preference == "non-veg":
             query["diet_type"] = "non-veg"
-        # "both" = no filter on diet_type
 
         products = await db.products.find(query, {"_id": 0}).to_list(100)
         if not products:
             return {"meal_items": [], "summary": "No products available for your preference.", "totals": {}}
 
+        # Build stock-aware menu string for AI
         available_str = "\n".join([
-            f"- {p['name']} ({p.get('diet_type','veg')}): ₹{p['cost_per_100g']}/100g | {p['calories_per_100g']}cal, {p['protein_per_100g']}g protein, {p['carbs_per_100g']}g carbs, {p['fat_per_100g']}g fat per 100g | Stock: {p['available_qty_grams']}g"
+            f"- {p['name']} ({p.get('diet_type','veg')}): ₹{p['cost_per_100g']}/100g | {p['calories_per_100g']}cal, P:{p['protein_per_100g']}g, C:{p['carbs_per_100g']}g, F:{p['fat_per_100g']}g per 100g | MAX available: {int(p['available_qty_grams'])}g"
             for p in products
         ])
-        budget_str = f"Budget: ₹{data.budget}. You MUST use as close to ₹{data.budget} as possible (aim for 90-100% utilization). DO NOT go under ₹{int(data.budget * 0.85)}. DO NOT exceed ₹{data.budget}. Increase gram portions to fill the budget." if data.budget else "No budget limit, but keep meal reasonable (₹100-₹400 range)."
         diet_pref_str = {"veg": "VEGETARIAN ONLY", "non-veg": "NON-VEGETARIAN ONLY", "both": "Both veg and non-veg allowed"}.get(data.diet_preference, "Both")
+        budget_str = f"Budget: ₹{data.budget}" if data.budget else "No specific budget"
 
-        prompt = f"""You are a nutrition expert at a fitness café in India. Build a COMPLETE single meal for this customer.
+        # HYBRID STEP 1: AI picks items + budget share percentages (NOT grams)
+        prompt = f"""You are a nutrition expert at a fitness café. Pick items for a COMPLETE balanced meal.
 
 Diet Preference: {diet_pref_str}
 Fitness Goal: {data.goal}
 {budget_str}
 
-Available Menu Items:
+Available Menu (with MAX stock):
 {available_str}
 
 RULES:
-- Build a COMPLETE balanced meal (protein source + carb source + optionally extras like salad/yogurt)
-- ONLY use items from the available menu above
-- Use the EXACT product names as listed
-- Suggest specific gram quantities (multiples of 25g)
-- BUDGET IS CRITICAL: Calculate total cost = sum(grams/100 * cost_per_100g) for each item. The total MUST be between 90% and 100% of the budget. If total is too low, increase portions or add more items. If total exceeds budget, reduce portions.
-- For {data.goal}:
-  * fat_loss: High protein, low carb, ~400-600 cal total, prioritize lean proteins
-  * muscle_gain: High protein, moderate-high carbs, ~700-1000 cal, include carb sources
-  * maintenance: Balanced macros, ~500-700 cal, good variety
-- Select 3-5 items for a complete meal
+- Pick 3-5 items for a complete meal (protein + carb + optional extras)
+- ONLY pick items from the list above
+- Use EXACT product names as listed
+- For each item, assign a budget_share_percent (what % of the total budget this item should get)
+- All budget_share_percent values MUST add up to exactly 100
+- DO NOT exceed MAX available stock for any item
+- For {data.goal}: fat_loss → prioritize lean protein (50-60% budget on protein), low carb; muscle_gain → high protein + carbs; maintenance → balanced
 
-Respond ONLY in this exact JSON format (no other text):
-{{"meal_items": [{{"product_name": "Exact Name", "grams": 150, "reason": "Brief reason"}}], "summary": "One line meal description"}}"""
+Respond ONLY in this JSON (no other text):
+{{"items": [{{"product_name": "Exact Name", "budget_share_percent": 40, "reason": "Brief reason"}}], "summary": "One line meal description"}}"""
 
         chat = LlmChat(
             api_key=os.environ.get('EMERGENT_LLM_KEY', ''),
             session_id=f"quickmeal-{uuid.uuid4()}",
-            system_message="You are a nutrition expert. Always respond in valid JSON format only. No markdown, no backticks."
+            system_message="You are a nutrition expert. Respond ONLY in valid JSON. No markdown, no backticks, no extra text."
         ).with_model("openai", "gpt-5.2")
         response = await chat.send_message(UserMessage(text=prompt))
 
@@ -1361,46 +1360,66 @@ Respond ONLY in this exact JSON format (no other text):
             cleaned = cleaned.rsplit("```", 1)[0]
         result = json.loads(cleaned)
 
-        # Enrich with full product data and calculate totals
-        enriched_items = []
-        totals = {"price": 0, "calories": 0, "protein": 0, "carbs": 0, "fat": 0}
-        for ai_item in result.get("meal_items", []):
-            product = next((p for p in products if p["name"].lower() == ai_item["product_name"].lower()), None)
+        ai_picks = result.get("items", result.get("meal_items", []))
+        if not ai_picks:
+            return {"meal_items": [], "summary": "AI returned no items. Please try again.", "totals": {}}
+
+        # HYBRID STEP 2: Match AI picks to real products
+        matched = []
+        for pick in ai_picks:
+            name = pick.get("product_name", "")
+            product = next((p for p in products if p["name"].lower() == name.lower()), None)
             if not product:
-                # Fuzzy match
-                product = next((p for p in products if ai_item["product_name"].lower() in p["name"].lower() or p["name"].lower() in ai_item["product_name"].lower()), None)
+                product = next((p for p in products if name.lower() in p["name"].lower() or p["name"].lower() in name.lower()), None)
             if product:
-                grams = ai_item.get("grams", 100)
-                factor = grams / 100
-                item_data = {
-                    "product_id": product["id"],
-                    "product_name": product["name"],
-                    "grams": grams,
-                    "price": round(factor * product["cost_per_100g"], 2),
-                    "calories": round(factor * product["calories_per_100g"], 1),
-                    "protein": round(factor * product["protein_per_100g"], 1),
-                    "carbs": round(factor * product["carbs_per_100g"], 1),
-                    "fat": round(factor * product["fat_per_100g"], 1),
-                    "diet_type": product.get("diet_type", "veg"),
-                    "image_url": product.get("image_url"),
-                    "reason": ai_item.get("reason", ""),
-                    "cost_per_100g": product["cost_per_100g"],
-                    "calories_per_100g": product["calories_per_100g"],
-                    "protein_per_100g": product["protein_per_100g"],
-                    "carbs_per_100g": product["carbs_per_100g"],
-                    "fat_per_100g": product["fat_per_100g"],
-                    "category": product.get("category", ""),
-                }
-                enriched_items.append(item_data)
-                totals["price"] += item_data["price"]
-                totals["calories"] += item_data["calories"]
-                totals["protein"] += item_data["protein"]
-                totals["carbs"] += item_data["carbs"]
-                totals["fat"] += item_data["fat"]
+                share = max(5, pick.get("budget_share_percent", round(100 / len(ai_picks))))
+                matched.append({"product": product, "share": share, "reason": pick.get("reason", "")})
 
-        totals = {k: round(v, 1) for k, v in totals.items()}
+        if not matched:
+            return {"meal_items": [], "summary": "Could not match AI suggestions to menu. Try again.", "totals": {}}
 
-        # ===== Post-process: Force total to EXACTLY match budget =====
+        # Normalize shares to 100%
+        total_share = sum(m["share"] for m in matched)
+        for m in matched:
+            m["share"] = m["share"] / total_share * 100
+
+        # HYBRID STEP 3: System calculates EXACT grams from budget + stock
+        budget = data.budget or 300
+        enriched_items = []
+        for m in matched:
+            p = m["product"]
+            budget_for_item = budget * m["share"] / 100
+            # Calculate grams from budget: grams = (budget_for_item / cost_per_100g) * 100
+            raw_grams = (budget_for_item / p["cost_per_100g"]) * 100
+            # Enforce stock limit
+            max_stock = p.get("available_qty_grams", 9999)
+            capped_grams = min(raw_grams, max_stock - 10)  # leave 10g buffer
+            # Round to nearest 5g for clean portions
+            final_grams = max(10, round(capped_grams / 5) * 5)
+
+            factor = final_grams / 100
+            enriched_items.append({
+                "product_id": p["id"],
+                "product_name": p["name"],
+                "grams": final_grams,
+                "price": round(factor * p["cost_per_100g"], 2),
+                "calories": round(factor * p["calories_per_100g"], 1),
+                "protein": round(factor * p["protein_per_100g"], 1),
+                "carbs": round(factor * p["carbs_per_100g"], 1),
+                "fat": round(factor * p["fat_per_100g"], 1),
+                "diet_type": p.get("diet_type", "veg"),
+                "image_url": p.get("image_url"),
+                "reason": m["reason"],
+                "cost_per_100g": p["cost_per_100g"],
+                "calories_per_100g": p["calories_per_100g"],
+                "protein_per_100g": p["protein_per_100g"],
+                "carbs_per_100g": p["carbs_per_100g"],
+                "fat_per_100g": p["fat_per_100g"],
+                "category": p.get("category", ""),
+                "max_stock": int(max_stock),
+            })
+
+        # HYBRID STEP 4: Precise budget adjustment — close the gap exactly
         def recalc_item(item: dict, grams: int):
             f = grams / 100
             item["grams"] = grams
@@ -1410,53 +1429,49 @@ Respond ONLY in this exact JSON format (no other text):
             item["carbs"] = round(f * item["carbs_per_100g"], 1)
             item["fat"] = round(f * item["fat_per_100g"], 1)
 
-        def recalc_totals(items: list):
+        def calc_total(items):
             t = {"price": 0, "calories": 0, "protein": 0, "carbs": 0, "fat": 0}
             for it in items:
                 for k in t:
                     t[k] += it[k]
-            return {k: round(v, 1) for k, v in t.items()}
+            return {k: round(v, 2) for k, v in t.items()}
 
-        if data.budget and totals["price"] > 0 and enriched_items:
-            budget = data.budget
+        totals = calc_total(enriched_items)
 
-            # Step 1: Scale all items proportionally (10g rounding for precision)
-            if totals["price"] < budget * 0.90 or totals["price"] > budget:
-                scale = budget * 0.95 / totals["price"]
-                for item in enriched_items:
-                    new_g = max(10, round(item["grams"] * scale / 10) * 10)
-                    recalc_item(item, new_g)
-                totals = recalc_totals(enriched_items)
-
-            # Step 2: Exact fill — adjust ONE item to 1g precision to close the gap
+        # Iterative adjustment: distribute remaining budget across items
+        for _round in range(5):
             gap = round(budget - totals["price"], 2)
-            if abs(gap) > 0.01 and enriched_items:
-                # Pick the largest-portion item (most room to adjust)
-                adjuster = max(enriched_items, key=lambda x: x["grams"])
-                # Calculate exact grams needed to add/remove to close gap
-                exact_extra_grams = round(gap / adjuster["cost_per_100g"] * 100)
-                new_g = max(10, adjuster["grams"] + exact_extra_grams)
-                recalc_item(adjuster, new_g)
-                totals = recalc_totals(enriched_items)
+            if abs(gap) < 0.50:
+                break
+            # Pick cheapest per-gram item with stock headroom to adjust
+            adjustable = [it for it in enriched_items if it["grams"] < it.get("max_stock", 9999) - 20]
+            if not adjustable and gap > 0:
+                adjustable = enriched_items  # fallback
+            if gap > 0 and adjustable:
+                # Under budget: add grams to the item with most stock headroom
+                adj = max(adjustable, key=lambda x: x.get("max_stock", 9999) - x["grams"])
+                extra_g = round(gap / adj["cost_per_100g"] * 100)
+                new_g = min(adj["grams"] + extra_g, adj.get("max_stock", 9999) - 5)
+                new_g = max(10, round(new_g))
+                recalc_item(adj, new_g)
+            elif gap < 0 and enriched_items:
+                # Over budget: trim from most expensive item
+                adj = max(enriched_items, key=lambda x: x["price"])
+                trim_g = max(1, round(abs(gap) / adj["cost_per_100g"] * 100) + 1)
+                new_g = max(10, adj["grams"] - trim_g)
+                recalc_item(adj, new_g)
+            totals = calc_total(enriched_items)
 
-            # Step 3: Final micro-adjust if still off by a few rupees (due to rounding)
-            final_gap = round(budget - totals["price"], 2)
-            if abs(final_gap) > 0.5 and enriched_items:
-                adjuster = max(enriched_items, key=lambda x: x["grams"])
-                micro_grams = round(final_gap / adjuster["cost_per_100g"] * 100)
-                if micro_grams != 0:
-                    new_g = max(10, adjuster["grams"] + micro_grams)
-                    recalc_item(adjuster, new_g)
-                    totals = recalc_totals(enriched_items)
+        # Final hard cap
+        if totals["price"] > budget:
+            adj = max(enriched_items, key=lambda x: x["price"])
+            over = totals["price"] - budget
+            trim_g = max(1, round(over / adj["cost_per_100g"] * 100) + 1)
+            recalc_item(adj, max(10, adj["grams"] - trim_g))
+            totals = calc_total(enriched_items)
 
-            # Step 4: Hard cap — if over budget, trim from largest
-            if totals["price"] > budget:
-                adjuster = max(enriched_items, key=lambda x: x["price"])
-                over = totals["price"] - budget
-                trim_g = max(1, round(over / adjuster["cost_per_100g"] * 100) + 1)
-                new_g = max(10, adjuster["grams"] - trim_g)
-                recalc_item(adjuster, new_g)
-                totals = recalc_totals(enriched_items)
+        # Round totals for display
+        totals = {k: round(v, 1) for k, v in totals.items()}
 
         return {
             "meal_items": enriched_items,
