@@ -220,7 +220,7 @@ export default function KitchenOrders() {
         </button>
       </div>
 
-      {orders.length === 0 && (
+      {activeTab === 'active' && orders.length === 0 && (
         <div className="empty-state">
           <div className="empty-icon">
             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#267E3E" strokeWidth="2"><path d="M20 6L9 17l-5-5"/></svg>
@@ -230,6 +230,7 @@ export default function KitchenOrders() {
         </div>
       )}
 
+      {activeTab === 'active' && (
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(380px,1fr))', gap: 14 }}>
         {orders.map(o => {
           const p = o.priority || 'normal';
