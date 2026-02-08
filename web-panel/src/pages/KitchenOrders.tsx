@@ -284,6 +284,137 @@ export default function KitchenOrders() {
           );
         })}
       </div>
+      )}
+
+      {/* Upcoming Scheduled Orders Tab */}
+      {activeTab === 'upcoming' && (
+        <div>
+          {scheduledOrders.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-icon">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#5B5FE0" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              </div>
+              <h3>No Scheduled Orders</h3>
+              <p>Scheduled orders from customers will appear here</p>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(380px,1fr))', gap: 14 }}>
+              {scheduledOrders.map(o => (
+                <div key={o.id} className={`order-card ${o.alert_triggered ? 'urgent' : ''}`} data-testid={`scheduled-card-${o.id}`}
+                  style={{ borderLeft: `4px solid ${o.alert_triggered ? '#E23744' : '#5B5FE0'}` }}
+                >
+                  <div className="order-header">
+                    <span className="order-id">#{o.id}</span>
+                    <span className={`badge ${o.alert_triggered ? 'badge-red' : 'badge-purple'}`} style={o.alert_triggered ? { animation: 'pulse 1s infinite' } : {}}>
+                      {o.alert_triggered ? 'ALERT - START NOW' : 'UPCOMING'}
+                    </span>
+                  </div>
+                  <div className="order-meta">
+                    <span>{o.user_name || o.customer_name}</span>
+                    <span className="badge badge-purple">{o.order_type}</span>
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: o.order_source === 'app' ? '#5B5FE015' : '#FF9F0A15', color: o.order_source === 'app' ? '#5B5FE0' : '#FF9F0A' }}>
+                      {o.order_source === 'app' ? 'APP' : 'WALK-IN'}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 12, margin: '10px 0', padding: '10px 12px', background: '#F8F5FF', borderRadius: 8 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 11, color: '#9C9C9C', fontWeight: 600 }}>Ready at</div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: '#5B5FE0' }}>{formatTime(o.scheduled_ready_time)}</div>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 11, color: '#9C9C9C', fontWeight: 600 }}>Kitchen alert</div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: o.alert_triggered ? '#E23744' : '#1C1C2E' }}>{formatTime(o.kitchen_alert_time)}</div>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 11, color: '#9C9C9C', fontWeight: 600 }}>Time until</div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: '#1C1C2E' }}>{timeUntil(o.scheduled_ready_time)}</div>
+                    </div>
+                  </div>
+                  <ul className="order-items">
+                    {o.items?.map((item: any, i: number) => (
+                      <li key={i}>
+                        <span style={{ fontWeight: 600 }}>{item.product_name}</span>
+                        <span>{item.product_type === 'ready_made' ? `x${item.quantity || 1}` : `${item.grams}g`}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  {o.alert_triggered && (
+                    <button className="btn btn-sm btn-green" style={{ width: '100%', fontWeight: 700 }}
+                      onClick={() => { setAlertOrder(o); }}
+                      data-testid={`start-scheduled-${o.id}`}
+                    >
+                      Confirm & Start Preparing
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* BLOCKING SCHEDULED ORDER ALERT POPUP */}
+      {alertOrder && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          data-testid="scheduled-alert-overlay"
+        >
+          <div style={{ background: '#FFF', borderRadius: 16, padding: 28, maxWidth: 480, width: '90%', textAlign: 'center', boxShadow: '0 20px 60px rgba(0,0,0,0.3)', border: '3px solid #E23744', animation: 'popIn 0.3s ease-out' }}
+            data-testid="scheduled-alert-popup"
+          >
+            <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#FDE8EA', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px', animation: 'pulse 1.5s infinite' }}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#E23744" strokeWidth="2.5">
+                <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/>
+              </svg>
+            </div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#E23744', letterSpacing: 2, marginBottom: 8 }}>SCHEDULED ORDER ALERT</div>
+            <div style={{ fontSize: 28, fontWeight: 800, color: '#1C1C2E', marginBottom: 4 }}>#{alertOrder.id}</div>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 16, margin: '14px 0' }}>
+              <div style={{ background: '#F8F5FF', borderRadius: 10, padding: '10px 18px' }}>
+                <div style={{ fontSize: 10, color: '#9C9C9C', fontWeight: 600 }}>Order Type</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: '#5B5FE0', textTransform: 'capitalize' }}>{alertOrder.order_type}</div>
+              </div>
+              <div style={{ background: '#FDE8EA', borderRadius: 10, padding: '10px 18px' }}>
+                <div style={{ fontSize: 10, color: '#9C9C9C', fontWeight: 600 }}>Ready At</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: '#E23744' }}>{formatTime(alertOrder.scheduled_ready_time)}</div>
+              </div>
+              <div style={{ background: '#F0FFF4', borderRadius: 10, padding: '10px 18px' }}>
+                <div style={{ fontSize: 10, color: '#9C9C9C', fontWeight: 600 }}>Customer</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: '#267E3E' }}>{alertOrder.user_name || alertOrder.customer_name}</div>
+              </div>
+            </div>
+            <div style={{ textAlign: 'left', background: '#FAFAFA', borderRadius: 10, padding: 14, margin: '14px 0', border: '1px solid #EFEFEF' }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#1C1C2E', marginBottom: 8 }}>Items (ingredient-wise grams):</div>
+              {alertOrder.items?.map((item: any, i: number) => (
+                <div key={i} style={{ marginBottom: 8, paddingBottom: 8, borderBottom: i < alertOrder.items.length - 1 ? '1px solid #EFEFEF' : 'none' }}>
+                  <div style={{ fontWeight: 700, color: '#1C1C2E', fontSize: 14 }}>
+                    {item.product_name} {item.product_type === 'ready_made' ? `× ${item.quantity || 1}` : `— ${item.grams}g`}
+                  </div>
+                  {item.ingredients_breakdown?.map((ing: any, j: number) => (
+                    <div key={j} style={{ marginLeft: 14, fontSize: 12, color: '#696969' }}>
+                      • {ing.name}: <strong>{ing.total_grams || ing.grams_per_serving}g</strong>
+                    </div>
+                  ))}
+                  {item.customized_ingredients?.map((ing: any, j: number) => (
+                    <div key={`c${j}`} style={{ marginLeft: 14, fontSize: 12, color: '#E23744' }}>
+                      • {ing.name}: <strong>{ing.grams_per_serving}g</strong> (customized)
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+            <button
+              className="btn btn-green"
+              style={{ width: '100%', padding: '16px 24px', fontSize: 16, fontWeight: 800, borderRadius: 12, cursor: confirming ? 'wait' : 'pointer' }}
+              onClick={() => confirmScheduledOrder(alertOrder.id)}
+              disabled={confirming}
+              data-testid="confirm-start-btn"
+            >
+              {confirming ? 'Confirming...' : 'Confirm & Start Preparing'}
+            </button>
+            <div style={{ fontSize: 11, color: '#9C9C9C', marginTop: 10 }}>This popup cannot be dismissed without confirmation</div>
+          </div>
+        </div>
+      )}
 
       {showTicket && (
         <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowTicket(null)}>
@@ -341,6 +472,10 @@ export default function KitchenOrders() {
         @keyframes pulse {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.5; }
+        }
+        @keyframes popIn {
+          0% { transform: scale(0.8); opacity: 0; }
+          100% { transform: scale(1); opacity: 1; }
         }
       `}</style>
     </div>
