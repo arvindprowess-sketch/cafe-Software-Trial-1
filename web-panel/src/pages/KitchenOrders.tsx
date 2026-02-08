@@ -173,6 +173,8 @@ export default function KitchenOrders() {
     return m < 1 ? 'Just now' : m < 60 ? `${m}m ago` : `${Math.floor(m / 60)}h ${m % 60}m`;
   };
 
+  console.log('[KitchenOrders] rendering, scheduledOrders:', scheduledOrders.length, 'activeTab:', activeTab);
+
   return (
     <div>
       <div className="page-header" style={{ marginBottom: 16 }}>
