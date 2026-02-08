@@ -613,6 +613,7 @@ async def create_category(category: CategoryCreate, user=Depends(get_current_use
         "image_url": category.image_url,
         "description": category.description,
         "sort_order": category.sort_order,
+        "font_style": category.font_style or "default",
         "is_active": True,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "created_by": user["id"]
