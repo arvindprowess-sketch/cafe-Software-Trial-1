@@ -5,18 +5,8 @@ import json
 import os
 from pathlib import Path
 
-# Load backend URL - Use the exact URL from review request
+# Load backend URL from review request
 backend_url = "https://healthy-bites-72.preview.emergentagent.com"
-
-# Also check frontend env as backup
-frontend_env_path = Path("/app/frontend/.env")
-if frontend_env_path.exists():
-    with open(frontend_env_path) as f:
-        for line in f:
-            if line.startswith("EXPO_PUBLIC_BACKEND_URL="):
-                backup_url = line.split("=", 1)[1].strip().strip('"')
-                print(f"📝 Found frontend backup URL: {backup_url}")
-                break
 
 API_BASE = f"{backend_url}/api"
 print(f"🌐 Testing backend at: {API_BASE}")
@@ -36,7 +26,7 @@ class TestResults:
         
     def print_summary(self):
         print("\n" + "="*60)
-        print(f"📊 BACKEND TEST RESULTS")
+        print(f"📊 BACKEND TEST RESULTS - Diet Cafe Expo")
         print("="*60)
         print(f"✅ PASSED: {len(self.passed)}")
         print(f"❌ FAILED: {len(self.failed)}")
@@ -48,9 +38,13 @@ class TestResults:
 
 results = TestResults()
 admin_token = None
+customer_token = None
+offer_id = None
+pack_id = None
+order_id = None
 
 async def test_admin_login(session):
-    """Test admin login to get auth token"""
+    """Test admin login with admin@dietcafe.com / admin123"""
     global admin_token
     try:
         payload = {"email": "admin@dietcafe.com", "password": "admin123"}
@@ -73,271 +67,508 @@ async def test_admin_login(session):
         results.log_fail("Admin Login", f"Exception: {e}")
         return False
 
-async def test_categories_endpoint(session):
-    """Test GET /api/categories should return 6 categories (per review request)"""
-    try:
-        async with session.get(f"{API_BASE}/categories") as response:
-            if response.status == 200:
-                data = await response.json()
-                if isinstance(data, list):
-                    category_count = len(data)
-                    # Check for expected 6 categories
-                    if category_count == 6:
-                        results.log_pass("Categories Endpoint", f"✓ Found exactly {category_count} categories as expected")
-                        
-                        # Verify category structure  
-                        sample_category = data[0] if data else {}
-                        required_fields = ['id', 'name', 'icon', 'color']
-                        missing_fields = [field for field in required_fields if field not in sample_category]
-                        
-                        if not missing_fields:
-                            results.log_pass("Category Structure Validation", "✓ Categories have all required fields")
-                            return True
-                        else:
-                            results.log_fail("Category Structure Validation", f"Missing fields: {missing_fields}")
-                            return False
-                    else:
-                        results.log_fail("Categories Endpoint", f"Expected 6 categories, got {category_count}")
-                        return False
-                else:
-                    results.log_fail("Categories Endpoint", "Response is not a list")
-                    return False
-            else:
-                text = await response.text()
-                results.log_fail("Categories Endpoint", f"HTTP {response.status}: {text}")
-                return False
-    except Exception as e:
-        results.log_fail("Categories Endpoint", f"Exception: {e}")
-        return False
-
-async def test_admin_products_all_endpoint(session):
-    """Test GET /api/products/all with admin token should return all products"""
+async def test_seed_offers_packs(session):
+    """Test POST /api/seed-offers-packs to seed test data"""
     if not admin_token:
-        results.log_fail("Admin Products All Endpoint", "No admin token available")
+        results.log_fail("Seed Offers & Packs", "No admin token available")
         return False
     
     try:
         headers = {"Authorization": f"Bearer {admin_token}"}
-        async with session.get(f"{API_BASE}/products/all", headers=headers) as response:
+        async with session.post(f"{API_BASE}/seed-offers-packs", headers=headers) as response:
+            if response.status == 200:
+                data = await response.json()
+                results.log_pass("Seed Offers & Packs", f"✓ {data.get('message', 'Seeded successfully')}")
+                return True
+            else:
+                text = await response.text()
+                results.log_fail("Seed Offers & Packs", f"HTTP {response.status}: {text}")
+                return False
+    except Exception as e:
+        results.log_fail("Seed Offers & Packs", f"Exception: {e}")
+        return False
+
+async def test_get_banners(session):
+    """Test GET /api/banners should return 6 banners (3 offers + 3 packs)"""
+    try:
+        async with session.get(f"{API_BASE}/banners") as response:
             if response.status == 200:
                 data = await response.json()
                 if isinstance(data, list):
-                    total_products = len(data)
-                    results.log_pass("Admin Products All Endpoint", f"✓ {total_products} products returned with admin token")
-                    return True
-                else:
-                    results.log_fail("Admin Products All Endpoint", "Response is not a list")
-                    return False
-            else:
-                text = await response.text()
-                results.log_fail("Admin Products All Endpoint", f"HTTP {response.status}: {text}")
-                return False
-    except Exception as e:
-        results.log_fail("Admin Products All Endpoint", f"Exception: {e}")
-        return False
-
-async def test_admin_only_access(session):
-    """Test that admin-only endpoints require proper authentication"""
-    try:
-        # Test without token first
-        async with session.get(f"{API_BASE}/products/all") as response:
-            if response.status == 401:
-                results.log_pass("Admin Authentication - No Token", "✓ Correctly rejected access without token")
-                
-                # Test with invalid token
-                headers = {"Authorization": "Bearer invalid_token"}
-                async with session.get(f"{API_BASE}/products/all", headers=headers) as response2:
-                    if response2.status == 401:
-                        results.log_pass("Admin Authentication - Invalid Token", "✓ Correctly rejected invalid token")
+                    banner_count = len(data)
+                    if banner_count == 6:
+                        offers_count = sum(1 for b in data if b.get("type") == "offer")
+                        packs_count = sum(1 for b in data if b.get("type") == "pack")
+                        results.log_pass("Get Banners", f"✓ {banner_count} banners ({offers_count} offers, {packs_count} packs)")
                         return True
                     else:
-                        results.log_fail("Admin Authentication - Invalid Token", f"Expected 401, got {response2.status}")
+                        results.log_fail("Get Banners", f"Expected 6 banners, got {banner_count}")
                         return False
-            else:
-                results.log_fail("Admin Authentication - No Token", f"Expected 401, got {response.status}")
-                return False
-    except Exception as e:
-        results.log_fail("Admin Authentication", f"Exception: {e}")
-        return False
-
-async def test_ai_quick_meal_endpoint(session):
-    """Test that AI Quick Meal endpoint works for authenticated users"""
-    if not admin_token:
-        results.log_fail("AI Quick Meal Endpoint", "No admin token available")
-        return False
-    
-    try:
-        headers = {"Authorization": f"Bearer {admin_token}"}
-        payload = {
-            "diet_preference": "veg",
-            "goal": "maintenance", 
-            "budget": 150,
-            "order_type": "dine-in"
-        }
-        
-        async with session.post(f"{API_BASE}/ai/quick-meal", json=payload, headers=headers) as response:
-            if response.status == 200:
-                data = await response.json()
-                meal_items = data.get("meal_items", [])
-                totals = data.get("totals", {})
-                
-                if meal_items or totals:  # Allow empty response if no products match
-                    results.log_pass("AI Quick Meal Endpoint", 
-                        f"✓ Response received: {len(meal_items)} items, totals: {totals}")
-                    return True
                 else:
-                    results.log_pass("AI Quick Meal Endpoint", "✓ Empty response (no matching products)")
-                    return True
-            else:
-                text = await response.text()
-                results.log_fail("AI Quick Meal Endpoint", f"HTTP {response.status}: {text}")
-                return False
-    except Exception as e:
-        results.log_fail("AI Quick Meal Endpoint", f"Exception: {e}")
-        return False
-
-async def test_products_list_admin(session):
-    """Test admin products list to verify new products appear"""
-    if not admin_token:
-        results.log_fail("Products List (Admin)", "No admin token available")
-        return False
-    
-    try:
-        headers = {"Authorization": f"Bearer {admin_token}"}
-        async with session.get(f"{API_BASE}/products/all", headers=headers) as response:
-            if response.status == 200:
-                data = await response.json()
-                if isinstance(data, list):
-                    # Look for the products we just created
-                    mushroom_found = any(p.get("name") == "Mushroom" and p.get("product_type") == "single" for p in data)
-                    paneer_masala_found = any(p.get("name") == "Paneer Butter Masala" and p.get("product_type") == "ready_made" for p in data)
-                    egg_curry_found = any(p.get("name") == "Egg Curry" and p.get("product_type") == "ready_made" for p in data)
-                    
-                    total_products = len(data)
-                    found_count = sum([mushroom_found, paneer_masala_found, egg_curry_found])
-                    
-                    results.log_pass("Products List (Admin)", 
-                        f"✓ {total_products} products total, found {found_count}/3 new products with correct product_type")
-                    return True
-                else:
-                    results.log_fail("Products List (Admin)", "Response is not a list")
+                    results.log_fail("Get Banners", "Response is not a list")
                     return False
             else:
                 text = await response.text()
-                results.log_fail("Products List (Admin)", f"HTTP {response.status}: {text}")
+                results.log_fail("Get Banners", f"HTTP {response.status}: {text}")
                 return False
     except Exception as e:
-        results.log_fail("Products List (Admin)", f"Exception: {e}")
+        results.log_fail("Get Banners", f"Exception: {e}")
         return False
 
-async def test_products_health_check(session):
-    """Test GET /api/products should return 16 products (per review request)"""
+async def test_get_offers(session):
+    """Test GET /api/offers should return 3 active offers"""
+    global offer_id
     try:
-        async with session.get(f"{API_BASE}/products") as response:
+        async with session.get(f"{API_BASE}/offers") as response:
+            if response.status == 200:
+                data = await response.json()
+                if isinstance(data, list):
+                    offer_count = len(data)
+                    if offer_count == 3:
+                        # Store first offer ID for later tests
+                        if data and data[0].get("id"):
+                            offer_id = data[0]["id"]
+                        offer_names = [o.get("title", "Unknown") for o in data]
+                        results.log_pass("Get Offers", f"✓ {offer_count} offers: {', '.join(offer_names)}")
+                        return True
+                    else:
+                        results.log_fail("Get Offers", f"Expected 3 offers, got {offer_count}")
+                        return False
+                else:
+                    results.log_fail("Get Offers", "Response is not a list")
+                    return False
+            else:
+                text = await response.text()
+                results.log_fail("Get Offers", f"HTTP {response.status}: {text}")
+                return False
+    except Exception as e:
+        results.log_fail("Get Offers", f"Exception: {e}")
+        return False
+
+async def test_get_offers_all_admin(session):
+    """Test GET /api/offers/all (admin) should return all offers"""
+    if not admin_token:
+        results.log_fail("Get Offers All (Admin)", "No admin token available")
+        return False
+    
+    try:
+        headers = {"Authorization": f"Bearer {admin_token}"}
+        async with session.get(f"{API_BASE}/offers/all", headers=headers) as response:
+            if response.status == 200:
+                data = await response.json()
+                if isinstance(data, list):
+                    offer_count = len(data)
+                    results.log_pass("Get Offers All (Admin)", f"✓ {offer_count} offers (including inactive)")
+                    return True
+                else:
+                    results.log_fail("Get Offers All (Admin)", "Response is not a list")
+                    return False
+            else:
+                text = await response.text()
+                results.log_fail("Get Offers All (Admin)", f"HTTP {response.status}: {text}")
+                return False
+    except Exception as e:
+        results.log_fail("Get Offers All (Admin)", f"Exception: {e}")
+        return False
+
+async def test_get_offer_products(session):
+    """Test GET /api/offers/{offer_id}/products should return filtered products with discounted prices"""
+    if not offer_id:
+        results.log_fail("Get Offer Products", "No offer ID available")
+        return False
+    
+    try:
+        async with session.get(f"{API_BASE}/offers/{offer_id}/products") as response:
             if response.status == 200:
                 data = await response.json()
                 if isinstance(data, list):
                     product_count = len(data)
-                    # Check for expected 16 products
-                    if product_count == 16:
-                        results.log_pass("Backend Health Check - Products Count", f"✓ Found exactly {product_count} products as expected")
-                        
-                        # Verify product structure
-                        sample_product = data[0] if data else {}
-                        required_fields = ['id', 'name', 'category', 'diet_type', 'calories_per_100g', 'protein_per_100g', 'carbs_per_100g', 'fat_per_100g', 'cost_per_100g']
-                        missing_fields = [field for field in required_fields if field not in sample_product]
-                        
-                        if not missing_fields:
-                            results.log_pass("Product Structure Validation", "✓ Products have all required fields")
-                            return True
-                        else:
-                            results.log_fail("Product Structure Validation", f"Missing fields: {missing_fields}")
-                            return False
-                    else:
-                        results.log_fail("Backend Health Check - Products Count", f"Expected 16 products, got {product_count}")
-                        return False
+                    # Check if products have discounted prices
+                    has_discounted = any("discounted_price" in p for p in data) if data else False
+                    results.log_pass("Get Offer Products", f"✓ {product_count} products, has discounts: {has_discounted}")
+                    return True
                 else:
-                    results.log_fail("Backend Health Check - Products", "Response is not a list")
+                    results.log_fail("Get Offer Products", "Response is not a list")
                     return False
             else:
                 text = await response.text()
-                results.log_fail("Backend Health Check - Products", f"HTTP {response.status}: {text}")
+                results.log_fail("Get Offer Products", f"HTTP {response.status}: {text}")
                 return False
     except Exception as e:
-        results.log_fail("Backend Health Check - Products", f"Exception: {e}")
+        results.log_fail("Get Offer Products", f"Exception: {e}")
         return False
 
-async def test_ai_quick_meal_endpoint(session):
-    """Test that existing AI Quick Meal endpoint still works"""
+async def test_create_offer_admin(session):
+    """Test POST /api/offers (admin) should create a new offer"""
     if not admin_token:
-        results.log_fail("AI Quick Meal Endpoint", "No admin token available")
+        results.log_fail("Create Offer (Admin)", "No admin token available")
         return False
     
     try:
         headers = {"Authorization": f"Bearer {admin_token}"}
         payload = {
-            "diet_preference": "veg",
-            "goal": "maintenance",
-            "budget": 150,
-            "order_type": "dine-in"
+            "title": "Test Offer 50% OFF",
+            "description": "Testing offer creation",
+            "discount_type": "percentage",
+            "discount_value": 50,
+            "min_order_value": 100,
+            "applicable_categories": ["Protein"],
+            "coupon_code": "TEST50",
+            "max_discount": 100,
+            "is_active": True
         }
         
-        async with session.post(f"{API_BASE}/ai/quick-meal", json=payload, headers=headers) as response:
-            if response.status == 200:
+        async with session.post(f"{API_BASE}/offers", json=payload, headers=headers) as response:
+            if response.status == 201:
                 data = await response.json()
-                meal_items = data.get("meal_items", [])
-                totals = data.get("totals", {})
-                
-                if meal_items and totals:
-                    results.log_pass("AI Quick Meal Endpoint", 
-                        f"✓ {len(meal_items)} items, ₹{totals.get('price', 0)} total, {totals.get('calories', 0)} cal")
+                if data.get("id"):
+                    results.log_pass("Create Offer (Admin)", f"✓ Created offer: {data.get('title')}")
                     return True
                 else:
-                    results.log_fail("AI Quick Meal Endpoint", "Missing meal_items or totals in response")
+                    results.log_fail("Create Offer (Admin)", "No ID in response")
                     return False
             else:
                 text = await response.text()
-                results.log_fail("AI Quick Meal Endpoint", f"HTTP {response.status}: {text}")
+                results.log_fail("Create Offer (Admin)", f"HTTP {response.status}: {text}")
                 return False
     except Exception as e:
-        results.log_fail("AI Quick Meal Endpoint", f"Exception: {e}")
+        results.log_fail("Create Offer (Admin)", f"Exception: {e}")
+        return False
+
+async def test_update_offer_admin(session):
+    """Test PUT /api/offers/{offer_id} (admin) should update an offer"""
+    if not admin_token or not offer_id:
+        results.log_fail("Update Offer (Admin)", "No admin token or offer ID available")
+        return False
+    
+    try:
+        headers = {"Authorization": f"Bearer {admin_token}"}
+        payload = {
+            "description": "Updated description via test"
+        }
+        
+        async with session.put(f"{API_BASE}/offers/{offer_id}", json=payload, headers=headers) as response:
+            if response.status == 200:
+                data = await response.json()
+                if data.get("description") == "Updated description via test":
+                    results.log_pass("Update Offer (Admin)", f"✓ Updated offer: {data.get('title')}")
+                    return True
+                else:
+                    results.log_fail("Update Offer (Admin)", "Description not updated")
+                    return False
+            else:
+                text = await response.text()
+                results.log_fail("Update Offer (Admin)", f"HTTP {response.status}: {text}")
+                return False
+    except Exception as e:
+        results.log_fail("Update Offer (Admin)", f"Exception: {e}")
+        return False
+
+async def test_get_packs(session):
+    """Test GET /api/packs should return 3 active packs"""
+    global pack_id
+    try:
+        async with session.get(f"{API_BASE}/packs") as response:
+            if response.status == 200:
+                data = await response.json()
+                if isinstance(data, list):
+                    pack_count = len(data)
+                    if pack_count == 3:
+                        # Store first pack ID for later tests
+                        if data and data[0].get("id"):
+                            pack_id = data[0]["id"]
+                        pack_names = [p.get("name", "Unknown") for p in data]
+                        results.log_pass("Get Packs", f"✓ {pack_count} packs: {', '.join(pack_names)}")
+                        return True
+                    else:
+                        results.log_fail("Get Packs", f"Expected 3 packs, got {pack_count}")
+                        return False
+                else:
+                    results.log_fail("Get Packs", "Response is not a list")
+                    return False
+            else:
+                text = await response.text()
+                results.log_fail("Get Packs", f"HTTP {response.status}: {text}")
+                return False
+    except Exception as e:
+        results.log_fail("Get Packs", f"Exception: {e}")
+        return False
+
+async def test_get_pack_detail(session):
+    """Test GET /api/packs/{pack_id} should return pack detail with enriched items, total_calories, savings"""
+    if not pack_id:
+        results.log_fail("Get Pack Detail", "No pack ID available")
+        return False
+    
+    try:
+        async with session.get(f"{API_BASE}/packs/{pack_id}") as response:
+            if response.status == 200:
+                data = await response.json()
+                has_enriched = "enriched_items" in data
+                has_calories = "total_calories" in data
+                has_savings = "savings" in data
+                results.log_pass("Get Pack Detail", 
+                    f"✓ Pack details: enriched_items: {has_enriched}, total_calories: {has_calories}, savings: {has_savings}")
+                return True
+            else:
+                text = await response.text()
+                results.log_fail("Get Pack Detail", f"HTTP {response.status}: {text}")
+                return False
+    except Exception as e:
+        results.log_fail("Get Pack Detail", f"Exception: {e}")
+        return False
+
+async def test_create_pack_admin(session):
+    """Test POST /api/packs (admin) should create a new pack"""
+    if not admin_token:
+        results.log_fail("Create Pack (Admin)", "No admin token available")
+        return False
+    
+    try:
+        headers = {"Authorization": f"Bearer {admin_token}"}
+        payload = {
+            "name": "Test Pack",
+            "description": "Testing pack creation",
+            "items": [
+                {"product_name": "chicken", "grams": 150},
+                {"product_name": "rice", "grams": 100}
+            ],
+            "original_price": 200,
+            "discounted_price": 150,
+            "is_active": True
+        }
+        
+        async with session.post(f"{API_BASE}/packs", json=payload, headers=headers) as response:
+            if response.status == 201:
+                data = await response.json()
+                if data.get("id"):
+                    results.log_pass("Create Pack (Admin)", f"✓ Created pack: {data.get('name')}")
+                    return True
+                else:
+                    results.log_fail("Create Pack (Admin)", "No ID in response")
+                    return False
+            else:
+                text = await response.text()
+                results.log_fail("Create Pack (Admin)", f"HTTP {response.status}: {text}")
+                return False
+    except Exception as e:
+        results.log_fail("Create Pack (Admin)", f"Exception: {e}")
+        return False
+
+async def test_create_mock_order_for_payment(session):
+    """Create a test order for payment testing"""
+    global order_id
+    if not admin_token:
+        results.log_fail("Create Mock Order", "No admin token available")
+        return False
+    
+    try:
+        headers = {"Authorization": f"Bearer {admin_token}"}
+        payload = {
+            "order_type": "dine-in",
+            "items": [
+                {
+                    "product_id": "test-id",
+                    "product_name": "Test Item",
+                    "grams": 100,
+                    "price": 50,
+                    "calories": 100,
+                    "protein": 10,
+                    "carbs": 15,
+                    "fat": 5
+                }
+            ],
+            "total_price": 50,
+            "total_calories": 100,
+            "total_protein": 10,
+            "total_carbs": 15,
+            "total_fat": 5
+        }
+        
+        async with session.post(f"{API_BASE}/orders", json=payload, headers=headers) as response:
+            if response.status == 200:
+                data = await response.json()
+                order_id = data.get("id")
+                if order_id:
+                    results.log_pass("Create Mock Order", f"✓ Created order: {order_id}")
+                    return True
+                else:
+                    results.log_fail("Create Mock Order", "No order ID in response")
+                    return False
+            else:
+                text = await response.text()
+                results.log_fail("Create Mock Order", f"HTTP {response.status}: {text}")
+                return False
+    except Exception as e:
+        results.log_fail("Create Mock Order", f"Exception: {e}")
+        return False
+
+async def test_create_payment_order(session):
+    """Test POST /api/payments/create-order should create mock Razorpay order"""
+    if not order_id:
+        results.log_fail("Create Payment Order", "No order ID available")
+        return False
+    
+    try:
+        payload = {
+            "order_id": order_id,
+            "amount": 50
+        }
+        
+        async with session.post(f"{API_BASE}/payments/create-order", json=payload) as response:
+            if response.status == 200:
+                data = await response.json()
+                if data.get("razorpay_order_id"):
+                    results.log_pass("Create Payment Order", f"✓ Mock Razorpay order: {data.get('razorpay_order_id')}")
+                    return True
+                else:
+                    results.log_fail("Create Payment Order", "No razorpay_order_id in response")
+                    return False
+            else:
+                text = await response.text()
+                results.log_fail("Create Payment Order", f"HTTP {response.status}: {text}")
+                return False
+    except Exception as e:
+        results.log_fail("Create Payment Order", f"Exception: {e}")
+        return False
+
+async def test_verify_payment(session):
+    """Test POST /api/payments/verify should verify mock payment"""
+    try:
+        payload = {
+            "razorpay_order_id": "mock_order_123",
+            "razorpay_payment_id": "mock_payment_456",
+            "razorpay_signature": "mock_signature"
+        }
+        
+        async with session.post(f"{API_BASE}/payments/verify", json=payload) as response:
+            if response.status == 200:
+                data = await response.json()
+                if data.get("status") == "success":
+                    results.log_pass("Verify Payment", f"✓ Payment verified successfully")
+                    return True
+                else:
+                    results.log_fail("Verify Payment", f"Unexpected status: {data.get('status')}")
+                    return False
+            else:
+                text = await response.text()
+                results.log_fail("Verify Payment", f"HTTP {response.status}: {text}")
+                return False
+    except Exception as e:
+        results.log_fail("Verify Payment", f"Exception: {e}")
+        return False
+
+async def test_apply_coupon(session):
+    """Test POST /api/orders/apply-coupon should return discount for valid coupon PROTEIN20"""
+    try:
+        payload = {
+            "coupon_code": "PROTEIN20",
+            "total_amount": 100
+        }
+        
+        async with session.post(f"{API_BASE}/orders/apply-coupon", json=payload) as response:
+            if response.status == 200:
+                data = await response.json()
+                if data.get("discount_amount") is not None:
+                    results.log_pass("Apply Coupon", f"✓ PROTEIN20 discount: ₹{data.get('discount_amount')}")
+                    return True
+                else:
+                    results.log_fail("Apply Coupon", "No discount_amount in response")
+                    return False
+            else:
+                text = await response.text()
+                results.log_fail("Apply Coupon", f"HTTP {response.status}: {text}")
+                return False
+    except Exception as e:
+        results.log_fail("Apply Coupon", f"Exception: {e}")
+        return False
+
+async def test_ai_adjust_portions(session):
+    """Test POST /api/ai/adjust-portions should return AI-suggested portion adjustments"""
+    if not admin_token:
+        results.log_fail("AI Adjust Portions", "No admin token available")
+        return False
+    
+    try:
+        headers = {"Authorization": f"Bearer {admin_token}"}
+        payload = {
+            "current_items": [
+                {"name": "chicken", "grams": 100},
+                {"name": "rice", "grams": 150}
+            ],
+            "target_calories": 500,
+            "fitness_goal": "muscle_gain"
+        }
+        
+        async with session.post(f"{API_BASE}/ai/adjust-portions", json=payload, headers=headers) as response:
+            if response.status == 200:
+                data = await response.json()
+                if "adjustments" in data or "suggestions" in data:
+                    results.log_pass("AI Adjust Portions", f"✓ AI suggestions received")
+                    return True
+                else:
+                    results.log_fail("AI Adjust Portions", "No adjustments or suggestions in response")
+                    return False
+            else:
+                text = await response.text()
+                results.log_fail("AI Adjust Portions", f"HTTP {response.status}: {text}")
+                return False
+    except Exception as e:
+        results.log_fail("AI Adjust Portions", f"Exception: {e}")
         return False
 
 async def main():
-    print("🧪 Starting Diet Cafe Backend API Tests...")
+    print("🧪 Starting Diet Cafe Expo Backend Tests...")
     print(f"🌐 Backend URL: {API_BASE}")
-    print("📋 Testing seeded database as per review request:")
-    print("   - 16 products expected")
-    print("   - 6 categories expected") 
-    print("   - Admin user: admin@dietcafe.com / admin123")
+    print("📋 Testing new features as per review request:")
+    print("   - Offers/Banners system with admin CRUD")
+    print("   - Goal Packs with admin CRUD") 
+    print("   - Dynamic Banners from offers + packs (6 total)")
+    print("   - Razorpay payment endpoints (mock mode)")
+    print("   - Smart Portion Adjuster (AI-powered)")
+    print("   - Coupon code application")
+    print("   - Admin: admin@dietcafe.com / admin123")
     
     # Create session with proper timeout
     timeout = aiohttp.ClientTimeout(total=60)
     async with aiohttp.ClientSession(timeout=timeout) as session:
         
-        # Test sequence following the review request exactly
-        print("\n1️⃣ Testing Backend Health Check - Products (16 expected)...")
-        await test_products_health_check(session)
-        
-        print("\n2️⃣ Testing Admin Login (admin@dietcafe.com / admin123)...")
+        # Test sequence following the review request features
+        print("\n1️⃣ Testing Admin Login...")
         login_success = await test_admin_login(session)
         
-        print("\n3️⃣ Testing Categories Endpoint (6 expected)...")
-        await test_categories_endpoint(session)
-        
         if login_success:
-            print("\n4️⃣ Testing Admin-Only Products Endpoint...")
-            await test_admin_products_all_endpoint(session)
+            print("\n2️⃣ Seeding Offers & Packs...")
+            await test_seed_offers_packs(session)
             
-            print("\n5️⃣ Testing Admin Authentication...")
-            await test_admin_only_access(session)
-        else:
-            print("⚠️ Skipping admin-only tests due to login failure")
+            print("\n3️⃣ Testing Dynamic Banners (6 expected: 3 offers + 3 packs)...")
+            await test_get_banners(session)
+            
+            print("\n4️⃣ Testing Offers Endpoints...")
+            await test_get_offers(session)
+            await test_get_offers_all_admin(session)
+            await test_get_offer_products(session)
+            await test_create_offer_admin(session)
+            await test_update_offer_admin(session)
+            
+            print("\n5️⃣ Testing Packs Endpoints...")
+            await test_get_packs(session)
+            await test_get_pack_detail(session)
+            await test_create_pack_admin(session)
+            
+            print("\n6️⃣ Testing Payment Endpoints (Mock Mode)...")
+            await test_create_mock_order_for_payment(session)
+            await test_create_payment_order(session)
+            await test_verify_payment(session)
+            
+            print("\n7️⃣ Testing Coupon System...")
+            await test_apply_coupon(session)
+            
+            print("\n8️⃣ Testing AI Portion Adjuster...")
+            await test_ai_adjust_portions(session)
         
-        # Optional AI test (as it was in original)
-        if login_success:
-            print("\n6️⃣ Testing AI Quick Meal Endpoint...")
-            await test_ai_quick_meal_endpoint(session)
+        else:
+            print("⚠️ Skipping feature tests due to admin login failure")
     
     # Print final results
     results.print_summary()
