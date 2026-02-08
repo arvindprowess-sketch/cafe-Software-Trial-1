@@ -376,14 +376,16 @@ export default function BudgetMealScreen() {
                   <View style={[styles.vegIndicator, { borderColor: item.diet_type === 'non-veg' ? Z_RED : GREEN }]}>
                     <View style={[styles.vegDot, { backgroundColor: item.diet_type === 'non-veg' ? Z_RED : GREEN }]} />
                   </View>
-                  <View>
-                    <Text style={styles.suggestionName}>{item.product_name}</Text>
-                    <Text style={styles.suggestionReason}>{item.reason}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.suggestionName} numberOfLines={1}>{item.product_name}</Text>
+                    <Text style={styles.suggestionReason} numberOfLines={2}>{item.reason}</Text>
                   </View>
                 </View>
                 <View style={styles.suggestionRight}>
-                  <Text style={styles.suggestionGrams}>{item.grams}g</Text>
-                  <Text style={styles.suggestionPrice}>₹{Math.round(item.price)}</Text>
+                  <View style={styles.suggestionGramsBox}>
+                    <Text style={styles.suggestionGrams}>{item.grams}g</Text>
+                    <Text style={styles.suggestionPrice}>₹{Math.round(item.price)}</Text>
+                  </View>
                   <Ionicons name="add-circle" size={24} color={PURPLE} />
                 </View>
               </TouchableOpacity>
