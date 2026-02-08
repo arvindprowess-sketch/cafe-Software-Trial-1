@@ -60,9 +60,9 @@ export default function AdminOffersScreen() {
         max_discount: form.max_discount ? parseFloat(form.max_discount) : null,
       };
       if (editId) {
-        await apiCall(`/offers/${editId}`, 'PUT', payload);
+        await apiCall(`/offers/${editId}`, { method: 'PUT', body: payload });
       } else {
-        await apiCall('/offers', 'POST', payload);
+        await apiCall('/offers', { method: 'POST', body: payload });
       }
       setShowForm(false);
       resetForm();
@@ -76,14 +76,14 @@ export default function AdminOffersScreen() {
     Alert.alert('Delete Offer', 'Are you sure?', [
       { text: 'Cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
-        await apiCall(`/offers/${id}`, 'DELETE');
+        await apiCall(`/offers/${id}`, { method: 'DELETE' });
         loadOffers();
       }},
     ]);
   };
 
   const toggleActive = async (offer: any) => {
-    await apiCall(`/offers/${offer.id}`, 'PUT', { is_active: !offer.is_active });
+    await apiCall(`/offers/${offer.id}`, { method: 'PUT', body: { is_active: !offer.is_active } });
     loadOffers();
   };
 

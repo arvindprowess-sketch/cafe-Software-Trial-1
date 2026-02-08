@@ -219,7 +219,7 @@ export default function CustomizeScreen() {
         calorie_goal: calorieGoal,
         consumed_today: consumedToday.calories || 0,
       };
-      const result = await apiCall('/ai/adjust-portions', 'POST', payload);
+      const result = await apiCall('/ai/adjust-portions', { method: 'POST', body: payload });
       setAdjustedItems(result);
     } catch (e) {
       Alert.alert('Error', 'Could not get AI suggestions. Try adjusting manually.');

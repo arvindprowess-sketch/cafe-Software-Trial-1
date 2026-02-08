@@ -85,9 +85,9 @@ export default function AdminPacksScreen() {
         items: packItems,
       };
       if (editId) {
-        await apiCall(`/packs/${editId}`, 'PUT', payload);
+        await apiCall(`/packs/${editId}`, { method: 'PUT', body: payload });
       } else {
-        await apiCall('/packs', 'POST', payload);
+        await apiCall('/packs', { method: 'POST', body: payload });
       }
       setShowForm(false);
       resetForm();
@@ -101,14 +101,14 @@ export default function AdminPacksScreen() {
     Alert.alert('Delete Pack', 'Are you sure?', [
       { text: 'Cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
-        await apiCall(`/packs/${id}`, 'DELETE');
+        await apiCall(`/packs/${id}`, { method: 'DELETE' });
         loadData();
       }},
     ]);
   };
 
   const toggleActive = async (pack: any) => {
-    await apiCall(`/packs/${pack.id}`, 'PUT', { is_active: !pack.is_active });
+    await apiCall(`/packs/${pack.id}`, { method: 'PUT', body: { is_active: !pack.is_active } });
     loadData();
   };
 
