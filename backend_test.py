@@ -77,7 +77,7 @@ async def test_admin_login(session):
         return False
 
 async def test_create_kitchen_staff(session):
-    """Test POST /api/staff - Create kitchen staff with PIN 1234"""
+    """Test POST /api/staff - Create kitchen staff with PIN 9999"""
     global kitchen_staff_id
     if not admin_token:
         results.log_fail("Create Kitchen Staff", "No admin token available")
@@ -88,7 +88,7 @@ async def test_create_kitchen_staff(session):
         payload = {
             "name": "Test Kitchen Staff",
             "role": "kitchen", 
-            "pin": "1234"
+            "pin": "9999"
         }
         
         async with session.post(f"{API_BASE}/staff", json=payload, headers=headers) as response:
