@@ -2831,12 +2831,15 @@ async def get_order_receipt(order_id: str, user=Depends(get_current_user)):
     if user["role"] == "customer" and order.get("user_id") != user["id"]:
         raise HTTPException(status_code=403, detail="Access denied")
     payment = await db.payments.find_one({"order_id": order_id}, {"_id": 0})
+    total = order.get("total_price", 0)
+    gst_amount = order.get("gst_amount", round(total * 5 / 105, 2))
+    base_amount = order.get("base_amount", round(total * 100 / 105, 2))
     receipt = {
         "cafe_name": "Diet Cafe",
         "cafe_tagline": "Healthy Eating, Happy Living",
         "order_id": order["id"],
         "order_type": order.get("order_type", "dine-in"),
-        "customer_name": order.get("user_name", "Walk-in"),
+        "customer_name": order.get("customer_name", order.get("user_name", "Walk-in")),
         "date": order.get("created_at", ""),
         "items": [],
         "subtotal": 0,
@@ -2844,9 +2847,12 @@ async def get_order_receipt(order_id: str, user=Depends(get_current_user)):
         "extra_charge_label": "Takeaway" if order.get("order_type") == "takeaway" else "Delivery" if order.get("order_type") == "delivery" else None,
         "discount": order.get("discount", 0),
         "coupon_code": order.get("coupon_code"),
-        "total": order.get("total_price", 0),
-        "payment_status": payment.get("status", "unpaid") if payment else order.get("payment_status", "unpaid"),
-        "payment_method": payment.get("mock", False) and "Cash (Mock)" or "Razorpay" if payment else "Cash",
+        "base_amount": base_amount,
+        "gst_percent": 5,
+        "gst_amount": gst_amount,
+        "total": total,
+        "payment_mode": order.get("payment_mode", "cash"),
+        "payment_status": payment.get("status", "paid") if payment else order.get("payment_status", "paid"),
         "nutrition_summary": {
             "calories": order.get("total_calories", 0),
             "protein": order.get("total_protein", 0),
