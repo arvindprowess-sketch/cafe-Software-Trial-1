@@ -48,13 +48,11 @@ export default function App() {
       <Route path="/admin" element={<ProtectedRoute roles={['admin']}><AdminLayout /></ProtectedRoute>}>
         <Route index element={<AdminDashboard />} />
         <Route path="products" element={<AdminProducts />} />
-        <Route path="staff" element={<AdminStaff />} />
         <Route path="kitchen" element={<AdminKitchen />} />
         <Route path="categories" element={<AdminCategories />} />
-        <Route path="analytics" element={<AdminAnalytics />} />
+        <Route path="orders" element={<AdminAnalytics />} />
         <Route path="tables" element={<AdminTables />} />
         <Route path="offers" element={<AdminOffers />} />
-        <Route path="shifts" element={<AdminShifts />} />
       </Route>
 
       <Route path="/kitchen" element={<ProtectedRoute roles={['kitchen']}><KitchenLayout /></ProtectedRoute>}>
