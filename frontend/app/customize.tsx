@@ -497,10 +497,90 @@ export default function CustomizeScreen() {
             <Ionicons name="arrow-back" size={20} color="#1C1C2E" />
           </TouchableOpacity>
           <Text style={styles.topTitle}>Customize Meal</Text>
-          <View style={styles.orderTypeBadge}><Text style={styles.orderTypeBadgeText}>{orderType}</Text></View>
+          <View style={styles.orderTypeBadge}><Text style={styles.orderTypeBadgeText}>{selectedOrderType}</Text></View>
         </View>
 
         <ScrollView contentContainerStyle={styles.scroll}>
+          {/* Order Type Selector */}
+          <Text style={styles.section}>Order Type</Text>
+          <View style={styles.orderTypeRow} testID="order-type-selector">
+            {[
+              { key: 'dine-in', label: 'Dine-in', icon: 'restaurant' as const },
+              { key: 'takeaway', label: 'Takeaway', icon: 'bag-handle' as const },
+              { key: 'delivery', label: 'Delivery', icon: 'bicycle' as const },
+            ].map(t => (
+              <TouchableOpacity
+                key={t.key}
+                testID={`order-type-${t.key}`}
+                style={[styles.orderTypeChip, selectedOrderType === t.key && styles.orderTypeChipActive]}
+                onPress={() => setSelectedOrderType(t.key)}
+              >
+                <Ionicons name={t.icon} size={16} color={selectedOrderType === t.key ? '#FFF' : '#696969'} />
+                <Text style={[styles.orderTypeChipText, selectedOrderType === t.key && { color: '#FFF' }]}>{t.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Schedule Toggle */}
+          <View style={styles.scheduleSection} testID="schedule-section">
+            <View style={styles.scheduleToggleRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.scheduleLabel}>Schedule for later</Text>
+                <Text style={styles.scheduleHint}>Set a specific meal ready time</Text>
+              </View>
+              <TouchableOpacity
+                testID="schedule-toggle"
+                style={[styles.scheduleToggle, isScheduled && styles.scheduleToggleActive]}
+                onPress={() => { setIsScheduled(!isScheduled); if (!isScheduled) setShowTimePicker(true); }}
+              >
+                <View style={[styles.scheduleToggleThumb, isScheduled && styles.scheduleToggleThumbActive]} />
+              </TouchableOpacity>
+            </View>
+            {isScheduled && (
+              <View style={styles.timePickerContainer} testID="time-picker">
+                <Text style={styles.timePickerLabel}>Ready at:</Text>
+                <View style={styles.timeInputRow}>
+                  <TextInput
+                    testID="schedule-hour-input"
+                    style={styles.timeInput}
+                    value={scheduledHour}
+                    onChangeText={(t) => { const v = t.replace(/[^0-9]/g, ''); if (parseInt(v) <= 23 || v === '') setScheduledHour(v.slice(0, 2)); }}
+                    placeholder="HH"
+                    placeholderTextColor="#B0B0B0"
+                    keyboardType="number-pad"
+                    maxLength={2}
+                  />
+                  <Text style={styles.timeColon}>:</Text>
+                  <TextInput
+                    testID="schedule-minute-input"
+                    style={styles.timeInput}
+                    value={scheduledMinute}
+                    onChangeText={(t) => { const v = t.replace(/[^0-9]/g, ''); if (parseInt(v) <= 59 || v === '') setScheduledMinute(v.slice(0, 2)); }}
+                    placeholder="MM"
+                    placeholderTextColor="#B0B0B0"
+                    keyboardType="number-pad"
+                    maxLength={2}
+                  />
+                </View>
+                {scheduledHour && scheduledMinute && (
+                  <View style={styles.alertInfoRow}>
+                    <Ionicons name="notifications" size={14} color="#5B5FE0" />
+                    <Text style={styles.alertInfoText}>
+                      Kitchen will be alerted at {
+                        (() => {
+                          const alertMin = selectedOrderType === 'delivery' ? 20 : 10;
+                          let h = parseInt(scheduledHour); let m = parseInt(scheduledMinute) - alertMin;
+                          if (m < 0) { m += 60; h -= 1; } if (h < 0) h += 24;
+                          return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+                        })()
+                      } ({selectedOrderType === 'delivery' ? '20' : '10'} min before)
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
+          </View>
+
           <Text style={styles.section}>Fitness Goal</Text>
           <View style={styles.goalRow}>
             {['fat_loss', 'muscle_gain', 'maintenance'].map(g => (
