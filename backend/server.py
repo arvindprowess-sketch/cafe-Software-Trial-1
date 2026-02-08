@@ -1185,7 +1185,7 @@ async def update_order_status(order_id: str, status: str, user=Depends(get_curre
     """Admin/Kitchen/Cashier: update order status"""
     if user["role"] not in ("admin", "kitchen", "cashier"):
         raise HTTPException(status_code=403, detail="Staff only")
-    valid_statuses = ["pending", "preparing", "ready", "completed", "cancelled"]
+    valid_statuses = ["pending", "preparing", "ready", "completed", "cancelled", "scheduled"]
     if status not in valid_statuses:
         raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {valid_statuses}")
     await db.orders.update_one({"id": order_id}, {"$set": {"status": status}})
