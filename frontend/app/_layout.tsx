@@ -9,10 +9,6 @@ export default function RootLayout() {
       <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right', contentStyle: { backgroundColor: '#FFFFFF' } }}>
         <Stack.Screen name="index" />
         <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="(admin)" />
-        <Stack.Screen name="(kitchen)" />
-        <Stack.Screen name="(cashier)" />
-        <Stack.Screen name="staff-login" />
         <Stack.Screen name="customize" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
       </Stack>
     </View>
