@@ -563,7 +563,12 @@ async def update_product(product_id: str, data: ProductUpdate, user=Depends(get_
     if user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Admin only")
     update_data = {k: v for k, v in data.dict().items() if v is not None}
-    if "name" in update_data:
+    # Resolve category_id to category name
+    if "category_id" in update_data:
+        cat = await db.categories.find_one({"id": update_data["category_id"]}, {"_id": 0})
+        if cat:
+            update_data["category"] = cat["name"]
+    if "name" in update_data and "category_id" not in update_data:
         nutrition = match_nutrition(update_data["name"])
         update_data["category"] = nutrition["category"]
         update_data["calories_per_100g"] = nutrition["calories"]
