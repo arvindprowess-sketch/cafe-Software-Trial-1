@@ -408,6 +408,14 @@ const styles = StyleSheet.create({
   orderInfo: { flex: 1 },
   orderId: { fontSize: 16, fontWeight: '800', color: BK_BROWN },
   orderDate: { fontSize: 12, color: BK_TEXT_LIGHT, marginTop: 2 },
+  orderTypeIconBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#FDE8E4',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   
   orderMetaRow: {
     flexDirection: 'row',
