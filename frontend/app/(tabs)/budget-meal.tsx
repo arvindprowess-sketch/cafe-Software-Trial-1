@@ -26,10 +26,12 @@ export default function BudgetMealScreen() {
   const [orderType, setOrderType] = useState('dine-in');
   const [userGoals, setUserGoals] = useState<any>({ daily_calories: 2000 });
   const [consumedToday, setConsumedToday] = useState(0);
+  const [userOrderHistory, setUserOrderHistory] = useState<any[]>([]);
 
   useEffect(() => {
     loadProducts();
     loadCalorieContext();
+    loadUserOrderHistory();
   }, []);
 
   const loadCalorieContext = async () => {
