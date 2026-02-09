@@ -605,12 +605,28 @@ export default function CustomizeScreen() {
           </View>
 
           <Text style={styles.section}>Fitness Goal</Text>
-          <View style={styles.goalRow}>
-            {['fat_loss', 'muscle_gain', 'maintenance'].map(g => (
-              <TouchableOpacity key={g} testID={`customize-goal-${g}`} style={[styles.goalChip, goal === g && styles.goalActive]} onPress={() => setGoal(g)}>
-                <Text style={[styles.goalText, goal === g && { color: '#FFF' }]}>{g === 'fat_loss' ? 'Fat Loss' : g === 'muscle_gain' ? 'Muscle Gain' : 'Maintain'}</Text>
-              </TouchableOpacity>
-            ))}
+          <View style={styles.goalContainer}>
+            <View style={styles.goalRow}>
+              {[
+                { key: 'fat_loss', label: 'Fat Loss' },
+                { key: 'muscle_gain', label: 'Muscle Gain' },
+                { key: 'maintenance', label: 'Maintain' }
+              ].map(g => (
+                <TouchableOpacity key={g.key} testID={`customize-goal-${g.key}`} style={[styles.goalChip, goal === g.key && styles.goalActive]} onPress={() => setGoal(g.key)}>
+                  <Text style={[styles.goalText, goal === g.key && { color: '#FFF' }]}>{g.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={styles.goalRow}>
+              {[
+                { key: 'beginner', label: 'Beginner' },
+                { key: 'recovery', label: 'Recovery' }
+              ].map(g => (
+                <TouchableOpacity key={g.key} testID={`customize-goal-${g.key}`} style={[styles.goalChip, goal === g.key && styles.goalActive]} onPress={() => setGoal(g.key)}>
+                  <Text style={[styles.goalText, goal === g.key && { color: '#FFF' }]}>{g.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
           <View style={styles.budgetRow}>
             <Text style={styles.budgetLabel}>Budget</Text>
