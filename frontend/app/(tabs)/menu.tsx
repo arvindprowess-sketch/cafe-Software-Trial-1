@@ -46,11 +46,15 @@ export default function MenuScreen() {
   const [user, setUser] = useState<any>(null);
   const [dietFilter, setDietFilter] = useState<'all' | 'veg' | 'non-veg'>('all');
 
-  // Handle URL params for category/diet filter
+  // Handle URL params for category/diet filter (only on initial load)
   useEffect(() => {
-    if (params.category) setSelectedCat(params.category as string);
-    if (params.dietFilter) setSelectedCat(params.dietFilter as string);
-  }, [params]);
+    if (params.category) {
+      setSelectedCat(params.category as string);
+    }
+    if (params.dietFilter) {
+      setDietFilter(params.dietFilter as 'veg' | 'non-veg');
+    }
+  }, []); // Only run once on mount
 
   const loadProducts = useCallback(async () => {
     try { 
