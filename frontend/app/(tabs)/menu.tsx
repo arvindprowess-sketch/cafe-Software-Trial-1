@@ -161,7 +161,7 @@ export default function MenuScreen() {
           <Image source={{ uri: cat.image_url }} style={styles.sidebarCatImg} />
         ) : (
           <View style={[styles.sidebarCatIcon, { backgroundColor: catColor }]}>
-            <Ionicons name={(cat.icon || 'grid') as any} size={18} color="#FFF" />
+            <Ionicons name={(cat.icon || 'grid') as any} size={24} color="#FFF" />
           </View>
         )}
         <Text style={[styles.sidebarCatLabel, isActive && { color: catColor, fontWeight: '800' }, fontStyleProp]} numberOfLines={2}>
@@ -371,7 +371,7 @@ export default function MenuScreen() {
   );
 }
 
-const SIDEBAR_WIDTH = 75;
+const SIDEBAR_WIDTH = 90;
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: BK_CREAM },
@@ -490,9 +490,9 @@ const styles = StyleSheet.create({
   sidebarCat: { 
     width: SIDEBAR_WIDTH - 4,
     alignItems: 'center', 
-    paddingVertical: 10,
-    paddingHorizontal: 2,
-    marginBottom: 2,
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    marginBottom: 4,
     borderLeftWidth: 3,
     borderLeftColor: 'transparent',
     position: 'relative',
@@ -509,25 +509,25 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
   sidebarCatImg: { 
-    width: 44, 
-    height: 44, 
-    borderRadius: 10,
-    marginBottom: 6,
+    width: 56, 
+    height: 56, 
+    borderRadius: 12,
+    marginBottom: 8,
   },
   sidebarCatIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
+    width: 56,
+    height: 56,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 6,
+    marginBottom: 8,
   },
   sidebarCatLabel: { 
     fontSize: 10, 
     fontWeight: '700', 
     color: BK_TEXT_LIGHT, 
     textAlign: 'center',
-    lineHeight: 12,
+    lineHeight: 13,
     width: '100%',
     textTransform: 'uppercase',
     letterSpacing: 0.3,
