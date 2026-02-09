@@ -45,6 +45,23 @@ export default function BudgetMealScreen() {
     } catch {}
   };
 
+  const loadUserOrderHistory = async () => {
+    try {
+      const orders = await apiCall('/orders').catch(() => []);
+      // Extract product IDs from all orders and count frequency
+      const productFrequency: { [key: string]: number } = {};
+      orders.forEach((order: any) => {
+        order.items?.forEach((item: any) => {
+          const productId = item.product_id;
+          if (productId) {
+            productFrequency[productId] = (productFrequency[productId] || 0) + 1;
+          }
+        });
+      });
+      setUserOrderHistory(Object.entries(productFrequency).map(([id, count]) => ({ id, count })));
+    } catch {}
+  };
+
   const loadProducts = async () => {
     try {
       const data = await apiCall('/products');
