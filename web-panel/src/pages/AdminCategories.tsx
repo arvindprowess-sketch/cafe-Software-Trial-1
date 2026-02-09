@@ -168,36 +168,38 @@ export default function AdminCategories() {
           top: 0;
           left: 0;
           right: 0;
-          bottom: 0;
-          background: rgba(0,0,0,0.55);
+          bottom: 40px;
+          background: rgba(0,0,0,0.6);
           display: flex;
           flex-direction: column;
           align-items: center;
           justify-content: center;
-          gap: 8px;
+          gap: 10px;
           opacity: 0;
           transition: opacity 0.2s ease;
           z-index: 3;
-          border-radius: 18px;
+          border-radius: 16px;
         }
         .cat-tile:hover .cat-tile-actions { opacity: 1; }
         .cat-tile-actions button {
-          padding: 8px 24px;
+          padding: 10px 28px;
           border-radius: 24px;
           border: none;
           font-family: var(--font-brand);
           font-weight: 600;
           font-size: 13px;
           cursor: pointer;
-          transition: transform 0.15s ease;
-          min-width: 120px;
+          transition: transform 0.15s ease, background 0.15s ease;
+          min-width: 130px;
           text-transform: uppercase;
           letter-spacing: 0.02em;
         }
         .cat-tile-actions button:hover { transform: scale(1.05); }
         .cat-tile-actions .btn-edit { background: #FFF; color: #1C1C2E; }
-        .cat-tile-actions .btn-toggle { background: rgba(255,255,255,0.15); color: #FFF; border: 1.5px solid rgba(255,255,255,0.5); }
-        .cat-tile-inactive { opacity: 0.45; filter: grayscale(0.6); }
+        .cat-tile-actions .btn-edit:hover { background: #F0F0F0; }
+        .cat-tile-actions .btn-toggle { background: transparent; color: #FFF; border: 2px solid rgba(255,255,255,0.7); }
+        .cat-tile-actions .btn-toggle:hover { background: rgba(255,255,255,0.1); }
+        .cat-tile-inactive { opacity: 0.4; filter: grayscale(0.7); }
 
         .cat-form-img-upload {
           width: 100%;
