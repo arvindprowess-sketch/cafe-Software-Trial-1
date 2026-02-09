@@ -249,6 +249,21 @@ export default function BudgetMealScreen() {
           </View>
         </View>
         
+        {/* Quick Budget Presets */}
+        <View style={styles.presetsRow}>
+          {[100, 150, 200, 250, 300, 400].map(amount => (
+            <TouchableOpacity
+              key={amount}
+              style={[styles.presetBtn, budget === String(amount) && styles.presetBtnActive]}
+              onPress={() => setBudget(String(amount))}
+            >
+              <Text style={[styles.presetText, budget === String(amount) && styles.presetTextActive]}>
+                ₹{amount}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        
         {/* Budget Progress Bar */}
         <View style={styles.budgetProgress}>
           <View style={styles.progressBar}>
@@ -265,6 +280,24 @@ export default function BudgetMealScreen() {
             </Text>
           </View>
         </View>
+
+        {/* Savings Indicator */}
+        {cart.length > 0 && (() => {
+          const fullPrice = cart.reduce((sum, item) => {
+            const factor = item.grams / 100;
+            return sum + (factor * item.cost_per_100g * 1.15); // Assume 15% markup if buying separately
+          }, 0);
+          const savings = fullPrice - totals.price;
+          const savingsPercent = ((savings / fullPrice) * 100).toFixed(0);
+          return savings > 5 ? (
+            <View style={styles.savingsCard}>
+              <Ionicons name="pricetag" size={16} color={GREEN} />
+              <Text style={styles.savingsText}>
+                You're saving ₹{Math.round(savings)} ({savingsPercent}%) with smart choices! 🎉
+              </Text>
+            </View>
+          ) : null;
+        })()}
       </View>
 
       {/* Quick Filters */}
