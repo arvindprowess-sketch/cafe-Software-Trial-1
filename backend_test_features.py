@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 
 # Use the public endpoint from the review request
-API_BASE = "https://demo-check.preview.emergentagent.com/api"
+API_BASE = "https://wellness-cafe.preview.emergentagent.com/api"
 print(f"🌐 Testing Diet Cafe NEW FEATURES at: {API_BASE}")
 print(f"🎯 Focus: Stock Management, Notifications, Coupons, Receipts, Kitchen Tickets, Shifts, Loyalty, Streaks, Meal Plans")
 

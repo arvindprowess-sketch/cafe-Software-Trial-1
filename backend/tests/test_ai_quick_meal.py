@@ -9,7 +9,7 @@ import requests
 import os
 import time
 
-BASE_URL = "https://demo-check.preview.emergentagent.com"
+BASE_URL = "https://wellness-cafe.preview.emergentagent.com"
 
 # Test fixtures
 @pytest.fixture(scope="module")
