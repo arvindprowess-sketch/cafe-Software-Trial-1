@@ -151,18 +151,19 @@ export default function MenuScreen() {
 
   // Render left sidebar category card
   const renderSidebarCat = (cat: any, index: number) => {
-    const catKey = cat.key || cat.name;
-    const isActive = selectedCat === catKey;
+    // Use name for filtering consistency (products use category name, not key)
+    const catValue = cat.name;
+    const isActive = selectedCat === catValue;
     const catColor = cat.color || '#1C1C2E';
     const fontStyleProp = cat.font_style === 'bold' ? { fontWeight: '800' as const } : cat.font_style === 'italic' ? { fontStyle: 'italic' as const } : cat.font_style === 'mono' ? { fontFamily: 'monospace' } : {};
     return (
       <TouchableOpacity
-        key={catKey}
-        testID={`sidebar-cat-${catKey}`}
+        key={cat.id || catValue}
+        testID={`sidebar-cat-${catValue}`}
         style={[styles.sidebarCat, isActive && styles.sidebarCatActive]}
         onPress={() => {
-          console.log('Category clicked:', catKey, 'Current:', selectedCat);
-          setSelectedCat(prev => prev === catKey ? '' : catKey);
+          console.log('Category clicked:', catValue, 'Current:', selectedCat);
+          setSelectedCat(prev => prev === catValue ? '' : catValue);
         }}
         activeOpacity={0.8}
       >
