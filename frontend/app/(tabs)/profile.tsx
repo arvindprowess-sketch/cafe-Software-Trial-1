@@ -64,7 +64,7 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.section}>Fitness Goal</Text>
+          <Text style={styles.section}>Fitness Goal ({GOALS.length} options)</Text>
           <View style={styles.goalsRow}>
             {GOALS.map(g => (
               <TouchableOpacity key={g.key} testID={`goal-${g.key}`} style={[styles.goalCard, goal === g.key && { borderColor: g.color, backgroundColor: `${g.color}10` }]} onPress={() => setGoal(g.key)}>
