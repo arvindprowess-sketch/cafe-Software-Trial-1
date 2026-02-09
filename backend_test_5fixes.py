@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 
 # Use the public endpoint from environment
-API_BASE = "https://wellness-cafe.preview.emergentagent.com/api"
+API_BASE = "https://mobile-menu-hub.preview.emergentagent.com/api"
 print(f"🌐 Testing Diet Cafe Cashier POS 5 Fixes at: {API_BASE}")
 print(f"🎯 Testing 5 specific fixes from review request")
 

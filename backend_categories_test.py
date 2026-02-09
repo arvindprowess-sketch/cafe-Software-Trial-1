@@ -4,7 +4,7 @@ import aiohttp
 import json
 
 # API Base URL from the review request context
-API_BASE = "https://wellness-cafe.preview.emergentagent.com/api"
+API_BASE = "https://mobile-menu-hub.preview.emergentagent.com/api"
 print(f"🌐 Testing Diet Cafe Categories API at: {API_BASE}")
 print(f"🎯 Focus: Admin login and Categories API for the redesigned Categories page")
 

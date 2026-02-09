@@ -4,7 +4,7 @@ import requests
 import os
 import uuid
 
-BASE_URL = "https://wellness-cafe.preview.emergentagent.com"
+BASE_URL = "https://mobile-menu-hub.preview.emergentagent.com"
 
 class TestAuth:
     """Authentication endpoint tests"""
