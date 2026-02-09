@@ -573,7 +573,7 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: BK_CREAM },
+  safe: { flex: 1, backgroundColor: '#FFF5E6' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   
   // Header (BK Dark Brown)
@@ -698,7 +698,7 @@ const styles = StyleSheet.create({
   dotActive: { backgroundColor: BK_ORANGE, width: 24 },
   
   // Category Grid (ENHANCED)
-  sectionTitle: { fontSize: 22, fontWeight: '800', color: BK_BROWN, paddingHorizontal: 16, marginTop: 24, marginBottom: 14, letterSpacing: 0.3, textTransform: 'uppercase' },
+  sectionTitle: { fontSize: 26, fontWeight: '800', color: '#FF0000', paddingHorizontal: 16, marginTop: 24, marginBottom: 14, letterSpacing: 0.3, textTransform: 'uppercase' },
   categoryGrid: { 
     flexDirection: 'row', 
     flexWrap: 'wrap', 
