@@ -188,7 +188,7 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* ===== PROMOTIONAL BANNERS ===== */}
+        {/* ===== PROMOTIONAL BANNERS (ENHANCED) ===== */}
         {banners.length > 0 && (
           <FlatList
             ref={bannerRef}
@@ -213,10 +213,11 @@ export default function HomeScreen() {
                     <Text style={styles.bannerTitle}>{item.title}</Text>
                     <Text style={styles.bannerSub}>{item.subtitle}</Text>
                     {item.type === 'offer' && (
-                      <View style={styles.bannerBadge}>
-                        <Text style={styles.bannerBadgeText}>
-                          {item.discount_type === 'percentage' ? `${item.discount_value}% OFF` : `₹${item.discount_value} OFF`}
+                      <View style={styles.bannerDiscountCircle}>
+                        <Text style={styles.bannerDiscountPercent}>
+                          {item.discount_type === 'percentage' ? `${item.discount_value}%` : `₹${item.discount_value}`}
                         </Text>
+                        <Text style={styles.bannerDiscountLabel}>OFF</Text>
                       </View>
                     )}
                     {item.type === 'pack' && (
@@ -227,7 +228,7 @@ export default function HomeScreen() {
                     )}
                   </View>
                   <View style={styles.bannerImagePlaceholder}>
-                    <Ionicons name={item.type === 'pack' ? 'fitness' : item.type === 'offer' ? 'pricetag' : 'fast-food'} size={50} color="rgba(255,255,255,0.4)" />
+                    <Ionicons name={item.type === 'pack' ? 'fitness' : item.type === 'offer' ? 'pricetag' : 'fast-food'} size={60} color="rgba(255,255,255,0.4)" />
                   </View>
                 </View>
               </TouchableOpacity>
@@ -240,7 +241,7 @@ export default function HomeScreen() {
           ))}
         </View>
 
-        {/* ===== CATEGORY GRID (BK Style) ===== */}
+        {/* ===== CATEGORY GRID (ENHANCED) ===== */}
         <Text style={styles.sectionTitle}>Our Menu</Text>
         <View style={styles.categoryGrid}>
           {MENU_CATEGORIES.map((cat) => (
@@ -255,7 +256,7 @@ export default function HomeScreen() {
                 <Image source={{ uri: cat.image }} style={styles.categoryImage} />
               ) : (
                 <View style={[styles.categoryImage, styles.categoryIconBg, { backgroundColor: cat.color }]}>
-                  <Ionicons name={cat.icon as any} size={28} color="#FFF" />
+                  <Ionicons name={cat.icon as any} size={32} color="#FFF" />
                 </View>
               )}
               <Text style={styles.categoryLabel} numberOfLines={2}>{cat.label}</Text>
@@ -483,42 +484,71 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* ===== POPULAR ITEMS ===== */}
+        {/* ===== POPULAR ITEMS (ENHANCED) ===== */}
         <Text style={styles.sectionTitle}>Popular Items</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.popularScroll}>
-          {products.slice(0, 10).map(item => (
-            <TouchableOpacity
-              key={item.id} testID={`popular-${item.id}`} style={styles.popularCard}
-              onPress={() => router.push('/(tabs)/menu')} activeOpacity={0.9}
-            >
-              {item.image_url ? (
-                <Image source={{ uri: item.image_url }} style={styles.popularImg} />
-              ) : (
-                <View style={[styles.popularImg, styles.popularImgPlaceholder]}>
-                  <Ionicons name="restaurant" size={28} color="#D0D0D0" />
+          {products.slice(0, 10).map((item, idx) => {
+            const isHighProtein = item.protein_per_100g >= 20;
+            const isUnderBudget = item.cost_per_100g <= 50;
+            const isPopular = idx < 3;
+            
+            return (
+              <TouchableOpacity
+                key={item.id} testID={`popular-${item.id}`} style={styles.popularCard}
+                onPress={() => router.push('/(tabs)/menu')} activeOpacity={0.9}
+              >
+                {item.image_url ? (
+                  <Image source={{ uri: item.image_url }} style={styles.popularImg} />
+                ) : (
+                  <View style={[styles.popularImg, styles.popularImgPlaceholder]}>
+                    <Ionicons name="restaurant" size={32} color="#D0D0D0" />
+                  </View>
+                )}
+                
+                {/* Smart Badges */}
+                {isPopular && (
+                  <View style={styles.popularBadge}>
+                    <Ionicons name="flame" size={10} color="#FFF" />
+                    <Text style={styles.popularBadgeText}>POPULAR</Text>
+                  </View>
+                )}
+                {isHighProtein && !isPopular && (
+                  <View style={[styles.popularBadge, { backgroundColor: BK_BROWN }]}>
+                    <Ionicons name="barbell" size={10} color="#FFF" />
+                    <Text style={styles.popularBadgeText}>HIGH PROTEIN</Text>
+                  </View>
+                )}
+                {isUnderBudget && !isPopular && !isHighProtein && (
+                  <View style={[styles.popularBadge, { backgroundColor: BK_GREEN }]}>
+                    <Ionicons name="wallet" size={10} color="#FFF" />
+                    <Text style={styles.popularBadgeText}>BUDGET</Text>
+                  </View>
+                )}
+                
+                {/* Protein Badge */}
+                <View style={styles.proteinBadge}>
+                  <Text style={styles.proteinText}>{item.protein_per_100g}g</Text>
+                  <Text style={styles.proteinLabel}>Protein</Text>
                 </View>
-              )}
-              {/* Protein Badge */}
-              <View style={styles.proteinBadge}>
-                <Text style={styles.proteinText}>{item.protein_per_100g}g</Text>
-                <Text style={styles.proteinLabel}>Protein</Text>
-              </View>
-              {/* Veg/Non-Veg indicator */}
-              <View style={[styles.vegBadge, { borderColor: item.diet_type === 'non-veg' ? Z_RED : GREEN }]}>
-                <View style={[styles.vegBadgeDot, { backgroundColor: item.diet_type === 'non-veg' ? Z_RED : GREEN }]} />
-              </View>
-              <View style={styles.popularInfo}>
-                <Text style={styles.popularName} numberOfLines={1}>{item.name}</Text>
-                <Text style={styles.popularDesc} numberOfLines={1}>{item.description || item.category}</Text>
-                <View style={styles.popularBottom}>
-                  <Text style={styles.popularPrice}>₹{item.cost_per_100g}<Text style={styles.per100}>/100g</Text></Text>
-                  <TouchableOpacity style={styles.addBtn} onPress={() => router.push('/(tabs)/menu')}>
-                    <Text style={styles.addBtnText}>Add +</Text>
-                  </TouchableOpacity>
+                
+                {/* Veg/Non-Veg indicator */}
+                <View style={[styles.vegBadge, { borderColor: item.diet_type === 'non-veg' ? Z_RED : GREEN }]}>
+                  <View style={[styles.vegBadgeDot, { backgroundColor: item.diet_type === 'non-veg' ? Z_RED : GREEN }]} />
                 </View>
-              </View>
-            </TouchableOpacity>
-          ))}
+                
+                <View style={styles.popularInfo}>
+                  <Text style={styles.popularName} numberOfLines={1}>{item.name}</Text>
+                  <Text style={styles.popularDesc} numberOfLines={1}>{item.description || item.category}</Text>
+                  <View style={styles.popularBottom}>
+                    <Text style={styles.popularPrice}>₹{item.cost_per_100g}<Text style={styles.per100}>/100g</Text></Text>
+                    <TouchableOpacity style={styles.addBtn} onPress={() => router.push('/(tabs)/menu')}>
+                      <Text style={styles.addBtnText}>Add +</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
 
         <View style={{ height: 100 }} />
