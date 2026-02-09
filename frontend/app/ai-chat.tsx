@@ -454,9 +454,10 @@ const styles = StyleSheet.create({
   sendBtnDisabled: { backgroundColor: '#D0D0D0' },
   
   // Checkout
-  checkoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Z_RED, marginHorizontal: 12, marginBottom: 12, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12 },
-  checkoutTotal: { fontSize: 18, fontWeight: '800', color: '#FFF' },
-  checkoutItems: { fontSize: 11, color: 'rgba(255,255,255,0.8)' },
-  checkoutRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  checkoutText: { fontSize: 15, fontWeight: '700', color: '#FFF' },
+  checkoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Z_RED, marginHorizontal: 12, marginBottom: 12, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4, elevation: 4 },
+  checkoutLeft: { flex: 1 },
+  checkoutTotal: { fontSize: 20, fontWeight: '800', color: '#FFF' },
+  checkoutItems: { fontSize: 12, color: 'rgba(255,255,255,0.85)', marginTop: 2 },
+  checkoutRight: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(0,0,0,0.15)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
+  checkoutText: { fontSize: 16, fontWeight: '700', color: '#FFF' },
 });
