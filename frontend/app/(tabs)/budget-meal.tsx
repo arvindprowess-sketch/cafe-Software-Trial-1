@@ -227,7 +227,10 @@ export default function BudgetMealScreen() {
           {aiLoading ? (
             <ActivityIndicator size="small" color="#FFF" />
           ) : (
-            <Ionicons name="sparkles" size={20} color="#FFF" />
+            <>
+              <Ionicons name="sparkles" size={20} color="#FFF" />
+              <Text style={styles.aiHelpText}>Smart Fill</Text>
+            </>
           )}
         </TouchableOpacity>
       </View>
