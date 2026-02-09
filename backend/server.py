@@ -1478,10 +1478,23 @@ async def ai_quick_meal(data: QuickMealRequest, user=Depends(get_current_user)):
         diet_pref_str = {"veg": "VEGETARIAN ONLY", "non-veg": "NON-VEGETARIAN ONLY", "both": "Both veg and non-veg allowed"}.get(data.diet_preference, "Both")
         budget_str = f"Budget: ₹{data.budget}" if data.budget else "No specific budget"
 
+        # User's fitness profile
+        user_profile_str = f"""
+**USER'S DAILY TARGETS:**
+- Daily Calorie Target: {user_goals['daily_calories']} kcal
+- Daily Protein Target: {user_goals['daily_protein']}g
+- Daily Carbs Target: {user_goals['daily_carbs']}g
+- Daily Fat Target: {user_goals['daily_fat']}g
+- User's Fitness Goal: {user_goals['fitness_goal']}
+
+NOTE: This is ONE MEAL. Keep portions reasonable to fit within user's daily targets (typically 25-35% of daily calories per meal)."""
+
         # HYBRID STEP 1: AI picks items with STRICT goal-based guidelines
         prompt = f"""You are a professional nutritionist and meal planner. Create a meal that STRICTLY follows the fitness goal guidelines.
 
 **GOAL: {goal_guide['description']}**
+
+{user_profile_str}
 
 **STRICT NUTRITIONAL REQUIREMENTS:**
 - Target Calories: {goal_guide['target_calories']}
