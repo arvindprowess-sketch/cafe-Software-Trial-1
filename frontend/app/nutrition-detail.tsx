@@ -20,6 +20,7 @@ export default function NutritionDetailScreen() {
   const [summary, setSummary] = useState<any>(null);
   const [orders, setOrders] = useState<any[]>([]);
   const [aiSuggestion, setAiSuggestion] = useState<string>('');
+  const [recommendedItems, setRecommendedItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [aiLoading, setAiLoading] = useState(false);
 
@@ -59,19 +60,61 @@ export default function NutritionDetailScreen() {
         fat: (goals.daily_fat || 60) - (consumed.fat || 0)
       };
 
+      // Get available menu items
+      const products = await apiCall('/products');
+
       const result = await apiCall('/ai/nutrition-advice', {
         method: 'POST',
         body: {
           consumed,
           goals,
           remaining,
-          meals_count: summaryData.meals_count || 0
+          meals_count: summaryData.meals_count || 0,
+          available_products: products.slice(0, 20).map((p: any) => ({
+            id: p.id,
+            name: p.name,
+            calories_per_100g: p.calories_per_100g,
+            protein_per_100g: p.protein_per_100g,
+            carbs_per_100g: p.carbs_per_100g,
+            fat_per_100g: p.fat_per_100g,
+            cost_per_100g: p.cost_per_100g,
+            category: p.category,
+            diet_type: p.diet_type
+          }))
         }
       });
       
       setAiSuggestion(result.advice || result.suggestion || 'Keep up the good work!');
+      
+      // If AI returned recommended products, find them in our product list
+      if (result.recommended_items && Array.isArray(result.recommended_items)) {
+        const recommended = result.recommended_items.map((rec: any) => {
+          const product = products.find((p: any) => p.id === rec.product_id || p.name === rec.product_name);
+          return product ? { ...product, suggested_grams: rec.grams || 100, reason: rec.reason } : null;
+        }).filter(Boolean);
+        setRecommendedItems(recommended);
+      } else {
+        // Fallback: Simple recommendation based on remaining macros
+        const sorted = products
+          .filter((p: any) => p.available_qty_grams > 0)
+          .sort((a: any, b: any) => {
+            // Prioritize high protein if protein is remaining
+            if (remaining.protein > 20) {
+              return b.protein_per_100g - a.protein_per_100g;
+            }
+            // Otherwise prioritize by calories
+            return b.calories_per_100g - a.calories_per_100g;
+          });
+        
+        setRecommendedItems(sorted.slice(0, 3).map((p: any) => ({
+          ...p,
+          suggested_grams: 100,
+          reason: remaining.protein > 20 ? 'High in protein' : 'Good calorie source'
+        })));
+      }
     } catch (e) {
       setAiSuggestion('Unable to generate AI suggestions at this time. Focus on balanced meals!');
+      setRecommendedItems([]);
     } finally {
       setAiLoading(false);
     }
@@ -189,7 +232,58 @@ export default function NutritionDetailScreen() {
               <Text style={styles.aiLoadingText}>Analyzing your nutrition...</Text>
             </View>
           ) : (
-            <Text style={styles.aiSuggestion}>{aiSuggestion}</Text>
+            <>
+              <Text style={styles.aiSuggestion}>{aiSuggestion}</Text>
+              
+              {/* Recommended Menu Items */}
+              {recommendedItems.length > 0 && (
+                <View style={styles.recommendedSection}>
+                  <Text style={styles.recommendedTitle}>💡 Recommended Items to Complete Your Goals:</Text>
+                  {recommendedItems.map((item, idx) => {
+                    const itemCals = Math.round((item.calories_per_100g * (item.suggested_grams || 100)) / 100);
+                    const itemProtein = Math.round((item.protein_per_100g * (item.suggested_grams || 100)) / 100);
+                    
+                    return (
+                      <TouchableOpacity 
+                        key={item.id} 
+                        style={styles.recommendedItem}
+                        onPress={() => {
+                          router.back();
+                          router.push('/(tabs)/menu');
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        <View style={styles.recommendedLeft}>
+                          <View style={[styles.dietDot, { borderColor: item.diet_type === 'non-veg' ? BK_RED : BK_GREEN }]}>
+                            <View style={[styles.dietDotFill, { backgroundColor: item.diet_type === 'non-veg' ? BK_RED : BK_GREEN }]} />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.recommendedName}>{item.name}</Text>
+                            <Text style={styles.recommendedReason}>{item.reason || 'Helps reach your goals'}</Text>
+                            <Text style={styles.recommendedNutrition}>
+                              {itemCals} cal • {itemProtein}g protein • {item.suggested_grams}g
+                            </Text>
+                          </View>
+                        </View>
+                        <View style={styles.recommendedRight}>
+                          <Ionicons name="add-circle" size={32} color={BK_GREEN} />
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                  <TouchableOpacity 
+                    style={styles.goToMenuBtn}
+                    onPress={() => {
+                      router.back();
+                      router.push('/(tabs)/menu');
+                    }}
+                  >
+                    <Text style={styles.goToMenuText}>Browse Full Menu</Text>
+                    <Ionicons name="arrow-forward" size={18} color={BK_WHITE} />
+                  </TouchableOpacity>
+                </View>
+              )}
+            </>
           )}
         </View>
 
@@ -243,9 +337,40 @@ const styles = StyleSheet.create({
   
   aiCard: { backgroundColor: '#FFF9F0', borderColor: BK_ORANGE },
   aiHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
-  aiSuggestion: { fontSize: 14, lineHeight: 22, color: BK_BROWN },
+  aiSuggestion: { fontSize: 14, lineHeight: 22, color: BK_BROWN, marginBottom: 16 },
   aiLoading: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   aiLoadingText: { fontSize: 14, color: BK_TEXT_LIGHT },
+  
+  recommendedSection: { marginTop: 8 },
+  recommendedTitle: { fontSize: 14, fontWeight: '800', color: BK_BROWN, marginBottom: 12 },
+  recommendedItem: { 
+    flexDirection: 'row', 
+    backgroundColor: BK_WHITE, 
+    borderRadius: 12, 
+    padding: 14, 
+    marginBottom: 10,
+    borderWidth: 2,
+    borderColor: BK_GREEN,
+    alignItems: 'center'
+  },
+  recommendedLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  dietDot: { width: 16, height: 16, borderRadius: 2, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  dietDotFill: { width: 8, height: 8, borderRadius: 4 },
+  recommendedName: { fontSize: 15, fontWeight: '800', color: BK_BROWN, marginBottom: 2 },
+  recommendedReason: { fontSize: 12, color: BK_TEXT_LIGHT, fontStyle: 'italic', marginBottom: 4 },
+  recommendedNutrition: { fontSize: 11, color: BK_GREEN, fontWeight: '700' },
+  recommendedRight: {},
+  goToMenuBtn: {
+    backgroundColor: BK_RED,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 25,
+    marginTop: 8
+  },
+  goToMenuText: { fontSize: 15, fontWeight: '800', color: BK_WHITE, textTransform: 'uppercase' },
   
   emptyText: { fontSize: 14, color: BK_TEXT_LIGHT, textAlign: 'center', paddingVertical: 20 },
 });
