@@ -246,11 +246,11 @@ export default function MenuScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.menuBtn} onPress={() => setDrawerVisible(true)}>
-          <Ionicons name="menu" size={24} color="#1C1C2E" />
+          <Ionicons name="menu" size={24} color="#F5EBDC" />
         </TouchableOpacity>
         <Text style={styles.title}>Our Menu</Text>
         <TouchableOpacity style={styles.searchBtn} onPress={() => {}}>
-          <Ionicons name="search" size={22} color={Z_RED} />
+          <Ionicons name="search" size={22} color="#FF8732" />
         </TouchableOpacity>
       </View>
       
