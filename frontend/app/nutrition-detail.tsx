@@ -54,66 +54,94 @@ export default function NutritionDetailScreen() {
       const consumed = summaryData.consumed || {};
       const goals = summaryData.goals || {};
       const remaining = {
-        calories: (goals.daily_calories || 2000) - (consumed.calories || 0),
-        protein: (goals.daily_protein || 150) - (consumed.protein || 0),
-        carbs: (goals.daily_carbs || 200) - (consumed.carbs || 0),
-        fat: (goals.daily_fat || 60) - (consumed.fat || 0)
+        calories: Math.max(0, (goals.daily_calories || 2000) - (consumed.calories || 0)),
+        protein: Math.max(0, (goals.daily_protein || 150) - (consumed.protein || 0)),
+        carbs: Math.max(0, (goals.daily_carbs || 200) - (consumed.carbs || 0)),
+        fat: Math.max(0, (goals.daily_fat || 60) - (consumed.fat || 0))
       };
 
       // Get available menu items
       const products = await apiCall('/products');
-
-      const result = await apiCall('/ai/nutrition-advice', {
-        method: 'POST',
-        body: {
-          consumed,
-          goals,
-          remaining,
-          meals_count: summaryData.meals_count || 0,
-          available_products: products.slice(0, 20).map((p: any) => ({
-            id: p.id,
-            name: p.name,
-            calories_per_100g: p.calories_per_100g,
-            protein_per_100g: p.protein_per_100g,
-            carbs_per_100g: p.carbs_per_100g,
-            fat_per_100g: p.fat_per_100g,
-            cost_per_100g: p.cost_per_100g,
-            category: p.category,
-            diet_type: p.diet_type
-          }))
-        }
-      });
       
-      setAiSuggestion(result.advice || result.suggestion || 'Keep up the good work!');
-      
-      // If AI returned recommended products, find them in our product list
-      if (result.recommended_items && Array.isArray(result.recommended_items)) {
-        const recommended = result.recommended_items.map((rec: any) => {
-          const product = products.find((p: any) => p.id === rec.product_id || p.name === rec.product_name);
-          return product ? { ...product, suggested_grams: rec.grams || 100, reason: rec.reason } : null;
-        }).filter(Boolean);
-        setRecommendedItems(recommended);
+      // Generate suggestion message
+      let suggestion = '';
+      if (remaining.calories <= 0) {
+        suggestion = `🎯 You've reached your daily calorie goal of ${goals.daily_calories || 2000} calories! Great job staying on track.`;
+      } else if (remaining.calories < 200) {
+        suggestion = `✨ You're almost there! Only ${Math.round(remaining.calories)} calories remaining. Consider a light snack to complete your goals.`;
       } else {
-        // Fallback: Simple recommendation based on remaining macros
-        const sorted = products
-          .filter((p: any) => p.available_qty_grams > 0)
-          .sort((a: any, b: any) => {
-            // Prioritize high protein if protein is remaining
-            if (remaining.protein > 20) {
-              return b.protein_per_100g - a.protein_per_100g;
-            }
-            // Otherwise prioritize by calories
-            return b.calories_per_100g - a.calories_per_100g;
-          });
+        suggestion = `📊 You have ${Math.round(remaining.calories)} calories remaining for today.\n\n`;
         
-        setRecommendedItems(sorted.slice(0, 3).map((p: any) => ({
+        if (remaining.protein > 20) {
+          suggestion += `💪 Focus on protein-rich foods (${Math.round(remaining.protein)}g protein needed).\n`;
+        }
+        if (remaining.carbs > 30) {
+          suggestion += `🌾 Add some healthy carbs (${Math.round(remaining.carbs)}g remaining).\n`;
+        }
+        if (remaining.fat > 10) {
+          suggestion += `🥑 Include healthy fats (${Math.round(remaining.fat)}g remaining).\n`;
+        }
+        
+        suggestion += `\n👇 Here are some items from our menu that can help:`;
+      }
+      
+      setAiSuggestion(suggestion);
+      
+      // Smart recommendation: Find items that match remaining macros
+      const availableProducts = products.filter((p: any) => 
+        p.available_qty_grams > 0 || p.product_type === 'ready_made'
+      );
+      
+      let recommended = [];
+      
+      // If high protein needed, prioritize protein items
+      if (remaining.protein > 20) {
+        const proteinItems = availableProducts
+          .filter((p: any) => p.protein_per_100g >= 15)
+          .sort((a: any, b: any) => b.protein_per_100g - a.protein_per_100g)
+          .slice(0, 2);
+        recommended.push(...proteinItems.map((p: any) => ({
           ...p,
-          suggested_grams: 100,
-          reason: remaining.protein > 20 ? 'High in protein' : 'Good calorie source'
+          suggested_grams: Math.min(150, Math.round((remaining.protein / p.protein_per_100g) * 100)),
+          reason: `High protein (${p.protein_per_100g}g per 100g)`
         })));
       }
+      
+      // Add a carb source if needed
+      if (remaining.carbs > 30 && recommended.length < 3) {
+        const carbItems = availableProducts
+          .filter((p: any) => p.carbs_per_100g >= 20 && !recommended.find(r => r.id === p.id))
+          .sort((a: any, b: any) => b.carbs_per_100g - a.carbs_per_100g)
+          .slice(0, 1);
+        recommended.push(...carbItems.map((p: any) => ({
+          ...p,
+          suggested_grams: 100,
+          reason: `Good carb source (${p.carbs_per_100g}g per 100g)`
+        })));
+      }
+      
+      // Fill remaining slots with balanced items
+      if (recommended.length < 3) {
+        const balanced = availableProducts
+          .filter((p: any) => !recommended.find(r => r.id === p.id))
+          .sort((a: any, b: any) => {
+            const aScore = a.protein_per_100g * 2 + a.calories_per_100g;
+            const bScore = b.protein_per_100g * 2 + b.calories_per_100g;
+            return bScore - aScore;
+          })
+          .slice(0, 3 - recommended.length);
+        recommended.push(...balanced.map((p: any) => ({
+          ...p,
+          suggested_grams: 100,
+          reason: 'Balanced nutrition'
+        })));
+      }
+      
+      setRecommendedItems(recommended.slice(0, 3));
+      
     } catch (e) {
-      setAiSuggestion('Unable to generate AI suggestions at this time. Focus on balanced meals!');
+      console.error('Error generating suggestion:', e);
+      setAiSuggestion('Focus on balanced meals with adequate protein, carbs, and healthy fats to reach your goals!');
       setRecommendedItems([]);
     } finally {
       setAiLoading(false);
