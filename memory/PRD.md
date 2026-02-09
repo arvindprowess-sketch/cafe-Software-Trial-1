@@ -1,70 +1,57 @@
-# AI Diet Cafe App - PRD
+# AI Diet Cafe App - PRD (Updated)
 
 ## Original Problem Statement
-Diet Cafe management: Mobile App (customers) + Web Panel (admin/kitchen/cashier) + shared FastAPI backend + MongoDB.
+User has an existing Diet Cafe app (FastAPI + React web panel + Expo mobile app) from GitHub. Requested complete Burger King-style redesign across all panels while maintaining all existing features.
 
 ## Architecture
-- **Backend**: FastAPI port 8001, MongoDB
-- **Web Panel**: React + Vite port 3000
-- **Mobile App**: Expo React Native with tunnel
-- **Auth**: Email/password (admin), PIN (staff), OTP (customers)
+- **Backend**: FastAPI (Python) on port 8001, MongoDB
+- **Web Panel**: Vite + React + TypeScript on port 3000 (Admin/Kitchen/Cashier)
+- **Mobile App**: Expo React Native (Customer app) on port 8081 with ngrok tunnel
+
+## Core Requirements (Static)
+1. Full café management: Admin, Kitchen, Cashier, Customer roles
+2. Product & Category management with images
+3. Order flow: Customer → Kitchen → Cashier
+4. AI Meal Builder, Budget Meals, Nutrition Tracking
+5. Loyalty system, Streaks, Offers/Coupons
+6. POS for walk-in customers
+7. Table management & QR scanning
 
 ## What's Been Implemented
 
-### Core Build (Sessions 1-4)
-- Full backend, mobile app, web panel, auth, stock mgmt, shifts, loyalty, sound alerts
-- Cashier POS with Build-by-grams/MRP, GST, Hold Bills, AI cart merge, offers
-- AI budget exact matching, admin categories, order source tracking
+### 2025-02-09: Burger King Style Redesign
+- **Web Panel (App.css)**: Complete CSS rewrite with BK design system
+  - Colors: Brown #502314, Red #D62300, Orange #FF8732, Cream #F5EBDC, Green #509E2F
+  - Font: Barlow Condensed (headings) + DM Sans (body) from Google Fonts
+  - Pill-shaped buttons, uppercase labels, dark brown sidebar, cream backgrounds
+  - Login: Dark brown background, white card, red CTA
+  - Dashboard: Stat cards, quick actions, staff table with brown header
+  - Categories: Image-first grid tiles with live badges
+  - Cashier POS: Brown top nav, orange active tabs, red cart button
+  - Kitchen Monitor: BK-styled order cards with priority badges
+- **Mobile App**: All screens updated with BK color system
+  - Dark brown header & bottom tab bar with orange active icons
+  - Cream backgrounds, brown text, red CTAs
+  - Updated: home, menu, orders, profile, budget-meal, ai-chat, combo-builder, customize, delivery-tracking, side drawer
+  - Category cards, product cards, nutrition cards all BK-styled
 
-### Scheduled Orders (Feb 8, 2026)
-- Customer schedule toggle + time picker, Kitchen alert popup (blocking), Confirm & Start flow
+### Test Results: Backend 92.9%, Frontend 100%
 
-### Hybrid AI Meal Builder (Feb 8, 2026)
-- AI picks items + budget_share_percent → System calculates exact grams (budget ±₹1, stock-aware)
+## User Personas
+- **Admin/Owner**: Manages categories, products, staff, offers, analytics
+- **Kitchen Staff**: Views live orders, marks preparing/ready
+- **Cashier**: Walk-in POS, billing, order management
+- **Customer**: Mobile app ordering, AI suggestions, nutrition tracking
 
-### Admin Panel Overhaul v1 (Feb 8, 2026)
-- Dashboard: Stats grid, Quick Actions, Staff Accounts with PIN reset
-- Categories: Full CRUD with icon, color, font_style, sort_order, active toggle
-- Products: Type tabs, Single/Ready-Made forms, mandatory category, AI auto-generate
-
-### Admin Panel v2 — Shortcomings Fixed (Feb 8, 2026)
-1. **Photo upload for Ready-Made Meals**: Image upload via base64 + file picker, stored in DB
-2. **Edit modal: Category change**: Dropdown to reassign any product to a different category
-3. **Ready-Made meal edit**: Price per plate, available plates, customizable toggle all editable
-4. **Product search**: Real-time filtering by name or category
-5. **Font_style propagation**: Category font_style (bold/italic/mono/default) renders in Cashier POS sidebar and Mobile app menu
-6. **AI result feedback**: After creating a product, shows AI-generated image, description, nutrition breakdown before closing
-7. **Low stock alerts**: Dashboard shows red-highlighted alerts for products < 500g stock
-8. **Inactive category filter**: Products in inactive categories auto-hidden from customer & cashier public endpoints
-
-### Category Page Redesign (Feb 9, 2026)
-1. **Image-first layout**: Burger King-style tiles with branded images (1:1 ratio), hover effects
-2. **Premium typography**: Oswald font (bold, condensed sans-serif) for category titles
-   - Font loaded globally via Google Fonts
-   - CSS variable `--font-brand` for consistency
-   - Uppercase styling with tight letter-spacing
-3. **Clean minimal design**: No card borders/shadows, floating images with drop-shadow
-   - Images use `object-fit: contain` at 85% size for floating effect
-   - Category names display in brand color below image
-   - Hover scales tile (1.03x) and image (1.08x) without adding shadows
-   - Edit overlay covers image area only, leaving name visible
-
-## Testing Status
-- iteration_14: Scheduled orders 100% pass
-- iteration_15: AI meal builder 100% pass
-- iteration_16: Admin panel v1 100% pass
-- iteration_17: Admin panel v2 shortcomings 100% pass (15 features)
-- iteration_19: Category typography 100% pass (Oswald font verified across all elements)
-
-## Credentials
-- Admin: admin@dietcafe.com / admin123
-- Kitchen PIN: 1234
-- Cashier PIN: 5678
+## Prioritized Backlog
+- P0: All core features implemented ✅
+- P1: Add sample products/menu items for demo
+- P1: Mobile Expo tunnel sometimes has ngrok conflicts - monitor
+- P2: Analytics dashboard enhancement
+- P2: Push notifications for order status
+- P2: Theme customization system (admin can change primary colors)
 
 ## Next Tasks
-1. Apply same Oswald font to Customer app and Cashier POS for category names (font consistency across all panels)
-2. Mobile app: loyalty rewards, streak tracker, weekly meal planning
-3. Real Razorpay integration (currently mocked)
-4. Push notifications for order updates
-5. Customer feedback/ratings system
-6. Backend refactoring: Split monolithic server.py into modules
+1. User testing on mobile device via Expo Go
+2. Seed sample products for demo
+3. Any design tweaks user requests after testing
