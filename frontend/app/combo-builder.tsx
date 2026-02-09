@@ -87,10 +87,11 @@ export default function ComboBuilderScreen() {
 
   const orderCombo = () => {
     if (!combo?.meal_items) return;
-    console.log('[Combo Builder] Order button clicked, combo items:', combo.meal_items);
+    console.log('[Combo Builder] Order button clicked, combo items:', combo.meal_items.length);
     
     try {
       // Normalize cart items with all required fields
+      // IMPORTANT: Remove image_url to prevent URL being too large
       const cart = combo.meal_items.map((item: any) => ({
         id: item.product_id || item.id,
         product_id: item.product_id || item.id,
@@ -102,12 +103,12 @@ export default function ComboBuilderScreen() {
         carbs_per_100g: item.carbs_per_100g || item.carbs || 0,
         fat_per_100g: item.fat_per_100g || item.fat || 0,
         diet_type: item.diet_type || 'veg',
-        image_url: item.image_url,
+        // Exclude image_url to prevent huge URL with base64 data
         product_type: 'single',
         category: item.category || '',
       }));
       
-      console.log('[Combo Builder] Normalized cart:', cart);
+      console.log('[Combo Builder] Normalized cart items:', cart.length);
       const cartString = JSON.stringify(cart);
       console.log('[Combo Builder] Cart string length:', cartString.length);
       
