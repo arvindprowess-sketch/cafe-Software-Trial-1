@@ -23,14 +23,14 @@ const { width } = Dimensions.get('window');
 
 // Category grid for BK-style menu
 const MENU_CATEGORIES = [
-  { key: 'Protein', label: 'High Protein', icon: 'barbell', color: '#E23744', image: 'https://images.unsplash.com/photo-1632778149955-e80f8ceca2e8?w=100&h=100&fit=crop' },
+  { key: 'Protein', label: 'High Protein', icon: 'barbell', color: BK_RED, image: 'https://images.unsplash.com/photo-1632778149955-e80f8ceca2e8?w=100&h=100&fit=crop' },
   { key: 'Carb', label: 'Healthy Carbs', icon: 'leaf', color: '#FF9F0A', image: 'https://images.unsplash.com/photo-1536304929831-ee1ca9d44726?w=100&h=100&fit=crop' },
-  { key: 'Fat', label: 'Good Fats', icon: 'water', color: '#5B5FE0', image: 'https://images.unsplash.com/photo-1523049673857-eb18f1d7b578?w=100&h=100&fit=crop' },
+  { key: 'Fat', label: 'Good Fats', icon: 'water', color: BK_ORANGE, image: 'https://images.unsplash.com/photo-1523049673857-eb18f1d7b578?w=100&h=100&fit=crop' },
   { key: 'Meal', label: 'Ready Meals', icon: 'restaurant', color: '#267E3E', image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=100&h=100&fit=crop' },
   { key: 'veg', label: 'Veg Only', icon: 'nutrition', color: '#4CAF50', image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=100&h=100&fit=crop' },
-  { key: 'non-veg', label: 'Non-Veg', icon: 'flame', color: '#E23744', image: 'https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=100&h=100&fit=crop' },
+  { key: 'non-veg', label: 'Non-Veg', icon: 'flame', color: BK_RED, image: 'https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=100&h=100&fit=crop' },
   { key: 'budget', label: 'Budget Meals', icon: 'wallet', color: '#FF6B35', image: 'https://images.unsplash.com/photo-1490818387583-1baba5e638af?w=100&h=100&fit=crop' },
-  { key: 'ai', label: 'AI Picks', icon: 'sparkles', color: '#5B5FE0', image: null },
+  { key: 'ai', label: 'AI Picks', icon: 'sparkles', color: BK_ORANGE, image: null },
 ];
 
 export default function HomeScreen() {
