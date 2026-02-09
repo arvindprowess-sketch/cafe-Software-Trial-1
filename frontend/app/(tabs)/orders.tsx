@@ -1,229 +1,394 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl, ActivityIndicator, TouchableOpacity, Alert } from 'react-native';
+import {
+  View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl,
+  ActivityIndicator
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { apiCall } from '../../utils/api';
 
-const Z_RED = '#D62300';
+const BK_RED = '#D62300';
+const BK_ORANGE = '#FF8732';
 const BK_BROWN = '#502314';
 const BK_CREAM = '#F5EBDC';
-const BK_ORANGE = '#FF8732';
 const BK_GREEN = '#509E2F';
+const BK_WHITE = '#FFFFFF';
 const BK_TEXT_LIGHT = '#8B6F61';
-const STEPS = ['scheduled', 'pending', 'preparing', 'ready', 'completed'];
-const STEP_LABELS: Record<string, string> = { scheduled: 'Scheduled', pending: 'Order Placed', preparing: 'Being Prepared', ready: 'Ready', completed: 'Completed' };
-const STEP_ICONS: Record<string, string> = { scheduled: 'time', pending: 'checkmark-circle', preparing: 'flame', ready: 'bag-check', completed: 'checkmark-done-circle' };
 
 export default function OrdersScreen() {
   const router = useRouter();
-  const [orders, setOrders] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<'recent' | 'monthly'>('recent');
+  const [recentOrders, setRecentOrders] = useState<any[]>([]);
+  const [monthlyOrders, setMonthlyOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [reorderingId, setReorderingId] = useState<string | null>(null);
 
-  const loadOrders = useCallback(async () => {
-    try { setOrders(await apiCall('/orders')); } catch (e) {} finally { setLoading(false); }
+  useEffect(() => {
+    loadOrders();
   }, []);
 
-  useEffect(() => { loadOrders(); }, []);
-  const onRefresh = async () => { setRefreshing(true); await loadOrders(); setRefreshing(false); };
-
-  const handleReorder = async (orderId: string) => {
-    setReorderingId(orderId);
+  const loadOrders = useCallback(async () => {
     try {
-      const result = await apiCall(`/orders/${orderId}/reorder`, { method: 'POST' });
-      if (result.unavailable?.length > 0) {
-        Alert.alert(
-          'Some items unavailable',
-          `${result.unavailable.join(', ')} ${result.unavailable.length === 1 ? 'is' : 'are'} currently unavailable. Proceeding with available items.`,
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Continue', onPress: () => {
-              if (result.cart_items.length > 0) {
-                const cart = result.cart_items.map((item: any) => ({
-                  id: item.id,
-                  name: item.name,
-                  grams: item.grams,
-                  cost_per_100g: item.cost_per_100g,
-                  calories_per_100g: item.calories_per_100g,
-                  protein_per_100g: item.protein_per_100g,
-                  carbs_per_100g: item.carbs_per_100g,
-                  fat_per_100g: item.fat_per_100g,
-                  category: item.category,
-                  diet_type: item.diet_type,
-                  image_url: item.image_url,
-                }));
-                router.push({ pathname: '/customize', params: { cart: JSON.stringify(cart), orderType: result.order_type } });
-              }
-            }},
-          ]
-        );
-      } else if (result.cart_items.length > 0) {
-        const cart = result.cart_items.map((item: any) => ({
-          id: item.id,
-          name: item.name,
-          grams: item.grams,
-          cost_per_100g: item.cost_per_100g,
-          calories_per_100g: item.calories_per_100g,
-          protein_per_100g: item.protein_per_100g,
-          carbs_per_100g: item.carbs_per_100g,
-          fat_per_100g: item.fat_per_100g,
-          category: item.category,
-          diet_type: item.diet_type,
-          image_url: item.image_url,
-        }));
-        router.push({ pathname: '/customize', params: { cart: JSON.stringify(cart), orderType: result.order_type } });
-      } else {
-        Alert.alert('Unavailable', 'All items from this order are currently unavailable.');
-      }
-    } catch (e: any) {
-      Alert.alert('Error', e.message || 'Could not prepare reorder');
+      const allOrders = await apiCall('/orders');
+      
+      // Recent orders: Last 7 days
+      const now = new Date();
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const recent = allOrders.filter((order: any) => {
+        const orderDate = new Date(order.created_at);
+        return orderDate >= sevenDaysAgo;
+      }).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      
+      // Monthly orders: Current month
+      const thisMonth = allOrders.filter((order: any) => {
+        const orderDate = new Date(order.created_at);
+        return orderDate.getMonth() === now.getMonth() && orderDate.getFullYear() === now.getFullYear();
+      }).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      
+      setRecentOrders(recent);
+      setMonthlyOrders(thisMonth);
+    } catch (e) {
+      console.error('Error loading orders:', e);
     } finally {
-      setReorderingId(null);
+      setLoading(false);
+    }
+  }, []);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadOrders();
+    setRefreshing(false);
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'completed': return BK_GREEN;
+      case 'pending': return BK_ORANGE;
+      case 'cancelled': return BK_RED;
+      case 'scheduled': return '#FF9F0A';
+      default: return BK_TEXT_LIGHT;
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'completed': return 'checkmark-circle';
+      case 'pending': return 'time';
+      case 'cancelled': return 'close-circle';
+      case 'scheduled': return 'calendar';
+      default: return 'ellipse';
     }
   };
 
   const renderOrder = ({ item }: { item: any }) => {
-    const statusIdx = STEPS.indexOf(item.status);
-    const isReordering = reorderingId === item.id;
+    const orderDate = new Date(item.created_at);
+    const isToday = orderDate.toDateString() === new Date().toDateString();
+    const statusColor = getStatusColor(item.status);
+    const statusIcon = getStatusIcon(item.status);
+
     return (
-      <View style={styles.card} testID={`order-${item.id}`}>
-        <View style={styles.cardTop}>
-          <View>
-            <Text style={styles.orderId}>Order #{item.id}</Text>
-            <View style={styles.metaRow}>
-              <Ionicons name={item.order_type === 'dine-in' ? 'restaurant' : item.order_type === 'takeaway' ? 'bag-handle' : 'bicycle'} size={12} color="#9C9C9C" />
-              <Text style={styles.metaText}>{item.order_type}</Text>
-              <Text style={styles.metaDot}>•</Text>
-              <Text style={styles.metaText}>{new Date(item.created_at).toLocaleDateString()}</Text>
+      <TouchableOpacity 
+        style={styles.orderCard}
+        onPress={() => {/* Navigate to order detail */}}
+        activeOpacity={0.9}
+      >
+        <View style={styles.orderHeader}>
+          <View style={styles.orderHeaderLeft}>
+            <Ionicons name={statusIcon as any} size={20} color={statusColor} />
+            <View>
+              <Text style={styles.orderId}>Order #{item.id.slice(0, 8)}</Text>
+              <Text style={styles.orderDate}>
+                {isToday ? 'Today' : orderDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} • {orderDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+              </Text>
             </View>
-            {item.is_scheduled && item.scheduled_ready_time && (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
-                <Ionicons name="time" size={12} color="#5B5FE0" />
-                <Text style={{ fontSize: 12, fontWeight: '700', color: BK_ORANGE }}>
-                  Ready at {new Date(item.scheduled_ready_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </Text>
-              </View>
-            )}
           </View>
-          <Text style={styles.orderPrice}>₹{Math.round(item.total_price)}</Text>
+          <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
+            <Text style={styles.statusText}>{item.status.toUpperCase()}</Text>
+          </View>
         </View>
 
-        <View style={styles.timeline}>
-          {STEPS.map((step, i) => {
-            const done = i <= statusIdx;
-            const active = i === statusIdx;
-            return (
-              <View key={step} style={styles.tlStep}>
-                <View style={styles.tlDotCol}>
-                  <View style={[styles.tlDot, done && styles.tlDotDone, active && styles.tlDotActive]}>
-                    <Ionicons name={STEP_ICONS[step] as any} size={12} color={done ? '#FFF' : '#D0D0D0'} />
-                  </View>
-                  {i < STEPS.length - 1 && <View style={[styles.tlLine, done && styles.tlLineDone]} />}
-                </View>
-                <Text style={[styles.tlLabel, done && styles.tlLabelDone, active && styles.tlLabelActive]}>{STEP_LABELS[step]}</Text>
+        <View style={styles.orderItems}>
+          {item.items?.slice(0, 3).map((orderItem: any, idx: number) => (
+            <View key={idx} style={styles.itemRow}>
+              <View style={[styles.dietDot, { borderColor: orderItem.diet_type === 'non-veg' ? BK_RED : BK_GREEN }]}>
+                <View style={[styles.dietDotFill, { backgroundColor: orderItem.diet_type === 'non-veg' ? BK_RED : BK_GREEN }]} />
               </View>
-            );
-          })}
-        </View>
-
-        <View style={styles.itemsBox}>
-          {item.items?.map((it: any, i: number) => (
-            <View key={i} style={styles.itemRow}>
-              <Text style={styles.itemQty}>{Math.round(it.grams)}g</Text>
-              <Text style={styles.itemName}>{it.product_name}</Text>
-              <Text style={styles.itemPrice}>₹{Math.round(it.price)}</Text>
+              <Text style={styles.itemName} numberOfLines={1}>
+                {orderItem.name} ({orderItem.grams || orderItem.quantity}g)
+              </Text>
             </View>
           ))}
-        </View>
-
-        <View style={styles.nutritionBar}>
-          <Ionicons name="flame" size={12} color={Z_RED} />
-          <Text style={styles.nutritionText}>{Math.round(item.total_calories)} cal</Text>
-          <Text style={styles.nutritionSep}>•</Text>
-          <Text style={styles.nutritionText}>P: {Math.round(item.total_protein)}g</Text>
-          <Text style={styles.nutritionText}>C: {Math.round(item.total_carbs)}g</Text>
-          <Text style={styles.nutritionText}>F: {Math.round(item.total_fat)}g</Text>
-        </View>
-
-        {/* Re-order Button */}
-        <TouchableOpacity
-          testID={`reorder-${item.id}`}
-          style={styles.reorderBtn}
-          onPress={() => handleReorder(item.id)}
-          disabled={isReordering}
-          activeOpacity={0.85}
-        >
-          {isReordering ? (
-            <ActivityIndicator color={Z_RED} size="small" />
-          ) : (
-            <>
-              <Ionicons name="refresh" size={16} color={Z_RED} />
-              <Text style={styles.reorderText}>Re-order</Text>
-            </>
+          {item.items?.length > 3 && (
+            <Text style={styles.moreItems}>+{item.items.length - 3} more items</Text>
           )}
-        </TouchableOpacity>
-      </View>
+        </View>
+
+        <View style={styles.orderFooter}>
+          <View style={styles.orderStats}>
+            <Ionicons name="restaurant" size={14} color={BK_TEXT_LIGHT} />
+            <Text style={styles.statsText}>{item.items?.length || 0} items</Text>
+            <Ionicons name="flame" size={14} color={BK_ORANGE} style={{ marginLeft: 12 }} />
+            <Text style={styles.statsText}>{Math.round(item.total_calories || 0)} cal</Text>
+          </View>
+          <Text style={styles.orderTotal}>₹{Math.round(item.total_price || 0)}</Text>
+        </View>
+
+        {item.order_type && (
+          <View style={styles.orderTypeBadge}>
+            <Ionicons 
+              name={item.order_type === 'delivery' ? 'bicycle' : item.order_type === 'dine-in' ? 'restaurant' : 'bag-handle'} 
+              size={12} 
+              color={BK_TEXT_LIGHT} 
+            />
+            <Text style={styles.orderTypeText}>{item.order_type}</Text>
+          </View>
+        )}
+      </TouchableOpacity>
     );
   };
 
-  if (loading) return <SafeAreaView style={styles.safe}><View style={styles.center}><ActivityIndicator size="large" color={Z_RED} /></View></SafeAreaView>;
+  const displayOrders = activeTab === 'recent' ? recentOrders : monthlyOrders;
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={BK_RED} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <View style={styles.header}><Text style={styles.title}>My Orders</Text></View>
-      {orders.length === 0 ? (
-        <View style={styles.center}>
-          <Ionicons name="receipt-outline" size={64} color="#E8E8E8" />
-          <Text style={styles.emptyText}>No orders yet</Text>
-          <Text style={styles.emptySub}>Your orders will appear here</Text>
+    <SafeAreaView style={styles.safe} edges={['top']}>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>My Orders</Text>
+      </View>
+
+      {/* Tab Selector */}
+      <View style={styles.tabContainer}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'recent' && styles.tabActive]}
+          onPress={() => setActiveTab('recent')}
+        >
+          <Ionicons name="time" size={18} color={activeTab === 'recent' ? BK_CREAM : BK_TEXT_LIGHT} />
+          <Text style={[styles.tabText, activeTab === 'recent' && styles.tabTextActive]}>
+            Recent Orders
+          </Text>
+          {recentOrders.length > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{recentOrders.length}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'monthly' && styles.tabActive]}
+          onPress={() => setActiveTab('monthly')}
+        >
+          <Ionicons name="calendar" size={18} color={activeTab === 'monthly' ? BK_CREAM : BK_TEXT_LIGHT} />
+          <Text style={[styles.tabText, activeTab === 'monthly' && styles.tabTextActive]}>
+            This Month
+          </Text>
+          {monthlyOrders.length > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{monthlyOrders.length}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
+
+      {/* Summary Stats */}
+      {displayOrders.length > 0 && (
+        <View style={styles.summaryCard}>
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryValue}>{displayOrders.length}</Text>
+            <Text style={styles.summaryLabel}>Total Orders</Text>
+          </View>
+          <View style={styles.summaryDivider} />
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryValue}>
+              ₹{Math.round(displayOrders.reduce((sum, o) => sum + (o.total_price || 0), 0))}
+            </Text>
+            <Text style={styles.summaryLabel}>Total Spent</Text>
+          </View>
+          <View style={styles.summaryDivider} />
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryValue}>
+              {Math.round(displayOrders.reduce((sum, o) => sum + (o.total_calories || 0), 0))}
+            </Text>
+            <Text style={styles.summaryLabel}>Total Calories</Text>
+          </View>
         </View>
-      ) : (
-        <FlatList data={orders} keyExtractor={i => i.id} renderItem={renderOrder}
-          contentContainerStyle={styles.list} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Z_RED} />}
-        />
       )}
+
+      {/* Orders List */}
+      <FlatList
+        data={displayOrders}
+        keyExtractor={item => item.id}
+        renderItem={renderOrder}
+        contentContainerStyle={styles.listContent}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={BK_RED} />}
+        showsVerticalScrollIndicator={false}
+        ListEmptyComponent={
+          <View style={styles.emptyState}>
+            <Ionicons name="receipt-outline" size={64} color="#D0D0D0" />
+            <Text style={styles.emptyTitle}>No Orders Yet</Text>
+            <Text style={styles.emptyText}>
+              {activeTab === 'recent' 
+                ? 'You haven\'t placed any orders in the last 7 days' 
+                : 'No orders this month'}
+            </Text>
+            <TouchableOpacity style={styles.emptyBtn} onPress={() => router.push('/(tabs)/menu')}>
+              <Text style={styles.emptyBtnText}>Browse Menu</Text>
+            </TouchableOpacity>
+          </View>
+        }
+      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: BK_CREAM },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 8 },
-  header: { backgroundColor: '#FFF', padding: 16, paddingTop: 8, borderBottomWidth: 1, borderBottomColor: '#E8DDD4' },
-  title: { fontSize: 24, fontWeight: '800', color: 'BK_BROWN' },
-  emptyText: { color: 'BK_BROWN', fontSize: 16, fontWeight: '600' },
-  emptySub: { color: BK_TEXT_LIGHT, fontSize: 13 },
-  list: { padding: 16 },
-  card: { backgroundColor: '#FFF', borderRadius: 14, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#E8DDD4' },
-  cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 },
-  orderId: { fontSize: 16, fontWeight: '700', color: 'BK_BROWN' },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 },
-  metaText: { fontSize: 12, color: BK_TEXT_LIGHT, textTransform: 'capitalize' },
-  metaDot: { color: '#D0D0D0' },
-  orderPrice: { fontSize: 18, fontWeight: '800', color: 'BK_BROWN' },
-  timeline: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 14 },
-  tlStep: { alignItems: 'center', flex: 1 },
-  tlDotCol: { alignItems: 'center', flexDirection: 'row' },
-  tlDot: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#E8E8E8', alignItems: 'center', justifyContent: 'center', zIndex: 1 },
-  tlDotDone: { backgroundColor: BK_GREEN },
-  tlDotActive: { backgroundColor: Z_RED, borderWidth: 2, borderColor: '#FDE8EA' },
-  tlLine: { height: 2, flex: 1, backgroundColor: '#E8E8E8', position: 'absolute', left: 24, right: -24, top: 11 },
-  tlLineDone: { backgroundColor: BK_GREEN },
-  tlLabel: { fontSize: 9, color: '#B0B0B0', marginTop: 4, textAlign: 'center' },
-  tlLabelDone: { color: BK_GREEN },
-  tlLabelActive: { color: Z_RED, fontWeight: '700' },
-  itemsBox: { backgroundColor: '#FAFAFA', borderRadius: 8, padding: 10, marginBottom: 10 },
-  itemRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 3 },
-  itemQty: { width: 50, fontSize: 12, fontWeight: '700', color: BK_TEXT_LIGHT },
-  itemName: { flex: 1, fontSize: 13, color: 'BK_BROWN' },
-  itemPrice: { fontSize: 13, fontWeight: '600', color: 'BK_BROWN' },
-  nutritionBar: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#E8DDD4' },
-  nutritionText: { fontSize: 11, color: BK_TEXT_LIGHT },
-  nutritionSep: { color: '#D0D0D0' },
-
-  // Re-order button
-  reorderBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 12, paddingVertical: 11, borderRadius: 10, borderWidth: 1.5, borderColor: Z_RED, backgroundColor: '#FDE8EA' },
-  reorderText: { fontSize: 14, fontWeight: '700', color: Z_RED },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  
+  header: {
+    backgroundColor: BK_BROWN,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  headerTitle: { fontSize: 22, fontWeight: '800', color: BK_CREAM, textTransform: 'uppercase', letterSpacing: 0.5 },
+  
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: BK_BROWN,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    gap: 8,
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 25,
+    backgroundColor: 'rgba(245,235,220,0.1)',
+  },
+  tabActive: {
+    backgroundColor: BK_RED,
+  },
+  tabText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: BK_TEXT_LIGHT,
+    textTransform: 'uppercase',
+  },
+  tabTextActive: {
+    color: BK_CREAM,
+    fontWeight: '800',
+  },
+  badge: {
+    backgroundColor: BK_ORANGE,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    minWidth: 24,
+    alignItems: 'center',
+  },
+  badgeText: { fontSize: 11, fontWeight: '800', color: BK_WHITE },
+  
+  summaryCard: {
+    flexDirection: 'row',
+    backgroundColor: BK_WHITE,
+    marginHorizontal: 16,
+    marginTop: 16,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 2,
+    borderColor: '#E8DDD4',
+  },
+  summaryItem: { flex: 1, alignItems: 'center' },
+  summaryValue: { fontSize: 20, fontWeight: '800', color: BK_BROWN },
+  summaryLabel: { fontSize: 11, color: BK_TEXT_LIGHT, marginTop: 4, textTransform: 'uppercase' },
+  summaryDivider: { width: 1, backgroundColor: '#E8DDD4', marginHorizontal: 8 },
+  
+  listContent: { padding: 16, paddingBottom: 100 },
+  
+  orderCard: {
+    backgroundColor: BK_WHITE,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: '#E8DDD4',
+  },
+  orderHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  orderHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  orderId: { fontSize: 16, fontWeight: '800', color: BK_BROWN },
+  orderDate: { fontSize: 12, color: BK_TEXT_LIGHT, marginTop: 2 },
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  statusText: { fontSize: 10, fontWeight: '800', color: BK_WHITE },
+  
+  orderItems: { marginBottom: 12 },
+  itemRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
+  dietDot: { width: 14, height: 14, borderRadius: 2, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  dietDotFill: { width: 7, height: 7, borderRadius: 4 },
+  itemName: { flex: 1, fontSize: 14, color: BK_BROWN },
+  moreItems: { fontSize: 12, color: BK_TEXT_LIGHT, fontStyle: 'italic', marginTop: 4 },
+  
+  orderFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E8DDD4',
+  },
+  orderStats: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  statsText: { fontSize: 12, color: BK_TEXT_LIGHT },
+  orderTotal: { fontSize: 20, fontWeight: '800', color: BK_RED },
+  
+  orderTypeBadge: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: BK_CREAM,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  orderTypeText: { fontSize: 10, fontWeight: '700', color: BK_TEXT_LIGHT, textTransform: 'uppercase' },
+  
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  emptyTitle: { fontSize: 18, fontWeight: '800', color: BK_BROWN, marginTop: 16 },
+  emptyText: { fontSize: 14, color: BK_TEXT_LIGHT, textAlign: 'center', marginTop: 8, paddingHorizontal: 40 },
+  emptyBtn: {
+    backgroundColor: BK_RED,
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    borderRadius: 25,
+    marginTop: 24,
+  },
+  emptyBtnText: { fontSize: 15, fontWeight: '800', color: BK_CREAM, textTransform: 'uppercase' },
 });
