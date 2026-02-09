@@ -164,7 +164,7 @@ export default function MenuScreen() {
     );
   };
 
-  // Render product card (BK style - large image with protein badge)
+  // Render product card (ENHANCED)
   const renderProduct = ({ item }: { item: any }) => {
     const inCart = cart.find(c => c.id === item.id);
     const isReadyMade = item.product_type === 'ready_made';
@@ -173,9 +173,14 @@ export default function MenuScreen() {
       : item.cost_per_100g;
     const priceUnit = isReadyMade ? '' : '/100g';
     
+    // Smart badges logic
+    const isHighProtein = item.protein_per_100g >= 20;
+    const isUnderBudget = item.cost_per_100g <= 50;
+    const showSmartBadge = isHighProtein || isUnderBudget;
+    
     return (
       <View style={styles.productCard} testID={`product-${item.id}`}>
-        {/* Product Image with Protein Badge */}
+        {/* Product Image with Badges */}
         <View style={styles.productImageWrapper}>
           {item.image_url ? (
             <Image source={{ uri: item.image_url }} style={styles.productImage} />
@@ -184,11 +189,21 @@ export default function MenuScreen() {
               <Ionicons name={isReadyMade ? 'fast-food' : 'restaurant'} size={32} color="#D0D0D0" />
             </View>
           )}
+          
+          {/* Smart Badge (High Protein or Budget) */}
+          {showSmartBadge && (
+            <View style={[styles.smartBadge, { backgroundColor: isHighProtein ? BK_BROWN : BK_GREEN }]}>
+              <Ionicons name={isHighProtein ? 'barbell' : 'wallet'} size={10} color="#FFF" />
+              <Text style={styles.smartBadgeText}>{isHighProtein ? 'HIGH PROTEIN' : 'BUDGET'}</Text>
+            </View>
+          )}
+          
           {/* Protein Badge (BK style) */}
           <View style={styles.proteinBadge}>
             <Text style={styles.proteinValue}>{item.protein_per_100g}g</Text>
             <Text style={styles.proteinLabel}>Protein</Text>
           </View>
+          
           {/* NEW badge for ready-made */}
           {isReadyMade && (
             <View style={styles.newBadge}>
@@ -518,18 +533,23 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   
-  // Product Card (BK style)
+  // Product Card (ENHANCED)
   productCard: { 
     backgroundColor: BK_WHITE, 
-    borderRadius: 14, 
+    borderRadius: 16, 
     overflow: 'hidden',
     borderWidth: 2,
     borderColor: '#E8DDD4',
+    shadowColor: BK_BROWN,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 4,
   },
   productImageWrapper: {
     position: 'relative',
     width: '100%',
-    height: 120,
+    height: 140,
   },
   productImage: { 
     width: '100%', 
@@ -540,28 +560,40 @@ const styles = StyleSheet.create({
     alignItems: 'center', 
     justifyContent: 'center' 
   },
-  proteinBadge: {
+  smartBadge: {
     position: 'absolute',
     top: 8,
     left: 8,
-    backgroundColor: BK_BROWN,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 20,
-    alignItems: 'center',
   },
-  proteinValue: { fontSize: 14, fontWeight: '800', color: BK_CREAM },
-  proteinLabel: { fontSize: 8, color: 'rgba(245,235,220,0.8)', marginTop: 1, textTransform: 'uppercase' },
-  newBadge: {
+  smartBadgeText: { fontSize: 9, fontWeight: '800', color: BK_WHITE, textTransform: 'uppercase', letterSpacing: 0.5 },
+  proteinBadge: {
     position: 'absolute',
     top: 8,
     right: 8,
+    backgroundColor: BK_BROWN,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+    alignItems: 'center',
+  },
+  proteinValue: { fontSize: 15, fontWeight: '800', color: BK_CREAM },
+  proteinLabel: { fontSize: 8, color: 'rgba(245,235,220,0.8)', marginTop: 1, textTransform: 'uppercase' },
+  newBadge: {
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
     backgroundColor: BK_GREEN,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: 20,
   },
-  newBadgeText: { fontSize: 8, fontWeight: '800', color: BK_WHITE, textTransform: 'uppercase' },
+  newBadgeText: { fontSize: 9, fontWeight: '800', color: BK_WHITE, textTransform: 'uppercase' },
   
   productInfo: { 
     padding: 10,
