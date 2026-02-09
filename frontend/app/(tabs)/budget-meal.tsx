@@ -70,8 +70,9 @@ export default function BudgetMealScreen() {
   };
 
   // Filter products: only single products (no ready-made meals), filtered by diet
+  // Sort by: New Arrivals first, then Frequently Ordered, then rest
   const filteredProducts = useMemo(() => {
-    return products.filter(p => {
+    const filtered = products.filter(p => {
       // Exclude ready-made meals - only show single products
       if (p.product_type === 'ready_made') return false;
       
@@ -79,7 +80,25 @@ export default function BudgetMealScreen() {
       if (dietPref === 'both') return true;
       return p.diet_type === dietPref;
     });
-  }, [products, dietPref]);
+
+    // Sort products by priority
+    return filtered.sort((a, b) => {
+      // Priority 1: New Arrivals (created in last 7 days)
+      const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+      const aIsNew = a.created_at && new Date(a.created_at).getTime() > sevenDaysAgo;
+      const bIsNew = b.created_at && new Date(b.created_at).getTime() > sevenDaysAgo;
+      if (aIsNew && !bIsNew) return -1;
+      if (!aIsNew && bIsNew) return 1;
+
+      // Priority 2: Frequently ordered by user
+      const aFreq = userOrderHistory.find(h => h.id === a.id)?.count || 0;
+      const bFreq = userOrderHistory.find(h => h.id === b.id)?.count || 0;
+      if (aFreq !== bFreq) return bFreq - aFreq;
+
+      // Priority 3: Alphabetical
+      return a.name.localeCompare(b.name);
+    });
+  }, [products, dietPref, userOrderHistory]);
 
   // Calculate cart totals
   const totals = useMemo(() => {
