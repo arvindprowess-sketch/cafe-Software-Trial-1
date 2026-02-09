@@ -387,7 +387,50 @@ const styles = StyleSheet.create({
   summaryLabel: { fontSize: 11, color: BK_TEXT_LIGHT, marginTop: 4, textTransform: 'uppercase' },
   summaryDivider: { width: 1, backgroundColor: '#E8DDD4', marginHorizontal: 8 },
   
-  listContent: { padding: 16, paddingBottom: 100 },
+  orderCard: {
+    backgroundColor: BK_WHITE,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: '#E8DDD4',
+  },
+  orderHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  orderHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+  orderInfo: { flex: 1 },
+  orderHeaderRight: { flexDirection: 'row', alignItems: 'center' },
+  orderId: { fontSize: 16, fontWeight: '800', color: BK_BROWN },
+  orderDate: { fontSize: 12, color: BK_TEXT_LIGHT, marginTop: 2 },
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+  },
+  statusText: { fontSize: 9, fontWeight: '800', color: BK_WHITE },
+  
+  orderMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  orderTypeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: BK_CREAM,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  orderTypeText: { fontSize: 10, fontWeight: '700', color: BK_TEXT_LIGHT, textTransform: 'uppercase' },
+  favoriteBtn: { padding: 4 },
+  
   
   orderCard: {
     backgroundColor: BK_WHITE,
