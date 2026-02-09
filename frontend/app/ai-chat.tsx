@@ -337,10 +337,42 @@ export default function AIChatScreen() {
         {cart.length > 0 && (
           <TouchableOpacity 
             style={styles.checkoutBtn}
-            onPress={() => router.push({
-              pathname: '/customize',
-              params: { cart: JSON.stringify(cart), orderType: 'dine-in' }
-            })}
+            onPress={() => {
+              try {
+                console.log('[AI Chat] Checkout clicked with cart:', cart);
+                // Clean cart data - only include necessary fields
+                const cleanCart = cart.map(item => ({
+                  id: item.id || item.product_id,
+                  product_id: item.product_id || item.id,
+                  name: item.name,
+                  grams: item.grams,
+                  cost_per_100g: item.cost_per_100g,
+                  calories_per_100g: item.calories_per_100g,
+                  protein_per_100g: item.protein_per_100g,
+                  carbs_per_100g: item.carbs_per_100g || 0,
+                  fat_per_100g: item.fat_per_100g || 0,
+                  diet_type: item.diet_type || 'veg',
+                  image_url: item.image_url,
+                  product_type: 'single'
+                }));
+                
+                console.log('[AI Chat] Clean cart:', cleanCart);
+                const cartString = JSON.stringify(cleanCart);
+                console.log('[AI Chat] Cart string length:', cartString.length);
+                
+                router.push({
+                  pathname: '/customize',
+                  params: { 
+                    cart: cartString, 
+                    orderType: 'dine-in' 
+                  }
+                });
+                console.log('[AI Chat] Navigation triggered');
+              } catch (error) {
+                console.error('[AI Chat] Error during checkout:', error);
+                Alert.alert('Error', 'Failed to proceed to checkout. Please try again.');
+              }
+            }}
           >
             <View>
               <Text style={styles.checkoutTotal}>₹{Math.round(cartTotal.price)}</Text>
