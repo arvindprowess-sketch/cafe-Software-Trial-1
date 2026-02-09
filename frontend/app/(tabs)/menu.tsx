@@ -10,9 +10,17 @@ import { apiCall } from '../../utils/api';
 import SideDrawer from '../components/SideDrawer';
 import { getStoredUser } from '../../utils/api';
 
-const Z_RED = '#E23744';
-const GREEN = '#267E3E';
-const PURPLE = '#5B5FE0';
+// BK Design System Colors
+const BK_RED = '#D62300';
+const BK_ORANGE = '#FF8732';
+const BK_BROWN = '#502314';
+const BK_CREAM = '#F5EBDC';
+const BK_GREEN = '#509E2F';
+const BK_WHITE = '#FFFFFF';
+const BK_TEXT_LIGHT = '#8B6F61';
+const Z_RED = BK_RED;
+const GREEN = BK_GREEN;
+const PURPLE = BK_RED;
 const { width, height } = Dimensions.get('window');
 
 // Default categories (used as fallback if no DB categories)
