@@ -8,9 +8,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { apiCall, getStoredUser } from '../../utils/api';
 
-const Z_RED = '#E23744';
-const GREEN = '#267E3E';
-const PURPLE = '#5B5FE0';
+const Z_RED = '#D62300';
+const GREEN = '#509E2F';
+const PURPLE = '#FF8732';
 const { width } = Dimensions.get('window');
 
 export default function BudgetMealScreen() {
@@ -236,11 +236,11 @@ export default function BudgetMealScreen() {
           ].map(d => (
             <TouchableOpacity
               key={d.key}
-              style={[styles.filterChip, dietPref === d.key && { backgroundColor: d.color || '#1C1C2E', borderColor: d.color || '#1C1C2E' }]}
+              style={[styles.filterChip, dietPref === d.key && { backgroundColor: d.color || '#502314', borderColor: d.color || '#502314' }]}
               onPress={() => setDietPref(d.key)}
             >
               {d.icon ? (
-                <Ionicons name={d.icon as any} size={14} color={dietPref === d.key ? '#FFF' : '#696969'} />
+                <Ionicons name={d.icon as any} size={14} color={dietPref === d.key ? '#FFF' : '#8B6F61'} />
               ) : (
                 <View style={[styles.vegDotSmall, { backgroundColor: d.color }]} />
               )}
@@ -261,7 +261,7 @@ export default function BudgetMealScreen() {
               style={[styles.filterChip, goal === g.key && styles.filterChipActive]}
               onPress={() => setGoal(g.key)}
             >
-              <Ionicons name={g.icon as any} size={14} color={goal === g.key ? '#FFF' : '#696969'} />
+              <Ionicons name={g.icon as any} size={14} color={goal === g.key ? '#FFF' : '#8B6F61'} />
               <Text style={[styles.filterText, goal === g.key && { color: '#FFF' }]}>{g.label}</Text>
             </TouchableOpacity>
           ))}
@@ -498,36 +498,36 @@ export default function BudgetMealScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F8F8F8' },
+  safe: { flex: 1, backgroundColor: '#F5EBDC' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   
   // Header
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FFF', paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12 },
-  title: { fontSize: 22, fontWeight: '800', color: '#1C1C2E' },
-  subtitle: { fontSize: 12, color: '#9C9C9C', marginTop: 2 },
+  title: { fontSize: 22, fontWeight: '800', color: '#502314' },
+  subtitle: { fontSize: 12, color: '#8B6F61', marginTop: 2 },
   aiHelpBtn: { width: 44, height: 44, borderRadius: 12, backgroundColor: PURPLE, alignItems: 'center', justifyContent: 'center' },
   
   // Budget Section
-  budgetSection: { backgroundColor: '#FFF', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#EFEFEF' },
+  budgetSection: { backgroundColor: '#FFF', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#E8DDD4' },
   budgetInputRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  budgetLabel: { fontSize: 16, fontWeight: '700', color: '#1C1C2E' },
-  budgetInputBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F5F5F5', borderRadius: 12, paddingHorizontal: 14, borderWidth: 2, borderColor: Z_RED },
+  budgetLabel: { fontSize: 16, fontWeight: '700', color: '#502314' },
+  budgetInputBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F5EBDC', borderRadius: 12, paddingHorizontal: 14, borderWidth: 2, borderColor: Z_RED },
   rupeeSign: { fontSize: 20, fontWeight: '800', color: Z_RED },
-  budgetInput: { fontSize: 24, fontWeight: '800', color: '#1C1C2E', minWidth: 80, textAlign: 'center', paddingVertical: 8 },
+  budgetInput: { fontSize: 24, fontWeight: '800', color: '#502314', minWidth: 80, textAlign: 'center', paddingVertical: 8 },
   budgetProgress: { },
-  progressBar: { height: 8, backgroundColor: '#F0F0F0', borderRadius: 4, overflow: 'hidden' },
+  progressBar: { height: 8, backgroundColor: '#E8DDD4', borderRadius: 4, overflow: 'hidden' },
   progressFill: { height: '100%', backgroundColor: GREEN, borderRadius: 4 },
   progressFillFull: { backgroundColor: Z_RED },
   budgetStats: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
-  budgetSpent: { fontSize: 12, color: '#696969' },
+  budgetSpent: { fontSize: 12, color: '#8B6F61' },
   budgetRemaining: { fontSize: 14, fontWeight: '700', color: GREEN },
   
   // Filters
-  filterRow: { backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#EFEFEF' },
+  filterRow: { backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E8DDD4' },
   filterScroll: { paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
-  filterChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, backgroundColor: '#F5F5F5', borderWidth: 1, borderColor: '#E8E8E8' },
+  filterChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, backgroundColor: '#F5EBDC', borderWidth: 1, borderColor: '#E8E8E8' },
   filterChipActive: { backgroundColor: Z_RED, borderColor: Z_RED },
-  filterText: { fontSize: 12, fontWeight: '600', color: '#696969' },
+  filterText: { fontSize: 12, fontWeight: '600', color: '#8B6F61' },
   filterDivider: { width: 1, height: 24, backgroundColor: '#E8E8E8', marginHorizontal: 4 },
   vegDotSmall: { width: 10, height: 10, borderRadius: 5 },
   
@@ -538,29 +538,29 @@ const styles = StyleSheet.create({
   // Section
   section: { marginBottom: 20 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#1C1C2E', flex: 1 },
-  sectionSubtitle: { fontSize: 12, color: '#9C9C9C', marginTop: -8, marginBottom: 10 },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#502314', flex: 1 },
+  sectionSubtitle: { fontSize: 12, color: '#8B6F61', marginTop: -8, marginBottom: 10 },
   
   // Cart Item
-  cartItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#FFF', borderRadius: 12, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: '#EFEFEF' },
+  cartItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#FFF', borderRadius: 12, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: '#E8DDD4' },
   cartItemLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
   cartItemInfo: { flex: 1 },
-  cartItemName: { fontSize: 14, fontWeight: '700', color: '#1C1C2E' },
-  cartItemMacros: { fontSize: 11, color: '#9C9C9C', marginTop: 2 },
+  cartItemName: { fontSize: 14, fontWeight: '700', color: '#502314' },
+  cartItemMacros: { fontSize: 11, color: '#8B6F61', marginTop: 2 },
   cartItemRight: { },
   gramsControl: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  gramsBtn: { width: 32, height: 32, borderRadius: 8, backgroundColor: '#FDE8EA', alignItems: 'center', justifyContent: 'center' },
+  gramsBtn: { width: 32, height: 32, borderRadius: 8, backgroundColor: '#FDE8E4', alignItems: 'center', justifyContent: 'center' },
   gramsBtnPlus: { backgroundColor: Z_RED },
   gramsDisplay: { alignItems: 'center', minWidth: 50 },
-  gramsText: { fontSize: 15, fontWeight: '800', color: '#1C1C2E' },
+  gramsText: { fontSize: 15, fontWeight: '800', color: '#502314' },
   priceText: { fontSize: 11, color: Z_RED, fontWeight: '600' },
   
   // Cart Summary
   cartSummary: { backgroundColor: '#FAFAFA', borderRadius: 10, padding: 12, marginTop: 8 },
   macroRow: { flexDirection: 'row', justifyContent: 'space-around' },
   macroItem: { alignItems: 'center' },
-  macroValue: { fontSize: 18, fontWeight: '800', color: '#1C1C2E' },
-  macroLabel: { fontSize: 10, color: '#9C9C9C', marginTop: 2 },
+  macroValue: { fontSize: 18, fontWeight: '800', color: '#502314' },
+  macroLabel: { fontSize: 10, color: '#8B6F61', marginTop: 2 },
   
   // Calorie Goal Context
   calorieGoalRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, backgroundColor: '#F0FFF4', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8 },
@@ -576,44 +576,44 @@ const styles = StyleSheet.create({
   // AI Suggestions
   suggestionItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F8F5FF', borderRadius: 12, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: '#E8E0FF', gap: 10 },
   suggestionLeft: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, flex: 1, flexShrink: 1 },
-  suggestionName: { fontSize: 14, fontWeight: '700', color: '#1C1C2E' },
+  suggestionName: { fontSize: 14, fontWeight: '700', color: '#502314' },
   suggestionReason: { fontSize: 11, color: PURPLE, marginTop: 2, lineHeight: 15 },
   suggestionRight: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 },
   suggestionGramsBox: { alignItems: 'flex-end' },
-  suggestionGrams: { fontSize: 14, fontWeight: '700', color: '#1C1C2E' },
-  suggestionPrice: { fontSize: 11, color: '#696969', marginTop: 1 },
+  suggestionGrams: { fontSize: 14, fontWeight: '700', color: '#502314' },
+  suggestionPrice: { fontSize: 11, color: '#8B6F61', marginTop: 1 },
   
   // Quick Add Grid
   quickAddGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  quickAddCard: { width: (width - 42) / 2, backgroundColor: '#FFF', borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: '#EFEFEF' },
-  quickAddImg: { width: '100%', height: 80, backgroundColor: '#F5F5F5' },
+  quickAddCard: { width: (width - 42) / 2, backgroundColor: '#FFF', borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: '#E8DDD4' },
+  quickAddImg: { width: '100%', height: 80, backgroundColor: '#F5EBDC' },
   imgPlaceholder: { alignItems: 'center', justifyContent: 'center' },
   quickAddInfo: { padding: 10 },
-  quickAddName: { fontSize: 13, fontWeight: '700', color: '#1C1C2E' },
-  quickAddMacro: { fontSize: 10, color: '#9C9C9C', marginTop: 2 },
-  quickAddAction: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 6, backgroundColor: '#FDE8EA', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 5 },
+  quickAddName: { fontSize: 13, fontWeight: '700', color: '#502314' },
+  quickAddMacro: { fontSize: 10, color: '#8B6F61', marginTop: 2 },
+  quickAddAction: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 6, backgroundColor: '#FDE8E4', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 5 },
   quickAddGrams: { fontSize: 12, fontWeight: '700', color: Z_RED },
-  quickAddPrice: { fontSize: 12, fontWeight: '600', color: '#696969' },
+  quickAddPrice: { fontSize: 12, fontWeight: '600', color: '#8B6F61' },
   
   // Product Row
-  productRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#FFF', borderRadius: 10, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: '#EFEFEF' },
+  productRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#FFF', borderRadius: 10, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: '#E8DDD4' },
   productLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
   productInfo: { flex: 1 },
-  productName: { fontSize: 14, fontWeight: '600', color: '#1C1C2E' },
-  productMeta: { fontSize: 11, color: '#9C9C9C', marginTop: 2 },
+  productName: { fontSize: 14, fontWeight: '600', color: '#502314' },
+  productMeta: { fontSize: 11, color: '#8B6F61', marginTop: 2 },
   addOptions: { flexDirection: 'row', gap: 6 },
-  addOptionBtn: { backgroundColor: '#FDE8EA', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, alignItems: 'center' },
-  addOptionDisabled: { backgroundColor: '#F5F5F5' },
+  addOptionBtn: { backgroundColor: '#FDE8E4', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, alignItems: 'center' },
+  addOptionDisabled: { backgroundColor: '#F5EBDC' },
   addOptionGrams: { fontSize: 12, fontWeight: '700', color: Z_RED },
-  addOptionPrice: { fontSize: 10, color: '#696969' },
+  addOptionPrice: { fontSize: 10, color: '#8B6F61' },
   inCartBadge: { backgroundColor: GREEN, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
   inCartText: { fontSize: 12, fontWeight: '700', color: '#FFF' },
   
   // Bottom Bar
-  bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#FFF', borderTopWidth: 1, borderTopColor: '#EFEFEF', padding: 16, paddingBottom: 28, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#FFF', borderTopWidth: 1, borderTopColor: '#E8DDD4', padding: 16, paddingBottom: 28, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   bottomLeft: { },
-  bottomTotal: { fontSize: 22, fontWeight: '800', color: '#1C1C2E' },
-  bottomItems: { fontSize: 11, color: '#9C9C9C', marginTop: 2 },
+  bottomTotal: { fontSize: 22, fontWeight: '800', color: '#502314' },
+  bottomItems: { fontSize: 11, color: '#8B6F61', marginTop: 2 },
   checkoutBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Z_RED, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 14 },
   checkoutBtnDisabled: { backgroundColor: '#D0D0D0' },
   checkoutText: { fontSize: 15, fontWeight: '700', color: '#FFF' },

@@ -8,9 +8,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { apiCall } from '../utils/api';
 
-const Z_RED = '#E23744';
-const GREEN = '#267E3E';
-const PURPLE = '#5B5FE0';
+const Z_RED = '#D62300';
+const GREEN = '#509E2F';
+const PURPLE = '#FF8732';
 const { width, height } = Dimensions.get('window');
 
 // Status steps
@@ -245,16 +245,16 @@ export default function DeliveryTrackingScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F8F8F8' },
+  safe: { flex: 1, backgroundColor: '#F5EBDC' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
-  errorText: { fontSize: 14, color: '#696969', textAlign: 'center', marginTop: 16 },
+  errorText: { fontSize: 14, color: '#8B6F61', textAlign: 'center', marginTop: 16 },
   retryBtn: { backgroundColor: Z_RED, borderRadius: 10, paddingHorizontal: 24, paddingVertical: 12, marginTop: 16 },
   retryBtnText: { color: '#FFF', fontSize: 14, fontWeight: '700' },
   
   // Header
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#FFF', paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#EFEFEF' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#FFF', paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#E8DDD4' },
   backBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#1C1C2E' },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: '#502314' },
   refreshBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   
   scroll: { flex: 1 },
@@ -262,56 +262,56 @@ const styles = StyleSheet.create({
   // Map
   mapContainer: { height: 200, backgroundColor: '#E8E8E8', marginHorizontal: 16, marginTop: 16, borderRadius: 16, overflow: 'hidden' },
   mapPlaceholder: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F0F0F5' },
-  mapText: { fontSize: 14, color: '#696969', marginTop: 12, textAlign: 'center', paddingHorizontal: 20 },
+  mapText: { fontSize: 14, color: '#8B6F61', marginTop: 12, textAlign: 'center', paddingHorizontal: 20 },
   openMapBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Z_RED, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10, marginTop: 12 },
   openMapBtnText: { color: '#FFF', fontSize: 14, fontWeight: '600' },
   
   // Driver
-  driverCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', marginHorizontal: 16, marginTop: 12, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#EFEFEF' },
+  driverCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', marginHorizontal: 16, marginTop: 12, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#E8DDD4' },
   driverAvatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: GREEN, alignItems: 'center', justifyContent: 'center' },
   driverInfo: { flex: 1, marginLeft: 12 },
-  driverName: { fontSize: 16, fontWeight: '700', color: '#1C1C2E' },
-  driverLabel: { fontSize: 12, color: '#9C9C9C', marginTop: 2 },
+  driverName: { fontSize: 16, fontWeight: '700', color: '#502314' },
+  driverLabel: { fontSize: 12, color: '#8B6F61', marginTop: 2 },
   driverActions: { flexDirection: 'row', gap: 8 },
-  driverBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#F5F5F5', alignItems: 'center', justifyContent: 'center' },
+  driverBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#F5EBDC', alignItems: 'center', justifyContent: 'center' },
   
   // ETA
-  etaCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#FFF', marginHorizontal: 16, marginTop: 12, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#EFEFEF' },
+  etaCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#FFF', marginHorizontal: 16, marginTop: 12, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#E8DDD4' },
   etaInfo: { flex: 1 },
-  etaLabel: { fontSize: 12, color: '#9C9C9C' },
-  etaValue: { fontSize: 20, fontWeight: '800', color: '#1C1C2E', marginTop: 2 },
+  etaLabel: { fontSize: 12, color: '#8B6F61' },
+  etaValue: { fontSize: 20, fontWeight: '800', color: '#502314', marginTop: 2 },
   
   // Timeline
-  timelineCard: { backgroundColor: '#FFF', marginHorizontal: 16, marginTop: 12, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#EFEFEF' },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#1C1C2E', marginBottom: 16 },
+  timelineCard: { backgroundColor: '#FFF', marginHorizontal: 16, marginTop: 12, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#E8DDD4' },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#502314', marginBottom: 16 },
   timelineItem: { flexDirection: 'row', marginBottom: 0 },
   timelineLeft: { width: 40, alignItems: 'center' },
-  timelineDot: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#F0F0F0', alignItems: 'center', justifyContent: 'center' },
+  timelineDot: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#E8DDD4', alignItems: 'center', justifyContent: 'center' },
   timelineDotCompleted: { backgroundColor: GREEN },
   timelineDotCurrent: { backgroundColor: Z_RED },
   timelineLine: { width: 2, height: 30, backgroundColor: '#E8E8E8', marginVertical: 4 },
   timelineLineCompleted: { backgroundColor: GREEN },
   timelineRight: { flex: 1, paddingLeft: 12, paddingBottom: 20 },
-  timelineLabel: { fontSize: 14, color: '#9C9C9C', fontWeight: '500' },
-  timelineLabelCompleted: { color: '#1C1C2E' },
+  timelineLabel: { fontSize: 14, color: '#8B6F61', fontWeight: '500' },
+  timelineLabelCompleted: { color: '#502314' },
   timelineLabelCurrent: { color: Z_RED, fontWeight: '700' },
   currentBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
   pulsingDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Z_RED },
   currentBadgeText: { fontSize: 11, color: Z_RED, fontWeight: '600' },
   
   // Address
-  addressCard: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, backgroundColor: '#FFF', marginHorizontal: 16, marginTop: 12, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#EFEFEF' },
+  addressCard: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, backgroundColor: '#FFF', marginHorizontal: 16, marginTop: 12, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#E8DDD4' },
   addressInfo: { flex: 1 },
-  addressLabel: { fontSize: 12, color: '#9C9C9C' },
-  addressText: { fontSize: 14, color: '#1C1C2E', marginTop: 4, lineHeight: 20 },
+  addressLabel: { fontSize: 12, color: '#8B6F61' },
+  addressText: { fontSize: 14, color: '#502314', marginTop: 4, lineHeight: 20 },
   
   // Order ID
-  orderIdCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F5F5F5', marginHorizontal: 16, marginTop: 12, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12 },
-  orderIdLabel: { fontSize: 12, color: '#9C9C9C' },
-  orderIdValue: { fontSize: 12, color: '#696969', fontWeight: '600' },
+  orderIdCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F5EBDC', marginHorizontal: 16, marginTop: 12, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12 },
+  orderIdLabel: { fontSize: 12, color: '#8B6F61' },
+  orderIdValue: { fontSize: 12, color: '#8B6F61', fontWeight: '600' },
   
   // Help
-  helpBar: { backgroundColor: '#FFF', paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: 1, borderTopColor: '#EFEFEF' },
+  helpBar: { backgroundColor: '#FFF', paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: 1, borderTopColor: '#E8DDD4' },
   helpBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#F0F0FF', borderRadius: 10, paddingVertical: 12 },
   helpBtnText: { color: PURPLE, fontSize: 14, fontWeight: '600' },
 });

@@ -5,11 +5,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { apiCall, getStoredUser, logout } from '../../utils/api';
 
-const Z_RED = '#E23744';
+const Z_RED = '#D62300';
 const GOALS = [
-  { key: 'fat_loss', label: 'Fat Loss', icon: 'trending-down' as const, color: '#E23744' },
-  { key: 'muscle_gain', label: 'Muscle Gain', icon: 'trending-up' as const, color: '#267E3E' },
-  { key: 'maintenance', label: 'Maintain', icon: 'swap-horizontal' as const, color: '#5B5FE0' },
+  { key: 'fat_loss', label: 'Fat Loss', icon: 'trending-down' as const, color: '#D62300' },
+  { key: 'muscle_gain', label: 'Muscle Gain', icon: 'trending-up' as const, color: '#509E2F' },
+  { key: 'maintenance', label: 'Maintain', icon: 'swap-horizontal' as const, color: '#FF8732' },
 ];
 
 export default function ProfileScreen() {
@@ -61,8 +61,8 @@ export default function ProfileScreen() {
           <View style={styles.goalsRow}>
             {GOALS.map(g => (
               <TouchableOpacity key={g.key} testID={`goal-${g.key}`} style={[styles.goalCard, goal === g.key && { borderColor: g.color, backgroundColor: `${g.color}10` }]} onPress={() => setGoal(g.key)}>
-                <View style={[styles.goalIcon, { backgroundColor: goal === g.key ? g.color : '#F5F5F5' }]}>
-                  <Ionicons name={g.icon} size={20} color={goal === g.key ? '#FFF' : '#9C9C9C'} />
+                <View style={[styles.goalIcon, { backgroundColor: goal === g.key ? g.color : '#F5EBDC' }]}>
+                  <Ionicons name={g.icon} size={20} color={goal === g.key ? '#FFF' : '#8B6F61'} />
                 </View>
                 <Text style={[styles.goalLabel, goal === g.key && { color: g.color, fontWeight: '700' }]}>{g.label}</Text>
               </TouchableOpacity>
@@ -75,7 +75,7 @@ export default function ProfileScreen() {
               { label: 'Calories (kcal)', val: calories, set: setCalories, color: Z_RED },
               { label: 'Protein (g)', val: protein, set: setProtein, color: Z_RED },
               { label: 'Carbs (g)', val: carbs, set: setCarbs, color: '#FF9F0A' },
-              { label: 'Fat (g)', val: fat, set: setFat, color: '#5B5FE0' },
+              { label: 'Fat (g)', val: fat, set: setFat, color: '#FF8732' },
             ].map(t => (
               <View key={t.label} style={styles.targetCard}>
                 <Text style={[styles.targetLabel, { color: t.color }]}>{t.label}</Text>
@@ -95,23 +95,23 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F8F8F8' },
+  safe: { flex: 1, backgroundColor: '#F5EBDC' },
   content: { padding: 16 },
-  title: { fontSize: 24, fontWeight: '800', color: '#1C1C2E', marginBottom: 16, marginTop: 8 },
-  userCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#FFF', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#EFEFEF', marginBottom: 20 },
-  avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#FDE8EA', alignItems: 'center', justifyContent: 'center' },
-  userName: { fontSize: 17, fontWeight: '700', color: '#1C1C2E' },
-  userEmail: { fontSize: 13, color: '#9C9C9C', marginTop: 2 },
-  logoutBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#FDE8EA', alignItems: 'center', justifyContent: 'center' },
-  section: { fontSize: 17, fontWeight: '700', color: '#1C1C2E', marginBottom: 10 },
+  title: { fontSize: 24, fontWeight: '800', color: '#502314', marginBottom: 16, marginTop: 8 },
+  userCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#FFF', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#E8DDD4', marginBottom: 20 },
+  avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#FDE8E4', alignItems: 'center', justifyContent: 'center' },
+  userName: { fontSize: 17, fontWeight: '700', color: '#502314' },
+  userEmail: { fontSize: 13, color: '#8B6F61', marginTop: 2 },
+  logoutBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#FDE8E4', alignItems: 'center', justifyContent: 'center' },
+  section: { fontSize: 17, fontWeight: '700', color: '#502314', marginBottom: 10 },
   goalsRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
-  goalCard: { flex: 1, alignItems: 'center', gap: 8, backgroundColor: '#FFF', borderRadius: 12, padding: 14, borderWidth: 1.5, borderColor: '#EFEFEF' },
+  goalCard: { flex: 1, alignItems: 'center', gap: 8, backgroundColor: '#FFF', borderRadius: 12, padding: 14, borderWidth: 1.5, borderColor: '#E8DDD4' },
   goalIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  goalLabel: { fontSize: 12, fontWeight: '600', color: '#696969' },
+  goalLabel: { fontSize: 12, fontWeight: '600', color: '#8B6F61' },
   targetsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 },
-  targetCard: { width: '48%', backgroundColor: '#FFF', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#EFEFEF' },
+  targetCard: { width: '48%', backgroundColor: '#FFF', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#E8DDD4' },
   targetLabel: { fontSize: 12, fontWeight: '600', marginBottom: 6 },
-  targetInput: { backgroundColor: '#F5F5F5', borderRadius: 8, padding: 10, color: '#1C1C2E', fontSize: 18, fontWeight: '700' },
+  targetInput: { backgroundColor: '#F5EBDC', borderRadius: 8, padding: 10, color: '#502314', fontSize: 18, fontWeight: '700' },
   saveBtn: { backgroundColor: Z_RED, borderRadius: 12, paddingVertical: 15, alignItems: 'center' },
   saveBtnText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
 });

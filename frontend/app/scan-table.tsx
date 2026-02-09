@@ -8,9 +8,9 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { apiCall } from '../utils/api';
 
-const Z_RED = '#E23744';
-const GREEN = '#267E3E';
-const PURPLE = '#5B5FE0';
+const Z_RED = '#D62300';
+const GREEN = '#509E2F';
+const PURPLE = '#FF8732';
 
 export default function ScanTableScreen() {
   const router = useRouter();
@@ -218,18 +218,18 @@ export default function ScanTableScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#1C1C2E' },
+  safe: { flex: 1, backgroundColor: '#502314' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   
   // Header
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 },
   backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#1C1C2E' },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: '#502314' },
   
   // Permission
   permissionBox: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40, backgroundColor: '#FFF' },
-  permTitle: { fontSize: 22, fontWeight: '800', color: '#1C1C2E', marginTop: 20 },
-  permDesc: { fontSize: 14, color: '#696969', textAlign: 'center', marginTop: 8 },
+  permTitle: { fontSize: 22, fontWeight: '800', color: '#502314', marginTop: 20 },
+  permDesc: { fontSize: 14, color: '#8B6F61', textAlign: 'center', marginTop: 8 },
   permBtn: { backgroundColor: Z_RED, borderRadius: 12, paddingHorizontal: 32, paddingVertical: 14, marginTop: 24 },
   permBtnText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
   manualBtn: { marginTop: 16 },
@@ -239,7 +239,7 @@ const styles = StyleSheet.create({
   scannerContainer: { flex: 1, position: 'relative' },
   camera: { flex: 1 },
   webFallback: { flex: 1, backgroundColor: '#2C2C3E', alignItems: 'center', justifyContent: 'center' },
-  webFallbackText: { color: '#9C9C9C', fontSize: 14, marginTop: 16 },
+  webFallbackText: { color: '#8B6F61', fontSize: 14, marginTop: 16 },
   overlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
   scanFrame: { width: 250, height: 250, position: 'relative' },
   corner: { position: 'absolute', width: 40, height: 40, borderColor: Z_RED, borderWidth: 4 },
@@ -252,15 +252,15 @@ const styles = StyleSheet.create({
   
   // Bottom
   bottomInfo: { backgroundColor: '#FFF', padding: 24, borderTopLeftRadius: 24, borderTopRightRadius: 24 },
-  scanHint: { fontSize: 14, color: '#696969', textAlign: 'center' },
-  manualEntry: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 16, paddingVertical: 12, backgroundColor: '#FDE8EA', borderRadius: 10 },
+  scanHint: { fontSize: 14, color: '#8B6F61', textAlign: 'center' },
+  manualEntry: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 16, paddingVertical: 12, backgroundColor: '#FDE8E4', borderRadius: 10 },
   manualEntryText: { color: Z_RED, fontSize: 14, fontWeight: '600' },
   
   // Table Card
   tableCard: { backgroundColor: '#FFF', marginHorizontal: 16, marginTop: 20, borderRadius: 20, padding: 24, alignItems: 'center' },
   tableIconBg: { width: 80, height: 80, borderRadius: 40, backgroundColor: Z_RED, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
-  tableNumber: { fontSize: 32, fontWeight: '800', color: '#1C1C2E' },
-  tableSeats: { fontSize: 14, color: '#696969', marginTop: 4 },
+  tableNumber: { fontSize: 32, fontWeight: '800', color: '#502314' },
+  tableSeats: { fontSize: 14, color: '#8B6F61', marginTop: 4 },
   statusBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#E8F5E9', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, marginTop: 16 },
   statusText: { color: GREEN, fontSize: 13, fontWeight: '600' },
   existingOrder: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#F0F0FF', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, marginTop: 12 },
@@ -270,10 +270,10 @@ const styles = StyleSheet.create({
   actions: { padding: 16, gap: 12 },
   primaryBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: Z_RED, borderRadius: 14, paddingVertical: 16 },
   primaryBtnText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
-  secondaryBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: '#FFF', borderRadius: 14, paddingVertical: 14, borderWidth: 1.5, borderColor: '#EFEFEF' },
-  secondaryBtnText: { color: '#1C1C2E', fontSize: 15, fontWeight: '600' },
+  secondaryBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: '#FFF', borderRadius: 14, paddingVertical: 14, borderWidth: 1.5, borderColor: '#E8DDD4' },
+  secondaryBtnText: { color: '#502314', fontSize: 15, fontWeight: '600' },
   
   // Tip
   tip: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, padding: 16 },
-  tipText: { color: '#9C9C9C', fontSize: 12 },
+  tipText: { color: '#8B6F61', fontSize: 12 },
 });

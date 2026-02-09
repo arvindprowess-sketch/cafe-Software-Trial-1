@@ -8,9 +8,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { apiCall } from '../utils/api';
 
-const Z_RED = '#E23744';
-const PURPLE = '#5B5FE0';
-const GREEN = '#267E3E';
+const Z_RED = '#D62300';
+const PURPLE = '#FF8732';
+const GREEN = '#509E2F';
 
 interface Message {
   id: string;
@@ -339,39 +339,39 @@ export default function AIChatScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F8F8F8' },
+  safe: { flex: 1, backgroundColor: '#F5EBDC' },
   flex1: { flex: 1 },
   
   // Header
-  header: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#EFEFEF' },
+  header: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#E8DDD4' },
   backBtn: { padding: 8 },
   headerCenter: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   aiAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: PURPLE, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { fontSize: 16, fontWeight: '700', color: '#1C1C2E' },
-  headerSub: { fontSize: 11, color: '#9C9C9C' },
+  headerTitle: { fontSize: 16, fontWeight: '700', color: '#502314' },
+  headerSub: { fontSize: 11, color: '#8B6F61' },
   
   // Budget Bar
-  budgetBar: { backgroundColor: '#FFF', paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#EFEFEF' },
+  budgetBar: { backgroundColor: '#FFF', paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#E8DDD4' },
   budgetInputGroup: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  budgetLabel: { fontSize: 14, fontWeight: '600', color: '#696969' },
-  budgetInputBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F5F5F5', borderRadius: 8, paddingHorizontal: 10 },
+  budgetLabel: { fontSize: 14, fontWeight: '600', color: '#8B6F61' },
+  budgetInputBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F5EBDC', borderRadius: 8, paddingHorizontal: 10 },
   rupee: { fontSize: 16, fontWeight: '700', color: Z_RED },
-  budgetInput: { fontSize: 18, fontWeight: '700', color: '#1C1C2E', width: 70, textAlign: 'right', paddingVertical: 6 },
+  budgetInput: { fontSize: 18, fontWeight: '700', color: '#502314', width: 70, textAlign: 'right', paddingVertical: 6 },
   budgetStats: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
-  spent: { fontSize: 12, color: '#696969' },
+  spent: { fontSize: 12, color: '#8B6F61' },
   remaining: { fontSize: 13, fontWeight: '700', color: GREEN },
-  progressBar: { height: 4, backgroundColor: '#F0F0F0', borderRadius: 2, marginTop: 6, overflow: 'hidden' },
+  progressBar: { height: 4, backgroundColor: '#E8DDD4', borderRadius: 2, marginTop: 6, overflow: 'hidden' },
   progressFill: { height: '100%', backgroundColor: PURPLE, borderRadius: 2 },
   
   // Cart Preview
-  cartPreview: { backgroundColor: '#FFF', paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#EFEFEF' },
+  cartPreview: { backgroundColor: '#FFF', paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#E8DDD4' },
   cartHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  cartTitle: { fontSize: 14, fontWeight: '700', color: '#1C1C2E' },
+  cartTitle: { fontSize: 14, fontWeight: '700', color: '#502314' },
   cartMacros: { fontSize: 11, color: PURPLE },
-  cartChip: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#F5F5F5', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, marginRight: 8 },
+  cartChip: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#F5EBDC', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, marginRight: 8 },
   vegDot: { width: 8, height: 8, borderRadius: 4 },
-  cartChipName: { fontSize: 12, fontWeight: '600', color: '#1C1C2E' },
-  cartChipGrams: { fontSize: 11, color: '#696969' },
+  cartChipName: { fontSize: 12, fontWeight: '600', color: '#502314' },
+  cartChipGrams: { fontSize: 11, color: '#8B6F61' },
   
   // Messages
   messages: { flex: 1 },
@@ -381,24 +381,24 @@ const styles = StyleSheet.create({
   aiMsgAvatar: { width: 28, height: 28, borderRadius: 14, backgroundColor: PURPLE, alignItems: 'center', justifyContent: 'center', marginRight: 8 },
   msgBubble: { maxWidth: '80%', borderRadius: 16, paddingHorizontal: 14, paddingVertical: 10 },
   userBubble: { backgroundColor: Z_RED, borderBottomRightRadius: 4 },
-  aiBubble: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#EFEFEF', borderBottomLeftRadius: 4 },
-  msgText: { fontSize: 14, color: '#1C1C2E', lineHeight: 20 },
+  aiBubble: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E8DDD4', borderBottomLeftRadius: 4 },
+  msgText: { fontSize: 14, color: '#502314', lineHeight: 20 },
   
   // Action buttons in AI message
-  actionButtons: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#F0F0F0' },
+  actionButtons: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#E8DDD4' },
   actionLabel: { fontSize: 11, color: GREEN, fontWeight: '600', marginBottom: 6 },
   addedItem: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
-  addedItemText: { fontSize: 12, color: '#1C1C2E' },
+  addedItemText: { fontSize: 12, color: '#502314' },
   
   // Quick prompts
-  quickPrompts: { marginTop: 10, padding: 12, backgroundColor: '#FFF', borderRadius: 12, borderWidth: 1, borderColor: '#EFEFEF' },
-  quickPromptsLabel: { fontSize: 12, color: '#696969', marginBottom: 8 },
-  promptChip: { backgroundColor: '#F5F5F5', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8, marginBottom: 8 },
+  quickPrompts: { marginTop: 10, padding: 12, backgroundColor: '#FFF', borderRadius: 12, borderWidth: 1, borderColor: '#E8DDD4' },
+  quickPromptsLabel: { fontSize: 12, color: '#8B6F61', marginBottom: 8 },
+  promptChip: { backgroundColor: '#F5EBDC', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8, marginBottom: 8 },
   promptText: { fontSize: 13, color: PURPLE, fontWeight: '500' },
   
   // Input
-  inputContainer: { flexDirection: 'row', alignItems: 'flex-end', padding: 12, backgroundColor: '#FFF', borderTopWidth: 1, borderTopColor: '#EFEFEF' },
-  input: { flex: 1, backgroundColor: '#F5F5F5', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10, fontSize: 14, maxHeight: 100, color: '#1C1C2E' },
+  inputContainer: { flexDirection: 'row', alignItems: 'flex-end', padding: 12, backgroundColor: '#FFF', borderTopWidth: 1, borderTopColor: '#E8DDD4' },
+  input: { flex: 1, backgroundColor: '#F5EBDC', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10, fontSize: 14, maxHeight: 100, color: '#502314' },
   sendBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: PURPLE, alignItems: 'center', justifyContent: 'center', marginLeft: 8 },
   sendBtnDisabled: { backgroundColor: '#D0D0D0' },
   

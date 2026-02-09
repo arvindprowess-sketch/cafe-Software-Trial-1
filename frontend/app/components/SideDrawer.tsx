@@ -9,9 +9,9 @@ import { apiCall, logout } from '../../utils/api';
 
 const { width } = Dimensions.get('window');
 const DRAWER_WIDTH = width * 0.85;
-const Z_RED = '#E23744';
-const GREEN = '#267E3E';
-const PURPLE = '#5B5FE0';
+const Z_RED = '#D62300';
+const GREEN = '#509E2F';
+const PURPLE = '#FF8732';
 
 interface SideDrawerProps {
   visible: boolean;
@@ -199,7 +199,7 @@ export default function SideDrawer({ visible, onClose, user }: SideDrawerProps) 
                       style={[styles.goalPill, goal === g.key && { borderColor: g.color, backgroundColor: `${g.color}15` }]}
                       onPress={() => setGoal(g.key)}
                     >
-                      <Ionicons name={g.icon} size={16} color={goal === g.key ? g.color : '#9C9C9C'} />
+                      <Ionicons name={g.icon} size={16} color={goal === g.key ? g.color : '#8B6F61'} />
                       <Text style={[styles.goalPillText, goal === g.key && { color: g.color, fontWeight: '700' }]}>{g.label}</Text>
                     </TouchableOpacity>
                   ))}
@@ -314,18 +314,18 @@ const styles = StyleSheet.create({
   },
   avatar: {
     width: 56, height: 56, borderRadius: 28,
-    backgroundColor: '#FDE8EA',
+    backgroundColor: '#FDE8E4',
     alignItems: 'center', justifyContent: 'center',
   },
   userInfo: { flex: 1 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  userName: { fontSize: 20, fontWeight: '700', color: '#1C1C2E' },
-  userPhone: { fontSize: 14, color: '#696969', marginTop: 2 },
+  userName: { fontSize: 20, fontWeight: '700', color: '#502314' },
+  userPhone: { fontSize: 14, color: '#8B6F61', marginTop: 2 },
   editNameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   editNameInput: {
     flex: 1, backgroundColor: '#FFF', borderRadius: 8,
     paddingHorizontal: 10, paddingVertical: 6,
-    fontSize: 18, fontWeight: '700', color: '#1C1C2E',
+    fontSize: 18, fontWeight: '700', color: '#502314',
     borderWidth: 1.5, borderColor: Z_RED,
   },
 
@@ -347,27 +347,27 @@ const styles = StyleSheet.create({
 
   // Goals expandable section
   goalsSection: { paddingHorizontal: 16, paddingTop: 8 },
-  sectionTitle: { fontSize: 14, fontWeight: '700', color: '#1C1C2E', marginBottom: 8, marginTop: 4 },
+  sectionTitle: { fontSize: 14, fontWeight: '700', color: '#502314', marginBottom: 8, marginTop: 4 },
   goalsRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
   goalPill: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: 6, paddingVertical: 10, borderRadius: 20,
     backgroundColor: '#FFF', borderWidth: 1.5, borderColor: '#E8E8E8',
   },
-  goalPillText: { fontSize: 11, fontWeight: '600', color: '#696969' },
+  goalPillText: { fontSize: 11, fontWeight: '600', color: '#8B6F61' },
 
   targetsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 },
   targetCard: {
     width: '47%', backgroundColor: '#FFF', borderRadius: 10,
-    padding: 10, borderWidth: 1, borderColor: '#EFEFEF',
+    padding: 10, borderWidth: 1, borderColor: '#E8DDD4',
   },
   targetLabel: { fontSize: 11, fontWeight: '600', marginBottom: 4 },
   targetInputRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   targetInput: {
-    flex: 1, backgroundColor: '#F5F5F5', borderRadius: 6,
-    padding: 8, color: '#1C1C2E', fontSize: 16, fontWeight: '700',
+    flex: 1, backgroundColor: '#F5EBDC', borderRadius: 6,
+    padding: 8, color: '#502314', fontSize: 16, fontWeight: '700',
   },
-  targetUnit: { fontSize: 11, color: '#9C9C9C', fontWeight: '600' },
+  targetUnit: { fontSize: 11, color: '#8B6F61', fontWeight: '600' },
 
   saveBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
@@ -380,7 +380,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 20, paddingVertical: 16, gap: 16,
   },
-  menuLabel: { fontSize: 16, fontWeight: '600', color: '#1C1C2E' },
+  menuLabel: { fontSize: 16, fontWeight: '600', color: '#502314' },
   divider: { height: 1, backgroundColor: '#E8E8E8', marginVertical: 8, marginHorizontal: 20 },
 
   version: {
