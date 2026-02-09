@@ -130,9 +130,17 @@ export default function MenuScreen() {
       
       // Category filter
       if (!selectedCat) return true;
+      
+      // Handle special categories
       if (selectedCat === 'veg') return p.diet_type === 'veg';
       if (selectedCat === 'non-veg') return p.diet_type === 'non-veg';
-      if (selectedCat === 'Meal') return p.product_type === 'ready_made' || p.category === 'Meal';
+      
+      // Meal category - show ready-made meals OR products in Meal category
+      if (selectedCat === 'Meal') {
+        return p.product_type === 'ready_made' || p.category === 'Meal';
+      }
+      
+      // Standard category matching
       return p.category === selectedCat;
     });
   }, [products, search, dietFilter, selectedCat]);
