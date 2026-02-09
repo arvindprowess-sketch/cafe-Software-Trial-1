@@ -50,9 +50,13 @@ export default function BudgetMealScreen() {
     } catch (e) {} finally { setLoading(false); }
   };
 
-  // Filter products by diet preference
+  // Filter products: only single products (no ready-made meals), filtered by diet
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
+      // Exclude ready-made meals - only show single products
+      if (p.product_type === 'ready_made') return false;
+      
+      // Diet filter
       if (dietPref === 'both') return true;
       return p.diet_type === dietPref;
     });
