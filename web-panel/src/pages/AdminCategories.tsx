@@ -78,7 +78,6 @@ export default function AdminCategories() {
   return (
     <div>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&display=swap');
         .cat-tiles-grid {
           display: grid;
           grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
@@ -134,11 +133,12 @@ export default function AdminCategories() {
           padding: 3px 10px;
           border-radius: 20px;
           font-size: 10px;
-          font-weight: 800;
+          font-weight: 700;
           letter-spacing: 0.5px;
           text-transform: uppercase;
           backdrop-filter: blur(8px);
           z-index: 2;
+          font-family: var(--font-brand);
         }
         .cat-tile-badge.active { background: rgba(38,126,62,0.85); color: #FFF; }
         .cat-tile-badge.inactive { background: rgba(0,0,0,0.5); color: #FFF; }
@@ -147,12 +147,14 @@ export default function AdminCategories() {
           text-align: center;
         }
         .cat-tile-name {
-          font-family: 'Nunito', sans-serif;
-          font-weight: 900;
-          font-size: 15px;
+          font-family: var(--font-brand);
+          font-weight: 600;
+          font-size: 14px;
           line-height: 1.2;
           color: #1C1C2E;
           margin-bottom: 2px;
+          text-transform: uppercase;
+          letter-spacing: -0.01em;
         }
         .cat-tile-order {
           font-size: 11px;
@@ -181,12 +183,14 @@ export default function AdminCategories() {
           padding: 8px 24px;
           border-radius: 24px;
           border: none;
-          font-family: 'Nunito', sans-serif;
-          font-weight: 800;
+          font-family: var(--font-brand);
+          font-weight: 600;
           font-size: 13px;
           cursor: pointer;
           transition: transform 0.15s ease;
           min-width: 120px;
+          text-transform: uppercase;
+          letter-spacing: 0.02em;
         }
         .cat-tile-actions button:hover { transform: scale(1.05); }
         .cat-tile-actions .btn-edit { background: #FFF; color: #1C1C2E; }
@@ -239,6 +243,7 @@ export default function AdminCategories() {
           letter-spacing: 1px;
           text-transform: uppercase;
           align-self: flex-start;
+          font-family: var(--font-brand);
         }
         .cat-form-preview-tile {
           width: 140px;
@@ -257,10 +262,12 @@ export default function AdminCategories() {
         .cat-form-preview-tile .pname {
           padding: 10px 8px;
           text-align: center;
-          font-family: 'Nunito', sans-serif;
-          font-weight: 900;
-          font-size: 14px;
+          font-family: var(--font-brand);
+          font-weight: 600;
+          font-size: 13px;
           color: #1C1C2E;
+          text-transform: uppercase;
+          letter-spacing: -0.01em;
         }
       `}</style>
 

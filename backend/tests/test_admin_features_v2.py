@@ -11,7 +11,7 @@ import requests
 import os
 import uuid
 
-BASE_URL = "https://repo-connect-29.preview.emergentagent.com"
+BASE_URL = "https://bold-menu-styles.preview.emergentagent.com"
 
 @pytest.fixture
 def api_client():
