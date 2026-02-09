@@ -644,7 +644,8 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FFF', paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12 },
   title: { fontSize: 22, fontWeight: '800', color: '#502314' },
   subtitle: { fontSize: 12, color: '#8B6F61', marginTop: 2 },
-  aiHelpBtn: { width: 44, height: 44, borderRadius: 12, backgroundColor: PURPLE, alignItems: 'center', justifyContent: 'center' },
+  aiHelpBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 12, backgroundColor: PURPLE, paddingHorizontal: 12, paddingVertical: 10 },
+  aiHelpText: { fontSize: 11, fontWeight: '700', color: '#FFF', textTransform: 'uppercase' },
   
   // Budget Section
   budgetSection: { backgroundColor: '#FFF', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#E8DDD4' },
