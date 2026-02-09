@@ -696,17 +696,17 @@ async def seed_default_categories(user=Depends(get_current_user)):
     
     default_categories = [
         {"name": "Protein", "key": "Protein", "label": "High Protein", "icon": "barbell", "color": "#E23744", 
-         "image_url": "https://images.unsplash.com/photo-1632778149955-e80f8ceca2e8?w=80&h=80&fit=crop", "sort_order": 1},
+         "image_url": "https://images.unsplash.com/photo-1532550907401-a500c9a57435?w=400&h=400&fit=crop&q=80", "sort_order": 1},
         {"name": "Carb", "key": "Carb", "label": "Healthy Carbs", "icon": "leaf", "color": "#FF9F0A",
-         "image_url": "https://images.unsplash.com/photo-1536304929831-ee1ca9d44726?w=80&h=80&fit=crop", "sort_order": 2},
+         "image_url": "https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&h=400&fit=crop&q=80", "sort_order": 2},
         {"name": "Fat", "key": "Fat", "label": "Good Fats", "icon": "water", "color": "#5B5FE0",
-         "image_url": "https://images.unsplash.com/photo-1523049673857-eb18f1d7b578?w=80&h=80&fit=crop", "sort_order": 3},
+         "image_url": "https://images.unsplash.com/photo-1523049673857-eb18f1d7b578?w=400&h=400&fit=crop&q=80", "sort_order": 3},
         {"name": "Meal", "key": "Meal", "label": "Ready Meals", "icon": "fast-food", "color": "#267E3E",
-         "image_url": "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=80&h=80&fit=crop", "sort_order": 4},
+         "image_url": "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400&h=400&fit=crop&q=80", "sort_order": 4},
         {"name": "Veg", "key": "veg", "label": "Veg Only", "icon": "nutrition", "color": "#4CAF50",
-         "image_url": "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=80&h=80&fit=crop", "sort_order": 5},
+         "image_url": "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400&h=400&fit=crop&q=80", "sort_order": 5},
         {"name": "Non-Veg", "key": "non-veg", "label": "Non-Veg", "icon": "flame", "color": "#E23744",
-         "image_url": "https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=80&h=80&fit=crop", "sort_order": 6},
+         "image_url": "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400&h=400&fit=crop&q=80", "sort_order": 6},
     ]
     
     for cat in default_categories:
