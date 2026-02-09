@@ -457,44 +457,86 @@ export default function BudgetMealScreen() {
         {/* All Products */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>All Items</Text>
-          {filteredProducts.map(product => {
+          {filteredProducts.map((product, index) => {
             const inCart = cart.find(c => c.id === product.id);
-            return (
-              <View key={product.id} style={styles.productRow}>
-                <View style={styles.productLeft}>
-                  <View style={[styles.vegIndicator, { borderColor: product.diet_type === 'non-veg' ? Z_RED : GREEN }]}>
-                    <View style={[styles.vegDot, { backgroundColor: product.diet_type === 'non-veg' ? Z_RED : GREEN }]} />
-                  </View>
-                  <View style={styles.productInfo}>
-                    <Text style={styles.productName}>{product.name}</Text>
-                    <Text style={styles.productMeta}>₹{product.cost_per_100g}/100g • {product.calories_per_100g} cal</Text>
-                  </View>
+            
+            // Check if this is the first item in a category
+            const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+            const isNew = product.created_at && new Date(product.created_at).getTime() > sevenDaysAgo;
+            const orderCount = userOrderHistory.find(h => h.id === product.id)?.count || 0;
+            
+            // Show section headers
+            const prevProduct = index > 0 ? filteredProducts[index - 1] : null;
+            const prevIsNew = prevProduct?.created_at && new Date(prevProduct.created_at).getTime() > sevenDaysAgo;
+            const prevOrderCount = prevProduct ? (userOrderHistory.find(h => h.id === prevProduct.id)?.count || 0) : 0;
+            
+            let sectionHeader = null;
+            if (index === 0 && isNew) {
+              sectionHeader = (
+                <View style={styles.subSectionHeader}>
+                  <Ionicons name="sparkles" size={14} color={PURPLE} />
+                  <Text style={styles.subSectionTitle}>New Arrivals</Text>
                 </View>
-                
-                {inCart ? (
-                  <View style={styles.inCartBadge}>
-                    <Text style={styles.inCartText}>{inCart.grams}g added</Text>
+              );
+            } else if (prevIsNew && !isNew && orderCount > 0) {
+              sectionHeader = (
+                <View style={styles.subSectionHeader}>
+                  <Ionicons name="heart" size={14} color={Z_RED} />
+                  <Text style={styles.subSectionTitle}>Your Favorites</Text>
+                </View>
+              );
+            } else if ((prevIsNew || prevOrderCount > 0) && !isNew && orderCount === 0) {
+              sectionHeader = (
+                <View style={styles.subSectionHeader}>
+                  <Ionicons name="list" size={14} color="#8B6F61" />
+                  <Text style={styles.subSectionTitle}>All Products</Text>
+                </View>
+              );
+            }
+            
+            return (
+              <React.Fragment key={product.id}>
+                {sectionHeader}
+                <View style={styles.productRow}>
+                  <View style={styles.productLeft}>
+                    <View style={[styles.vegIndicator, { borderColor: product.diet_type === 'non-veg' ? Z_RED : GREEN }]}>
+                      <View style={[styles.vegDot, { backgroundColor: product.diet_type === 'non-veg' ? Z_RED : GREEN }]} />
+                    </View>
+                    <View style={styles.productInfo}>
+                      <View style={styles.productNameRow}>
+                        <Text style={styles.productName}>{product.name}</Text>
+                        {isNew && <View style={styles.newBadge}><Text style={styles.newBadgeText}>NEW</Text></View>}
+                        {orderCount > 0 && !isNew && <Ionicons name="heart" size={12} color={Z_RED} style={{ marginLeft: 4 }} />}
+                      </View>
+                      <Text style={styles.productMeta}>₹{product.cost_per_100g}/100g • {product.calories_per_100g} cal</Text>
+                    </View>
                   </View>
-                ) : (
-                  <View style={styles.addOptions}>
-                    {[50, 100].map(g => {
-                      const price = (g / 100) * product.cost_per_100g;
-                      const canAfford = price <= remaining;
-                      return (
-                        <TouchableOpacity
-                          key={g}
-                          style={[styles.addOptionBtn, !canAfford && styles.addOptionDisabled]}
-                          onPress={() => canAfford && updateItem(product, g)}
-                          disabled={!canAfford}
-                        >
-                          <Text style={[styles.addOptionGrams, !canAfford && { color: '#B0B0B0' }]}>+{g}g</Text>
-                          <Text style={[styles.addOptionPrice, !canAfford && { color: '#B0B0B0' }]}>₹{Math.round(price)}</Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                )}
-              </View>
+                  
+                  {inCart ? (
+                    <View style={styles.inCartBadge}>
+                      <Text style={styles.inCartText}>{inCart.grams}g added</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.addOptions}>
+                      {[50, 100].map(g => {
+                        const price = (g / 100) * product.cost_per_100g;
+                        const canAfford = price <= remaining;
+                        return (
+                          <TouchableOpacity
+                            key={g}
+                            style={[styles.addOptionBtn, !canAfford && styles.addOptionDisabled]}
+                            onPress={() => canAfford && updateItem(product, g)}
+                            disabled={!canAfford}
+                          >
+                            <Text style={[styles.addOptionGrams, !canAfford && { color: '#B0B0B0' }]}>+{g}g</Text>
+                            <Text style={[styles.addOptionPrice, !canAfford && { color: '#B0B0B0' }]}>₹{Math.round(price)}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  )}
+                </View>
+              </React.Fragment>
             );
           })}
         </View>
