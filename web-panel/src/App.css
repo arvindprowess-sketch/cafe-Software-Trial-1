@@ -10,6 +10,15 @@
   --white: #FFFFFF;
   --radius: 10px;
   --sidebar-w: 220px;
+  --font-brand: 'Oswald', sans-serif;
+}
+
+/* Brand font utility - premium condensed sans-serif for category titles */
+.font-brand {
+  font-family: var(--font-brand);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
