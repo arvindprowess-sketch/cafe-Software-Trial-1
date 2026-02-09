@@ -650,6 +650,11 @@ const styles = StyleSheet.create({
   budgetInputBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F5EBDC', borderRadius: 12, paddingHorizontal: 14, borderWidth: 2, borderColor: Z_RED },
   rupeeSign: { fontSize: 20, fontWeight: '800', color: Z_RED },
   budgetInput: { fontSize: 24, fontWeight: '800', color: '#502314', minWidth: 80, textAlign: 'center', paddingVertical: 8 },
+  presetsRow: { flexDirection: 'row', gap: 8, marginBottom: 12, flexWrap: 'wrap' },
+  presetBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: '#F5EBDC', borderWidth: 1, borderColor: '#E8DDD4' },
+  presetBtnActive: { backgroundColor: Z_RED, borderColor: Z_RED },
+  presetText: { fontSize: 12, fontWeight: '700', color: '#8B6F61' },
+  presetTextActive: { color: '#FFF' },
   budgetProgress: { },
   progressBar: { height: 8, backgroundColor: '#E8DDD4', borderRadius: 4, overflow: 'hidden' },
   progressFill: { height: '100%', backgroundColor: GREEN, borderRadius: 4 },
@@ -657,6 +662,8 @@ const styles = StyleSheet.create({
   budgetStats: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
   budgetSpent: { fontSize: 12, color: '#8B6F61' },
   budgetRemaining: { fontSize: 14, fontWeight: '700', color: GREEN },
+  savingsCard: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#E8F5E1', borderRadius: 10, padding: 10, marginTop: 10 },
+  savingsText: { fontSize: 12, fontWeight: '600', color: GREEN, flex: 1 },
   
   // Filters
   filterRow: { backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E8DDD4' },
