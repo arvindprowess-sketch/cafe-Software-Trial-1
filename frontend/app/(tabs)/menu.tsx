@@ -473,6 +473,7 @@ const styles = StyleSheet.create({
     backgroundColor: BK_WHITE,
     borderRightWidth: 2,
     borderRightColor: '#E8DDD4',
+    zIndex: 10,
   },
   sidebarContent: { 
     paddingVertical: 6,
@@ -527,6 +528,7 @@ const styles = StyleSheet.create({
   // Product List
   productListContainer: {
     flex: 1,
+    zIndex: 1,
   },
   productListContent: { 
     padding: 8,
