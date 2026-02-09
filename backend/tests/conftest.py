@@ -2,7 +2,7 @@ import pytest
 import requests
 import os
 
-BASE_URL = "https://mobile-menu-hub.preview.emergentagent.com"
+BASE_URL = "https://dietcafe-app.preview.emergentagent.com"
 
 @pytest.fixture
 def api_client():

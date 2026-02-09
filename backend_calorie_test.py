@@ -10,7 +10,7 @@ import uuid
 from datetime import datetime
 
 # Backend URL from review request
-BACKEND_URL = "https://mobile-menu-hub.preview.emergentagent.com"
+BACKEND_URL = "https://dietcafe-app.preview.emergentagent.com"
 API_BASE = f"{BACKEND_URL}/api"
 
 class CalorieTestResults:
