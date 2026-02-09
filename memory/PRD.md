@@ -43,7 +43,11 @@ Diet Cafe management: Mobile App (customers) + Web Panel (admin/kitchen/cashier)
    - Font loaded globally via Google Fonts
    - CSS variable `--font-brand` for consistency
    - Uppercase styling with tight letter-spacing
-   - Applied to: page title, tile names, badges, buttons, modal elements
+3. **Clean minimal design**: No card borders/shadows, floating images with drop-shadow
+   - Images use `object-fit: contain` at 85% size for floating effect
+   - Category names display in brand color below image
+   - Hover scales tile (1.03x) and image (1.08x) without adding shadows
+   - Edit overlay covers image area only, leaving name visible
 
 ## Testing Status
 - iteration_14: Scheduled orders 100% pass
