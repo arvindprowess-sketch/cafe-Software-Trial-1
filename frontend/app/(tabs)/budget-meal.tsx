@@ -38,9 +38,9 @@ export default function BudgetMealScreen() {
   // Re-fetch AI suggestions when diet preference changes (if suggestions exist)
   useEffect(() => {
     if (aiSuggestions.length > 0 && lastAiDietPref && lastAiDietPref !== dietPref) {
-      // User changed diet filter after getting AI suggestions - refresh them
-      console.log('Diet preference changed, re-fetching AI suggestions...');
-      getAiSuggestions();
+      // User changed diet filter after getting AI suggestions - refresh with FULL budget
+      console.log('Diet preference changed, re-fetching AI suggestions with full budget...');
+      getAiSuggestions(true); // Use full budget, not remaining
     }
   }, [dietPref]);
 
