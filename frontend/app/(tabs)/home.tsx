@@ -9,8 +9,16 @@ import { useRouter } from 'expo-router';
 import { apiCall, getStoredUser } from '../../utils/api';
 import SideDrawer from '../components/SideDrawer';
 
-const Z_RED = '#E23744';
-const GREEN = '#267E3E';
+// BK Design System Colors
+const BK_RED = '#D62300';
+const BK_ORANGE = '#FF8732';
+const BK_BROWN = '#502314';
+const BK_CREAM = '#F5EBDC';
+const BK_GREEN = '#509E2F';
+const BK_WHITE = '#FFFFFF';
+const BK_TEXT_LIGHT = '#8B6F61';
+const Z_RED = BK_RED;
+const GREEN = BK_GREEN;
 const { width } = Dimensions.get('window');
 
 // Category grid for BK-style menu
@@ -535,10 +543,10 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F8F8F8' },
+  safe: { flex: 1, backgroundColor: BK_CREAM },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   
-  // Header with hamburger menu
+  // Header (BK Dark Brown)
   header: { 
     flexDirection: 'row', 
     justifyContent: 'space-between', 
@@ -546,13 +554,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, 
     paddingTop: 8, 
     paddingBottom: 12, 
-    backgroundColor: '#FFF',
+    backgroundColor: BK_BROWN,
   },
   menuBtn: { 
     width: 44, 
     height: 44, 
     borderRadius: 12, 
-    backgroundColor: '#F5F5F5', 
+    backgroundColor: 'rgba(245,235,220,0.15)', 
     alignItems: 'center', 
     justifyContent: 'center' 
   },
@@ -560,15 +568,15 @@ const styles = StyleSheet.create({
     width: 44, 
     height: 44, 
     borderRadius: 22, 
-    backgroundColor: '#FDE8EA', 
+    backgroundColor: 'rgba(245,235,220,0.15)', 
     alignItems: 'center', 
     justifyContent: 'center' 
   },
   
-  // Order type toggle
+  // Order type toggle (BK)
   orderToggle: { 
     flexDirection: 'row', 
-    backgroundColor: '#F0F0F5', 
+    backgroundColor: 'rgba(245,235,220,0.15)', 
     borderRadius: 25, 
     padding: 4 
   },
@@ -578,32 +586,34 @@ const styles = StyleSheet.create({
     borderRadius: 20 
   },
   toggleBtnActive: { 
-    backgroundColor: Z_RED 
+    backgroundColor: BK_RED 
   },
   toggleText: { 
     fontSize: 12, 
     fontWeight: '800', 
-    color: '#9C9C9C' 
+    color: 'rgba(245,235,220,0.5)',
+    letterSpacing: 0.5,
   },
   toggleTextActive: { 
-    color: '#FFF' 
+    color: BK_CREAM 
   },
   
   // Location bar
   locationBar: { 
     flexDirection: 'row', 
     alignItems: 'center', 
-    backgroundColor: '#FFF', 
+    backgroundColor: BK_WHITE, 
     paddingHorizontal: 16, 
     paddingVertical: 12, 
     gap: 8, 
     borderBottomWidth: 1, 
-    borderBottomColor: '#F0F0F0' 
+    borderBottomColor: '#E8DDD4' 
   },
   locationText: { 
     fontSize: 11, 
     fontWeight: '800', 
-    color: Z_RED 
+    color: BK_RED,
+    letterSpacing: 0.5,
   },
   locationValue: { 
     flex: 1, 
@@ -614,7 +624,7 @@ const styles = StyleSheet.create({
   locationName: { 
     fontSize: 14, 
     fontWeight: '600', 
-    color: '#1C1C2E' 
+    color: BK_BROWN 
   },
   
   // Banners
@@ -630,17 +640,17 @@ const styles = StyleSheet.create({
     minHeight: 120,
   },
   bannerContent: { flex: 1 },
-  bannerTitle: { fontSize: 22, fontWeight: '800', color: '#FFF' },
-  bannerSub: { fontSize: 13, color: 'rgba(255,255,255,0.85)', marginTop: 6 },
-  bannerBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(255,255,255,0.3)', alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, marginTop: 8 },
-  bannerBadgeText: { fontSize: 11, fontWeight: '700', color: '#FFF' },
+  bannerTitle: { fontSize: 24, fontWeight: '800', color: BK_CREAM, letterSpacing: 0.5 },
+  bannerSub: { fontSize: 13, color: 'rgba(245,235,220,0.85)', marginTop: 6 },
+  bannerBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(245,235,220,0.3)', alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20, marginTop: 8 },
+  bannerBadgeText: { fontSize: 11, fontWeight: '800', color: BK_CREAM, letterSpacing: 0.5 },
   bannerImagePlaceholder: { width: 80, height: 80, alignItems: 'center', justifyContent: 'center' },
   dots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 12 },
-  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#D0D0D0' },
-  dotActive: { backgroundColor: Z_RED, width: 24 },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#D4C4B0' },
+  dotActive: { backgroundColor: BK_ORANGE, width: 24 },
   
-  // Category Grid (BK style)
-  sectionTitle: { fontSize: 20, fontWeight: '800', color: '#1C1C2E', paddingHorizontal: 16, marginTop: 20, marginBottom: 14 },
+  // Category Grid (BK style - bold)
+  sectionTitle: { fontSize: 22, fontWeight: '800', color: BK_BROWN, paddingHorizontal: 16, marginTop: 24, marginBottom: 14, letterSpacing: 0.3, textTransform: 'uppercase' },
   categoryGrid: { 
     flexDirection: 'row', 
     flexWrap: 'wrap', 
@@ -650,16 +660,16 @@ const styles = StyleSheet.create({
   categoryCard: { 
     width: (width - 54) / 4, 
     alignItems: 'center', 
-    backgroundColor: '#FFF', 
-    borderRadius: 12, 
+    backgroundColor: BK_WHITE, 
+    borderRadius: 14, 
     padding: 10, 
-    borderWidth: 1, 
-    borderColor: '#F0F0F0' 
+    borderWidth: 2, 
+    borderColor: '#E8DDD4' 
   },
   categoryImage: { 
     width: 56, 
     height: 56, 
-    borderRadius: 28, 
+    borderRadius: 12, 
     marginBottom: 8 
   },
   categoryIconBg: { 
@@ -668,118 +678,120 @@ const styles = StyleSheet.create({
   },
   categoryLabel: { 
     fontSize: 11, 
-    fontWeight: '700', 
-    color: '#1C1C2E', 
-    textAlign: 'center' 
+    fontWeight: '800', 
+    color: BK_BROWN, 
+    textAlign: 'center',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
   },
   
   // Nutrition Card
-  nutriCard: { backgroundColor: '#FFF', marginHorizontal: 16, marginTop: 16, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#F0F0F0' },
+  nutriCard: { backgroundColor: BK_WHITE, marginHorizontal: 16, marginTop: 16, borderRadius: 16, padding: 18, borderWidth: 2, borderColor: '#E8DDD4' },
   nutriHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
-  nutriTitle: { flex: 1, fontSize: 15, fontWeight: '700', color: '#1C1C2E' },
-  nutriMeals: { fontSize: 12, color: '#9C9C9C' },
+  nutriTitle: { flex: 1, fontSize: 16, fontWeight: '800', color: BK_BROWN, textTransform: 'uppercase', letterSpacing: 0.3 },
+  nutriMeals: { fontSize: 12, color: BK_TEXT_LIGHT },
   nutriRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   nutriMain: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
-  calValue: { fontSize: 32, fontWeight: '800', color: '#1C1C2E' },
-  calUnit: { fontSize: 13, color: '#9C9C9C' },
+  calValue: { fontSize: 34, fontWeight: '800', color: BK_BROWN },
+  calUnit: { fontSize: 13, color: BK_TEXT_LIGHT },
   macroRow: { flexDirection: 'row', gap: 16 },
   macroItem: { alignItems: 'center' },
-  macroVal: { fontSize: 16, fontWeight: '700' },
-  macroLabel: { fontSize: 10, color: '#9C9C9C', marginTop: 2 },
-  progressBg: { height: 5, backgroundColor: '#F0F0F5', borderRadius: 3, marginTop: 14, overflow: 'hidden' },
-  progressFill: { height: '100%', backgroundColor: Z_RED, borderRadius: 3 },
-  progressFillOver: { backgroundColor: '#FF4444' },
-  overGoalBanner: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, backgroundColor: '#FFF5F5', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8 },
-  overGoalText: { fontSize: 11, color: '#E23744', fontWeight: '600', flex: 1 },
+  macroVal: { fontSize: 16, fontWeight: '800' },
+  macroLabel: { fontSize: 10, color: BK_TEXT_LIGHT, marginTop: 2, textTransform: 'uppercase', letterSpacing: 0.5 },
+  progressBg: { height: 6, backgroundColor: '#E8DDD4', borderRadius: 3, marginTop: 14, overflow: 'hidden' },
+  progressFill: { height: '100%', backgroundColor: BK_ORANGE, borderRadius: 3 },
+  progressFillOver: { backgroundColor: BK_RED },
+  overGoalBanner: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, backgroundColor: '#FDE8E4', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 },
+  overGoalText: { fontSize: 11, color: BK_RED, fontWeight: '700', flex: 1 },
   
   // Scan Table CTA
-  scanTableCTA: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#E8F5E9', marginHorizontal: 16, marginTop: 16, borderRadius: 14, padding: 16, borderWidth: 1.5, borderColor: '#267E3E' },
+  scanTableCTA: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#E8F5E1', marginHorizontal: 16, marginTop: 16, borderRadius: 14, padding: 16, borderWidth: 2, borderColor: BK_GREEN },
   scanCtaLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
-  scanCtaIconBg: { width: 44, height: 44, borderRadius: 12, backgroundColor: '#267E3E', alignItems: 'center', justifyContent: 'center' },
-  scanCtaTitle: { fontSize: 16, fontWeight: '700', color: '#267E3E' },
-  scanCtaSub: { fontSize: 12, color: '#4CAF50', marginTop: 2 },
+  scanCtaIconBg: { width: 44, height: 44, borderRadius: 12, backgroundColor: BK_GREEN, alignItems: 'center', justifyContent: 'center' },
+  scanCtaTitle: { fontSize: 16, fontWeight: '800', color: BK_GREEN, textTransform: 'uppercase' },
+  scanCtaSub: { fontSize: 12, color: '#6DB84D', marginTop: 2 },
   
   // AI Meal Builder CTA
-  mealBuilderCTA: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#FFF', marginHorizontal: 16, marginTop: 16, borderRadius: 14, padding: 16, borderWidth: 1.5, borderColor: '#5B5FE0', borderStyle: 'dashed' },
+  mealBuilderCTA: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: BK_WHITE, marginHorizontal: 16, marginTop: 16, borderRadius: 14, padding: 16, borderWidth: 2, borderColor: BK_ORANGE, borderStyle: 'dashed' },
   ctaLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
-  ctaIconBg: { width: 44, height: 44, borderRadius: 12, backgroundColor: '#5B5FE0', alignItems: 'center', justifyContent: 'center' },
-  ctaTitle: { fontSize: 16, fontWeight: '800', color: '#1C1C2E' },
-  ctaSub: { fontSize: 12, color: '#9C9C9C', marginTop: 2 },
+  ctaIconBg: { width: 44, height: 44, borderRadius: 12, backgroundColor: BK_ORANGE, alignItems: 'center', justifyContent: 'center' },
+  ctaTitle: { fontSize: 16, fontWeight: '800', color: BK_BROWN, textTransform: 'uppercase' },
+  ctaSub: { fontSize: 12, color: BK_TEXT_LIGHT, marginTop: 2 },
   
   // Builder Card
-  builderCard: { backgroundColor: '#FFF', marginHorizontal: 16, marginTop: 16, borderRadius: 16, padding: 18, borderWidth: 1, borderColor: '#5B5FE0' },
+  builderCard: { backgroundColor: BK_WHITE, marginHorizontal: 16, marginTop: 16, borderRadius: 16, padding: 18, borderWidth: 2, borderColor: BK_ORANGE },
   builderHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   builderTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  builderTitle: { fontSize: 18, fontWeight: '800', color: '#1C1C2E' },
-  builderLabel: { fontSize: 13, fontWeight: '700', color: '#696969', marginBottom: 8, marginTop: 6 },
+  builderTitle: { fontSize: 18, fontWeight: '800', color: BK_BROWN, textTransform: 'uppercase' },
+  builderLabel: { fontSize: 13, fontWeight: '800', color: BK_TEXT_LIGHT, marginBottom: 8, marginTop: 6, textTransform: 'uppercase', letterSpacing: 0.5 },
   dietRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-  dietChip: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 10, backgroundColor: '#FFF', borderWidth: 1.5, borderColor: '#E8E8E8' },
-  dietText: { fontSize: 13, fontWeight: '700', color: '#696969' },
+  dietChip: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 25, backgroundColor: BK_WHITE, borderWidth: 2, borderColor: '#E8DDD4' },
+  dietText: { fontSize: 13, fontWeight: '700', color: BK_TEXT_LIGHT },
   vegIndicator: { width: 14, height: 14, borderRadius: 2, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   vegDotInner: { width: 7, height: 7, borderRadius: 4 },
   goalRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-  goalChip: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 12, borderRadius: 10, backgroundColor: '#FFF', borderWidth: 1.5, borderColor: '#E8E8E8' },
-  goalText: { fontSize: 11, fontWeight: '700', color: '#696969' },
-  budgetInput: { backgroundColor: '#F5F5F5', borderRadius: 10, padding: 14, color: '#1C1C2E', fontSize: 15, fontWeight: '600', borderWidth: 1, borderColor: '#E8E8E8', marginBottom: 14 },
-  buildBtn: { backgroundColor: '#5B5FE0', borderRadius: 12, paddingVertical: 16, alignItems: 'center', justifyContent: 'center' },
+  goalChip: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 12, borderRadius: 25, backgroundColor: BK_WHITE, borderWidth: 2, borderColor: '#E8DDD4' },
+  goalText: { fontSize: 11, fontWeight: '700', color: BK_TEXT_LIGHT },
+  budgetInput: { backgroundColor: BK_CREAM, borderRadius: 12, padding: 14, color: BK_BROWN, fontSize: 15, fontWeight: '600', borderWidth: 2, borderColor: '#E8DDD4', marginBottom: 14 },
+  buildBtn: { backgroundColor: BK_RED, borderRadius: 25, paddingVertical: 16, alignItems: 'center', justifyContent: 'center' },
   buildBtnContent: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  buildBtnText: { color: '#FFF', fontSize: 15, fontWeight: '800' },
+  buildBtnText: { color: BK_CREAM, fontSize: 15, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
   
   // Meal Result
-  mealResultCard: { backgroundColor: '#FFF', marginHorizontal: 16, marginTop: 16, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#EFEFEF' },
+  mealResultCard: { backgroundColor: BK_WHITE, marginHorizontal: 16, marginTop: 16, borderRadius: 16, padding: 16, borderWidth: 2, borderColor: '#E8DDD4' },
   mealResultHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   mealResultTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  mealResultTitle: { fontSize: 17, fontWeight: '800', color: '#1C1C2E' },
-  rebuildBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F0F0FF', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
-  rebuildText: { fontSize: 12, fontWeight: '700', color: '#5B5FE0' },
-  mealSummary: { color: '#696969', fontSize: 13, lineHeight: 19, marginBottom: 12 },
-  mealItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F5F5F5' },
+  mealResultTitle: { fontSize: 18, fontWeight: '800', color: BK_BROWN, textTransform: 'uppercase' },
+  rebuildBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FFF0E0', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+  rebuildText: { fontSize: 12, fontWeight: '800', color: BK_ORANGE },
+  mealSummary: { color: BK_TEXT_LIGHT, fontSize: 13, lineHeight: 19, marginBottom: 12 },
+  mealItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#E8DDD4' },
   mealItemLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
   vegDot: { width: 16, height: 16, borderRadius: 2, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   vegDotFill: { width: 8, height: 8, borderRadius: 4 },
-  mealItemName: { fontSize: 14, fontWeight: '700', color: '#1C1C2E' },
-  mealItemReason: { fontSize: 11, color: '#9C9C9C', marginTop: 2 },
+  mealItemName: { fontSize: 14, fontWeight: '700', color: BK_BROWN },
+  mealItemReason: { fontSize: 11, color: BK_TEXT_LIGHT, marginTop: 2 },
   mealItemRight: { alignItems: 'flex-end' },
-  mealItemGrams: { fontSize: 15, fontWeight: '800', color: Z_RED },
-  mealItemPrice: { fontSize: 12, color: '#9C9C9C', marginTop: 2 },
-  mealTotals: { backgroundColor: '#FAFAFA', borderRadius: 12, padding: 14, marginTop: 14 },
+  mealItemGrams: { fontSize: 15, fontWeight: '800', color: BK_RED },
+  mealItemPrice: { fontSize: 12, color: BK_TEXT_LIGHT, marginTop: 2 },
+  mealTotals: { backgroundColor: BK_CREAM, borderRadius: 12, padding: 14, marginTop: 14 },
   totalRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 12 },
   totalItem: { alignItems: 'center' },
-  totalLabel: { fontSize: 10, color: '#9C9C9C', marginBottom: 3 },
+  totalLabel: { fontSize: 10, color: BK_TEXT_LIGHT, marginBottom: 3, textTransform: 'uppercase' },
   totalValue: { fontSize: 16, fontWeight: '800' },
-  totalPriceRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#EFEFEF', paddingTop: 10 },
-  totalPriceLabel: { fontSize: 14, fontWeight: '600', color: '#696969' },
-  totalPriceValue: { fontSize: 24, fontWeight: '800', color: '#1C1C2E' },
-  orderMealBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Z_RED, borderRadius: 12, paddingVertical: 15, marginTop: 14 },
-  orderMealText: { color: '#FFF', fontSize: 15, fontWeight: '800' },
+  totalPriceRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#E8DDD4', paddingTop: 10 },
+  totalPriceLabel: { fontSize: 14, fontWeight: '600', color: BK_TEXT_LIGHT },
+  totalPriceValue: { fontSize: 24, fontWeight: '800', color: BK_BROWN },
+  orderMealBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: BK_RED, borderRadius: 25, paddingVertical: 16, marginTop: 14 },
+  orderMealText: { color: BK_CREAM, fontSize: 15, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
   mealErrorRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  mealErrorText: { flex: 1, color: '#696969', fontSize: 13, lineHeight: 18 },
-  retryBtn: { backgroundColor: '#5B5FE0', borderRadius: 10, paddingVertical: 12, alignItems: 'center', marginTop: 14 },
-  retryText: { color: '#FFF', fontSize: 14, fontWeight: '700' },
+  mealErrorText: { flex: 1, color: BK_TEXT_LIGHT, fontSize: 13, lineHeight: 18 },
+  retryBtn: { backgroundColor: BK_ORANGE, borderRadius: 25, paddingVertical: 12, alignItems: 'center', marginTop: 14 },
+  retryText: { color: BK_BROWN, fontSize: 14, fontWeight: '800', textTransform: 'uppercase' },
   
   // Popular Items (horizontal scroll)
   popularScroll: { paddingHorizontal: 12, gap: 12 },
   popularCard: { 
     width: 200, 
-    backgroundColor: '#FFF', 
-    borderRadius: 14, 
+    backgroundColor: BK_WHITE, 
+    borderRadius: 16, 
     overflow: 'hidden', 
-    borderWidth: 1, 
-    borderColor: '#F0F0F0' 
+    borderWidth: 2, 
+    borderColor: '#E8DDD4' 
   },
-  popularImg: { width: '100%', height: 130, backgroundColor: '#F5F5F5' },
+  popularImg: { width: '100%', height: 130, backgroundColor: BK_CREAM },
   popularImgPlaceholder: { alignItems: 'center', justifyContent: 'center' },
   proteinBadge: { 
     position: 'absolute', 
     top: 10, 
     left: 10, 
-    backgroundColor: 'rgba(0,0,0,0.7)', 
-    paddingHorizontal: 8, 
-    paddingVertical: 4, 
-    borderRadius: 8 
+    backgroundColor: BK_BROWN, 
+    paddingHorizontal: 10, 
+    paddingVertical: 5, 
+    borderRadius: 20 
   },
-  proteinText: { fontSize: 14, fontWeight: '800', color: '#FFF' },
-  proteinLabel: { fontSize: 9, color: 'rgba(255,255,255,0.8)' },
+  proteinText: { fontSize: 14, fontWeight: '800', color: BK_CREAM },
+  proteinLabel: { fontSize: 9, color: 'rgba(245,235,220,0.8)', textTransform: 'uppercase' },
   vegBadge: { 
     position: 'absolute', 
     top: 10, 
@@ -790,20 +802,20 @@ const styles = StyleSheet.create({
     borderWidth: 2, 
     alignItems: 'center', 
     justifyContent: 'center', 
-    backgroundColor: '#FFF' 
+    backgroundColor: BK_WHITE 
   },
   vegBadgeDot: { width: 9, height: 9, borderRadius: 5 },
   popularInfo: { padding: 12 },
-  popularName: { fontSize: 15, fontWeight: '700', color: '#1C1C2E' },
-  popularDesc: { fontSize: 12, color: '#9C9C9C', marginTop: 3 },
+  popularName: { fontSize: 15, fontWeight: '800', color: BK_BROWN },
+  popularDesc: { fontSize: 12, color: BK_TEXT_LIGHT, marginTop: 3 },
   popularBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 },
-  popularPrice: { fontSize: 15, fontWeight: '700', color: '#1C1C2E' },
-  per100: { fontSize: 10, fontWeight: '400', color: '#9C9C9C' },
-  addBtn: { backgroundColor: Z_RED, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
-  addBtnText: { color: '#FFF', fontSize: 13, fontWeight: '700' },
+  popularPrice: { fontSize: 16, fontWeight: '800', color: BK_BROWN },
+  per100: { fontSize: 10, fontWeight: '400', color: BK_TEXT_LIGHT },
+  addBtn: { backgroundColor: BK_RED, paddingHorizontal: 18, paddingVertical: 8, borderRadius: 20 },
+  addBtnText: { color: BK_CREAM, fontSize: 13, fontWeight: '800', textTransform: 'uppercase' },
   
-  // Floating AI Button
-  floatingAiBtn: { position: 'absolute', bottom: 90, right: 20, width: 56, height: 56, borderRadius: 28, backgroundColor: '#5B5FE0', alignItems: 'center', justifyContent: 'center', shadowColor: '#5B5FE0', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 10 },
-  floatingAiInner: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#5B5FE0', alignItems: 'center', justifyContent: 'center' },
-  floatingAiBadge: { position: 'absolute', top: -2, right: -2, width: 20, height: 20, borderRadius: 10, backgroundColor: Z_RED, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#FFF' },
+  // Floating AI Button (BK Orange)
+  floatingAiBtn: { position: 'absolute', bottom: 90, right: 20, width: 56, height: 56, borderRadius: 28, backgroundColor: BK_ORANGE, alignItems: 'center', justifyContent: 'center', shadowColor: BK_BROWN, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 10 },
+  floatingAiInner: { width: 56, height: 56, borderRadius: 28, backgroundColor: BK_ORANGE, alignItems: 'center', justifyContent: 'center' },
+  floatingAiBadge: { position: 'absolute', top: -2, right: -2, width: 20, height: 20, borderRadius: 10, backgroundColor: BK_RED, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: BK_WHITE },
 });
