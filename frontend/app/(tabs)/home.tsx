@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Image,
   RefreshControl, FlatList, Dimensions, ActivityIndicator, Alert
@@ -91,6 +91,9 @@ export default function HomeScreen() {
   const calPct = goals.daily_calories ? (consumed.calories / goals.daily_calories) * 100 : 0;
   const isCalorieOver = calPct > 100;
   const caloriesOverAmount = Math.round((consumed.calories || 0) - (goals.daily_calories || 2000));
+
+  // Memoize popular products to prevent re-computation
+  const popularProducts = useMemo(() => products.slice(0, 10), [products]);
 
   // AI Quick Meal functions
   const buildMeal = async () => {
@@ -500,8 +503,14 @@ export default function HomeScreen() {
 
         {/* ===== POPULAR ITEMS (ENHANCED) ===== */}
         <Text style={styles.sectionTitle}>Popular Items</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.popularScroll}>
-          {products.slice(0, 10).map((item, idx) => {
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false} 
+          contentContainerStyle={styles.popularScroll}
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={5}
+        >
+          {popularProducts.map((item, idx) => {
             const isHighProtein = item.protein_per_100g >= 20;
             const isUnderBudget = item.cost_per_100g <= 50;
             const isPopular = idx < 3;
@@ -512,7 +521,12 @@ export default function HomeScreen() {
                 onPress={() => router.push('/(tabs)/menu')} activeOpacity={0.9}
               >
                 {item.image_url ? (
-                  <Image source={{ uri: item.image_url }} style={styles.popularImg} />
+                  <Image 
+                    source={{ uri: item.image_url }} 
+                    style={styles.popularImg}
+                    resizeMode="cover"
+                    defaultSource={require('../../assets/images/icon.png')}
+                  />
                 ) : (
                   <View style={[styles.popularImg, styles.popularImgPlaceholder]}>
                     <Ionicons name="restaurant" size={32} color="#D0D0D0" />
