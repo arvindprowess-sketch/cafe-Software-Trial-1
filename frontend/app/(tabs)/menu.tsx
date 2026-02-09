@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity, Image, RefreshControl,
   Alert, ActivityIndicator, ScrollView, TextInput, Dimensions
@@ -117,23 +117,25 @@ export default function MenuScreen() {
   }, 0);
   const cartItems = cart.length;
 
-  // Filter products
-  const filtered = products.filter(p => {
-    // Search filter
-    const searchMatch = !search || p.name.toLowerCase().includes(search.toLowerCase());
-    if (!searchMatch) return false;
-    
-    // Diet type filter (veg/non-veg toggle)
-    if (dietFilter === 'veg' && p.diet_type !== 'veg') return false;
-    if (dietFilter === 'non-veg' && p.diet_type !== 'non-veg') return false;
-    
-    // Category filter
-    if (!selectedCat) return true;
-    if (selectedCat === 'veg') return p.diet_type === 'veg';
-    if (selectedCat === 'non-veg') return p.diet_type === 'non-veg';
-    if (selectedCat === 'Meal') return p.product_type === 'ready_made' || p.category === 'Meal';
-    return p.category === selectedCat;
-  });
+  // Filter products (memoized for performance)
+  const filtered = useMemo(() => {
+    return products.filter(p => {
+      // Search filter
+      const searchMatch = !search || p.name.toLowerCase().includes(search.toLowerCase());
+      if (!searchMatch) return false;
+      
+      // Diet type filter (veg/non-veg toggle)
+      if (dietFilter === 'veg' && p.diet_type !== 'veg') return false;
+      if (dietFilter === 'non-veg' && p.diet_type !== 'non-veg') return false;
+      
+      // Category filter
+      if (!selectedCat) return true;
+      if (selectedCat === 'veg') return p.diet_type === 'veg';
+      if (selectedCat === 'non-veg') return p.diet_type === 'non-veg';
+      if (selectedCat === 'Meal') return p.product_type === 'ready_made' || p.category === 'Meal';
+      return p.category === selectedCat;
+    });
+  }, [products, search, dietFilter, selectedCat]);
 
   const goCustomize = () => {
     if (cart.length === 0) { Alert.alert('Empty Cart', 'Add items first'); return; }
@@ -351,6 +353,11 @@ export default function MenuScreen() {
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Z_RED} />}
             showsVerticalScrollIndicator={false}
             ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+            removeClippedSubviews={true}
+            maxToRenderPerBatch={10}
+            updateCellsBatchingPeriod={50}
+            windowSize={10}
+            initialNumToRender={8}
             ListEmptyComponent={
               <View style={styles.emptyState}>
                 <Ionicons name="restaurant-outline" size={48} color="#D0D0D0" />

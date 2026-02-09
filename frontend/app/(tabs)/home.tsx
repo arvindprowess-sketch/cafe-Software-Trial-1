@@ -199,6 +199,9 @@ export default function HomeScreen() {
             data={banners} keyExtractor={item => item.id}
             style={styles.bannerList}
             onScrollToIndexFailed={() => {}}
+            removeClippedSubviews={true}
+            maxToRenderPerBatch={3}
+            windowSize={5}
             renderItem={({ item }) => (
               <TouchableOpacity
                 activeOpacity={0.85}
