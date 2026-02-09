@@ -374,13 +374,13 @@ export default function AIChatScreen() {
               }
             }}
           >
-            <View>
+            <View style={styles.checkoutLeft}>
               <Text style={styles.checkoutTotal}>₹{Math.round(cartTotal.price)}</Text>
-              <Text style={styles.checkoutItems}>{cart.length} items</Text>
+              <Text style={styles.checkoutItems}>{cart.length} items • {Math.round(cartTotal.calories)} cal</Text>
             </View>
             <View style={styles.checkoutRight}>
-              <Text style={styles.checkoutText}>Checkout</Text>
-              <Ionicons name="arrow-forward" size={18} color="#FFF" />
+              <Text style={styles.checkoutText}>Place Order</Text>
+              <Ionicons name="arrow-forward" size={20} color="#FFF" />
             </View>
           </TouchableOpacity>
         )}
