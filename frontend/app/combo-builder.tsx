@@ -16,6 +16,8 @@ const GOALS = [
   { key: 'muscle_gain', label: 'Muscle Gain', icon: 'trending-up', desc: 'High protein, moderate carbs', color: GREEN, bg: '#E8F5E9' },
   { key: 'fat_loss', label: 'Fat Loss', icon: 'flame', desc: 'Low cal, lean protein focus', color: Z_RED, bg: '#FDE8E4' },
   { key: 'maintenance', label: 'Maintenance', icon: 'swap-horizontal', desc: 'Balanced macros, good variety', color: PURPLE, bg: '#EDE7F6' },
+  { key: 'beginner', label: 'Beginner Phase', icon: 'ribbon', desc: 'Easy to digest, moderate cal', color: '#5B5FE0', bg: '#E8EAF6' },
+  { key: 'recovery', label: 'Recovery Phase', icon: 'heart', desc: 'Lower intensity, anti-inflammatory', color: '#FF6B9D', bg: '#FCE4EC' },
 ];
 const DIETS = [
   { key: 'veg', label: 'Vegetarian', icon: 'leaf', color: GREEN },
