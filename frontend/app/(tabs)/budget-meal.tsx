@@ -392,6 +392,43 @@ export default function BudgetMealScreen() {
                   <Text style={styles.macroLabel}>Fat</Text>
                 </View>
               </View>
+
+              {/* Interactive Macro Balance Indicator */}
+              <View style={styles.macroBalanceSection}>
+                <Text style={styles.macroBalanceTitle}>Macro Balance</Text>
+                <View style={styles.macroBarContainer}>
+                  {(() => {
+                    const totalMacros = totals.protein + totals.carbs + totals.fat;
+                    const proteinPct = totalMacros > 0 ? (totals.protein / totalMacros) * 100 : 0;
+                    const carbsPct = totalMacros > 0 ? (totals.carbs / totalMacros) * 100 : 0;
+                    const fatPct = totalMacros > 0 ? (totals.fat / totalMacros) * 100 : 0;
+                    return (
+                      <>
+                        <View style={styles.macroBar}>
+                          <View style={[styles.macroBarSegment, { width: `${proteinPct}%`, backgroundColor: Z_RED }]} />
+                          <View style={[styles.macroBarSegment, { width: `${carbsPct}%`, backgroundColor: '#FF9F0A' }]} />
+                          <View style={[styles.macroBarSegment, { width: `${fatPct}%`, backgroundColor: PURPLE }]} />
+                        </View>
+                        <View style={styles.macroLegend}>
+                          <View style={styles.legendItem}>
+                            <View style={[styles.legendDot, { backgroundColor: Z_RED }]} />
+                            <Text style={styles.legendText}>P: {proteinPct.toFixed(0)}%</Text>
+                          </View>
+                          <View style={styles.legendItem}>
+                            <View style={[styles.legendDot, { backgroundColor: '#FF9F0A' }]} />
+                            <Text style={styles.legendText}>C: {carbsPct.toFixed(0)}%</Text>
+                          </View>
+                          <View style={styles.legendItem}>
+                            <View style={[styles.legendDot, { backgroundColor: PURPLE }]} />
+                            <Text style={styles.legendText}>F: {fatPct.toFixed(0)}%</Text>
+                          </View>
+                        </View>
+                      </>
+                    );
+                  })()}
+                </View>
+              </View>
+
               {/* Calorie Goal Context */}
               {(() => {
                 const projected = consumedToday + totals.calories;
