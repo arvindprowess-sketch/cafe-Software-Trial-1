@@ -37,11 +37,20 @@ Diet Cafe management: Mobile App (customers) + Web Panel (admin/kitchen/cashier)
 7. **Low stock alerts**: Dashboard shows red-highlighted alerts for products < 500g stock
 8. **Inactive category filter**: Products in inactive categories auto-hidden from customer & cashier public endpoints
 
+### Category Page Redesign (Feb 9, 2026)
+1. **Image-first layout**: Burger King-style tiles with branded images (1:1 ratio), hover effects
+2. **Premium typography**: Oswald font (bold, condensed sans-serif) for category titles
+   - Font loaded globally via Google Fonts
+   - CSS variable `--font-brand` for consistency
+   - Uppercase styling with tight letter-spacing
+   - Applied to: page title, tile names, badges, buttons, modal elements
+
 ## Testing Status
 - iteration_14: Scheduled orders 100% pass
 - iteration_15: AI meal builder 100% pass
 - iteration_16: Admin panel v1 100% pass
 - iteration_17: Admin panel v2 shortcomings 100% pass (15 features)
+- iteration_19: Category typography 100% pass (Oswald font verified across all elements)
 
 ## Credentials
 - Admin: admin@dietcafe.com / admin123
@@ -49,8 +58,9 @@ Diet Cafe management: Mobile App (customers) + Web Panel (admin/kitchen/cashier)
 - Cashier PIN: 5678
 
 ## Next Tasks
-1. Mobile app: loyalty rewards, streak tracker, weekly meal planning
-2. Real Razorpay integration (currently mocked)
-3. Push notifications for order updates
-4. Customer feedback/ratings system
-5. Backend refactoring: Split monolithic server.py into modules
+1. Apply same Oswald font to Customer app and Cashier POS for category names (font consistency across all panels)
+2. Mobile app: loyalty rewards, streak tracker, weekly meal planning
+3. Real Razorpay integration (currently mocked)
+4. Push notifications for order updates
+5. Customer feedback/ratings system
+6. Backend refactoring: Split monolithic server.py into modules
