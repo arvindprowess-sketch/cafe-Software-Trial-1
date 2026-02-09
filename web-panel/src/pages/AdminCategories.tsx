@@ -80,86 +80,88 @@ export default function AdminCategories() {
       <style>{`
         .cat-tiles-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
-          gap: 20px;
-          padding: 4px;
+          grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+          gap: 32px;
+          padding: 8px;
         }
         .cat-tile {
           position: relative;
-          border-radius: 18px;
-          overflow: hidden;
-          background: #FFF;
-          box-shadow: 0 2px 12px rgba(0,0,0,0.07);
           cursor: pointer;
-          transition: transform 0.2s ease, box-shadow 0.2s ease;
-          aspect-ratio: 1 / 1.15;
+          transition: transform 0.2s ease;
           display: flex;
           flex-direction: column;
+          align-items: center;
         }
         .cat-tile:hover {
-          transform: translateY(-4px);
-          box-shadow: 0 8px 28px rgba(0,0,0,0.13);
+          transform: scale(1.03);
         }
         .cat-tile-img-wrap {
-          flex: 1;
+          width: 100%;
+          aspect-ratio: 1;
           overflow: hidden;
           position: relative;
-          background: #F5F5F5;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: transparent;
         }
         .cat-tile-img-wrap img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
+          max-width: 85%;
+          max-height: 85%;
+          object-fit: contain;
           display: block;
           transition: transform 0.3s ease;
+          filter: drop-shadow(0 8px 16px rgba(0,0,0,0.15));
         }
         .cat-tile:hover .cat-tile-img-wrap img {
-          transform: scale(1.06);
+          transform: scale(1.08);
         }
         .cat-tile-no-img {
-          width: 100%;
-          height: 100%;
+          width: 120px;
+          height: 120px;
+          border-radius: 50%;
           display: flex;
           align-items: center;
           justify-content: center;
           font-size: 48px;
           font-weight: 800;
-          opacity: 0.15;
+          opacity: 0.3;
+          background: #F0F0F0;
         }
         .cat-tile-badge {
           position: absolute;
-          top: 10px;
-          right: 10px;
-          padding: 3px 10px;
+          top: 8px;
+          right: 8px;
+          padding: 4px 10px;
           border-radius: 20px;
-          font-size: 10px;
+          font-size: 9px;
           font-weight: 700;
           letter-spacing: 0.5px;
           text-transform: uppercase;
-          backdrop-filter: blur(8px);
           z-index: 2;
           font-family: var(--font-brand);
         }
-        .cat-tile-badge.active { background: rgba(38,126,62,0.85); color: #FFF; }
-        .cat-tile-badge.inactive { background: rgba(0,0,0,0.5); color: #FFF; }
+        .cat-tile-badge.active { background: #267E3E; color: #FFF; }
+        .cat-tile-badge.inactive { background: #666; color: #FFF; }
         .cat-tile-footer {
-          padding: 12px 14px 14px;
+          padding: 8px 4px 0;
           text-align: center;
+          width: 100%;
         }
         .cat-tile-name {
           font-family: var(--font-brand);
           font-weight: 600;
-          font-size: 14px;
-          line-height: 1.2;
+          font-size: 15px;
+          line-height: 1.3;
           color: #1C1C2E;
-          margin-bottom: 2px;
           text-transform: uppercase;
-          letter-spacing: -0.01em;
+          letter-spacing: -0.02em;
         }
         .cat-tile-order {
           font-size: 11px;
-          color: #ACACAC;
-          font-weight: 600;
+          color: #999;
+          font-weight: 500;
+          margin-top: 2px;
         }
         .cat-tile-actions {
           position: absolute;
