@@ -459,20 +459,6 @@ const styles = StyleSheet.create({
   statsText: { fontSize: 12, color: BK_TEXT_LIGHT },
   orderTotal: { fontSize: 20, fontWeight: '800', color: BK_RED },
   
-  orderTypeBadge: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: BK_CREAM,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  orderTypeText: { fontSize: 10, fontWeight: '700', color: BK_TEXT_LIGHT, textTransform: 'uppercase' },
-  
   emptyState: {
     alignItems: 'center',
     paddingVertical: 60,
