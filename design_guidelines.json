@@ -1,254 +1,167 @@
 {
   "identity": {
-    "name": "E1",
-    "persona": "Anti-AI Designer",
-    "tone": "The Performance Pro",
-    "philosophy": "Fusion over Imitation. Emotion First. Deep Dark Mode."
+    "name": "Diet Cafe - The BK Rebrand",
+    "persona": "E1 - The Anti-AI Designer",
+    "mission": "Redesign Diet Cafe to look like the 2024 Burger King app: Mouthwatering, Big & Bold, Playfully Irreverent.",
+    "core_principles": [
+      "Mouthwatering Appeal: Healthy food must look greasy-good (without the grease).",
+      "Big & Bold: Massive typography, confident colors.",
+      "Playfully Irreverent: Dieting isn't punishment; it's a delicious hack.",
+      "Proudly True: Real ingredients, honest macros."
+    ]
   },
-  "visual_strategy": {
-    "theme": "dark",
-    "archetype": "ARCHETYPE 2: THE PERFORMANCE PRO",
-    "concept": "Digital Aurora",
-    "description": "Deep obsidian backgrounds with subtle, animated glowing orbs (Aurora) behind glassmorphic surfaces. High contrast for data, vibrant accents for motivation."
+  "typography": {
+    "headings": {
+      "family": "Barlow Condensed",
+      "weights": [700, 800, 900],
+      "usage": "Use for all headlines, prices, and CTA buttons. Resembles BK's 'Flame Sans'.",
+      "case": "Uppercase for H1/H2, Sentence Case for subheads."
+    },
+    "body": {
+      "family": "DM Sans",
+      "weights": [400, 500, 700],
+      "usage": "Use for descriptions, nutritional info, and long text.",
+      "case": "Sentence case."
+    },
+    "installation_mobile": "Use expo-font to load 'BarlowCondensed-Bold', 'BarlowCondensed-ExtraBold', 'DMSans-Regular', 'DMSans-Medium'.",
+    "installation_web": "Import from Google Fonts in index.html or App.css."
   },
   "colors": {
     "palette": {
+      "primary": {
+        "red": "#D62300",
+        "orange": "#FF8732"
+      },
       "background": {
-        "primary": "#000000",
-        "secondary": "#0A0A0A",
-        "tertiary": "#121212",
-        "modal": "#1C1C1E"
+        "cream": "#F5EBDC",
+        "dark_brown": "#502314",
+        "white": "#FFFFFF"
       },
       "text": {
-        "primary": "#FFFFFF",
-        "secondary": "#8E8E93",
-        "tertiary": "#48484A",
-        "disabled": "#3A3A3C"
+        "primary": "#502314",
+        "secondary": "#502314",
+        "light": "#F5EBDC"
       },
-      "brand": {
-        "primary": "#FF3B30",
-        "primary_dim": "rgba(255, 59, 48, 0.15)",
-        "secondary": "#FF006E",
-        "accent": "#007AFF"
-      },
-      "status": {
-        "success": "#32D74B",
-        "warning": "#FF9F0A",
-        "error": "#FF453A",
-        "info": "#0A84FF"
-      },
-      "border": {
-        "subtle": "#2C2C2E",
-        "active": "#FF3B30"
+      "functional": {
+        "success_green": "#509E2F",
+        "warning_yellow": "#F5A623",
+        "error_red": "#D62300"
       }
     },
-    "gradients": {
-      "aurora": ["#000000", "#1C1C1E"],
-      "brand_glow": ["rgba(255, 59, 48, 0.6)", "transparent"]
-    }
-  },
-  "typography": {
-    "family": {
-      "heading": "System",
-      "body": "System"
-    },
-    "styles": {
-      "h1": {
-        "fontSize": 32,
-        "fontWeight": "800",
-        "letterSpacing": 0.5,
-        "color": "#FFFFFF",
-        "lineHeight": 38
-      },
-      "h2": {
-        "fontSize": 24,
-        "fontWeight": "700",
-        "letterSpacing": 0.3,
-        "color": "#FFFFFF",
-        "lineHeight": 28
-      },
-      "h3": {
-        "fontSize": 20,
-        "fontWeight": "600",
-        "color": "#FFFFFF",
-        "lineHeight": 24
-      },
-      "body": {
-        "fontSize": 16,
-        "fontWeight": "400",
-        "color": "#E5E5EA",
-        "lineHeight": 22
-      },
-      "caption": {
-        "fontSize": 12,
-        "fontWeight": "500",
-        "color": "#8E8E93",
-        "letterSpacing": 0.2
-      },
-      "button_text": {
-        "fontSize": 16,
-        "fontWeight": "700",
-        "letterSpacing": 0.5,
-        "textTransform": "uppercase"
-      }
-    }
-  },
-  "spacing": {
-    "scale": {
-      "xs": 4,
-      "s": 8,
-      "m": 12,
-      "l": 16,
-      "xl": 24,
-      "xxl": 32,
-      "xxxl": 48
-    },
-    "layout": {
-      "screen_padding": 16,
-      "card_gap": 16,
-      "section_gap": 32
+    "usage_rules": {
+      "backgrounds": "Use 'cream' (#F5EBDC) as the main canvas. Use 'dark_brown' (#502314) for headers, sidebars, and heavy contrast sections.",
+      "text": "NEVER use pure black. Use 'dark_brown' (#502314) for all primary text.",
+      "ctas": "Primary buttons should be 'primary_red' (#D62300) or 'primary_orange' (#FF8732). Text on buttons must be 'cream' or 'dark_brown' depending on contrast."
     }
   },
   "components": {
     "buttons": {
-      "primary": {
-        "backgroundColor": "#FF3B30",
-        "borderRadius": 12,
-        "paddingVertical": 16,
-        "paddingHorizontal": 24,
-        "alignItems": "center",
-        "justifyContent": "center",
-        "shadowColor": "#FF3B30",
-        "shadowOffset": { "width": 0, "height": 4 },
-        "shadowOpacity": 0.3,
-        "shadowRadius": 8,
-        "elevation": 5
-      },
-      "secondary": {
-        "backgroundColor": "#1C1C1E",
-        "borderRadius": 12,
-        "paddingVertical": 16,
-        "paddingHorizontal": 24,
-        "alignItems": "center",
-        "justifyContent": "center",
-        "borderWidth": 1,
-        "borderColor": "#2C2C2E"
-      },
-      "ghost": {
-        "backgroundColor": "transparent",
-        "paddingVertical": 8,
-        "paddingHorizontal": 16
-      }
+      "shape": "Pill-shaped (rounded-full)",
+      "style": "Flat, bold, no gradients. High contrast.",
+      "typography": "Barlow Condensed, Uppercase, Bold."
     },
     "cards": {
-      "container": {
-        "backgroundColor": "#121212",
-        "borderRadius": 16,
-        "padding": 16,
-        "borderWidth": 1,
-        "borderColor": "#2C2C2E",
-        "shadowColor": "#000",
-        "shadowOffset": { "width": 0, "height": 2 },
-        "shadowOpacity": 0.25,
-        "shadowRadius": 4,
-        "elevation": 2
-      },
-      "glass": {
-        "backgroundColor": "rgba(28, 28, 30, 0.6)",
-        "borderRadius": 16,
-        "overflow": "hidden",
-        "borderColor": "rgba(255, 255, 255, 0.1)",
-        "borderWidth": 1
-      }
+      "shape": "Rounded-xl or Rounded-2xl",
+      "background": "White or Dark Brown (for featured items).",
+      "shadow": "Subtle shadow-sm or shadow-md. No heavy drop shadows.",
+      "border": "Optional 1px border in dark_brown/10 for definition."
     },
     "inputs": {
-      "default": {
-        "backgroundColor": "#1C1C1E",
-        "borderRadius": 8,
-        "padding": 16,
-        "color": "#FFFFFF",
-        "borderWidth": 1,
-        "borderColor": "#2C2C2E",
-        "fontSize": 16
+      "shape": "Rounded-lg",
+      "background": "White",
+      "border": "2px solid #502314 (Dark Brown) on focus. 1px solid #D6D6D6 inactive.",
+      "text": "DM Sans"
+    },
+    "navigation": {
+      "mobile_bottom_bar": {
+        "background": "#502314",
+        "active_icon": "#FF8732",
+        "inactive_icon": "#F5EBDC"
       },
-      "active": {
-        "borderColor": "#FF3B30",
-        "backgroundColor": "#2C2C2E"
+      "web_sidebar": {
+        "background": "#502314",
+        "text": "#F5EBDC",
+        "active_item_bg": "#D62300"
       }
     }
   },
-  "assets": {
-    "images": {
-      "hero_food": [
-        {
-          "url": "https://images.unsplash.com/photo-1708184528306-f75a0a5118ee?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzR8MHwxfHNlYXJjaHwxfHxncmlsbGVkJTIwY2hpY2tlbiUyMGJyZWFzdCUyMGhlYWx0aHklMjBpbmRpYW4lMjBtZWFsfGVufDB8fHx8MTc3MDM3NTYwMnww&ixlib=rb-4.1.0&q=85",
-          "description": "Grilled chicken breast with rice - Hero Meal",
-          "category": "product_main"
-        },
-        {
-          "url": "https://images.unsplash.com/photo-1689832832416-e9be9dc30c6b?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1NzZ8MHwxfHNlYXJjaHwyfHxwYW5lZXIlMjB0aWtrYSUyMHNhbGFkJTIwYm93bCUyMGhlYWx0aHl8ZW58MHx8fHwxNzcwMzc1NjAzfDA&ixlib=rb-4.1.0&q=85",
-          "description": "Paneer Tikka Salad Bowl - Healthy Veg Option",
-          "category": "product_main"
-        },
-        {
-          "url": "https://images.unsplash.com/photo-1623002071634-54590669fe3d?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzNDR8MHwxfHNlYXJjaHwxfHxoZWFsdGh5JTIwZ3JlZW4lMjBzbW9vdGhpZSUyMGdsYXNzfGVufDB8fHx8MTc3MDM3NTYwNXww&ixlib=rb-4.1.0&q=85",
-          "description": "Green Detox Smoothie",
-          "category": "product_drink"
-        }
-      ],
-      "backgrounds": {
-        "gym_texture": {
-          "url": "https://images.unsplash.com/photo-1693214674451-2111f7690877?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1Nzh8MHwxfHNlYXJjaHwyfHxtb2Rlcm4lMjBkYXJrJTIwZ3ltJTIwaW50ZXJpb3IlMjBtaW5pbWFsaXN0fGVufDB8fHx8MTc3MDM3NTYwNnww&ixlib=rb-4.1.0&q=85",
-          "description": "Dark Gym Interior - Use with overlay for auth screens"
-        }
+  "layout_strategy": {
+    "mobile": {
+      "grid": "Use 2-column grid for menu items. 1-column for hero/banners.",
+      "spacing": "Generous. p-4 or p-6 container padding.",
+      "safe_area": "Respect top and bottom safe areas. Use background color #F5EBDC for status bar area."
+    },
+    "web": {
+      "structure": "Sidebar layout (Left fixed, Right content).",
+      "dashboard_grid": "Bento grid style for Admin Dashboard. High density but readable.",
+      "container": "Max-width 1440px for content area."
+    }
+  },
+  "image_urls": {
+    "hero_banners": [
+      {
+        "url": "https://images.unsplash.com/photo-1716034353309-c6066ae24c67?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Nzd8MHwxfHNlYXJjaHwxfHxkZWxpY2lvdXMlMjBncmlsbGVkJTIwY2hpY2tlbiUyMHNhbGFkJTIwYm93bCUyMGZyZXNoJTIwdmlicmFudHxlbnwwfHx8fDE3NzA2MzY5ODZ8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Chicken Salad Bowl - Hero",
+        "category": "hero"
+      },
+      {
+         "url": "https://images.unsplash.com/photo-1670944316338-40c256cb144e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Nzd8MHwxfHNlYXJjaHw0fHxkZWxpY2lvdXMlMjBncmlsbGVkJTIwY2hpY2tlbiUyMHNhbGFkJTIwYm93bCUyMGZyZXNoJTIwdmlicmFudHxlbnwwfHx8fDE3NzA2MzY5ODZ8MA&ixlib=rb-4.1.0&q=85",
+         "description": "Fresh Bowl Closeup - Hero",
+         "category": "hero"
       }
-    }
-  },
-  "layout_strategies": {
-    "mobile_container": {
-      "flex": 1,
-      "backgroundColor": "#000000"
-    },
-    "safe_area": {
-      "flex": 1,
-      "paddingHorizontal": 16
-    },
-    "row_between": {
-      "flexDirection": "row",
-      "justifyContent": "space-between",
-      "alignItems": "center"
-    }
-  },
-  "instructions_to_main_agent": {
-    "setup": [
-      "Install `expo-linear-gradient` for creating the 'Aurora' effects and button gradients.",
-      "Use `expo-blur` (already installed) for glassmorphic overlays in headers and modals.",
-      "Use `expo-image` for high-performance image loading.",
-      "Ensure all interactive elements have a minimum hit slop of 10px and height of 44px."
     ],
-    "styling_rules": [
-      "NEVER use inline styles for complex components. Use `StyleSheet.create`.",
-      "Avoid 'pure black' (#000) for cards; use #1C1C1E to maintain depth.",
-      "Use `rgba(255, 59, 48, 0.8)` (Brand Red) for primary actions.",
-      "Text over images MUST have a gradient overlay or text shadow for readability."
+    "products": [
+      {
+        "url": "https://images.unsplash.com/photo-1689832832416-e9be9dc30c6b?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Nzd8MHwxfHNlYXJjaHwzfHxkZWxpY2lvdXMlMjBncmlsbGVkJTIwY2hpY2tlbiUyMHNhbGFkJTIwYm93bCUyMGZyZXNoJTIwdmlicmFudHxlbnwwfHx8fDE3NzA2MzY5ODZ8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Wooden Bowl Salad",
+        "category": "food"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1591424238566-00d60a5342b0?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzV8MHwxfHNlYXJjaHwyfHxmcmVzaCUyMGZydWl0JTIwc21vb3RoaWUlMjBnbGFzcyUyMGJlcnJ5JTIwbWFuZ298ZW58MHx8fHwxNzcwNjM2OTkwfDA&ixlib=rb-4.1.0&q=85",
+        "description": "Smoothie Bowl",
+        "category": "food"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1606673993554-a5f993a16e0d?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzV8MHwxfHNlYXJjaHwzfHxmcmVzaCUyMGZydWl0JTIwc21vb3RoaWUlMjBnbGFzcyUyMGJlcnJ5JTIwbWFuZ298ZW58MHx8fHwxNzcwNjM2OTkwfDA&ixlib=rb-4.1.0&q=85",
+        "description": "Yellow Smoothie",
+        "category": "drink"
+      },
+       {
+        "url": "https://images.unsplash.com/photo-1639896773497-f4da6a09c50f?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1ODF8MHwxfHNlYXJjaHwyfHxnb3VybWV0JTIwaGVhbHRoeSUyMGNoaWNrZW4lMjBhdm9jYWRvJTIwd3JhcHxlbnwwfHx8fDE3NzA2MzY5OTR8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Sandwich Wrap",
+        "category": "food"
+      }
     ],
-    "animations": [
-      "Use `LayoutAnimation` for list layout changes (adding/removing items).",
-      "Use `Animated` API for simple opacity/transform transitions."
-    ],
-    "accessibility": [
-      "All `TouchableOpacity` or `Pressable` must have `accessibilityLabel`.",
-      "Contrast ratio is critical in Dark Mode. Ensure grey text (#8E8E93) is not used for essential data."
+    "categories": [
+      { "name": "Salads", "icon": "leaf-outline" },
+      { "name": "Wraps", "icon": "nutrition-outline" },
+      { "name": "Bowls", "icon": "restaurant-outline" },
+      { "name": "Smoothies", "icon": "water-outline" },
+      { "name": "Offers", "icon": "pricetag-outline" }
     ]
   },
-  "UNIVERSAL_GUIDELINES": [
-    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients.",
-    "Don't make generic centered layouts. Use left alignment for body text.",
-    "Create depth through layered design elements (Background > Card > Content).",
-    "Use glass-morphism effects with `BlurView` (tint='dark', intensity=80).",
-    "NEVER use AI assistant Emoji characters like 🤖 etc.",
-    "Every interaction needs micro-feedback (opacity change on press).",
-    "Use 2-3x more spacing than feels comfortable.",
-    "Missing categories/logos = use placeholder text (FORBIDDEN). Use a generic relevant icon instead."
-  ]
+  "specific_instructions": {
+    "mobile_app": {
+      "path": "/app/frontend",
+      "framework": "Expo React Native",
+      "notes": "Use 'StyleSheet' or 'NativeWind' (if configured, otherwise stick to standard inline styles or StyleSheet). Prioritize TouchableOpacity for interactions. Use Ionicons for icons."
+    },
+    "web_panel": {
+      "path": "/app/web-panel",
+      "framework": "Vite React",
+      "notes": "Use standard CSS modules or global App.css since Tailwind might not be configured in web-panel. If Tailwind is not present, use standard CSS variables for colors."
+    }
+  },
+  "universal_guidelines": [
+    "NO GRADIENTS: Avoid complex gradients. Use flat, bold colors.",
+    "NO 3D BUTTONS: Use flat buttons with rounded corners (pill shape).",
+    "TEXT HIERARCHY: Headings must be MASSIVE (ExtraBold). Body text must be readable and friendly.",
+    "IMAGES: Use high-quality, mouth-watering photos. No generic stock vector art.",
+    "INPUTS: Big, chunky inputs with visible borders.",
+    "DATA-TESTID: All interactive elements must have data-testid attributes."
+  ],
+  "accessibility": {
+    "contrast": "Ensure text contrast ratio of 4.5:1. Use #502314 on #F5EBDC (Passes). Use #F5EBDC on #D62300 (Passes).",
+    "touch_targets": "Minimum 44x44px for all mobile touch targets."
+  }
 }
