@@ -9,8 +9,12 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiCall } from '../utils/api';
 
-const Z_RED = '#E23744';
-const GREEN = '#267E3E';
+const Z_RED = '#D62300';
+const GREEN = '#509E2F';
+const BK_BROWN = '#502314';
+const BK_CREAM = '#F5EBDC';
+const BK_ORANGE = '#FF8732';
+const BK_TEXT_LIGHT = '#8B6F61';
 
 type Step = 'phone' | 'otp' | 'name';
 
