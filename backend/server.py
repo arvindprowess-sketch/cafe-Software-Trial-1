@@ -1657,12 +1657,38 @@ Respond ONLY in this JSON format (no markdown, no backticks):
         # Round totals for display
         totals = {k: round(v, 1) for k, v in totals.items()}
 
+        # Check against user's daily targets and provide warnings
+        warnings = []
+        meal_percentage = {
+            "calories": round((totals["calories"] / user_goals["daily_calories"]) * 100, 1),
+            "protein": round((totals["protein"] / user_goals["daily_protein"]) * 100, 1),
+            "carbs": round((totals["carbs"] / user_goals["daily_carbs"]) * 100, 1),
+            "fat": round((totals["fat"] / user_goals["daily_fat"]) * 100, 1)
+        }
+
+        # Generate warnings if meal exceeds recommended single-meal portion (35% of daily)
+        if meal_percentage["calories"] > 35:
+            warnings.append(f"⚠️ This meal contains {meal_percentage['calories']}% of your daily calorie target. Consider reducing portion sizes.")
+        if meal_percentage["protein"] > 40:
+            warnings.append(f"⚠️ High protein content: {meal_percentage['protein']}% of your daily target in one meal.")
+        if meal_percentage["carbs"] > 40:
+            warnings.append(f"⚠️ High carb content: {meal_percentage['carbs']}% of your daily target in one meal.")
+        if meal_percentage["fat"] > 40:
+            warnings.append(f"⚠️ High fat content: {meal_percentage['fat']}% of your daily target in one meal.")
+
+        # Add positive feedback if meal is well-balanced
+        if all(25 <= pct <= 35 for pct in meal_percentage.values()):
+            warnings.append("✅ This meal is well-balanced and fits perfectly within your daily targets!")
+
         return {
             "meal_items": enriched_items,
             "summary": result.get("summary", "AI-built meal"),
             "totals": totals,
             "diet_preference": data.diet_preference,
-            "goal": data.goal
+            "goal": data.goal,
+            "warnings": warnings,
+            "meal_percentage": meal_percentage,
+            "user_daily_targets": user_goals
         }
     except json.JSONDecodeError:
         logger.error("AI quick-meal JSON parse error")
