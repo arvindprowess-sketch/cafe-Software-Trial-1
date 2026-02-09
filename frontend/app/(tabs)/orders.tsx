@@ -147,20 +147,21 @@ export default function OrdersScreen() {
 
         {/* Second Row: Delivery Badge, Status Badge, Heart */}
         <View style={styles.orderMetaRow}>
-          {item.order_type && (
-            <View style={styles.orderTypeBadge}>
-              <Ionicons 
-                name={item.order_type === 'delivery' ? 'bicycle' : item.order_type === 'dine-in' ? 'restaurant' : 'bag-handle'} 
-                size={12} 
-                color={BK_TEXT_LIGHT} 
-              />
-              <Text style={styles.orderTypeText}>{item.order_type}</Text>
+          <View style={styles.badgesContainer}>
+            {item.order_type && (
+              <View style={styles.orderTypeBadge}>
+                <Ionicons 
+                  name={item.order_type === 'delivery' ? 'bicycle' : item.order_type === 'dine-in' ? 'restaurant' : 'bag-handle'} 
+                  size={12} 
+                  color={BK_TEXT_LIGHT} 
+                />
+                <Text style={styles.orderTypeText}>{item.order_type}</Text>
+              </View>
+            )}
+            <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
+              <Text style={styles.statusText}>{item.status.toUpperCase()}</Text>
             </View>
-          )}
-          <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
-            <Text style={styles.statusText}>{item.status.toUpperCase()}</Text>
           </View>
-          <View style={{ flex: 1 }} />
           <TouchableOpacity 
             onPress={(e) => {
               e.stopPropagation();
@@ -408,9 +409,16 @@ const styles = StyleSheet.create({
   
   orderMetaRow: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  badgesContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 12,
+    flex: 1,
+    marginRight: 12,
   },
   orderTypeBadge: {
     flexDirection: 'row',
@@ -428,7 +436,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   statusText: { fontSize: 9, fontWeight: '800', color: BK_WHITE },
-  favoriteBtn: { padding: 4 },
+  favoriteBtn: { padding: 4, marginLeft: 8 },
   
   listContent: { padding: 16, paddingBottom: 100 },
   
