@@ -486,6 +486,7 @@ const styles = StyleSheet.create({
   sidebarContent: { 
     paddingVertical: 6,
     paddingHorizontal: 2,
+    paddingBottom: 100,
   },
   sidebarCat: { 
     width: SIDEBAR_WIDTH - 4,
@@ -540,7 +541,7 @@ const styles = StyleSheet.create({
   },
   productListContent: { 
     padding: 8,
-    paddingBottom: 100,
+    paddingBottom: 120,
   },
   
   // Product Card (ENHANCED)
@@ -702,7 +703,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between', 
     alignItems: 'center', 
     marginBottom: 6, 
-    elevation: 8,
+    elevation: 12,
+    zIndex: 100,
     shadowColor: BK_BROWN,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
