@@ -395,21 +395,38 @@ export default function HomeScreen() {
 
             {/* Fitness Goal */}
             <Text style={styles.builderLabel}>Fitness Goal</Text>
-            <View style={styles.goalRow}>
-              {[
-                { key: 'fat_loss', label: 'Fat Loss', icon: 'trending-down' as const, color: Z_RED },
-                { key: 'muscle_gain', label: 'Muscle Gain', icon: 'trending-up' as const, color: GREEN },
-                { key: 'maintenance', label: 'Maintain', icon: 'swap-horizontal' as const, color: BK_ORANGE },
-              ].map(g => (
-                <TouchableOpacity
-                  key={g.key} testID={`meal-goal-${g.key}`}
-                  style={[styles.goalChip, mealGoal === g.key && { backgroundColor: g.color, borderColor: g.color }]}
-                  onPress={() => setMealGoal(g.key)}
-                >
-                  <Ionicons name={g.icon} size={16} color={mealGoal === g.key ? '#FFF' : g.color} />
-                  <Text style={[styles.goalText, mealGoal === g.key && { color: '#FFF' }]}>{g.label}</Text>
-                </TouchableOpacity>
-              ))}
+            <View style={styles.goalContainer}>
+              <View style={styles.goalRow}>
+                {[
+                  { key: 'fat_loss', label: 'Fat Loss', icon: 'trending-down' as const, color: Z_RED },
+                  { key: 'muscle_gain', label: 'Muscle Gain', icon: 'trending-up' as const, color: GREEN },
+                  { key: 'maintenance', label: 'Maintain', icon: 'swap-horizontal' as const, color: BK_ORANGE },
+                ].map(g => (
+                  <TouchableOpacity
+                    key={g.key} testID={`meal-goal-${g.key}`}
+                    style={[styles.goalChip, mealGoal === g.key && { backgroundColor: g.color, borderColor: g.color }]}
+                    onPress={() => setMealGoal(g.key)}
+                  >
+                    <Ionicons name={g.icon} size={16} color={mealGoal === g.key ? '#FFF' : g.color} />
+                    <Text style={[styles.goalText, mealGoal === g.key && { color: '#FFF' }]}>{g.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <View style={styles.goalRow}>
+                {[
+                  { key: 'beginner', label: 'Beginner Phase', icon: 'ribbon' as const, color: '#5B5FE0' },
+                  { key: 'recovery', label: 'Recovery Phase', icon: 'heart' as const, color: '#FF6B9D' },
+                ].map(g => (
+                  <TouchableOpacity
+                    key={g.key} testID={`meal-goal-${g.key}`}
+                    style={[styles.goalChip, mealGoal === g.key && { backgroundColor: g.color, borderColor: g.color }]}
+                    onPress={() => setMealGoal(g.key)}
+                  >
+                    <Ionicons name={g.icon} size={16} color={mealGoal === g.key ? '#FFF' : g.color} />
+                    <Text style={[styles.goalText, mealGoal === g.key && { color: '#FFF' }]}>{g.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
 
             {/* Budget */}
