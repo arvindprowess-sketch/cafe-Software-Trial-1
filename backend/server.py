@@ -166,7 +166,7 @@ class AISuggestRequest(BaseModel):
 
 class QuickMealRequest(BaseModel):
     diet_preference: str  # "veg", "non-veg", "both"
-    goal: str  # "fat_loss", "muscle_gain", "maintenance"
+    goal: str  # "fat_loss", "muscle_gain", "maintenance", "beginner", "recovery"
     budget: Optional[float] = None
     order_type: str = "dine-in"
 
