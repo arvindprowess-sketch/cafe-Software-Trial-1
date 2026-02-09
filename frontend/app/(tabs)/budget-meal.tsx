@@ -148,9 +148,11 @@ export default function BudgetMealScreen() {
     updateItem(product, currentGrams + gramsToAdd);
   };
 
-  // Get AI suggestions for remaining budget
-  const getAiSuggestions = async () => {
-    if (remaining <= 10) {
+  // Get AI suggestions for budget (uses full budget, not remaining, for better suggestions)
+  const getAiSuggestions = async (useFullBudget = false) => {
+    const budgetToUse = useFullBudget ? budgetNum : remaining;
+    
+    if (budgetToUse <= 10) {
       Alert.alert('Budget Full', 'You\'ve used most of your budget!');
       return;
     }
@@ -161,7 +163,7 @@ export default function BudgetMealScreen() {
         body: {
           diet_preference: dietPref,
           goal: goal,
-          budget: remaining,
+          budget: budgetToUse,
           order_type: orderType,
         },
       });
