@@ -1399,6 +1399,57 @@ async def ai_quick_meal(data: QuickMealRequest, user=Depends(get_current_user)):
     try:
         from emergentintegrations.llm.chat import LlmChat, UserMessage
 
+        # Define strict nutrition guidelines for each goal
+        GOAL_GUIDELINES = {
+            "fat_loss": {
+                "description": "Fat Loss - High protein, low carb, calorie deficit",
+                "target_calories": "400-600 kcal per meal",
+                "protein_priority": "50-60% of budget on protein sources",
+                "macro_ratio": "High protein (40-50%), Low carb (20-30%), Moderate fat (20-30%)",
+                "foods_to_prioritize": "Lean proteins (chicken, fish, egg whites, tofu), Low-calorie vegetables",
+                "foods_to_avoid": "High-carb items (rice, bread), High-fat items",
+                "portion_size": "Smaller portions, focus on protein density"
+            },
+            "muscle_gain": {
+                "description": "Muscle Gain - High protein, high carb, calorie surplus",
+                "target_calories": "700-1000 kcal per meal",
+                "protein_priority": "40-50% of budget on protein sources",
+                "macro_ratio": "High protein (35-45%), High carb (40-50%), Moderate fat (15-25%)",
+                "foods_to_prioritize": "Lean proteins, Complex carbs (brown rice, quinoa, oats), Healthy fats",
+                "foods_to_avoid": "Low-calorie items that don't support growth",
+                "portion_size": "Larger portions to support muscle building"
+            },
+            "maintenance": {
+                "description": "Maintenance - Balanced nutrition",
+                "target_calories": "500-700 kcal per meal",
+                "protein_priority": "30-40% of budget on protein sources",
+                "macro_ratio": "Balanced - Protein (30-35%), Carbs (35-45%), Fat (20-30%)",
+                "foods_to_prioritize": "Variety of proteins, carbs, and fats",
+                "foods_to_avoid": "None - balanced approach",
+                "portion_size": "Moderate portions for energy balance"
+            },
+            "beginner": {
+                "description": "Beginner / Adaptation Phase - Easy to digest, moderate calories",
+                "target_calories": "450-600 kcal per meal",
+                "protein_priority": "30-40% of budget on easily digestible proteins",
+                "macro_ratio": "Moderate protein (30-35%), Moderate carb (40-45%), Lower fat (20-25%)",
+                "foods_to_prioritize": "Easy to digest proteins (paneer, dal, egg whites), Simple carbs (brown rice, oats), Easily digestible foods",
+                "foods_to_avoid": "Very high fiber items, Heavy/rich foods, Excessive fats",
+                "portion_size": "Moderate portions to allow body adaptation"
+            },
+            "recovery": {
+                "description": "Recovery / Deload Phase - Lower intensity, anti-inflammatory",
+                "target_calories": "400-550 kcal per meal",
+                "protein_priority": "30-35% of budget on protein for recovery",
+                "macro_ratio": "Moderate protein (30-35%), Lower carb (30-35%), Moderate-high healthy fats (30-35%)",
+                "foods_to_prioritize": "Quality proteins, Anti-inflammatory foods, Healthy fats (avocado, nuts), Vegetables",
+                "foods_to_avoid": "Excessive carbs, Processed foods, High-sugar items",
+                "portion_size": "Slightly smaller portions to aid recovery"
+            }
+        }
+
+        goal_guide = GOAL_GUIDELINES.get(data.goal, GOAL_GUIDELINES["maintenance"])
+
         # Step 0: Fetch available products with real stock
         query = {"is_active": True, "available_qty_grams": {"$gt": 50}}
         if data.diet_preference == "veg":
@@ -1418,32 +1469,49 @@ async def ai_quick_meal(data: QuickMealRequest, user=Depends(get_current_user)):
         diet_pref_str = {"veg": "VEGETARIAN ONLY", "non-veg": "NON-VEGETARIAN ONLY", "both": "Both veg and non-veg allowed"}.get(data.diet_preference, "Both")
         budget_str = f"Budget: ₹{data.budget}" if data.budget else "No specific budget"
 
-        # HYBRID STEP 1: AI picks items + budget share percentages (NOT grams)
-        prompt = f"""You are a nutrition expert at a fitness café. Pick items for a COMPLETE balanced meal.
+        # HYBRID STEP 1: AI picks items with STRICT goal-based guidelines
+        prompt = f"""You are a professional nutritionist and meal planner. Create a meal that STRICTLY follows the fitness goal guidelines.
 
-Diet Preference: {diet_pref_str}
-Fitness Goal: {data.goal}
-{budget_str}
+**GOAL: {goal_guide['description']}**
 
-Available Menu (with MAX stock):
+**STRICT NUTRITIONAL REQUIREMENTS:**
+- Target Calories: {goal_guide['target_calories']}
+- Protein Priority: {goal_guide['protein_priority']}
+- Macro Ratio: {goal_guide['macro_ratio']}
+- Foods to Prioritize: {goal_guide['foods_to_prioritize']}
+- Foods to Avoid: {goal_guide['foods_to_avoid']}
+- Portion Size: {goal_guide['portion_size']}
+
+**CUSTOMER PREFERENCES:**
+- Diet: {diet_pref_str}
+- {budget_str}
+
+**AVAILABLE MENU (with MAX stock):**
 {available_str}
 
-RULES:
-- Pick 3-5 items for a complete meal (protein + carb + optional extras)
-- ONLY pick items from the list above
-- Use EXACT product names as listed
-- For each item, assign a budget_share_percent (what % of the total budget this item should get)
-- All budget_share_percent values MUST add up to exactly 100
-- DO NOT exceed MAX available stock for any item
-- For {data.goal}: fat_loss → prioritize lean protein (50-60% budget on protein), low carb; muscle_gain → high protein + carbs; maintenance → balanced
+**CRITICAL RULES - YOU MUST FOLLOW THESE EXACTLY:**
+1. Pick 3-5 items that STRICTLY ALIGN with the {data.goal} goal guidelines above
+2. ONLY pick items from the available menu
+3. Use EXACT product names as listed
+4. For each item, assign budget_share_percent (total must equal 100)
+5. DO NOT exceed MAX available stock
+6. PRIORITIZE foods listed in "Foods to Prioritize" for {data.goal}
+7. AVOID or MINIMIZE foods listed in "Foods to Avoid" for {data.goal}
+8. Ensure the meal targets the specified calorie range and macro ratios
+9. For {data.goal} specifically:
+   - {"Focus on lean proteins and low-carb vegetables. Minimize rice, bread, and high-fat items." if data.goal == "fat_loss" else ""}
+   - {"Include substantial protein AND complex carbs. Higher calorie items preferred." if data.goal == "muscle_gain" else ""}
+   - {"Balance of all macros - variety is key." if data.goal == "maintenance" else ""}
+   - {"Easy to digest proteins (paneer, dal, egg whites) and simple carbs. Avoid heavy foods." if data.goal == "beginner" else ""}
+   - {"Quality proteins, healthy fats (nuts, avocado), vegetables. Lower carbs." if data.goal == "recovery" else ""}
 
-Respond ONLY in this JSON (no other text):
-{{"items": [{{"product_name": "Exact Name", "budget_share_percent": 40, "reason": "Brief reason"}}], "summary": "One line meal description"}}"""
+Respond ONLY in this JSON format (no markdown, no backticks):
+{{"items": [{{"product_name": "Exact Name", "budget_share_percent": 40, "reason": "Why this fits {data.goal} goal"}}], "summary": "One line explaining how this meal supports {data.goal}"}}"""
 
         chat = LlmChat(
             api_key=os.environ.get('EMERGENT_LLM_KEY', ''),
             session_id=f"quickmeal-{uuid.uuid4()}",
-            system_message="You are a nutrition expert. Respond ONLY in valid JSON. No markdown, no backticks, no extra text."
+            system_message=f"You are a professional nutritionist. You MUST strictly follow {data.goal} guidelines. Respond ONLY in valid JSON. No markdown, no backticks, no extra text."
         ).with_model("openai", "gpt-5.2")
         response = await chat.send_message(UserMessage(text=prompt))
 
