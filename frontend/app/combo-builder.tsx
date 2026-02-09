@@ -87,20 +87,42 @@ export default function ComboBuilderScreen() {
 
   const orderCombo = () => {
     if (!combo?.meal_items) return;
-    const cart = combo.meal_items.map((item: any) => ({
-      id: item.product_id,
-      name: item.product_name,
-      grams: item.grams,
-      cost_per_100g: item.cost_per_100g,
-      calories_per_100g: item.calories_per_100g,
-      protein_per_100g: item.protein_per_100g,
-      carbs_per_100g: item.carbs_per_100g,
-      fat_per_100g: item.fat_per_100g,
-      diet_type: item.diet_type || 'veg',
-      image_url: item.image_url,
-      category: item.category || '',
-    }));
-    router.push({ pathname: '/customize', params: { cart: JSON.stringify(cart), orderType: 'dine-in' } });
+    console.log('[Combo Builder] Order button clicked, combo items:', combo.meal_items);
+    
+    try {
+      // Normalize cart items with all required fields
+      const cart = combo.meal_items.map((item: any) => ({
+        id: item.product_id || item.id,
+        product_id: item.product_id || item.id,
+        name: item.product_name || item.name,
+        grams: item.grams || 100,
+        cost_per_100g: item.cost_per_100g || 0,
+        calories_per_100g: item.calories_per_100g || item.calories || 0,
+        protein_per_100g: item.protein_per_100g || item.protein || 0,
+        carbs_per_100g: item.carbs_per_100g || item.carbs || 0,
+        fat_per_100g: item.fat_per_100g || item.fat || 0,
+        diet_type: item.diet_type || 'veg',
+        image_url: item.image_url,
+        product_type: 'single',
+        category: item.category || '',
+      }));
+      
+      console.log('[Combo Builder] Normalized cart:', cart);
+      const cartString = JSON.stringify(cart);
+      console.log('[Combo Builder] Cart string length:', cartString.length);
+      
+      router.push({ 
+        pathname: '/customize', 
+        params: { 
+          cart: cartString, 
+          orderType: 'dine-in' 
+        } 
+      });
+      console.log('[Combo Builder] Navigation triggered to customize screen');
+    } catch (error) {
+      console.error('[Combo Builder] Error during order:', error);
+      alert('Failed to proceed to checkout. Please try again.');
+    }
   };
 
   const goalInfo = GOALS.find(g => g.key === goal) || GOALS[0];
