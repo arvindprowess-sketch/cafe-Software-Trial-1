@@ -24,6 +24,10 @@ export default function ProfileScreen() {
   const [fat, setFat] = useState('65');
   const [saving, setSaving] = useState(false);
 
+  // Log to verify goals array
+  console.log('GOALS array length:', GOALS.length);
+  console.log('GOALS:', GOALS.map(g => g.key));
+
   useEffect(() => {
     (async () => {
       const u = await getStoredUser();
