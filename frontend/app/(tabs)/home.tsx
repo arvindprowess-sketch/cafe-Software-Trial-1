@@ -871,6 +871,37 @@ const styles = StyleSheet.create({
   rebuildBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FFF0E0', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
   rebuildText: { fontSize: 12, fontWeight: '800', color: BK_ORANGE },
   mealSummary: { color: BK_TEXT_LIGHT, fontSize: 13, lineHeight: 19, marginBottom: 12 },
+  warningsContainer: { marginBottom: 12, gap: 8 },
+  warningItem: {
+    flexDirection: 'row',
+    backgroundColor: '#FFF3E0',
+    borderLeftWidth: 3,
+    borderLeftColor: '#FF9F0A',
+    padding: 10,
+    borderRadius: 8,
+  },
+  warningPositive: {
+    backgroundColor: '#E8F5E9',
+    borderLeftColor: '#509E2F',
+  },
+  warningCaution: {
+    backgroundColor: '#FDE8E4',
+    borderLeftColor: '#D62300',
+  },
+  warningText: {
+    fontSize: 12,
+    color: '#8B6F61',
+    lineHeight: 18,
+    flex: 1,
+  },
+  warningTextPositive: {
+    color: '#509E2F',
+    fontWeight: '600',
+  },
+  warningTextCaution: {
+    color: '#D62300',
+    fontWeight: '600',
+  },
   mealItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#E8DDD4' },
   mealItemLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
   vegDot: { width: 16, height: 16, borderRadius: 2, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
