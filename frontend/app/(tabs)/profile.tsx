@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { apiCall, getStoredUser, logout } from '../../utils/api';
 
+// UPDATED: 2026-02-09 22:45 - Added 5 goals
 const Z_RED = '#D62300';
 const GOALS = [
   { key: 'fat_loss', label: 'Fat Loss', icon: 'trending-down' as const, color: '#D62300' },
