@@ -704,6 +704,15 @@ const styles = StyleSheet.create({
   macroItem: { alignItems: 'center' },
   macroValue: { fontSize: 18, fontWeight: '800', color: '#502314' },
   macroLabel: { fontSize: 10, color: '#8B6F61', marginTop: 2 },
+  macroBalanceSection: { marginTop: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#E8DDD4' },
+  macroBalanceTitle: { fontSize: 11, fontWeight: '700', color: '#8B6F61', marginBottom: 8, textTransform: 'uppercase' },
+  macroBarContainer: { },
+  macroBar: { height: 10, backgroundColor: '#E8DDD4', borderRadius: 5, flexDirection: 'row', overflow: 'hidden' },
+  macroBarSegment: { height: '100%' },
+  macroLegend: { flexDirection: 'row', justifyContent: 'center', gap: 16, marginTop: 8 },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  legendDot: { width: 8, height: 8, borderRadius: 4 },
+  legendText: { fontSize: 10, color: '#8B6F61', fontWeight: '600' },
   
   // Calorie Goal Context
   calorieGoalRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, backgroundColor: '#F0FFF4', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8 },
