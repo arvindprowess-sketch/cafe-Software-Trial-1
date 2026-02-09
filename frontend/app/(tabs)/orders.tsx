@@ -18,9 +18,10 @@ const BK_TEXT_LIGHT = '#8B6F61';
 
 export default function OrdersScreen() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'recent' | 'monthly'>('recent');
+  const [activeTab, setActiveTab] = useState<'recent' | 'monthly' | 'favorites'>('recent');
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
   const [monthlyOrders, setMonthlyOrders] = useState<any[]>([]);
+  const [favoriteOrders, setFavoriteOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -46,14 +47,48 @@ export default function OrdersScreen() {
         return orderDate.getMonth() === now.getMonth() && orderDate.getFullYear() === now.getFullYear();
       }).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       
+      // Favorite orders
+      const favorites = allOrders.filter((order: any) => order.is_favorite === true)
+        .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      
       setRecentOrders(recent);
       setMonthlyOrders(thisMonth);
+      setFavoriteOrders(favorites);
     } catch (e) {
       console.error('Error loading orders:', e);
     } finally {
       setLoading(false);
     }
   }, []);
+
+  const toggleFavorite = async (orderId: string, currentFavorite: boolean) => {
+    try {
+      await apiCall(`/orders/${orderId}/favorite`, {
+        method: 'POST',
+        body: { is_favorite: !currentFavorite }
+      });
+      
+      // Update local state
+      const updateOrderFavorite = (order: any) => 
+        order.id === orderId ? { ...order, is_favorite: !currentFavorite } : order;
+      
+      setRecentOrders(prev => prev.map(updateOrderFavorite));
+      setMonthlyOrders(prev => prev.map(updateOrderFavorite));
+      
+      if (!currentFavorite) {
+        // Added to favorites
+        const order = [...recentOrders, ...monthlyOrders].find(o => o.id === orderId);
+        if (order) {
+          setFavoriteOrders(prev => [{ ...order, is_favorite: true }, ...prev]);
+        }
+      } else {
+        // Removed from favorites
+        setFavoriteOrders(prev => prev.filter(o => o.id !== orderId));
+      }
+    } catch (e) {
+      console.error('Error toggling favorite:', e);
+    }
+  };
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -96,17 +131,40 @@ export default function OrdersScreen() {
         <View style={styles.orderHeader}>
           <View style={styles.orderHeaderLeft}>
             <Ionicons name={statusIcon as any} size={20} color={statusColor} />
-            <View>
+            <View style={{ flex: 1 }}>
               <Text style={styles.orderId}>Order #{item.id.slice(0, 8)}</Text>
               <Text style={styles.orderDate}>
                 {isToday ? 'Today' : orderDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} • {orderDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
               </Text>
             </View>
           </View>
-          <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
-            <Text style={styles.statusText}>{item.status.toUpperCase()}</Text>
+          <View style={styles.orderHeaderRight}>
+            <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
+              <Text style={styles.statusText}>{item.status.toUpperCase()}</Text>
+            </View>
+            <TouchableOpacity 
+              onPress={() => toggleFavorite(item.id, item.is_favorite)}
+              style={styles.favoriteBtn}
+            >
+              <Ionicons 
+                name={item.is_favorite ? "heart" : "heart-outline"} 
+                size={24} 
+                color={item.is_favorite ? BK_RED : BK_TEXT_LIGHT} 
+              />
+            </TouchableOpacity>
           </View>
         </View>
+
+        {item.order_type && (
+          <View style={styles.orderTypeBadge}>
+            <Ionicons 
+              name={item.order_type === 'delivery' ? 'bicycle' : item.order_type === 'dine-in' ? 'restaurant' : 'bag-handle'} 
+              size={12} 
+              color={BK_TEXT_LIGHT} 
+            />
+            <Text style={styles.orderTypeText}>{item.order_type}</Text>
+          </View>
+        )}
 
         <View style={styles.orderItems}>
           {item.items?.slice(0, 3).map((orderItem: any, idx: number) => (
@@ -133,22 +191,11 @@ export default function OrdersScreen() {
           </View>
           <Text style={styles.orderTotal}>₹{Math.round(item.total_price || 0)}</Text>
         </View>
-
-        {item.order_type && (
-          <View style={styles.orderTypeBadge}>
-            <Ionicons 
-              name={item.order_type === 'delivery' ? 'bicycle' : item.order_type === 'dine-in' ? 'restaurant' : 'bag-handle'} 
-              size={12} 
-              color={BK_TEXT_LIGHT} 
-            />
-            <Text style={styles.orderTypeText}>{item.order_type}</Text>
-          </View>
-        )}
       </TouchableOpacity>
     );
   };
 
-  const displayOrders = activeTab === 'recent' ? recentOrders : monthlyOrders;
+  const displayOrders = activeTab === 'recent' ? recentOrders : activeTab === 'monthly' ? monthlyOrders : favoriteOrders;
 
   if (loading) {
     return (
@@ -173,10 +220,8 @@ export default function OrdersScreen() {
           style={[styles.tab, activeTab === 'recent' && styles.tabActive]}
           onPress={() => setActiveTab('recent')}
         >
-          <Ionicons name="time" size={18} color={activeTab === 'recent' ? BK_CREAM : BK_TEXT_LIGHT} />
-          <Text style={[styles.tabText, activeTab === 'recent' && styles.tabTextActive]}>
-            Recent Orders
-          </Text>
+          <Ionicons name="time" size={16} color={activeTab === 'recent' ? BK_CREAM : BK_TEXT_LIGHT} />
+          <Text style={[styles.tabText, activeTab === 'recent' && styles.tabTextActive]}>Recent</Text>
           {recentOrders.length > 0 && (
             <View style={styles.badge}>
               <Text style={styles.badgeText}>{recentOrders.length}</Text>
@@ -188,13 +233,24 @@ export default function OrdersScreen() {
           style={[styles.tab, activeTab === 'monthly' && styles.tabActive]}
           onPress={() => setActiveTab('monthly')}
         >
-          <Ionicons name="calendar" size={18} color={activeTab === 'monthly' ? BK_CREAM : BK_TEXT_LIGHT} />
-          <Text style={[styles.tabText, activeTab === 'monthly' && styles.tabTextActive]}>
-            This Month
-          </Text>
+          <Ionicons name="calendar" size={16} color={activeTab === 'monthly' ? BK_CREAM : BK_TEXT_LIGHT} />
+          <Text style={[styles.tabText, activeTab === 'monthly' && styles.tabTextActive]}>Monthly</Text>
           {monthlyOrders.length > 0 && (
             <View style={styles.badge}>
               <Text style={styles.badgeText}>{monthlyOrders.length}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'favorites' && styles.tabActive]}
+          onPress={() => setActiveTab('favorites')}
+        >
+          <Ionicons name="heart" size={16} color={activeTab === 'favorites' ? BK_CREAM : BK_TEXT_LIGHT} />
+          <Text style={[styles.tabText, activeTab === 'favorites' && styles.tabTextActive]}>Favorites</Text>
+          {favoriteOrders.length > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{favoriteOrders.length}</Text>
             </View>
           )}
         </TouchableOpacity>
@@ -239,7 +295,9 @@ export default function OrdersScreen() {
             <Text style={styles.emptyText}>
               {activeTab === 'recent' 
                 ? 'You haven\'t placed any orders in the last 7 days' 
-                : 'No orders this month'}
+                : activeTab === 'monthly'
+                ? 'No orders this month'
+                : 'No favorite orders yet. Tap the ❤️ icon on any order to add it to favorites!'}
             </Text>
             <TouchableOpacity style={styles.emptyBtn} onPress={() => router.push('/(tabs)/menu')}>
               <Text style={styles.emptyBtnText}>Browse Menu</Text>
@@ -274,9 +332,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
+    gap: 4,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
     borderRadius: 25,
     backgroundColor: 'rgba(245,235,220,0.1)',
   },
@@ -284,7 +342,7 @@ const styles = StyleSheet.create({
     backgroundColor: BK_RED,
   },
   tabText: {
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: '700',
     color: BK_TEXT_LIGHT,
     textTransform: 'uppercase',
