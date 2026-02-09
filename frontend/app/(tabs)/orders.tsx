@@ -5,7 +5,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { apiCall } from '../../utils/api';
 
-const Z_RED = '#E23744';
+const Z_RED = '#D62300';
+const BK_BROWN = '#502314';
+const BK_CREAM = '#F5EBDC';
+const BK_ORANGE = '#FF8732';
+const BK_GREEN = '#509E2F';
+const BK_TEXT_LIGHT = '#8B6F61';
 const STEPS = ['scheduled', 'pending', 'preparing', 'ready', 'completed'];
 const STEP_LABELS: Record<string, string> = { scheduled: 'Scheduled', pending: 'Order Placed', preparing: 'Being Prepared', ready: 'Ready', completed: 'Completed' };
 const STEP_ICONS: Record<string, string> = { scheduled: 'time', pending: 'checkmark-circle', preparing: 'flame', ready: 'bag-check', completed: 'checkmark-done-circle' };
