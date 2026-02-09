@@ -10,6 +10,8 @@ const GOALS = [
   { key: 'fat_loss', label: 'Fat Loss', icon: 'trending-down' as const, color: '#D62300' },
   { key: 'muscle_gain', label: 'Muscle Gain', icon: 'trending-up' as const, color: '#509E2F' },
   { key: 'maintenance', label: 'Maintain', icon: 'swap-horizontal' as const, color: '#FF8732' },
+  { key: 'beginner', label: 'Beginner Phase', icon: 'ribbon' as const, color: '#5B5FE0' },
+  { key: 'recovery', label: 'Recovery Phase', icon: 'heart' as const, color: '#FF6B9D' },
 ];
 
 export default function ProfileScreen() {
