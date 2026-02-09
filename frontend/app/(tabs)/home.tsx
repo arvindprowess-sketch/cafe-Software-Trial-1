@@ -329,7 +329,7 @@ export default function HomeScreen() {
                 <Text style={styles.ctaSub}>Budget + Goal = Perfect meal in seconds</Text>
               </View>
             </View>
-            <Ionicons name="arrow-forward-circle" size={28} color="#5B5FE0" />
+            <Ionicons name="arrow-forward-circle" size={28} color={BK_ORANGE} />
           </TouchableOpacity>
         )}
 
@@ -337,7 +337,7 @@ export default function HomeScreen() {
           <View style={styles.builderCard}>
             <View style={styles.builderHeader}>
               <View style={styles.builderTitleRow}>
-                <Ionicons name="sparkles" size={18} color="#5B5FE0" />
+                <Ionicons name="sparkles" size={18} color={BK_ORANGE} />
                 <Text style={styles.builderTitle}>AI Meal Builder</Text>
               </View>
               <TouchableOpacity testID="close-builder" onPress={resetBuilder}>
@@ -372,7 +372,7 @@ export default function HomeScreen() {
               {[
                 { key: 'fat_loss', label: 'Fat Loss', icon: 'trending-down' as const, color: Z_RED },
                 { key: 'muscle_gain', label: 'Muscle Gain', icon: 'trending-up' as const, color: GREEN },
-                { key: 'maintenance', label: 'Maintain', icon: 'swap-horizontal' as const, color: '#5B5FE0' },
+                { key: 'maintenance', label: 'Maintain', icon: 'swap-horizontal' as const, color: BK_ORANGE },
               ].map(g => (
                 <TouchableOpacity
                   key={g.key} testID={`meal-goal-${g.key}`}
@@ -419,11 +419,11 @@ export default function HomeScreen() {
           <View style={styles.mealResultCard}>
             <View style={styles.mealResultHeader}>
               <View style={styles.mealResultTitleRow}>
-                <Ionicons name="sparkles" size={16} color="#5B5FE0" />
+                <Ionicons name="sparkles" size={16} color={BK_ORANGE} />
                 <Text style={styles.mealResultTitle}>Your AI Meal</Text>
               </View>
               <TouchableOpacity testID="rebuild-meal" onPress={resetBuilder}>
-                <View style={styles.rebuildBadge}><Ionicons name="refresh" size={14} color="#5B5FE0" /><Text style={styles.rebuildText}>New</Text></View>
+                <View style={styles.rebuildBadge}><Ionicons name="refresh" size={14} color={BK_ORANGE} /><Text style={styles.rebuildText}>New</Text></View>
               </TouchableOpacity>
             </View>
             <Text style={styles.mealSummary}>{aiMeal.summary}</Text>
@@ -452,7 +452,7 @@ export default function HomeScreen() {
                   { label: 'Calories', val: aiMeal.totals.calories, color: Z_RED },
                   { label: 'Protein', val: `${Math.round(aiMeal.totals.protein)}g`, color: Z_RED },
                   { label: 'Carbs', val: `${Math.round(aiMeal.totals.carbs)}g`, color: '#FF9F0A' },
-                  { label: 'Fat', val: `${Math.round(aiMeal.totals.fat)}g`, color: '#5B5FE0' },
+                  { label: 'Fat', val: `${Math.round(aiMeal.totals.fat)}g`, color: BK_ORANGE },
                 ].map(t => (
                   <View key={t.label} style={styles.totalItem}>
                     <Text style={styles.totalLabel}>{t.label}</Text>
