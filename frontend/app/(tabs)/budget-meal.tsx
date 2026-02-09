@@ -23,6 +23,7 @@ export default function BudgetMealScreen() {
   const [cart, setCart] = useState<any[]>([]);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiSuggestions, setAiSuggestions] = useState<any[]>([]);
+  const [lastAiDietPref, setLastAiDietPref] = useState<string>(''); // Track diet pref used for AI call
   const [orderType, setOrderType] = useState('dine-in');
   const [userGoals, setUserGoals] = useState<any>({ daily_calories: 2000 });
   const [consumedToday, setConsumedToday] = useState(0);
