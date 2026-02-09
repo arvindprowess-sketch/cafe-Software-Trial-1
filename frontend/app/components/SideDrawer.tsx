@@ -331,7 +331,7 @@ const styles = StyleSheet.create({
 
   goalCard: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#4A3728',
+    backgroundColor: '#502314',
     marginHorizontal: 16, borderRadius: 14,
     padding: 14, gap: 12,
   },
