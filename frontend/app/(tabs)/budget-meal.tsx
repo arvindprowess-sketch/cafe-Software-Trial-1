@@ -35,6 +35,15 @@ export default function BudgetMealScreen() {
     loadUserOrderHistory();
   }, []);
 
+  // Re-fetch AI suggestions when diet preference changes (if suggestions exist)
+  useEffect(() => {
+    if (aiSuggestions.length > 0 && lastAiDietPref && lastAiDietPref !== dietPref) {
+      // User changed diet filter after getting AI suggestions - refresh them
+      console.log('Diet preference changed, re-fetching AI suggestions...');
+      getAiSuggestions();
+    }
+  }, [dietPref]);
+
   const loadCalorieContext = async () => {
     try {
       const [user, summary] = await Promise.all([
