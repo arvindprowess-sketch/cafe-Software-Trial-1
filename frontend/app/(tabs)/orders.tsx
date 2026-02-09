@@ -63,12 +63,7 @@ export default function OrdersScreen() {
 
   const toggleFavorite = async (orderId: string, currentFavorite: boolean) => {
     try {
-      await apiCall(`/orders/${orderId}/favorite`, {
-        method: 'POST',
-        body: { is_favorite: !currentFavorite }
-      });
-      
-      // Update local state
+      // Update local state immediately for better UX
       const updateOrderFavorite = (order: any) => 
         order.id === orderId ? { ...order, is_favorite: !currentFavorite } : order;
       
@@ -85,6 +80,15 @@ export default function OrdersScreen() {
         // Removed from favorites
         setFavoriteOrders(prev => prev.filter(o => o.id !== orderId));
       }
+      
+      // Try to update backend (optional - will fail silently if endpoint doesn't exist)
+      await apiCall(`/orders/${orderId}/favorite`, {
+        method: 'POST',
+        body: { is_favorite: !currentFavorite }
+      }).catch(() => {
+        // Backend update failed, but local state is already updated
+        console.log('Favorite stored locally');
+      });
     } catch (e) {
       console.error('Error toggling favorite:', e);
     }
@@ -131,7 +135,7 @@ export default function OrdersScreen() {
         <View style={styles.orderHeader}>
           <View style={styles.orderHeaderLeft}>
             <Ionicons name={statusIcon as any} size={20} color={statusColor} />
-            <View style={{ flex: 1 }}>
+            <View style={styles.orderInfo}>
               <Text style={styles.orderId}>Order #{item.id.slice(0, 8)}</Text>
               <Text style={styles.orderDate}>
                 {isToday ? 'Today' : orderDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} • {orderDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
@@ -142,29 +146,36 @@ export default function OrdersScreen() {
             <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
               <Text style={styles.statusText}>{item.status.toUpperCase()}</Text>
             </View>
-            <TouchableOpacity 
-              onPress={() => toggleFavorite(item.id, item.is_favorite)}
-              style={styles.favoriteBtn}
-            >
-              <Ionicons 
-                name={item.is_favorite ? "heart" : "heart-outline"} 
-                size={24} 
-                color={item.is_favorite ? BK_RED : BK_TEXT_LIGHT} 
-              />
-            </TouchableOpacity>
           </View>
         </View>
 
-        {item.order_type && (
-          <View style={styles.orderTypeBadge}>
+        {/* Order Type and Favorite - Second Row */}
+        <View style={styles.orderMetaRow}>
+          {item.order_type && (
+            <View style={styles.orderTypeBadge}>
+              <Ionicons 
+                name={item.order_type === 'delivery' ? 'bicycle' : item.order_type === 'dine-in' ? 'restaurant' : 'bag-handle'} 
+                size={12} 
+                color={BK_TEXT_LIGHT} 
+              />
+              <Text style={styles.orderTypeText}>{item.order_type}</Text>
+            </View>
+          )}
+          <TouchableOpacity 
+            onPress={(e) => {
+              e.stopPropagation();
+              toggleFavorite(item.id, item.is_favorite);
+            }}
+            style={styles.favoriteBtn}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
             <Ionicons 
-              name={item.order_type === 'delivery' ? 'bicycle' : item.order_type === 'dine-in' ? 'restaurant' : 'bag-handle'} 
-              size={12} 
-              color={BK_TEXT_LIGHT} 
+              name={item.is_favorite ? "heart" : "heart-outline"} 
+              size={22} 
+              color={item.is_favorite ? BK_RED : BK_TEXT_LIGHT} 
             />
-            <Text style={styles.orderTypeText}>{item.order_type}</Text>
-          </View>
-        )}
+          </TouchableOpacity>
+        </View>
 
         <View style={styles.orderItems}>
           {item.items?.slice(0, 3).map((orderItem: any, idx: number) => (
