@@ -121,7 +121,7 @@ export default function ComboBuilderScreen() {
       console.log('[Combo Builder] Navigation triggered to customize screen');
     } catch (error) {
       console.error('[Combo Builder] Error during order:', error);
-      alert('Failed to proceed to checkout. Please try again.');
+      Alert.alert('Error', 'Failed to proceed to checkout. Please try again.');
     }
   };
 
