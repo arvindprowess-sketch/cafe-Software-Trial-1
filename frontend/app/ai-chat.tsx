@@ -106,15 +106,34 @@ export default function AIChatScreen() {
       // Handle actions
       if (result.actions) {
         if (result.actions.add && Array.isArray(result.actions.add)) {
-          // Add items to cart
+          // Add items to cart with proper structure
           setCart(prev => {
             const newCart = [...prev];
-            result.actions.add.forEach((item: CartItem) => {
-              const existingIdx = newCart.findIndex(c => c.name === item.name || c.product_id === item.product_id);
+            result.actions.add.forEach((item: any) => {
+              // Normalize item structure - ensure all required fields
+              const normalizedItem: CartItem = {
+                id: item.product_id || item.id,
+                product_id: item.product_id || item.id,
+                name: item.name || item.product_name,
+                grams: item.grams || 100,
+                cost_per_100g: item.cost_per_100g || 0,
+                calories_per_100g: item.calories_per_100g || item.calories || 0,
+                protein_per_100g: item.protein_per_100g || item.protein || 0,
+                carbs_per_100g: item.carbs_per_100g || item.carbs || 0,
+                fat_per_100g: item.fat_per_100g || item.fat || 0,
+                diet_type: item.diet_type || 'veg',
+                image_url: item.image_url,
+              };
+              
+              const existingIdx = newCart.findIndex(c => 
+                c.name === normalizedItem.name || 
+                c.product_id === normalizedItem.product_id
+              );
+              
               if (existingIdx >= 0) {
-                newCart[existingIdx].grams += item.grams;
+                newCart[existingIdx].grams += normalizedItem.grams;
               } else {
-                newCart.push(item);
+                newCart.push(normalizedItem);
               }
             });
             return newCart;
