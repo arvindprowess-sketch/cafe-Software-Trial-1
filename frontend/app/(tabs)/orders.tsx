@@ -147,21 +147,20 @@ export default function OrdersScreen() {
 
         {/* Second Row: Delivery Badge, Status Badge, Heart */}
         <View style={styles.orderMetaRow}>
-          <View style={styles.orderMetaLeft}>
-            {item.order_type && (
-              <View style={styles.orderTypeBadge}>
-                <Ionicons 
-                  name={item.order_type === 'delivery' ? 'bicycle' : item.order_type === 'dine-in' ? 'restaurant' : 'bag-handle'} 
-                  size={12} 
-                  color={BK_TEXT_LIGHT} 
-                />
-                <Text style={styles.orderTypeText}>{item.order_type}</Text>
-              </View>
-            )}
-            <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
-              <Text style={styles.statusText}>{item.status.toUpperCase()}</Text>
+          {item.order_type && (
+            <View style={styles.orderTypeBadge}>
+              <Ionicons 
+                name={item.order_type === 'delivery' ? 'bicycle' : item.order_type === 'dine-in' ? 'restaurant' : 'bag-handle'} 
+                size={12} 
+                color={BK_TEXT_LIGHT} 
+              />
+              <Text style={styles.orderTypeText}>{item.order_type}</Text>
             </View>
+          )}
+          <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
+            <Text style={styles.statusText}>{item.status.toUpperCase()}</Text>
           </View>
+          <View style={{ flex: 1 }} />
           <TouchableOpacity 
             onPress={(e) => {
               e.stopPropagation();
@@ -409,15 +408,9 @@ const styles = StyleSheet.create({
   
   orderMetaRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  orderMetaLeft: {
-    flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    flex: 1,
+    marginBottom: 12,
   },
   orderTypeBadge: {
     flexDirection: 'row',
