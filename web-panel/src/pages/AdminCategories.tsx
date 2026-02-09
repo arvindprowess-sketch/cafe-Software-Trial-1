@@ -273,11 +273,11 @@ export default function AdminCategories() {
 
       <div className="page-header">
         <div>
-          <h1 style={{ fontFamily: "'Nunito', sans-serif", fontWeight: 900 }}>Manage Categories</h1>
+          <h1 style={{ fontFamily: "var(--font-brand)", fontWeight: 600, textTransform: 'uppercase', letterSpacing: '-0.01em' }}>Manage Categories</h1>
           <p>{categories.length} categories &middot; Image-first branding for Customer App</p>
         </div>
         <button className="btn btn-primary" onClick={openCreate} data-testid="add-category-btn"
-          style={{ borderRadius: 24, fontFamily: "'Nunito', sans-serif", fontWeight: 800, padding: '10px 24px' }}>
+          style={{ borderRadius: 24, fontFamily: "var(--font-brand)", fontWeight: 600, padding: '10px 24px', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
           + Add Category
         </button>
       </div>
@@ -317,9 +317,9 @@ export default function AdminCategories() {
           <div style={{ fontSize: 56, marginBottom: 12, opacity: 0.2 }}>
             <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#5B5FE0" strokeWidth="2"><path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z"/></svg>
           </div>
-          <h3 style={{ fontFamily: "'Nunito', sans-serif", fontWeight: 900 }}>No Categories Yet</h3>
+          <h3 style={{ fontFamily: "var(--font-brand)", fontWeight: 600, textTransform: 'uppercase' }}>No Categories Yet</h3>
           <p>Create your first category with a branded image</p>
-          <button className="btn btn-primary" onClick={openCreate} style={{ borderRadius: 24, fontFamily: "'Nunito', sans-serif", fontWeight: 800 }}>
+          <button className="btn btn-primary" onClick={openCreate} style={{ borderRadius: 24, fontFamily: "var(--font-brand)", fontWeight: 600, textTransform: 'uppercase' }}>
             + Add Category
           </button>
         </div>
@@ -328,14 +328,14 @@ export default function AdminCategories() {
       {showForm && (
         <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowForm(false)}>
           <div className="modal" style={{ maxWidth: 540, borderRadius: 20 }}>
-            <h2 style={{ fontFamily: "'Nunito', sans-serif", fontWeight: 900, fontSize: 22 }}>
+            <h2 style={{ fontFamily: "var(--font-brand)", fontWeight: 600, fontSize: 22, textTransform: 'uppercase', letterSpacing: '-0.01em' }}>
               {formMode === 'create' ? 'New Category' : 'Edit Category'}
             </h2>
             <form onSubmit={handleSave}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 16 }}>
                 {/* Image Upload */}
                 <div>
-                  <label style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 6, display: 'block' }}>CATEGORY IMAGE</label>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: '#888', marginBottom: 6, display: 'block', fontFamily: "var(--font-brand)", letterSpacing: '0.05em' }}>CATEGORY IMAGE</label>
                   <div className="cat-form-img-upload" onClick={() => fileInputRef.current?.click()} data-testid="cat-image-upload">
                     {imagePreview ? (
                       <img src={imagePreview} alt="Preview" />
@@ -359,7 +359,7 @@ export default function AdminCategories() {
 
                 {/* Live Preview */}
                 <div>
-                  <label style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 6, display: 'block' }}>LIVE PREVIEW</label>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: '#888', marginBottom: 6, display: 'block', fontFamily: "var(--font-brand)", letterSpacing: '0.05em' }}>LIVE PREVIEW</label>
                   <div className="cat-form-preview">
                     <div className="cat-form-preview-label">How it looks</div>
                     <div className="cat-form-preview-tile">
@@ -381,7 +381,7 @@ export default function AdminCategories() {
               <div className="form-group">
                 <label>Category Name *</label>
                 <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="e.g. High Protein" required
-                  style={{ fontFamily: "'Nunito', sans-serif", fontWeight: 700, fontSize: 15, borderRadius: 12 }}
+                  style={{ fontFamily: "var(--font-brand)", fontWeight: 500, fontSize: 15, borderRadius: 12, textTransform: 'uppercase' }}
                   data-testid="cat-name-input" />
               </div>
 
@@ -426,9 +426,9 @@ export default function AdminCategories() {
 
               <div className="modal-actions" style={{ marginTop: 16 }}>
                 <button type="button" className="btn btn-secondary" onClick={() => setShowForm(false)}
-                  style={{ borderRadius: 24, fontFamily: "'Nunito', sans-serif", fontWeight: 800 }}>Cancel</button>
+                  style={{ borderRadius: 24, fontFamily: "var(--font-brand)", fontWeight: 600, textTransform: 'uppercase' }}>Cancel</button>
                 <button type="submit" className="btn btn-primary" disabled={saving}
-                  style={{ borderRadius: 24, fontFamily: "'Nunito', sans-serif", fontWeight: 800, padding: '10px 28px' }}
+                  style={{ borderRadius: 24, fontFamily: "var(--font-brand)", fontWeight: 600, padding: '10px 28px', textTransform: 'uppercase' }}
                   data-testid="save-category-btn">
                   {saving ? 'Saving...' : formMode === 'create' ? 'Create' : 'Update'}
                 </button>
