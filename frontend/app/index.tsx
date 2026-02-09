@@ -354,74 +354,74 @@ export default function AuthScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F8F8F8' },
+  safe: { flex: 1, backgroundColor: BK_BROWN },
   scroll: { flexGrow: 1, justifyContent: 'center', padding: 24 },
   
   // Logo
   logoSection: { alignItems: 'center', marginBottom: 32 },
-  logoBg: { width: 64, height: 64, borderRadius: 16, backgroundColor: Z_RED, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
-  brand: { fontSize: 28, fontWeight: '800', color: '#1C1C2E' },
+  logoBg: { width: 68, height: 68, borderRadius: 16, backgroundColor: Z_RED, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
+  brand: { fontSize: 30, fontWeight: '800', color: BK_CREAM, textTransform: 'uppercase', letterSpacing: 1 },
   
   // Form Card
-  formCard: { backgroundColor: '#FFF', borderRadius: 20, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 4 },
+  formCard: { backgroundColor: '#FFF', borderRadius: 20, padding: 28, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 20, elevation: 6 },
   
   // Back button
-  backBtn: { position: 'absolute', top: 16, left: 16, width: 40, height: 40, borderRadius: 20, backgroundColor: '#F5F5F5', alignItems: 'center', justifyContent: 'center', zIndex: 10 },
+  backBtn: { position: 'absolute', top: 16, left: 16, width: 40, height: 40, borderRadius: 20, backgroundColor: BK_CREAM, alignItems: 'center', justifyContent: 'center', zIndex: 10 },
   
   // Icon containers
   iconContainer: { alignItems: 'center', marginBottom: 20, marginTop: 8 },
-  phoneBg: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#FDE8EA', alignItems: 'center', justifyContent: 'center' },
-  otpBg: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#E8F5E9', alignItems: 'center', justifyContent: 'center' },
-  nameBg: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#E8E8FF', alignItems: 'center', justifyContent: 'center' },
+  phoneBg: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#FDE8E4', alignItems: 'center', justifyContent: 'center' },
+  otpBg: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#E8F5E1', alignItems: 'center', justifyContent: 'center' },
+  nameBg: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#FFF0E0', alignItems: 'center', justifyContent: 'center' },
   
   // Titles
-  title: { fontSize: 22, fontWeight: '800', color: '#1C1C2E', textAlign: 'center', marginBottom: 8 },
-  subtitle: { fontSize: 14, color: '#696969', textAlign: 'center', marginBottom: 24 },
+  title: { fontSize: 24, fontWeight: '800', color: BK_BROWN, textAlign: 'center', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.3 },
+  subtitle: { fontSize: 14, color: BK_TEXT_LIGHT, textAlign: 'center', marginBottom: 24 },
   
   // Phone input
-  phoneInputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F5F5F5', borderRadius: 12, overflow: 'hidden', marginBottom: 16 },
-  countryCode: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 14, backgroundColor: '#EFEFEF', gap: 6 },
+  phoneInputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: BK_CREAM, borderRadius: 14, overflow: 'hidden', marginBottom: 16, borderWidth: 2, borderColor: '#E8DDD4' },
+  countryCode: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 14, backgroundColor: '#E8DDD4', gap: 6 },
   flag: { fontSize: 18 },
-  countryText: { fontSize: 16, fontWeight: '600', color: '#1C1C2E' },
-  phoneInput: { flex: 1, fontSize: 18, fontWeight: '600', color: '#1C1C2E', paddingHorizontal: 14, paddingVertical: 14, letterSpacing: 1 },
+  countryText: { fontSize: 16, fontWeight: '700', color: BK_BROWN },
+  phoneInput: { flex: 1, fontSize: 18, fontWeight: '600', color: BK_BROWN, paddingHorizontal: 14, paddingVertical: 14, letterSpacing: 1 },
   
   // OTP input
   otpContainer: { flexDirection: 'row', justifyContent: 'center', gap: 10, marginBottom: 20 },
-  otpInput: { width: 48, height: 56, borderRadius: 12, backgroundColor: '#F5F5F5', borderWidth: 2, borderColor: '#EFEFEF', textAlign: 'center', fontSize: 22, fontWeight: '700', color: '#1C1C2E' },
-  otpInputFilled: { borderColor: GREEN, backgroundColor: '#E8F5E9' },
+  otpInput: { width: 48, height: 56, borderRadius: 12, backgroundColor: BK_CREAM, borderWidth: 2, borderColor: '#E8DDD4', textAlign: 'center', fontSize: 22, fontWeight: '800', color: BK_BROWN },
+  otpInputFilled: { borderColor: GREEN, backgroundColor: '#E8F5E1' },
   
   // Demo OTP box
-  demoOtpBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#FFF8E1', borderRadius: 10, padding: 12, marginBottom: 16 },
-  demoOtpText: { fontSize: 13, color: '#FF9F0A' },
-  demoOtpCode: { fontWeight: '800', fontSize: 16, letterSpacing: 2 },
+  demoOtpBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#FFF0E0', borderRadius: 12, padding: 12, marginBottom: 16 },
+  demoOtpText: { fontSize: 13, color: BK_ORANGE },
+  demoOtpCode: { fontWeight: '800', fontSize: 16, letterSpacing: 2, color: BK_BROWN },
   
   // Name input
-  nameInput: { backgroundColor: '#F5F5F5', borderRadius: 12, padding: 16, fontSize: 18, fontWeight: '600', color: '#1C1C2E', marginBottom: 16, textAlign: 'center' },
+  nameInput: { backgroundColor: BK_CREAM, borderRadius: 14, padding: 16, fontSize: 18, fontWeight: '600', color: BK_BROWN, marginBottom: 16, textAlign: 'center', borderWidth: 2, borderColor: '#E8DDD4' },
   
-  // Buttons
-  primaryBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Z_RED, borderRadius: 14, paddingVertical: 16, marginBottom: 12 },
-  primaryBtnDisabled: { backgroundColor: '#D0D0D0' },
-  primaryBtnText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
+  // Buttons (BK pill style)
+  primaryBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Z_RED, borderRadius: 28, paddingVertical: 16, marginBottom: 12 },
+  primaryBtnDisabled: { backgroundColor: '#C4A99A' },
+  primaryBtnText: { color: BK_CREAM, fontSize: 16, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
   
   resendBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12 },
-  resendText: { fontSize: 14, fontWeight: '600', color: Z_RED },
+  resendText: { fontSize: 14, fontWeight: '700', color: BK_ORANGE },
   
   // Divider
   divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 20 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: '#EFEFEF' },
-  dividerText: { paddingHorizontal: 16, fontSize: 13, color: '#B0B0B0' },
+  dividerLine: { flex: 1, height: 1, backgroundColor: '#E8DDD4' },
+  dividerText: { paddingHorizontal: 16, fontSize: 13, color: BK_TEXT_LIGHT },
   
   // Admin button
-  adminBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#FDE8EA', borderRadius: 12, paddingVertical: 14 },
-  adminBtnText: { fontSize: 14, fontWeight: '600', color: Z_RED },
+  adminBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#FDE8E4', borderRadius: 14, paddingVertical: 14 },
+  adminBtnText: { fontSize: 14, fontWeight: '700', color: Z_RED },
   
   // Staff button
-  staffBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#F5F5F5', borderRadius: 12, paddingVertical: 14, marginTop: 10 },
-  staffBtnText: { fontSize: 14, fontWeight: '600', color: '#1C1C2E' },
+  staffBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: BK_CREAM, borderRadius: 14, paddingVertical: 14, marginTop: 10 },
+  staffBtnText: { fontSize: 14, fontWeight: '700', color: BK_BROWN },
   
   // Error
-  error: { color: Z_RED, fontSize: 13, textAlign: 'center', marginBottom: 12 },
+  error: { color: Z_RED, fontSize: 13, textAlign: 'center', marginBottom: 12, fontWeight: '600' },
   
   // Terms
-  terms: { fontSize: 11, color: '#B0B0B0', textAlign: 'center', marginTop: 24 },
+  terms: { fontSize: 11, color: 'rgba(245,235,220,0.5)', textAlign: 'center', marginTop: 24 },
 });
