@@ -339,8 +339,9 @@ export default function AIChatScreen() {
             style={styles.checkoutBtn}
             onPress={() => {
               try {
-                console.log('[AI Chat] Checkout clicked with cart:', cart);
+                console.log('[AI Chat] Checkout clicked with cart items:', cart.length);
                 // Clean cart data - only include necessary fields
+                // IMPORTANT: Exclude image_url to prevent URL being too large with base64 data
                 const cleanCart = cart.map(item => ({
                   id: item.id || item.product_id,
                   product_id: item.product_id || item.id,
@@ -352,11 +353,11 @@ export default function AIChatScreen() {
                   carbs_per_100g: item.carbs_per_100g || 0,
                   fat_per_100g: item.fat_per_100g || 0,
                   diet_type: item.diet_type || 'veg',
-                  image_url: item.image_url,
+                  // Exclude image_url - it contains huge base64 data
                   product_type: 'single'
                 }));
                 
-                console.log('[AI Chat] Clean cart:', cleanCart);
+                console.log('[AI Chat] Clean cart items:', cleanCart.length);
                 const cartString = JSON.stringify(cleanCart);
                 console.log('[AI Chat] Cart string length:', cartString.length);
                 
