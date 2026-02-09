@@ -697,7 +697,7 @@ const styles = StyleSheet.create({
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#D4C4B0' },
   dotActive: { backgroundColor: BK_ORANGE, width: 24 },
   
-  // Category Grid (ENHANCED)
+  // Category Grid (CLEAN - No Box)
   sectionTitle: { fontSize: 22, fontWeight: '800', color: BK_BROWN, paddingHorizontal: 16, marginTop: 24, marginBottom: 14, letterSpacing: 0.3, textTransform: 'uppercase' },
   categoryGrid: { 
     flexDirection: 'row', 
@@ -708,22 +708,14 @@ const styles = StyleSheet.create({
   categoryCard: { 
     width: (width - 60) / 4, 
     alignItems: 'center', 
-    backgroundColor: BK_WHITE, 
-    borderRadius: 16, 
-    padding: 12, 
-    borderWidth: 2, 
-    borderColor: '#E8DDD4',
-    shadowColor: BK_BROWN,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    backgroundColor: 'transparent',
+    padding: 8,
   },
   categoryImage: { 
     width: 60, 
     height: 60, 
     borderRadius: 14, 
-    marginBottom: 8 
+    marginBottom: 6 
   },
   categoryIconBg: { 
     alignItems: 'center', 
