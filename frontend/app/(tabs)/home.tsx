@@ -272,14 +272,14 @@ export default function HomeScreen() {
           </View>
           <View style={styles.nutriRow}>
             <View style={styles.nutriMain}>
-              <Text style={[styles.calValue, isCalorieOver && { color: '#E23744' }]}>{Math.round(consumed.calories || 0)}</Text>
+              <Text style={[styles.calValue, isCalorieOver && { color: BK_RED }]}>{Math.round(consumed.calories || 0)}</Text>
               <Text style={styles.calUnit}>/ {goals.daily_calories || 2000} kcal</Text>
             </View>
             <View style={styles.macroRow}>
               {[
                 { label: 'Protein', val: consumed.protein, goal: goals.daily_protein, color: Z_RED },
                 { label: 'Carbs', val: consumed.carbs, goal: goals.daily_carbs, color: '#FF9F0A' },
-                { label: 'Fat', val: consumed.fat, goal: goals.daily_fat, color: '#5B5FE0' },
+                { label: 'Fat', val: consumed.fat, goal: goals.daily_fat, color: BK_ORANGE },
               ].map(m => (
                 <View key={m.label} style={styles.macroItem}>
                   <Text style={[styles.macroVal, { color: m.color }]}>{Math.round(m.val || 0)}g</Text>
@@ -293,7 +293,7 @@ export default function HomeScreen() {
           </View>
           {isCalorieOver && (
             <View style={styles.overGoalBanner} testID="calorie-over-banner">
-              <Ionicons name="information-circle" size={14} color="#E23744" />
+              <Ionicons name="information-circle" size={14} color={BK_RED} />
               <Text style={styles.overGoalText}>
                 {caloriesOverAmount} cal over your daily goal — you're in control!
               </Text>
