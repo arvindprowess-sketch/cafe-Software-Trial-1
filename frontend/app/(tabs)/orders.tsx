@@ -129,10 +129,11 @@ export default function OrdersScreen() {
     return (
       <TouchableOpacity 
         style={styles.orderCard}
-        onPress={() => {/* Navigate to order detail */}}
+        onPress={() => router.push({ pathname: '/order-detail', params: { orderId: item.id } })}
         activeOpacity={0.9}
+        testID={`order-card-${item.id}`}
       >
-        {/* First Row: Order Info Only */}
+        {/* First Row: Order Info and Order Type Icon */}
         <View style={styles.orderHeader}>
           <View style={styles.orderHeaderLeft}>
             <Ionicons name={statusIcon as any} size={20} color={statusColor} />
@@ -143,21 +144,21 @@ export default function OrdersScreen() {
               </Text>
             </View>
           </View>
+          {/* Order Type Icon - Moved to Right */}
+          {item.order_type && (
+            <View style={styles.orderTypeIconBadge}>
+              <Ionicons 
+                name={item.order_type === 'delivery' ? 'bicycle' : item.order_type === 'dine-in' ? 'restaurant' : 'bag-handle'} 
+                size={20} 
+                color={BK_RED} 
+              />
+            </View>
+          )}
         </View>
 
-        {/* Second Row: Delivery Badge, Status Badge, Heart */}
+        {/* Second Row: Status Badge and Heart */}
         <View style={styles.orderMetaRow}>
           <View style={styles.badgesContainer}>
-            {item.order_type && (
-              <View style={styles.orderTypeBadge}>
-                <Ionicons 
-                  name={item.order_type === 'delivery' ? 'bicycle' : item.order_type === 'dine-in' ? 'restaurant' : 'bag-handle'} 
-                  size={12} 
-                  color={BK_TEXT_LIGHT} 
-                />
-                <Text style={styles.orderTypeText}>{item.order_type}</Text>
-              </View>
-            )}
             <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
               <Text style={styles.statusText}>{item.status.toUpperCase()}</Text>
             </View>
@@ -169,6 +170,7 @@ export default function OrdersScreen() {
             }}
             style={styles.favoriteBtn}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            testID={`favorite-btn-${item.id}`}
           >
             <Ionicons 
               name={item.is_favorite ? "heart" : "heart-outline"} 
