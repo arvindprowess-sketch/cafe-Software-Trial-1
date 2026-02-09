@@ -15,7 +15,16 @@ export default function CustomizeScreen() {
   const initialCart = params.cart ? JSON.parse(params.cart as string) : [];
   const orderType = (params.orderType as string) || 'dine-in';
 
-  const [items, setItems] = useState<any[]>(initialCart);
+  // Normalize cart items - ensure all have 'id' field
+  const normalizedCart = initialCart.map((item: any) => ({
+    ...item,
+    id: item.id || item.product_id,
+    product_id: item.product_id || item.id,
+    carbs_per_100g: item.carbs_per_100g || 0,
+    fat_per_100g: item.fat_per_100g || 0,
+  }));
+  
+  const [items, setItems] = useState<any[]>(normalizedCart);
   const [goal, setGoal] = useState('');
   const [budget, setBudget] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
