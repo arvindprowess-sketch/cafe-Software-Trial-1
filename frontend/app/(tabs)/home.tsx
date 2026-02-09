@@ -143,7 +143,7 @@ export default function HomeScreen() {
         {/* ===== HEADER WITH HAMBURGER & ORDER TYPE TOGGLE ===== */}
         <View style={styles.header}>
           <TouchableOpacity testID="menu-drawer-btn" style={styles.menuBtn} onPress={() => setDrawerVisible(true)}>
-            <Ionicons name="menu" size={24} color="#1C1C2E" />
+            <Ionicons name="menu" size={24} color="#F5EBDC" />
           </TouchableOpacity>
           
           {/* Delivery / Dine-in Toggle */}
