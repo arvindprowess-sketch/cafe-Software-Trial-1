@@ -167,8 +167,11 @@ export default function BudgetMealScreen() {
       });
       if (result.meal_items?.length > 0) {
         setAiSuggestions(result.meal_items);
+        setLastAiDietPref(dietPref); // Track which diet pref was used
       } else {
         Alert.alert('No suggestions', result.summary || 'Try adjusting your budget');
+        setAiSuggestions([]);
+        setLastAiDietPref('');
       }
     } catch (e: any) {
       Alert.alert('Error', e.message);
