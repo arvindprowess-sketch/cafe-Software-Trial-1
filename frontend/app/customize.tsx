@@ -114,17 +114,17 @@ export default function CustomizeScreen() {
         // Use fixed price or calculate from per plate
         itemPrice = (i.fixed_price || (i.cost_per_100g * (i.serving_grams || 300) / 100)) * qty;
         // Use total per serving or calculate
-        itemCal = (i.total_calories_per_serving || i.calories_per_100g) * qty;
-        itemProtein = (i.total_protein_per_serving || i.protein_per_100g) * qty;
-        itemCarbs = (i.total_carbs_per_serving || i.carbs_per_100g) * qty;
-        itemFat = (i.total_fat_per_serving || i.fat_per_100g) * qty;
+        itemCal = (i.total_calories_per_serving || i.calories_per_100g || 0) * qty;
+        itemProtein = (i.total_protein_per_serving || i.protein_per_100g || 0) * qty;
+        itemCarbs = (i.total_carbs_per_serving || i.carbs_per_100g || 0) * qty;
+        itemFat = (i.total_fat_per_serving || i.fat_per_100g || 0) * qty;
       } else {
         const f = i.grams / 100;
         itemPrice = f * i.cost_per_100g;
-        itemCal = f * i.calories_per_100g;
-        itemProtein = f * i.protein_per_100g;
-        itemCarbs = f * i.carbs_per_100g;
-        itemFat = f * i.fat_per_100g;
+        itemCal = f * (i.calories_per_100g || 0);
+        itemProtein = f * (i.protein_per_100g || 0);
+        itemCarbs = f * (i.carbs_per_100g || 0);
+        itemFat = f * (i.fat_per_100g || 0);
       }
       
       return { 
