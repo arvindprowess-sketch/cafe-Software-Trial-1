@@ -467,49 +467,41 @@ export default function BudgetMealScreen() {
         )}
 
         {/* AI Suggestions */}
-        {(() => {
-          // Filter AI suggestions by current diet preference
-          const filteredAiSuggestions = aiSuggestions.filter(item => {
-            if (dietPref === 'both') return true;
-            return item.diet_type === dietPref;
-          });
-          
-          return filteredAiSuggestions.length > 0 && (
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Ionicons name="sparkles" size={16} color={PURPLE} />
-                <Text style={styles.sectionTitle}>AI Suggestions</Text>
-                <TouchableOpacity onPress={() => setAiSuggestions([])}>
-                  <Ionicons name="close-circle" size={20} color="#D0D0D0" />
-                </TouchableOpacity>
-              </View>
-              {filteredAiSuggestions.map((item, i) => (
-                <TouchableOpacity 
-                  key={i} 
-                  style={styles.suggestionItem}
-                  onPress={() => addSuggestion(item)}
-                >
-                  <View style={styles.suggestionLeft}>
-                    <View style={[styles.vegIndicator, { borderColor: item.diet_type === 'non-veg' ? Z_RED : GREEN }]}>
-                      <View style={[styles.vegDot, { backgroundColor: item.diet_type === 'non-veg' ? Z_RED : GREEN }]} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.suggestionName} numberOfLines={1}>{item.product_name}</Text>
-                      <Text style={styles.suggestionReason} numberOfLines={2}>{item.reason}</Text>
-                    </View>
-                  </View>
-                  <View style={styles.suggestionRight}>
-                    <View style={styles.suggestionGramsBox}>
-                      <Text style={styles.suggestionGrams}>{item.grams}g</Text>
-                      <Text style={styles.suggestionPrice}>₹{Math.round(item.price)}</Text>
-                    </View>
-                    <Ionicons name="add-circle" size={24} color={PURPLE} />
-                  </View>
-                </TouchableOpacity>
-              ))}
+        {aiSuggestions.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="sparkles" size={16} color={PURPLE} />
+              <Text style={styles.sectionTitle}>AI Suggestions ({dietPref === 'both' ? 'All' : dietPref === 'veg' ? 'Veg' : 'Non-Veg'})</Text>
+              <TouchableOpacity onPress={() => { setAiSuggestions([]); setLastAiDietPref(''); }}>
+                <Ionicons name="close-circle" size={20} color="#D0D0D0" />
+              </TouchableOpacity>
             </View>
-          );
-        })()}
+            {aiSuggestions.map((item, i) => (
+              <TouchableOpacity 
+                key={i} 
+                style={styles.suggestionItem}
+                onPress={() => addSuggestion(item)}
+              >
+                <View style={styles.suggestionLeft}>
+                  <View style={[styles.vegIndicator, { borderColor: item.diet_type === 'non-veg' ? Z_RED : GREEN }]}>
+                    <View style={[styles.vegDot, { backgroundColor: item.diet_type === 'non-veg' ? Z_RED : GREEN }]} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.suggestionName} numberOfLines={1}>{item.product_name}</Text>
+                    <Text style={styles.suggestionReason} numberOfLines={2}>{item.reason}</Text>
+                  </View>
+                </View>
+                <View style={styles.suggestionRight}>
+                  <View style={styles.suggestionGramsBox}>
+                    <Text style={styles.suggestionGrams}>{item.grams}g</Text>
+                    <Text style={styles.suggestionPrice}>₹{Math.round(item.price)}</Text>
+                  </View>
+                  <Ionicons name="add-circle" size={24} color={PURPLE} />
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
 
         {/* What Fits in Your Budget */}
         {remaining > 10 && fitsInBudget.length > 0 && (
