@@ -12,8 +12,20 @@ const PURPLE = '#FF8732';
 export default function CustomizeScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const initialCart = params.cart ? JSON.parse(params.cart as string) : [];
+  
+  console.log('[Customize] Screen mounted with params:', params);
+  
+  let initialCart = [];
+  try {
+    initialCart = params.cart ? JSON.parse(params.cart as string) : [];
+    console.log('[Customize] Parsed cart:', initialCart);
+  } catch (error) {
+    console.error('[Customize] Error parsing cart:', error);
+    Alert.alert('Error', 'Failed to load cart items');
+  }
+  
   const orderType = (params.orderType as string) || 'dine-in';
+  console.log('[Customize] Order type:', orderType);
 
   // Normalize cart items - ensure all have 'id' field
   const normalizedCart = initialCart.map((item: any) => ({
@@ -23,6 +35,8 @@ export default function CustomizeScreen() {
     carbs_per_100g: item.carbs_per_100g || 0,
     fat_per_100g: item.fat_per_100g || 0,
   }));
+  
+  console.log('[Customize] Normalized cart:', normalizedCart);
   
   const [items, setItems] = useState<any[]>(normalizedCart);
   const [goal, setGoal] = useState('');
