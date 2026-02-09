@@ -270,12 +270,18 @@ export default function HomeScreen() {
           ))}
         </View>
 
-        {/* ===== TODAY'S NUTRITION CARD ===== */}
-        <View style={styles.nutriCard} testID="nutrition-summary-card">
+        {/* ===== TODAY'S NUTRITION CARD (CLICKABLE) ===== */}
+        <TouchableOpacity 
+          style={styles.nutriCard} 
+          testID="nutrition-summary-card"
+          onPress={() => router.push('/nutrition-detail')}
+          activeOpacity={0.8}
+        >
           <View style={styles.nutriHeader}>
             <Ionicons name="fitness" size={18} color={isCalorieOver ? '#FF6B6B' : Z_RED} />
             <Text style={styles.nutriTitle}>Today's Nutrition</Text>
             <Text style={styles.nutriMeals}>{summary?.meals_count || 0} meals</Text>
+            <Ionicons name="chevron-forward" size={18} color={BK_TEXT_LIGHT} style={{ marginLeft: 'auto' }} />
           </View>
           <View style={styles.nutriRow}>
             <View style={styles.nutriMain}>
@@ -306,7 +312,7 @@ export default function HomeScreen() {
               </Text>
             </View>
           )}
-        </View>
+        </TouchableOpacity>
 
         {/* ===== SCAN TABLE QR (For dine-in) ===== */}
         {orderType === 'dine-in' && (
