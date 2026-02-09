@@ -101,7 +101,7 @@ export default function OrdersScreen() {
             {item.is_scheduled && item.scheduled_ready_time && (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
                 <Ionicons name="time" size={12} color="#5B5FE0" />
-                <Text style={{ fontSize: 12, fontWeight: '700', color: '#5B5FE0' }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: BK_ORANGE }}>
                   Ready at {new Date(item.scheduled_ready_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </Text>
               </View>
@@ -189,38 +189,38 @@ export default function OrdersScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F8F8F8' },
+  safe: { flex: 1, backgroundColor: BK_CREAM },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 8 },
-  header: { backgroundColor: '#FFF', padding: 16, paddingTop: 8, borderBottomWidth: 1, borderBottomColor: '#EFEFEF' },
-  title: { fontSize: 24, fontWeight: '800', color: '#1C1C2E' },
-  emptyText: { color: '#1C1C2E', fontSize: 16, fontWeight: '600' },
-  emptySub: { color: '#9C9C9C', fontSize: 13 },
+  header: { backgroundColor: '#FFF', padding: 16, paddingTop: 8, borderBottomWidth: 1, borderBottomColor: '#E8DDD4' },
+  title: { fontSize: 24, fontWeight: '800', color: 'BK_BROWN' },
+  emptyText: { color: 'BK_BROWN', fontSize: 16, fontWeight: '600' },
+  emptySub: { color: BK_TEXT_LIGHT, fontSize: 13 },
   list: { padding: 16 },
-  card: { backgroundColor: '#FFF', borderRadius: 14, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#EFEFEF' },
+  card: { backgroundColor: '#FFF', borderRadius: 14, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#E8DDD4' },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 },
-  orderId: { fontSize: 16, fontWeight: '700', color: '#1C1C2E' },
+  orderId: { fontSize: 16, fontWeight: '700', color: 'BK_BROWN' },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 },
-  metaText: { fontSize: 12, color: '#9C9C9C', textTransform: 'capitalize' },
+  metaText: { fontSize: 12, color: BK_TEXT_LIGHT, textTransform: 'capitalize' },
   metaDot: { color: '#D0D0D0' },
-  orderPrice: { fontSize: 18, fontWeight: '800', color: '#1C1C2E' },
+  orderPrice: { fontSize: 18, fontWeight: '800', color: 'BK_BROWN' },
   timeline: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 14 },
   tlStep: { alignItems: 'center', flex: 1 },
   tlDotCol: { alignItems: 'center', flexDirection: 'row' },
   tlDot: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#E8E8E8', alignItems: 'center', justifyContent: 'center', zIndex: 1 },
-  tlDotDone: { backgroundColor: '#267E3E' },
+  tlDotDone: { backgroundColor: BK_GREEN },
   tlDotActive: { backgroundColor: Z_RED, borderWidth: 2, borderColor: '#FDE8EA' },
   tlLine: { height: 2, flex: 1, backgroundColor: '#E8E8E8', position: 'absolute', left: 24, right: -24, top: 11 },
-  tlLineDone: { backgroundColor: '#267E3E' },
+  tlLineDone: { backgroundColor: BK_GREEN },
   tlLabel: { fontSize: 9, color: '#B0B0B0', marginTop: 4, textAlign: 'center' },
-  tlLabelDone: { color: '#267E3E' },
+  tlLabelDone: { color: BK_GREEN },
   tlLabelActive: { color: Z_RED, fontWeight: '700' },
   itemsBox: { backgroundColor: '#FAFAFA', borderRadius: 8, padding: 10, marginBottom: 10 },
   itemRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 3 },
-  itemQty: { width: 50, fontSize: 12, fontWeight: '700', color: '#696969' },
-  itemName: { flex: 1, fontSize: 13, color: '#1C1C2E' },
-  itemPrice: { fontSize: 13, fontWeight: '600', color: '#1C1C2E' },
-  nutritionBar: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#EFEFEF' },
-  nutritionText: { fontSize: 11, color: '#9C9C9C' },
+  itemQty: { width: 50, fontSize: 12, fontWeight: '700', color: BK_TEXT_LIGHT },
+  itemName: { flex: 1, fontSize: 13, color: 'BK_BROWN' },
+  itemPrice: { fontSize: 13, fontWeight: '600', color: 'BK_BROWN' },
+  nutritionBar: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#E8DDD4' },
+  nutritionText: { fontSize: 11, color: BK_TEXT_LIGHT },
   nutritionSep: { color: '#D0D0D0' },
 
   // Re-order button
