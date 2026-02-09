@@ -238,7 +238,7 @@ export default function BudgetMealScreen() {
           <Text style={styles.title}>Budget Meal Builder</Text>
           <Text style={styles.subtitle}>Build your perfect meal within budget</Text>
         </View>
-        <TouchableOpacity style={styles.aiHelpBtn} onPress={getAiSuggestions} disabled={aiLoading}>
+        <TouchableOpacity style={styles.aiHelpBtn} onPress={() => getAiSuggestions(true)} disabled={aiLoading}>
           {aiLoading ? (
             <ActivityIndicator size="small" color="#FFF" />
           ) : (
