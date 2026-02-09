@@ -185,7 +185,7 @@ export default function OrdersScreen() {
                 <View style={[styles.dietDotFill, { backgroundColor: orderItem.diet_type === 'non-veg' ? BK_RED : BK_GREEN }]} />
               </View>
               <Text style={styles.itemName} numberOfLines={1}>
-                {orderItem.name} ({orderItem.grams || orderItem.quantity}g)
+                {orderItem.name || orderItem.product_name || 'Item'} ({orderItem.grams || orderItem.quantity || 0}g)
               </Text>
             </View>
           ))}
@@ -465,9 +465,9 @@ const styles = StyleSheet.create({
   
   orderItems: { marginBottom: 12 },
   itemRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
-  dietDot: { width: 14, height: 14, borderRadius: 2, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  dietDot: { width: 14, height: 14, borderRadius: 2, borderWidth: 2, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   dietDotFill: { width: 7, height: 7, borderRadius: 4 },
-  itemName: { flex: 1, fontSize: 14, color: BK_BROWN },
+  itemName: { flex: 1, fontSize: 14, color: BK_BROWN, fontWeight: '600' },
   moreItems: { fontSize: 12, color: BK_TEXT_LIGHT, fontStyle: 'italic', marginTop: 4 },
   
   orderFooter: {
