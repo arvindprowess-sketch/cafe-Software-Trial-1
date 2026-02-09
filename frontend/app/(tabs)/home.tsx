@@ -334,6 +334,20 @@ export default function HomeScreen() {
           </TouchableOpacity>
         )}
 
+        {/* ===== SCHEDULE FOR LATER ===== */}
+        <TouchableOpacity testID="schedule-for-later" style={styles.scheduleCTA} onPress={() => router.push('/(tabs)/menu')} activeOpacity={0.9}>
+          <View style={styles.ctaLeft}>
+            <View style={[styles.ctaIconBg, { backgroundColor: BK_GREEN }]}>
+              <Ionicons name="time" size={20} color="#FFF" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.ctaTitle}>Schedule for Later</Text>
+              <Text style={styles.ctaSub}>Pre-order your meals in advance</Text>
+            </View>
+          </View>
+          <Ionicons name="calendar" size={28} color={BK_GREEN} />
+        </TouchableOpacity>
+
         {showMealBuilder && !aiMeal && (
           <View style={styles.builderCard}>
             <View style={styles.builderHeader}>
@@ -762,6 +776,9 @@ const styles = StyleSheet.create({
   ctaIconBg: { width: 44, height: 44, borderRadius: 12, backgroundColor: BK_ORANGE, alignItems: 'center', justifyContent: 'center' },
   ctaTitle: { fontSize: 16, fontWeight: '800', color: BK_BROWN, textTransform: 'uppercase' },
   ctaSub: { fontSize: 12, color: BK_TEXT_LIGHT, marginTop: 2 },
+  
+  // Schedule for Later CTA
+  scheduleCTA: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#E8F5E1', marginHorizontal: 16, marginTop: 12, borderRadius: 14, padding: 16, borderWidth: 2, borderColor: BK_GREEN },
   
   // Builder Card
   builderCard: { backgroundColor: BK_WHITE, marginHorizontal: 16, marginTop: 16, borderRadius: 16, padding: 18, borderWidth: 2, borderColor: BK_ORANGE },
