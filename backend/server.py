@@ -1450,6 +1450,15 @@ async def ai_quick_meal(data: QuickMealRequest, user=Depends(get_current_user)):
 
         goal_guide = GOAL_GUIDELINES.get(data.goal, GOAL_GUIDELINES["maintenance"])
 
+        # Get user's daily targets from profile
+        user_goals = {
+            "daily_calories": user.get("daily_calories", 2000),
+            "daily_protein": user.get("daily_protein", 100),
+            "daily_carbs": user.get("daily_carbs", 250),
+            "daily_fat": user.get("daily_fat", 65),
+            "fitness_goal": user.get("fitness_goal", "maintenance")
+        }
+
         # Step 0: Fetch available products with real stock
         query = {"is_active": True, "available_qty_grams": {"$gt": 50}}
         if data.diet_preference == "veg":
