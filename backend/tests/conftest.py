@@ -2,7 +2,7 @@ import pytest
 import requests
 import os
 
-BASE_URL = "https://cashier-hub-8.preview.emergentagent.com"
+BASE_URL = "https://repo-connect-29.preview.emergentagent.com"
 
 @pytest.fixture
 def api_client():
