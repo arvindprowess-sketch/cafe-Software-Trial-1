@@ -831,6 +831,7 @@ const styles = StyleSheet.create({
   dietText: { fontSize: 13, fontWeight: '700', color: BK_TEXT_LIGHT },
   vegIndicator: { width: 14, height: 14, borderRadius: 2, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   vegDotInner: { width: 7, height: 7, borderRadius: 4 },
+  goalContainer: { marginBottom: 8 },
   goalRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
   goalChip: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 12, borderRadius: 25, backgroundColor: BK_WHITE, borderWidth: 2, borderColor: '#E8DDD4' },
   goalText: { fontSize: 11, fontWeight: '700', color: BK_TEXT_LIGHT },
