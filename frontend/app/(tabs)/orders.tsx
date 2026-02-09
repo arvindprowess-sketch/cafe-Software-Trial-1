@@ -146,36 +146,34 @@ export default function OrdersScreen() {
             <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
               <Text style={styles.statusText}>{item.status.toUpperCase()}</Text>
             </View>
+            <TouchableOpacity 
+              onPress={(e) => {
+                e.stopPropagation();
+                toggleFavorite(item.id, item.is_favorite);
+              }}
+              style={styles.favoriteBtn}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons 
+                name={item.is_favorite ? "heart" : "heart-outline"} 
+                size={22} 
+                color={item.is_favorite ? BK_RED : BK_TEXT_LIGHT} 
+              />
+            </TouchableOpacity>
           </View>
         </View>
 
-        {/* Order Type and Favorite - Second Row */}
-        <View style={styles.orderMetaRow}>
-          {item.order_type && (
-            <View style={styles.orderTypeBadge}>
-              <Ionicons 
-                name={item.order_type === 'delivery' ? 'bicycle' : item.order_type === 'dine-in' ? 'restaurant' : 'bag-handle'} 
-                size={12} 
-                color={BK_TEXT_LIGHT} 
-              />
-              <Text style={styles.orderTypeText}>{item.order_type}</Text>
-            </View>
-          )}
-          <TouchableOpacity 
-            onPress={(e) => {
-              e.stopPropagation();
-              toggleFavorite(item.id, item.is_favorite);
-            }}
-            style={styles.favoriteBtn}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
+        {/* Order Type Badge */}
+        {item.order_type && (
+          <View style={styles.orderTypeBadge}>
             <Ionicons 
-              name={item.is_favorite ? "heart" : "heart-outline"} 
-              size={22} 
-              color={item.is_favorite ? BK_RED : BK_TEXT_LIGHT} 
+              name={item.order_type === 'delivery' ? 'bicycle' : item.order_type === 'dine-in' ? 'restaurant' : 'bag-handle'} 
+              size={12} 
+              color={BK_TEXT_LIGHT} 
             />
-          </TouchableOpacity>
-        </View>
+            <Text style={styles.orderTypeText}>{item.order_type}</Text>
+          </View>
+        )}
 
         <View style={styles.orderItems}>
           {item.items?.slice(0, 3).map((orderItem: any, idx: number) => (
@@ -403,7 +401,7 @@ const styles = StyleSheet.create({
   },
   orderHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
   orderInfo: { flex: 1 },
-  orderHeaderRight: { flexDirection: 'row', alignItems: 'center' },
+  orderHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   orderId: { fontSize: 16, fontWeight: '800', color: BK_BROWN },
   orderDate: { fontSize: 12, color: BK_TEXT_LIGHT, marginTop: 2 },
   statusBadge: {
@@ -412,13 +410,8 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   statusText: { fontSize: 9, fontWeight: '800', color: BK_WHITE },
+  favoriteBtn: { padding: 4 },
   
-  orderMetaRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
   orderTypeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -427,9 +420,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 12,
+    alignSelf: 'flex-start',
+    marginBottom: 12,
   },
   orderTypeText: { fontSize: 10, fontWeight: '700', color: BK_TEXT_LIGHT, textTransform: 'uppercase' },
-  favoriteBtn: { padding: 4 },
   
   listContent: { padding: 16, paddingBottom: 100 },
   
