@@ -137,7 +137,14 @@ export default function MenuScreen() {
 
   const goCustomize = () => {
     if (cart.length === 0) { Alert.alert('Empty Cart', 'Add items first'); return; }
-    router.push({ pathname: '/customize', params: { cart: JSON.stringify(cart), orderType } });
+    
+    // Remove image data to prevent navigation crash
+    const cleanedCart = cart.map(item => {
+      const { image_url, ...itemWithoutImage } = item;
+      return itemWithoutImage;
+    });
+    
+    router.push({ pathname: '/customize', params: { cart: JSON.stringify(cleanedCart), orderType } });
   };
 
   // Render left sidebar category card
