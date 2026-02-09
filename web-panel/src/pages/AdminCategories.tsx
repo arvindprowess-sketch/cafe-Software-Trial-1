@@ -296,15 +296,14 @@ export default function AdminCategories() {
               {c.image_url ? (
                 <img src={c.image_url} alt={c.name} loading="lazy" />
               ) : (
-                <div className="cat-tile-no-img" style={{ color: c.color }}>{c.name?.[0]}</div>
+                <div className="cat-tile-no-img" style={{ background: c.color, color: '#FFF' }}>{c.name?.[0]}</div>
               )}
             </div>
             <span className={`cat-tile-badge ${c.is_active !== false ? 'active' : 'inactive'}`}>
               {c.is_active !== false ? 'Live' : 'Off'}
             </span>
-            <div className="cat-tile-footer" style={{ borderTop: `3px solid ${c.color}` }}>
-              <div className="cat-tile-name">{c.name}</div>
-              <div className="cat-tile-order">#{c.sort_order}</div>
+            <div className="cat-tile-footer">
+              <div className="cat-tile-name" style={{ color: c.color }}>{c.name}</div>
             </div>
             <div className="cat-tile-actions">
               <button className="btn-edit" onClick={() => openEdit(c)} data-testid={`edit-cat-${c.id}`}>Edit</button>
