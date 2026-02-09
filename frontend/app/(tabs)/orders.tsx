@@ -132,6 +132,7 @@ export default function OrdersScreen() {
         onPress={() => {/* Navigate to order detail */}}
         activeOpacity={0.9}
       >
+        {/* First Row: Order Info Only */}
         <View style={styles.orderHeader}>
           <View style={styles.orderHeaderLeft}>
             <Ionicons name={statusIcon as any} size={20} color={statusColor} />
@@ -142,38 +143,40 @@ export default function OrdersScreen() {
               </Text>
             </View>
           </View>
-          <View style={styles.orderHeaderRight}>
+        </View>
+
+        {/* Second Row: Delivery Badge, Status Badge, Heart */}
+        <View style={styles.orderMetaRow}>
+          <View style={styles.orderMetaLeft}>
+            {item.order_type && (
+              <View style={styles.orderTypeBadge}>
+                <Ionicons 
+                  name={item.order_type === 'delivery' ? 'bicycle' : item.order_type === 'dine-in' ? 'restaurant' : 'bag-handle'} 
+                  size={12} 
+                  color={BK_TEXT_LIGHT} 
+                />
+                <Text style={styles.orderTypeText}>{item.order_type}</Text>
+              </View>
+            )}
             <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
               <Text style={styles.statusText}>{item.status.toUpperCase()}</Text>
             </View>
-            <TouchableOpacity 
-              onPress={(e) => {
-                e.stopPropagation();
-                toggleFavorite(item.id, item.is_favorite);
-              }}
-              style={styles.favoriteBtn}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Ionicons 
-                name={item.is_favorite ? "heart" : "heart-outline"} 
-                size={22} 
-                color={item.is_favorite ? BK_RED : BK_TEXT_LIGHT} 
-              />
-            </TouchableOpacity>
           </View>
-        </View>
-
-        {/* Order Type Badge */}
-        {item.order_type && (
-          <View style={styles.orderTypeBadge}>
+          <TouchableOpacity 
+            onPress={(e) => {
+              e.stopPropagation();
+              toggleFavorite(item.id, item.is_favorite);
+            }}
+            style={styles.favoriteBtn}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
             <Ionicons 
-              name={item.order_type === 'delivery' ? 'bicycle' : item.order_type === 'dine-in' ? 'restaurant' : 'bag-handle'} 
-              size={12} 
-              color={BK_TEXT_LIGHT} 
+              name={item.is_favorite ? "heart" : "heart-outline"} 
+              size={22} 
+              color={item.is_favorite ? BK_RED : BK_TEXT_LIGHT} 
             />
-            <Text style={styles.orderTypeText}>{item.order_type}</Text>
-          </View>
-        )}
+          </TouchableOpacity>
+        </View>
 
         <View style={styles.orderItems}>
           {item.items?.slice(0, 3).map((orderItem: any, idx: number) => (
@@ -397,21 +400,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 12,
   },
   orderHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
   orderInfo: { flex: 1 },
-  orderHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   orderId: { fontSize: 16, fontWeight: '800', color: BK_BROWN },
   orderDate: { fontSize: 12, color: BK_TEXT_LIGHT, marginTop: 2 },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
-  },
-  statusText: { fontSize: 9, fontWeight: '800', color: BK_WHITE },
-  favoriteBtn: { padding: 4 },
   
+  orderMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  orderMetaLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
   orderTypeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -420,10 +427,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 12,
-    alignSelf: 'flex-start',
-    marginBottom: 12,
   },
   orderTypeText: { fontSize: 10, fontWeight: '700', color: BK_TEXT_LIGHT, textTransform: 'uppercase' },
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+  },
+  statusText: { fontSize: 9, fontWeight: '800', color: BK_WHITE },
+  favoriteBtn: { padding: 4 },
   
   listContent: { padding: 16, paddingBottom: 100 },
   
