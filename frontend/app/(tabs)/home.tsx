@@ -472,6 +472,29 @@ export default function HomeScreen() {
             </View>
             <Text style={styles.mealSummary}>{aiMeal.summary}</Text>
 
+            {/* Display Warnings/Feedback about Daily Targets */}
+            {aiMeal.warnings && aiMeal.warnings.length > 0 && (
+              <View style={styles.warningsContainer}>
+                {aiMeal.warnings.map((warning: string, idx: number) => {
+                  const isPositive = warning.startsWith('✅');
+                  const isWarning = warning.startsWith('⚠️');
+                  return (
+                    <View key={idx} style={[
+                      styles.warningItem,
+                      isPositive && styles.warningPositive,
+                      isWarning && styles.warningCaution
+                    ]}>
+                      <Text style={[
+                        styles.warningText,
+                        isPositive && styles.warningTextPositive,
+                        isWarning && styles.warningTextCaution
+                      ]}>{warning}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+
             {aiMeal.meal_items.map((item: any, i: number) => (
               <View key={i} style={styles.mealItem}>
                 <View style={styles.mealItemLeft}>
