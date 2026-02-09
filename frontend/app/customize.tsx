@@ -791,6 +791,7 @@ const styles = StyleSheet.create({
   orderTypeBadgeText: { color: Z_RED, fontSize: 11, fontWeight: '700', textTransform: 'capitalize' },
   scroll: { padding: 16 },
   section: { fontSize: 16, fontWeight: '700', color: '#502314', marginBottom: 8, marginTop: 4 },
+  goalContainer: { marginBottom: 8 },
   goalRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
   goalChip: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center', backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E8E8E8' },
   goalActive: { backgroundColor: Z_RED, borderColor: Z_RED },
