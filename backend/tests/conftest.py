@@ -2,7 +2,7 @@ import pytest
 import requests
 import os
 
-BASE_URL = "https://bold-menu-styles.preview.emergentagent.com"
+BASE_URL = "https://demo-check.preview.emergentagent.com"
 
 @pytest.fixture
 def api_client():
