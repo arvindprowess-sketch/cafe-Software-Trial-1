@@ -431,6 +431,7 @@ const styles = StyleSheet.create({
   orderTypeText: { fontSize: 10, fontWeight: '700', color: BK_TEXT_LIGHT, textTransform: 'uppercase' },
   favoriteBtn: { padding: 4 },
   
+  listContent: { padding: 16, paddingBottom: 100 },
   
   orderCard: {
     backgroundColor: BK_WHITE,
