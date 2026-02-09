@@ -288,7 +288,7 @@ export default function CustomizeScreen() {
         if (i.product_type === 'ready_made') {
           const qty = i.quantity || 1;
           return {
-            product_id: i.id,
+            product_id: i.id || i.product_id,
             product_name: i.name,
             product_type: 'ready_made',
             quantity: qty,
@@ -296,22 +296,22 @@ export default function CustomizeScreen() {
             price: (i.fixed_price || (i.cost_per_100g * (i.serving_grams || 300) / 100)) * qty,
             calories: (i.total_calories_per_serving || i.calories_per_100g) * qty,
             protein: (i.total_protein_per_serving || i.protein_per_100g) * qty,
-            carbs: (i.total_carbs_per_serving || i.carbs_per_100g) * qty,
-            fat: (i.total_fat_per_serving || i.fat_per_100g) * qty,
+            carbs: (i.total_carbs_per_serving || i.carbs_per_100g || 0) * qty,
+            fat: (i.total_fat_per_serving || i.fat_per_100g || 0) * qty,
             customized_ingredients: i.customized_ingredients || null
           };
         } else {
           const f = i.grams / 100;
           return {
-            product_id: i.id,
+            product_id: i.id || i.product_id,
             product_name: i.name,
             product_type: 'single',
             grams: i.grams,
             price: f * i.cost_per_100g,
             calories: f * i.calories_per_100g,
             protein: f * i.protein_per_100g,
-            carbs: f * i.carbs_per_100g,
-            fat: f * i.fat_per_100g
+            carbs: f * (i.carbs_per_100g || 0),
+            fat: f * (i.fat_per_100g || 0)
           };
         }
       });
