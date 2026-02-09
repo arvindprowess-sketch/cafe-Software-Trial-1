@@ -351,34 +351,32 @@ export default function MenuScreen() {
 const SIDEBAR_WIDTH = 75;
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F5F5F5' },
+  safe: { flex: 1, backgroundColor: BK_CREAM },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   
-  // Header
+  // Header (BK Dark Brown)
   header: { 
     flexDirection: 'row', 
     alignItems: 'center', 
     justifyContent: 'space-between',
-    backgroundColor: '#FFF', 
+    backgroundColor: BK_BROWN, 
     paddingHorizontal: 12, 
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    paddingVertical: 12,
   },
   menuBtn: { 
     width: 36, 
     height: 36, 
     borderRadius: 8, 
-    backgroundColor: '#F5F5F5', 
+    backgroundColor: 'rgba(245,235,220,0.15)', 
     alignItems: 'center', 
     justifyContent: 'center' 
   },
-  title: { fontSize: 18, fontWeight: '800', color: '#1C1C2E' },
+  title: { fontSize: 20, fontWeight: '800', color: BK_CREAM, textTransform: 'uppercase', letterSpacing: 0.5 },
   searchBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#FDE8EA',
+    backgroundColor: 'rgba(245,235,220,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -387,19 +385,19 @@ const styles = StyleSheet.create({
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFF',
+    backgroundColor: BK_WHITE,
     marginHorizontal: 10,
     marginVertical: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 25,
     gap: 8,
-    borderWidth: 1,
-    borderColor: '#F0F0F0',
+    borderWidth: 2,
+    borderColor: '#E8DDD4',
   },
-  searchInput: { flex: 1, fontSize: 13, color: '#1C1C2E' },
+  searchInput: { flex: 1, fontSize: 13, color: BK_BROWN },
   
-  // Diet Toggle (Veg / Non-Veg)
+  // Diet Toggle (BK style pills)
   dietToggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -414,21 +412,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: '#FFF',
-    borderWidth: 1.5,
-    borderColor: '#E8E8E8',
+    backgroundColor: BK_WHITE,
+    borderWidth: 2,
+    borderColor: '#E8DDD4',
   },
   dietToggleBtnAllActive: {
-    backgroundColor: '#1C1C2E',
-    borderColor: '#1C1C2E',
+    backgroundColor: BK_BROWN,
+    borderColor: BK_BROWN,
   },
   dietToggleBtnVegActive: {
-    backgroundColor: '#E8F5E9',
-    borderColor: GREEN,
+    backgroundColor: '#E8F5E1',
+    borderColor: BK_GREEN,
   },
   dietToggleBtnNonvegActive: {
-    backgroundColor: '#FDE8EA',
-    borderColor: Z_RED,
+    backgroundColor: '#FDE8E4',
+    borderColor: BK_RED,
   },
   dietToggleDot: {
     width: 12,
@@ -438,26 +436,28 @@ const styles = StyleSheet.create({
   },
   dietToggleText: {
     fontSize: 13,
-    fontWeight: '600',
-    color: '#696969',
+    fontWeight: '700',
+    color: BK_TEXT_LIGHT,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
   },
   dietToggleTextActive: {
-    color: '#FFF',
+    color: BK_CREAM,
     fontWeight: '800',
   },
   
-  // Main Content Layout
+  // Main Content
   mainContent: { 
     flex: 1, 
     flexDirection: 'row',
   },
   
-  // Left Sidebar Container (Fixed Width)
+  // Left Sidebar (BK)
   sidebarContainer: { 
     width: SIDEBAR_WIDTH, 
-    backgroundColor: '#FFF',
-    borderRightWidth: 1,
-    borderRightColor: '#F0F0F0',
+    backgroundColor: BK_WHITE,
+    borderRightWidth: 2,
+    borderRightColor: '#E8DDD4',
   },
   sidebarContent: { 
     paddingVertical: 6,
@@ -474,7 +474,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   sidebarCatActive: { 
-    backgroundColor: '#FFF5F5',
+    backgroundColor: '#FFF0E0',
   },
   sidebarActiveBar: {
     position: 'absolute',
@@ -500,14 +500,16 @@ const styles = StyleSheet.create({
   },
   sidebarCatLabel: { 
     fontSize: 10, 
-    fontWeight: '600', 
-    color: '#696969', 
+    fontWeight: '700', 
+    color: BK_TEXT_LIGHT, 
     textAlign: 'center',
     lineHeight: 12,
     width: '100%',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
   },
   
-  // Product List Container (Takes remaining space)
+  // Product List
   productListContainer: {
     flex: 1,
   },
@@ -516,23 +518,23 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   
-  // Product Card (BK style - compact)
+  // Product Card (BK style)
   productCard: { 
-    backgroundColor: '#FFF', 
-    borderRadius: 12, 
+    backgroundColor: BK_WHITE, 
+    borderRadius: 14, 
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#F0F0F0',
+    borderWidth: 2,
+    borderColor: '#E8DDD4',
   },
   productImageWrapper: {
     position: 'relative',
     width: '100%',
-    height: 110,
+    height: 120,
   },
   productImage: { 
     width: '100%', 
     height: '100%',
-    backgroundColor: '#F5F5F5',
+    backgroundColor: BK_CREAM,
   },
   productImagePlaceholder: { 
     alignItems: 'center', 
@@ -542,24 +544,24 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 8,
     left: 8,
-    backgroundColor: 'rgba(0,0,0,0.75)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+    backgroundColor: BK_BROWN,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
     alignItems: 'center',
   },
-  proteinValue: { fontSize: 14, fontWeight: '800', color: '#FFF' },
-  proteinLabel: { fontSize: 8, color: 'rgba(255,255,255,0.8)', marginTop: 1 },
+  proteinValue: { fontSize: 14, fontWeight: '800', color: BK_CREAM },
+  proteinLabel: { fontSize: 8, color: 'rgba(245,235,220,0.8)', marginTop: 1, textTransform: 'uppercase' },
   newBadge: {
     position: 'absolute',
     top: 8,
     right: 8,
-    backgroundColor: GREEN,
-    paddingHorizontal: 6,
+    backgroundColor: BK_GREEN,
+    paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 4,
+    borderRadius: 20,
   },
-  newBadgeText: { fontSize: 8, fontWeight: '800', color: '#FFF' },
+  newBadgeText: { fontSize: 8, fontWeight: '800', color: BK_WHITE, textTransform: 'uppercase' },
   
   productInfo: { 
     padding: 10,
@@ -573,8 +575,8 @@ const styles = StyleSheet.create({
   productName: { 
     flex: 1,
     fontSize: 14, 
-    fontWeight: '700', 
-    color: '#1C1C2E',
+    fontWeight: '800', 
+    color: BK_BROWN,
     lineHeight: 18,
   },
   vegIndicator: {
@@ -584,12 +586,12 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFF',
+    backgroundColor: BK_WHITE,
   },
   vegDot: { width: 8, height: 8, borderRadius: 4 },
   productDesc: { 
     fontSize: 11, 
-    color: '#9C9C9C', 
+    color: BK_TEXT_LIGHT, 
     marginTop: 4,
     lineHeight: 14,
   },
@@ -600,35 +602,36 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   productPrice: { 
-    fontSize: 16, 
+    fontSize: 18, 
     fontWeight: '800', 
-    color: '#1C1C2E' 
+    color: BK_BROWN 
   },
   priceUnit: { 
     fontSize: 10, 
     fontWeight: '400', 
-    color: '#9C9C9C' 
+    color: BK_TEXT_LIGHT 
   },
   addBtn: { 
-    backgroundColor: Z_RED, 
-    paddingHorizontal: 16, 
+    backgroundColor: BK_RED, 
+    paddingHorizontal: 18, 
     paddingVertical: 8, 
-    borderRadius: 8,
+    borderRadius: 20,
   },
   addBtnText: { 
-    color: '#FFF', 
+    color: BK_CREAM, 
     fontSize: 13, 
-    fontWeight: '700' 
+    fontWeight: '800',
+    textTransform: 'uppercase',
   },
   qtyBox: { 
     flexDirection: 'row', 
     alignItems: 'center', 
-    backgroundColor: Z_RED, 
-    borderRadius: 8, 
+    backgroundColor: BK_RED, 
+    borderRadius: 20, 
     overflow: 'hidden' 
   },
   qtyBtn: { paddingHorizontal: 10, paddingVertical: 8 },
-  qtyText: { color: '#FFF', fontSize: 12, fontWeight: '700', minWidth: 36, textAlign: 'center' },
+  qtyText: { color: BK_CREAM, fontSize: 12, fontWeight: '800', minWidth: 36, textAlign: 'center' },
   
   // Empty State
   emptyState: {
@@ -638,32 +641,33 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 14,
-    color: '#9C9C9C',
+    color: BK_TEXT_LIGHT,
     marginTop: 12,
+    fontWeight: '600',
   },
   
-  // Cart Bar
+  // Cart Bar (BK Red)
   cartBar: { 
     position: 'absolute', 
     bottom: 0, 
     left: 16, 
     right: 16, 
-    backgroundColor: Z_RED, 
-    borderRadius: 14, 
-    paddingHorizontal: 20, 
+    backgroundColor: BK_RED, 
+    borderRadius: 25, 
+    paddingHorizontal: 22, 
     paddingVertical: 14, 
     flexDirection: 'row', 
     justifyContent: 'space-between', 
     alignItems: 'center', 
     marginBottom: 6, 
     elevation: 8,
-    shadowColor: Z_RED,
+    shadowColor: BK_BROWN,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
   },
-  cartItems: { color: '#FFF', fontSize: 12, fontWeight: '500' },
-  cartTotal: { color: '#FFF', fontSize: 20, fontWeight: '800' },
+  cartItems: { color: BK_CREAM, fontSize: 12, fontWeight: '600' },
+  cartTotal: { color: BK_CREAM, fontSize: 22, fontWeight: '800' },
   cartRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  cartAction: { color: '#FFF', fontSize: 15, fontWeight: '700' },
+  cartAction: { color: BK_CREAM, fontSize: 15, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
 });
