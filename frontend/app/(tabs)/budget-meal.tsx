@@ -251,24 +251,6 @@ export default function BudgetMealScreen() {
               <Text style={[styles.filterText, dietPref === d.key && { color: '#FFF' }]}>{d.label}</Text>
             </TouchableOpacity>
           ))}
-          
-          <View style={styles.filterDivider} />
-          
-          {/* Goal */}
-          {[
-            { key: 'fat_loss', label: 'Fat Loss', icon: 'trending-down' },
-            { key: 'muscle_gain', label: 'Muscle', icon: 'trending-up' },
-            { key: 'maintenance', label: 'Maintain', icon: 'swap-horizontal' },
-          ].map(g => (
-            <TouchableOpacity
-              key={g.key}
-              style={[styles.filterChip, goal === g.key && styles.filterChipActive]}
-              onPress={() => setGoal(g.key)}
-            >
-              <Ionicons name={g.icon as any} size={14} color={goal === g.key ? '#FFF' : '#8B6F61'} />
-              <Text style={[styles.filterText, goal === g.key && { color: '#FFF' }]}>{g.label}</Text>
-            </TouchableOpacity>
-          ))}
         </ScrollView>
       </View>
 
