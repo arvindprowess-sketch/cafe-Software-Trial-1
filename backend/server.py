@@ -371,6 +371,14 @@ def generate_otp() -> str:
     import random
     return str(random.randint(100000, 999999))
 
+def sms_is_configured() -> bool:
+    """True only when a real SMS provider (MSG91) is configured.
+    Used to gate the DEV-ONLY dev_otp response field."""
+    return bool(
+        os.environ.get("MSG91_AUTH_KEY", "").strip()
+        and os.environ.get("MSG91_TEMPLATE_ID", "").strip()
+    )
+
 async def send_otp_sms(phone: str, otp: str) -> bool:
     """Send OTP via MSG91 SMS (A2). Falls back to dev-mode logging if creds are missing.
     The OTP is NEVER returned in the HTTP response."""
@@ -429,11 +437,21 @@ async def send_otp(data: OTPSendRequest):
     if not sent:
         raise HTTPException(status_code=500, detail="Failed to send OTP. Please try again.")
 
-    return {
+    response = {
         "message": "OTP sent successfully",
         "phone": phone,
         "expires_in": 300
     }
+    # DEV-ONLY CONVENIENCE (A1 relaxed for dev): when NO SMS provider (MSG91) is configured,
+    # also return the plaintext OTP so testers can log in without real SMS.
+    # Once MSG91_AUTH_KEY + MSG91_TEMPLATE_ID are set, the OTP is NEVER included.
+    if not sms_is_configured():
+        logger.warning(
+            f"[SMS][DEV] No SMS provider configured -> returning dev_otp in /auth/otp/send "
+            f"response for {phone}. Set MSG91_AUTH_KEY + MSG91_TEMPLATE_ID to disable this."
+        )
+        response["dev_otp"] = otp
+    return response
 
 @api_router.post("/auth/otp/verify")
 async def verify_otp(data: OTPVerifyRequest):

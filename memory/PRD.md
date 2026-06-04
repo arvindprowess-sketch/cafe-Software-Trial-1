@@ -97,3 +97,10 @@ Goal: give the user ONE preview URL to test BOTH the customer mobile app and the
   so the Expo web export succeeds cleanly.
 - Mobile app is a STATIC build → re-run `bash /app/scripts/build-mobile.sh` after editing `frontend/`.
 - OTP is DEV-mode (no MSG91 keys) → OTP not sent to phone; appears in backend log.
+
+## 2026-06-04 — DEV-ONLY dev_otp convenience
+- `/auth/otp/send` returns `dev_otp` (plaintext) ONLY when no SMS provider is configured
+  (helper `sms_is_configured()` = MSG91_AUTH_KEY + MSG91_TEMPLATE_ID both set). Logs a clear
+  warning. When MSG91 is configured, `dev_otp` is never included (production-safe).
+- Mobile `app/index.tsx` reads `result.dev_otp` (was `demo_otp`) -> shows "Demo OTP" box on
+  the verify screen. Rebuilt mobile bundle via scripts/build-mobile.sh. Verified e2e.

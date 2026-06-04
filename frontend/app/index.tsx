@@ -57,9 +57,9 @@ export default function AuthScreen() {
         body: { phone: cleanPhone }
       });
       
-      // For demo, show OTP
-      if (result.demo_otp) {
-        setDemoOtp(result.demo_otp);
+      // DEV-ONLY: backend returns dev_otp only when no SMS provider (MSG91) is configured
+      if (result.dev_otp) {
+        setDemoOtp(result.dev_otp);
       }
       
       setStep('otp');

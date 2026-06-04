@@ -14,9 +14,11 @@
 
 ## Customer app (Mobile, /mobile) — phone + OTP
 - 10-digit phone + 6-digit OTP.
-- **DEV MODE**: MSG91 SMS not configured, so OTP is NOT sent to the phone — it is printed in the backend log:
-  `grep "\[SMS\]\[DEV\]" /var/log/supervisor/backend.*.log | tail -1`
-- To enable real SMS OTP: add `MSG91_AUTH_KEY` + `MSG91_TEMPLATE_ID` to `/app/backend/.env`.
+- **DEV MODE (MSG91 not configured):** `/auth/otp/send` now returns the OTP as a `dev_otp`
+  field AND the mobile app shows it on the VERIFY OTP screen as "Demo OTP: XXXXXX".
+  So you can log in instantly without real SMS. A warning is also logged server-side.
+- **Once MSG91 is configured** (MSG91_AUTH_KEY + MSG91_TEMPLATE_ID set in backend/.env),
+  `dev_otp` is NEVER returned and the on-screen box disappears — real SMS is used.
 
 ## Seeding (already done)
 - `POST /api/seed` → 16 products + admin (idempotent)
