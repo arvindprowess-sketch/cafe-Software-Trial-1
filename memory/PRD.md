@@ -164,3 +164,15 @@ Goal: give the user ONE preview URL to test BOTH the customer mobile app and the
 - FIX: added `import { useCart } from '../../utils/CartContext';`. Rebuilt mobile bundle
   (bash scripts/build-mobile.sh). Verified via screenshot: Budget Meal Builder renders fully.
 
+## 2026-06 — PHASE 1: Budget Builder cleanup + Smart Fill alternatives
+- 1A (budget-meal.tsx): rewrote as a pure SETUP screen. Removed leftover inline dish/product
+  list, "Your Meal"/"Fits in budget"/"All Items" sections, the cart-total row and the broken
+  "Review Order" bottom bar. Kept ONLY: budget input + presets (Rs100-400), spent/left bar,
+  Veg/Non-Veg filter, Goal selector, and a prominent lime "Smart Fill My Meal" CTA (+ header btn).
+- 1B (smart-fill.tsx): client-side alternatives under each SELECTED suggested dish. Fetches the
+  existing /products catalog once (no new endpoint); per dish shows up to 3 "Similar options ·
+  tap to swap" chips filtered by same diet_type, ranked by closeness in calories+carbs (per 100g)
+  with a same-category bonus. swap() replaces the dish keeping same grams and recomputes
+  price/macros; toggle keeps/removes. Totals + bottom bar recompute live. Verified swap
+  Chicken Breast->Grilled Fish recomputed 2726->2685 cal, Rs250->Rs278.
+
