@@ -331,7 +331,7 @@ export default function MenuScreen() {
       </View>
 
       {/* Veg / Non-Veg Toggle */}
-      <View style={styles.dietToggleRow} data-testid="diet-toggle-row">
+      <View style={styles.dietToggleRow} testID="diet-toggle-row">
         <TouchableOpacity
           testID="diet-toggle-all"
           style={[styles.dietToggleBtn, dietFilter === 'all' && styles.dietToggleBtnAllActive]}

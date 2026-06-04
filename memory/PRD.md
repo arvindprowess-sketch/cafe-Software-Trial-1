@@ -104,3 +104,24 @@ Goal: give the user ONE preview URL to test BOTH the customer mobile app and the
   warning. When MSG91 is configured, `dev_otp` is never included (production-safe).
 - Mobile `app/index.tsx` reads `result.dev_otp` (was `demo_otp`) -> shows "Demo OTP" box on
   the verify screen. Rebuilt mobile bundle via scripts/build-mobile.sh. Verified e2e.
+
+## 2026-06-04 — Customer App Fixes Round 2 (5 fixes, all verified 5/5)
+- FIX 1 Delivery location: home.tsx delivery bar -> address modal using expo-location
+  (permission -> getCurrentPosition -> reverseGeocode; Nominatim web fallback; coords fallback)
+  + manual-entry fallback; persisted to AsyncStorage 'delivery_address'; carried into customize.tsx
+  and stored on the order (OrderCreate.delivery_address + order doc; backend).
+- FIX 2 Six canonical goals from ONE source (utils/theme.ts GOALS: fat_loss, muscle_gain,
+  maintenance, beginner, recomposition, lean_bulk). Used on Home selector, SideDrawer (3-dots),
+  AI Picks inline builder, Budget Builder goal row, and combo-builder. Backend GOAL_GUIDELINES +
+  prompt lines added for recomposition (maintenance cal, very high protein) and lean_bulk
+  (~+10-15% surplus, high protein, controlled fat).
+- FIX 3 Removed duplicate goal+budget: customize.tsx hides the Fitness Goal + Budget section when
+  goal is carried via params (cameFromAI). home orderAiMeal, combo orderCombo, budget-meal
+  proceedToCheckout, and smart-fill all pass goal+budget.
+- FIX 4 Popular Items: moved vegBadge onto the product image (top:124) so it no longer overlaps
+  the 'Add +' button.
+- FIX 5 Smart Fill -> new dedicated screen app/smart-fill.tsx (dishes list, toggle each, Back,
+  Review Order -> customize -> Place Order -> Orders tab). Removed the old frozen inline AI
+  suggestions panel from budget-meal.tsx; added a Goal selector row there.
+- Also normalized data-testid -> testID in SideDrawer.tsx & menu.tsx (RN-Web only maps testID).
+- Mobile is a static web export: after Expo edits run `bash /app/scripts/build-mobile.sh`.

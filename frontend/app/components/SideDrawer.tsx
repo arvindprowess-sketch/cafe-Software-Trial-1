@@ -121,7 +121,7 @@ export default function SideDrawer({ visible, onClose, user }: SideDrawerProps) 
         <Animated.View style={[styles.drawer, { transform: [{ translateX: slideAnim }] }]}>
           {/* Header */}
           <View style={styles.header}>
-            <TouchableOpacity style={styles.closeBtn} onPress={onClose} data-testid="drawer-close-btn">
+            <TouchableOpacity style={styles.closeBtn} onPress={onClose} testID="drawer-close-btn">
               <Ionicons name="arrow-back" size={24} color="#15140F" />
             </TouchableOpacity>
             <TouchableOpacity style={styles.notifBtn}>
@@ -142,9 +142,9 @@ export default function SideDrawer({ visible, onClose, user }: SideDrawerProps) 
                     value={nameValue}
                     onChangeText={setNameValue}
                     autoFocus
-                    data-testid="drawer-edit-name-input"
+                    testID="drawer-edit-name-input"
                   />
-                  <TouchableOpacity onPress={saveName} disabled={savingName} data-testid="drawer-save-name-btn">
+                  <TouchableOpacity onPress={saveName} disabled={savingName} testID="drawer-save-name-btn">
                     <Ionicons name="checkmark-circle" size={28} color={GREEN} />
                   </TouchableOpacity>
                   <TouchableOpacity onPress={() => { setEditingName(false); setNameValue(user?.name || 'Guest User'); }}>
@@ -154,7 +154,7 @@ export default function SideDrawer({ visible, onClose, user }: SideDrawerProps) 
               ) : (
                 <View style={styles.nameRow}>
                   <Text style={styles.userName}>{nameValue}</Text>
-                  <TouchableOpacity onPress={() => setEditingName(true)} data-testid="drawer-edit-name-btn">
+                  <TouchableOpacity onPress={() => setEditingName(true)} testID="drawer-edit-name-btn">
                     <Ionicons name="pencil" size={14} color="#9C9C9C" />
                   </TouchableOpacity>
                 </View>
@@ -167,7 +167,7 @@ export default function SideDrawer({ visible, onClose, user }: SideDrawerProps) 
           <TouchableOpacity
             style={styles.goalCard}
             onPress={() => setShowGoals(!showGoals)}
-            data-testid="drawer-fitness-toggle"
+            testID="drawer-fitness-toggle"
           >
             <View style={styles.goalIconBox}>
               <Ionicons name="fitness" size={20} color="#FFF" />
@@ -184,13 +184,13 @@ export default function SideDrawer({ visible, onClose, user }: SideDrawerProps) 
           <ScrollView style={styles.menuList} showsVerticalScrollIndicator={false}>
             {/* Expandable Goals Section */}
             {showGoals && (
-              <View style={styles.goalsSection} data-testid="drawer-goals-section">
+              <View style={styles.goalsSection} testID="drawer-goals-section">
                 <Text style={styles.sectionTitle}>Fitness Goal</Text>
                 <View style={styles.goalsRow}>
                   {GOALS.map(g => (
                     <TouchableOpacity
                       key={g.key}
-                      data-testid={`drawer-goal-${g.key}`}
+                      testID={`drawer-goal-${g.key}`}
                       style={[styles.goalPill, goal === g.key && { borderColor: g.color, backgroundColor: `${g.color}15` }]}
                       onPress={() => setGoal(g.key)}
                     >
@@ -212,7 +212,7 @@ export default function SideDrawer({ visible, onClose, user }: SideDrawerProps) 
                       <Text style={[styles.targetLabel, { color: t.color }]}>{t.label}</Text>
                       <View style={styles.targetInputRow}>
                         <TextInput
-                          data-testid={`drawer-target-${t.label.toLowerCase()}`}
+                          testID={`drawer-target-${t.label.toLowerCase()}`}
                           style={styles.targetInput}
                           value={t.val}
                           onChangeText={t.set}
@@ -228,7 +228,7 @@ export default function SideDrawer({ visible, onClose, user }: SideDrawerProps) 
                   style={styles.saveBtn}
                   onPress={saveGoals}
                   disabled={saving}
-                  data-testid="drawer-save-goals-btn"
+                  testID="drawer-save-goals-btn"
                 >
                   <Ionicons name="checkmark-circle" size={18} color="#FFF" />
                   <Text style={styles.saveBtnText}>{saving ? 'Saving...' : 'Save Goals'}</Text>
@@ -248,7 +248,7 @@ export default function SideDrawer({ visible, onClose, user }: SideDrawerProps) 
                   key={item.id}
                   style={styles.menuItem}
                   onPress={() => handleItemPress(item)}
-                  data-testid={`drawer-${item.id}`}
+                  testID={`drawer-${item.id}`}
                 >
                   <Ionicons name={item.icon as any} size={22} color="#15140F" />
                   <Text style={styles.menuLabel}>{item.label}</Text>
@@ -262,7 +262,7 @@ export default function SideDrawer({ visible, onClose, user }: SideDrawerProps) 
             <TouchableOpacity
               style={styles.menuItem}
               onPress={handleLogout}
-              data-testid="drawer-logout"
+              testID="drawer-logout"
             >
               <Ionicons name="log-out-outline" size={22} color={Z_RED} />
               <Text style={[styles.menuLabel, { color: Z_RED }]}>Logout</Text>
