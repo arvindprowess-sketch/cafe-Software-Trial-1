@@ -7,6 +7,8 @@ import os
 import logging
 import json
 import base64
+import secrets
+import socketio
 from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
@@ -18,6 +20,9 @@ import jwt
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
@@ -27,8 +32,53 @@ app = FastAPI()
 api_router = APIRouter(prefix="/api")
 security = HTTPBearer()
 
-JWT_SECRET = "dietcafe_secret_key_2024"
+# ========== CONFIG (env-driven, A3 + A4) ==========
+JWT_SECRET = os.environ.get("JWT_SECRET") or secrets.token_hex(32)
 JWT_ALGORITHM = "HS256"
+
+_origins_env = os.environ.get("ALLOWED_ORIGINS", "").strip()
+ALLOWED_ORIGINS = [o.strip() for o in _origins_env.split(",") if o.strip()] or ["*"]
+
+# ========== SOCKET.IO REAL-TIME SERVER (Part C) ==========
+sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")
+STAFF_ROOMS = ["kitchen", "cashier", "admin"]
+
+@sio.event
+async def connect(sid, environ):
+    logger.info(f"[WS] Client connected: {sid}")
+
+@sio.event
+async def disconnect(sid):
+    logger.info(f"[WS] Client disconnected: {sid}")
+
+@sio.event
+async def join_room(sid, data):
+    """Clients join role-based rooms: 'kitchen', 'cashier', 'admin', or 'user:<id>'."""
+    room_id = (data or {}).get("room_id")
+    if not room_id:
+        logger.warning(f"[WS] join_room without room_id from {sid}")
+        return
+    await sio.enter_room(sid, room_id)
+    await sio.emit("joined", {"room_id": room_id}, to=sid)
+    logger.info(f"[WS] {sid} joined room {room_id}")
+
+async def broadcast_event(event_type: str, payload: dict, rooms=None):
+    """Broadcast a real-time event to the given rooms (defaults to staff; menu_update also hits customers)."""
+    message = {"type": event_type, "data": payload}
+    if rooms is not None:
+        targets = rooms
+    elif event_type == "menu_update":
+        targets = STAFF_ROOMS + ["customers"]
+    else:
+        targets = STAFF_ROOMS
+    for room in targets:
+        try:
+            await sio.emit("update", message, room=room)
+        except Exception as e:
+            logger.error(f"[WS] broadcast error to {room}: {e}")
+
+# ========== CANONICAL ORDER STATUS FLOW (Part C2) ==========
+ORDER_STATUSES = ["pending", "accepted", "preparing", "ready", "completed", "cancelled", "scheduled", "out_for_delivery"]
 
 # ========== NUTRITION DATABASE (per 100g) ==========
 NON_VEG_KEYWORDS = {"chicken", "egg", "fish", "kabab", "seekh", "mutton", "lamb", "prawn", "shrimp", "meat", "pork", "beef", "turkey"}
@@ -110,6 +160,13 @@ class ProductCreate(BaseModel):
     description: Optional[str] = None
     category: Optional[str] = None  # Admin can select category
     diet_type: Optional[str] = None  # "veg" or "non-veg"
+    # B1: admin-entered nutrition (per 100g). When set, these override NUTRITION_DB.
+    calories_per_100g: Optional[float] = None
+    protein_per_100g: Optional[float] = None
+    carbs_per_100g: Optional[float] = None
+    fat_per_100g: Optional[float] = None
+    # B5: per-item preparation time
+    preparation_time_minutes: Optional[int] = None
 
 class ProductUpdate(BaseModel):
     name: Optional[str] = None
@@ -125,6 +182,12 @@ class ProductUpdate(BaseModel):
     diet_type: Optional[str] = None
     description: Optional[str] = None
     is_editable: Optional[bool] = None
+    # B1 + B5
+    calories_per_100g: Optional[float] = None
+    protein_per_100g: Optional[float] = None
+    carbs_per_100g: Optional[float] = None
+    fat_per_100g: Optional[float] = None
+    preparation_time_minutes: Optional[int] = None
 
 class OrderItem(BaseModel):
     product_id: str
@@ -157,6 +220,8 @@ class OrderCreate(BaseModel):
     customer_name: Optional[str] = None  # For walk-in customers
     is_scheduled: Optional[bool] = False
     scheduled_ready_time: Optional[str] = None  # ISO datetime string
+    table_number: Optional[int] = None
+    confirm_duplicate: Optional[bool] = False  # B3: bypass duplicate guard when user confirms
 
 class AISuggestRequest(BaseModel):
     goal: str
@@ -176,6 +241,12 @@ class SingleProductCreate(BaseModel):
     grams: float
     category_id: Optional[str] = None
     diet_type: Optional[str] = None
+    # B1 + B5
+    calories_per_100g: Optional[float] = None
+    protein_per_100g: Optional[float] = None
+    carbs_per_100g: Optional[float] = None
+    fat_per_100g: Optional[float] = None
+    preparation_time_minutes: Optional[int] = None
 
 class IngredientItem(BaseModel):
     name: str
@@ -190,6 +261,7 @@ class ReadyMadeMealCreate(BaseModel):
     serving_grams: float = 300
     is_editable: bool = False
     category_id: Optional[str] = None
+    preparation_time_minutes: Optional[int] = None  # B5
 
 class ReadyMadeOrderItem(BaseModel):
     product_id: str
@@ -264,10 +336,35 @@ def match_nutrition(product_name: str) -> Dict:
                 return val
     return {"calories": 100, "protein": 5, "carbs": 15, "fat": 3, "category": "Other", "diet_type": detect_diet_type(product_name)}
 
+def resolved_nutrition(name: str, cal=None, pro=None, carb=None, fat=None) -> Dict:
+    """B1: Prefer admin-entered nutrition; fall back to NUTRITION_DB keyword matching when empty."""
+    base = match_nutrition(name)
+    return {
+        "calories": cal if cal is not None else base["calories"],
+        "protein": pro if pro is not None else base["protein"],
+        "carbs": carb if carb is not None else base["carbs"],
+        "fat": fat if fat is not None else base["fat"],
+        "category": base["category"],
+        "diet_type": base.get("diet_type", detect_diet_type(name)),
+    }
+
 # ========== AUTH ROUTES ==========
 
-# OTP Storage (in production, use Redis with TTL)
-otp_store: Dict[str, Dict] = {}
+# OTP storage is durable in MongoDB (collection: otp_codes) with a TTL index on expires_at (A5).
+async def store_otp(phone: str, otp: str, name: Optional[str] = None):
+    now = datetime.now(timezone.utc)
+    await db.otp_codes.update_one(
+        {"phone": phone},
+        {"$set": {
+            "phone": phone,
+            "otp_hash": hash_password(otp),
+            "expires_at": now + timedelta(minutes=5),
+            "last_sent_at": now,
+            "attempts": 0,
+            "name": name,
+        }},
+        upsert=True,
+    )
 
 def generate_otp() -> str:
     """Generate 6-digit OTP"""
@@ -275,33 +372,37 @@ def generate_otp() -> str:
     return str(random.randint(100000, 999999))
 
 async def send_otp_sms(phone: str, otp: str) -> bool:
-    """Send OTP via SMS - Mock for now, can switch to MSG91 later"""
-    # TODO: Uncomment below for MSG91 integration
-    # import httpx
-    # MSG91_AUTH_KEY = os.environ.get("MSG91_AUTH_KEY")
-    # MSG91_TEMPLATE_ID = os.environ.get("MSG91_TEMPLATE_ID")
-    # MSG91_SENDER_ID = os.environ.get("MSG91_SENDER_ID", "DIETCF")
-    # 
-    # if MSG91_AUTH_KEY and MSG91_TEMPLATE_ID:
-    #     try:
-    #         async with httpx.AsyncClient() as client:
-    #             response = await client.post(
-    #                 "https://api.msg91.com/api/v5/otp",
-    #                 headers={"authkey": MSG91_AUTH_KEY},
-    #                 json={
-    #                     "template_id": MSG91_TEMPLATE_ID,
-    #                     "mobile": f"91{phone}",
-    #                     "otp": otp,
-    #                     "sender": MSG91_SENDER_ID,
-    #                 }
-    #             )
-    #             return response.status_code == 200
-    #     except Exception as e:
-    #         logger.error(f"MSG91 error: {e}")
-    #         return False
-    
-    # Mock OTP - In production, remove this and use MSG91 above
-    logger.info(f"📱 MOCK OTP for {phone}: {otp}")
+    """Send OTP via MSG91 SMS (A2). Falls back to dev-mode logging if creds are missing.
+    The OTP is NEVER returned in the HTTP response."""
+    import httpx
+    MSG91_AUTH_KEY = os.environ.get("MSG91_AUTH_KEY", "").strip()
+    MSG91_TEMPLATE_ID = os.environ.get("MSG91_TEMPLATE_ID", "").strip()
+    MSG91_SENDER_ID = os.environ.get("MSG91_SENDER_ID", "FUELCF").strip()
+
+    if MSG91_AUTH_KEY and MSG91_TEMPLATE_ID:
+        try:
+            async with httpx.AsyncClient(timeout=10) as hc:
+                response = await hc.post(
+                    "https://control.msg91.com/api/v5/otp",
+                    headers={"authkey": MSG91_AUTH_KEY, "Content-Type": "application/json"},
+                    params={
+                        "template_id": MSG91_TEMPLATE_ID,
+                        "mobile": f"91{phone}",
+                        "otp": otp,
+                        "sender": MSG91_SENDER_ID,
+                    },
+                )
+                if response.status_code == 200:
+                    logger.info(f"[SMS] OTP sent to {phone} via MSG91")
+                    return True
+                logger.error(f"[SMS] MSG91 failed ({response.status_code}): {response.text}")
+                return False
+        except Exception as e:
+            logger.error(f"[SMS] MSG91 error: {e}")
+            return False
+
+    # DEV MODE: no SMS provider configured -> log only, never expose in response
+    logger.info(f"[SMS][DEV] OTP for {phone}: {otp}  (configure MSG91_AUTH_KEY + MSG91_TEMPLATE_ID for real SMS)")
     return True
 
 class OTPSendRequest(BaseModel):
@@ -315,35 +416,22 @@ class OTPVerifyRequest(BaseModel):
 
 @api_router.post("/auth/otp/send")
 async def send_otp(data: OTPSendRequest):
-    """Send OTP to phone number"""
+    """Send OTP to phone number (A1: never returns the OTP)."""
     phone = data.phone.strip().replace(" ", "").replace("-", "")
-    
-    # Validate phone number (10 digits for India)
+
     if not phone.isdigit() or len(phone) != 10:
         raise HTTPException(status_code=400, detail="Invalid phone number. Enter 10 digits.")
-    
-    # Generate OTP
+
     otp = generate_otp()
-    
-    # Store OTP with expiry (5 minutes)
-    otp_store[phone] = {
-        "otp": otp,
-        "expires_at": datetime.now(timezone.utc).timestamp() + 300,  # 5 minutes
-        "attempts": 0,
-        "name": data.name
-    }
-    
-    # Send OTP via SMS
+    await store_otp(phone, otp, data.name)
+
     sent = await send_otp_sms(phone, otp)
-    
     if not sent:
         raise HTTPException(status_code=500, detail="Failed to send OTP. Please try again.")
-    
-    # For DEMO: Return OTP in response (REMOVE IN PRODUCTION!)
+
     return {
         "message": "OTP sent successfully",
         "phone": phone,
-        "demo_otp": otp,  # REMOVE THIS IN PRODUCTION
         "expires_in": 300
     }
 
@@ -351,35 +439,32 @@ async def send_otp(data: OTPSendRequest):
 async def verify_otp(data: OTPVerifyRequest):
     """Verify OTP and login/register user"""
     phone = data.phone.strip().replace(" ", "").replace("-", "")
-    
-    # Check if OTP exists
-    if phone not in otp_store:
+
+    record = await db.otp_codes.find_one({"phone": phone}, {"_id": 0})
+    if not record:
         raise HTTPException(status_code=400, detail="OTP expired or not sent. Please request new OTP.")
-    
-    stored = otp_store[phone]
-    
-    # Check expiry
-    if datetime.now(timezone.utc).timestamp() > stored["expires_at"]:
-        del otp_store[phone]
+
+    expires_at = record["expires_at"]
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if datetime.now(timezone.utc) > expires_at:
+        await db.otp_codes.delete_one({"phone": phone})
         raise HTTPException(status_code=400, detail="OTP expired. Please request new OTP.")
-    
-    # Check attempts (max 3)
-    if stored["attempts"] >= 3:
-        del otp_store[phone]
+
+    if record.get("attempts", 0) >= 3:
+        await db.otp_codes.delete_one({"phone": phone})
         raise HTTPException(status_code=400, detail="Too many wrong attempts. Please request new OTP.")
-    
-    # Verify OTP
-    if data.otp != stored["otp"]:
-        otp_store[phone]["attempts"] += 1
-        remaining = 3 - otp_store[phone]["attempts"]
-        raise HTTPException(status_code=400, detail=f"Invalid OTP. {remaining} attempts remaining.")
-    
-    # OTP verified - clean up
-    del otp_store[phone]
-    
+
+    if not verify_password(data.otp, record.get("otp_hash", "")):
+        await db.otp_codes.update_one({"phone": phone}, {"$inc": {"attempts": 1}})
+        remaining = 3 - (record.get("attempts", 0) + 1)
+        raise HTTPException(status_code=400, detail=f"Invalid OTP. {max(remaining,0)} attempts remaining.")
+
+    await db.otp_codes.delete_one({"phone": phone})
+
     # Check if user exists
     user = await db.users.find_one({"phone": phone}, {"_id": 0})
-    
+
     if user:
         # Existing user - login
         token = create_token(user["id"], user["role"])
@@ -402,7 +487,7 @@ async def verify_otp(data: OTPVerifyRequest):
     else:
         # New user - register
         user_id = str(uuid.uuid4())
-        name = data.name or stored.get("name") or f"User{phone[-4:]}"
+        name = data.name or record.get("name") or f"User{phone[-4:]}"
         
         new_user = {
             "id": user_id,
@@ -441,14 +526,15 @@ async def verify_otp(data: OTPVerifyRequest):
 async def resend_otp(data: OTPSendRequest):
     """Resend OTP to phone number"""
     phone = data.phone.strip().replace(" ", "").replace("-", "")
-    
-    # Rate limiting - check if previous OTP was sent within 30 seconds
-    if phone in otp_store:
-        time_diff = otp_store[phone]["expires_at"] - 300 + 30  # Original send time + 30 sec
-        if datetime.now(timezone.utc).timestamp() < time_diff:
+
+    record = await db.otp_codes.find_one({"phone": phone}, {"_id": 0})
+    if record and record.get("last_sent_at"):
+        last_sent = record["last_sent_at"]
+        if last_sent.tzinfo is None:
+            last_sent = last_sent.replace(tzinfo=timezone.utc)
+        if (datetime.now(timezone.utc) - last_sent).total_seconds() < 30:
             raise HTTPException(status_code=429, detail="Please wait 30 seconds before requesting new OTP.")
-    
-    # Generate and send new OTP
+
     return await send_otp(data)
 
 # Keep existing email/password login for admin
@@ -517,7 +603,7 @@ async def get_me(user=Depends(get_current_user)):
 async def create_product(data: ProductCreate, user=Depends(get_current_user)):
     if user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Admin only")
-    nutrition = match_nutrition(data.name)
+    nutrition = resolved_nutrition(data.name, data.calories_per_100g, data.protein_per_100g, data.carbs_per_100g, data.fat_per_100g)
     product_id = str(uuid.uuid4())
     import random
     product = {
@@ -525,12 +611,13 @@ async def create_product(data: ProductCreate, user=Depends(get_current_user)):
         "name": data.name,
         "cost_per_100g": data.cost_per_100g,
         "available_qty_grams": data.available_qty_grams or 10000,
-        "category": nutrition["category"],
-        "diet_type": nutrition.get("diet_type", detect_diet_type(data.name)),
+        "category": data.category or nutrition["category"],
+        "diet_type": data.diet_type or nutrition.get("diet_type", detect_diet_type(data.name)),
         "calories_per_100g": nutrition["calories"],
         "protein_per_100g": nutrition["protein"],
         "carbs_per_100g": nutrition["carbs"],
         "fat_per_100g": nutrition["fat"],
+        "preparation_time_minutes": data.preparation_time_minutes or 10,
         "is_active": True,
         "image_url": data.image_url,
         "description": data.description or "",
@@ -538,6 +625,7 @@ async def create_product(data: ProductCreate, user=Depends(get_current_user)):
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.products.insert_one(product)
+    await broadcast_event("menu_update", {"action": "created", "product_id": product_id})
     return {k: v for k, v in product.items() if k != "_id"}
 
 @api_router.get("/products")
@@ -570,16 +658,20 @@ async def update_product(product_id: str, data: ProductUpdate, user=Depends(get_
             update_data["category"] = cat["name"]
     if "name" in update_data and "category_id" not in update_data:
         nutrition = match_nutrition(update_data["name"])
-        update_data["category"] = nutrition["category"]
-        update_data["calories_per_100g"] = nutrition["calories"]
-        update_data["protein_per_100g"] = nutrition["protein"]
-        update_data["carbs_per_100g"] = nutrition["carbs"]
-        update_data["fat_per_100g"] = nutrition["fat"]
+        # Keep admin-provided category if present, else derive from keyword match
+        if "category" not in update_data:
+            update_data["category"] = nutrition["category"]
+        # B1: only fill nutrition from NUTRITION_DB for fields the admin did NOT explicitly send
+        for fld, key in [("calories_per_100g", "calories"), ("protein_per_100g", "protein"),
+                          ("carbs_per_100g", "carbs"), ("fat_per_100g", "fat")]:
+            if fld not in update_data:
+                update_data[fld] = nutrition[key]
     if update_data:
         await db.products.update_one({"id": product_id}, {"$set": update_data})
     product = await db.products.find_one({"id": product_id}, {"_id": 0})
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
+    await broadcast_event("menu_update", {"action": "updated", "product_id": product_id})
     return product
 
 @api_router.delete("/products/{product_id}")
@@ -589,6 +681,7 @@ async def delete_product(product_id: str, user=Depends(get_current_user)):
     result = await db.products.delete_one({"id": product_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Product not found")
+    await broadcast_event("menu_update", {"action": "deleted", "product_id": product_id})
     return {"message": "Product deleted"}
 
 @api_router.post("/upload/image")
@@ -890,7 +983,7 @@ async def create_single_product(data: SingleProductCreate, user=Depends(get_curr
     if user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Admin only")
     import random
-    nutrition = match_nutrition(data.name)
+    nutrition = resolved_nutrition(data.name, data.calories_per_100g, data.protein_per_100g, data.carbs_per_100g, data.fat_per_100g)
     cost_per_100g = round((data.price / data.grams) * 100, 2)
     description = await ai_generate_description(data.name, "single")
     image_url = await ai_generate_food_image(data.name, "single")
@@ -920,6 +1013,7 @@ async def create_single_product(data: SingleProductCreate, user=Depends(get_curr
         "protein_per_100g": nutrition["protein"],
         "carbs_per_100g": nutrition["carbs"],
         "fat_per_100g": nutrition["fat"],
+        "preparation_time_minutes": data.preparation_time_minutes or 8,
         "is_active": True,
         "image_url": image_url,
         "description": description,
@@ -927,6 +1021,7 @@ async def create_single_product(data: SingleProductCreate, user=Depends(get_curr
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.products.insert_one(product)
+    await broadcast_event("menu_update", {"action": "created", "product_id": product_id})
     return {k: v for k, v in product.items() if k != "_id"}
 
 @api_router.post("/products/ready-made")
@@ -1000,6 +1095,7 @@ async def create_ready_made_meal(data: ReadyMadeMealCreate, user=Depends(get_cur
         "total_protein_per_serving": nutrition.get("total_protein", 0),
         "total_carbs_per_serving": nutrition.get("total_carbs", 0),
         "total_fat_per_serving": nutrition.get("total_fat", 0),
+        "preparation_time_minutes": data.preparation_time_minutes or 15,
         "is_active": True,
         "image_url": image_url,
         "description": description,
@@ -1007,6 +1103,7 @@ async def create_ready_made_meal(data: ReadyMadeMealCreate, user=Depends(get_cur
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.products.insert_one(product)
+    await broadcast_event("menu_update", {"action": "created", "product_id": product_id})
     return {k: v for k, v in product.items() if k != "_id"}
 
 # ========== STOCK CHECK FOR READY-MADE DISHES ==========
@@ -1048,7 +1145,30 @@ async def create_order(data: OrderCreate, user=Depends(get_current_user)):
         extra_charge = 10
     elif data.order_type == "delivery":
         extra_charge = 30
-    
+
+    # B3: Duplicate-order guard. Flag identical order from same user/table within 2 minutes.
+    if not data.confirm_duplicate:
+        def _sig(items):
+            return sorted([f"{i.get('product_id')}|{i.get('grams', 0)}|{i.get('quantity', 1)}" for i in items])
+        new_sig = _sig([it.dict() for it in data.items])
+        two_min_ago = (datetime.now(timezone.utc) - timedelta(minutes=2)).isoformat()
+        dup_query = {"created_at": {"$gte": two_min_ago}, "status": {"$nin": ["cancelled"]}}
+        if data.table_number is not None:
+            dup_query["$or"] = [{"user_id": user["id"]}, {"table_number": data.table_number}]
+        else:
+            dup_query["user_id"] = user["id"]
+        recent = await db.orders.find(dup_query, {"_id": 0}).to_list(20)
+        for r in recent:
+            if _sig(r.get("items", [])) == new_sig:
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "warning": "duplicate_order",
+                        "message": "An identical order was just placed moments ago. Place it again?",
+                        "existing_order_id": r["id"],
+                    },
+                )
+
     # Process items and build order with ingredient breakdowns for kitchen
     processed_items = []
     for item in data.items:
@@ -1098,12 +1218,15 @@ async def create_order(data: OrderCreate, user=Depends(get_current_user)):
     is_scheduled = data.is_scheduled and data.scheduled_ready_time
     if is_scheduled:
         order_status = "scheduled"
-        # Calculate kitchen alert time based on order type
         ready_dt = datetime.fromisoformat(data.scheduled_ready_time.replace('Z', '+00:00'))
-        if data.order_type == "delivery":
-            alert_minutes = 20
-        else:  # dine-in or takeaway
-            alert_minutes = 10
+        # B5: alert lead time = LONGEST prep time among the ordered items (+ delivery buffer)
+        prep_times = []
+        for it in data.items:
+            prod = await db.products.find_one({"id": it.product_id}, {"_id": 0})
+            if prod and prod.get("preparation_time_minutes"):
+                prep_times.append(prod["preparation_time_minutes"])
+        max_prep = max(prep_times) if prep_times else 10
+        alert_minutes = max_prep + (15 if data.order_type == "delivery" else 0)
         kitchen_alert_time = (ready_dt - timedelta(minutes=alert_minutes)).isoformat()
     else:
         order_status = "preparing" if getattr(data, 'payment_mode', None) in ("cash", "upi", "card", "other") else "pending"
@@ -1136,6 +1259,7 @@ async def create_order(data: OrderCreate, user=Depends(get_current_user)):
         "scheduled_ready_time": data.scheduled_ready_time if is_scheduled else None,
         "kitchen_alert_time": kitchen_alert_time,
         "schedule_confirmed": False if is_scheduled else None,
+        "table_number": data.table_number,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.orders.insert_one(order)
@@ -1205,7 +1329,12 @@ async def create_order(data: OrderCreate, user=Depends(get_current_user)):
             "type": "scheduled_order", "order_id": order_id, "read": False,
             "created_at": datetime.now(timezone.utc).isoformat()
         })
-    return {k: v for k, v in order.items() if k != "_id"}
+    # Real-time push (C1 + C5): notify all staff panels of the new order
+    clean_order = {k: v for k, v in order.items() if k != "_id"}
+    await broadcast_event("new_order", clean_order)
+    # Stock changed -> tell customer apps + POS to refresh menu (C3)
+    await broadcast_event("menu_update", {"action": "stock_changed"})
+    return clean_order
 
 @api_router.get("/orders")
 async def list_orders(user=Depends(get_current_user)):
@@ -1214,7 +1343,7 @@ async def list_orders(user=Depends(get_current_user)):
         orders = await db.orders.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
     elif user["role"] == "kitchen":
         orders = await db.orders.find(
-            {"status": {"$in": ["pending", "preparing", "ready"]}},
+            {"status": {"$in": ["pending", "accepted", "preparing", "ready"]}},
             {"_id": 0}
         ).sort("created_at", 1).to_list(100)
     else:
@@ -1227,7 +1356,7 @@ async def kitchen_orders(user=Depends(get_current_user)):
     if user["role"] not in ("admin", "kitchen"):
         raise HTTPException(status_code=403, detail="Kitchen/Admin only")
     orders = await db.orders.find(
-        {"status": {"$in": ["pending", "preparing"]}},
+        {"status": {"$in": ["pending", "accepted", "preparing"]}},
         {"_id": 0}
     ).sort("created_at", 1).to_list(100)
     return orders
@@ -1272,6 +1401,9 @@ async def confirm_scheduled_order(order_id: str, user=Depends(get_current_user))
         await notify_order_status(order_id, "preparing")
     except Exception:
         pass
+    await broadcast_event("order_status", updated)
+    if updated and updated.get("user_id"):
+        await broadcast_event("order_status", updated, rooms=[f"user:{updated['user_id']}"])
     return updated
 
 @api_router.put("/orders/{order_id}/status")
@@ -1279,9 +1411,8 @@ async def update_order_status(order_id: str, status: str, user=Depends(get_curre
     """Admin/Kitchen/Cashier: update order status"""
     if user["role"] not in ("admin", "kitchen", "cashier"):
         raise HTTPException(status_code=403, detail="Staff only")
-    valid_statuses = ["pending", "preparing", "ready", "completed", "cancelled", "scheduled"]
-    if status not in valid_statuses:
-        raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {valid_statuses}")
+    if status not in ORDER_STATUSES:
+        raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {ORDER_STATUSES}")
     await db.orders.update_one({"id": order_id}, {"$set": {"status": status}})
     order = await db.orders.find_one({"id": order_id}, {"_id": 0})
     if not order:
@@ -1291,6 +1422,10 @@ async def update_order_status(order_id: str, status: str, user=Depends(get_curre
         await notify_order_status(order_id, status)
     except Exception:
         pass
+    # Real-time propagation to all staff panels + the customer's tracking screen (C1/C2)
+    await broadcast_event("order_status", order)
+    if order.get("user_id"):
+        await broadcast_event("order_status", order, rooms=[f"user:{order['user_id']}"])
     return order
 
 # ========== POPULAR ITEMS (Based on Previous Day Sales) ==========
@@ -1377,7 +1512,7 @@ Respond in this exact JSON format:
         chat = LlmChat(
             api_key=os.environ.get('EMERGENT_LLM_KEY', ''),
             session_id=f"suggest-{uuid.uuid4()}",
-            system_message="You are a nutrition expert. Always respond in valid JSON format only."
+            system_message="You are a nutrition expert. Always respond in valid JSON format only. You are NOT a doctor: never give medical, clinical, or diagnostic advice; for health conditions advise consulting a professional."
         ).with_model("openai", "gpt-5.2")
         response = await chat.send_message(UserMessage(text=prompt))
         try:
@@ -1533,7 +1668,7 @@ Respond ONLY in this JSON format (no markdown, no backticks):
         chat = LlmChat(
             api_key=os.environ.get('EMERGENT_LLM_KEY', ''),
             session_id=f"quickmeal-{uuid.uuid4()}",
-            system_message=f"You are a professional nutritionist. You MUST strictly follow {data.goal} guidelines. Respond ONLY in valid JSON. No markdown, no backticks, no extra text."
+            system_message=f"You are a professional nutritionist. You MUST strictly follow {data.goal} guidelines. You are NOT a doctor: do not give medical/clinical/diagnostic advice; for health conditions advise consulting a professional. Respond ONLY in valid JSON. No markdown, no backticks, no extra text."
         ).with_model("openai", "gpt-5.2")
         response = await chat.send_message(UserMessage(text=prompt))
 
@@ -1746,7 +1881,7 @@ async def ai_chat(data: AIChatRequest, user=Depends(get_current_user)):
         
         menu_str = "\n".join([
             f"- {p['name']} ({p.get('diet_type','veg')}): ₹{p['cost_per_100g']}/100g | {p['calories_per_100g']}cal, P:{p['protein_per_100g']}g"
-            for p in products[:20]  # Limit to avoid token overflow
+            for p in products[:60]  # B4: larger menu window, already diet-filtered above
         ])
         
         budget_str = f"Budget: ₹{data.budget}" if data.budget else "No specific budget"
@@ -1775,7 +1910,8 @@ RULES:
 7. If asked about nutrition, give practical advice
 8. If asked to add items, respond with JSON at the end like: {{\"add\": [{{\"name\": \"Product Name\", \"grams\": 100}}]}}
 9. If customer says "order" or "checkout", respond with: {{\"action\": \"checkout\"}}
-10. Keep Indian food culture in mind"""
+10. Keep Indian food culture in mind
+11. IMPORTANT: You are NOT a doctor. Do NOT give medical, clinical, or diagnostic advice or treat health conditions (diabetes, BP, pregnancy, allergies, etc.). For any health condition, gently recommend consulting a qualified doctor/registered dietitian. Only give general food and menu guidance."""
 
         chat = LlmChat(
             api_key=os.environ.get('EMERGENT_LLM_KEY', ''),
@@ -2184,7 +2320,7 @@ async def mark_notification_read(notification_id: str, user=Depends(get_current_
 class OfferCreate(BaseModel):
     title: str
     subtitle: str
-    discount_type: str = "percentage"  # "percentage" or "flat"
+    discount_type: str = "percentage"  # "percentage", "flat", or "bogo" (buy-one-get-one)
     discount_value: float = 10  # 10% or ₹10
     applicable_to: str = "all"  # "all", "category", "products"
     applicable_category: Optional[str] = None  # "Protein", "Carb", etc.
@@ -2278,15 +2414,18 @@ async def get_offer_products(offer_id: str):
         original = p["cost_per_100g"]
         if offer["discount_type"] == "percentage":
             discount = original * (offer["discount_value"] / 100)
+        elif offer["discount_type"] == "bogo":
+            discount = 0  # BOGO discount is applied on the cart (free 2nd unit), not per-100g price
         else:
             discount = offer["discount_value"]
-        if offer.get("max_discount"):
+        if offer.get("max_discount") and offer["discount_type"] != "bogo":
             discount = min(discount, offer["max_discount"])
         p["original_price"] = original
         p["discounted_price"] = round(max(original - discount, 0), 2)
         p["discount_amount"] = round(discount, 2)
         p["offer_id"] = offer["id"]
         p["offer_title"] = offer["title"]
+        p["is_bogo"] = offer["discount_type"] == "bogo"
     return {"offer": offer, "products": products}
 
 # ========== GOAL PACKS (Admin-Created Meal Packs) ==========
@@ -2810,20 +2949,48 @@ async def verify_payment(data: PaymentVerifyRequest, user=Depends(get_current_us
 
 # ========== APPLY COUPON TO ORDER ==========
 @api_router.post("/orders/apply-coupon")
-async def apply_coupon(coupon_code: str = Body(..., embed=True), user=Depends(get_current_user)):
-    """Apply coupon code and return discount details"""
+async def apply_coupon(
+    coupon_code: str = Body(..., embed=True),
+    cart_items: Optional[List[Dict[str, Any]]] = Body(None, embed=True),
+    cart_total: Optional[float] = Body(None, embed=True),
+    user=Depends(get_current_user),
+):
+    """Apply coupon code and return discount details (supports percentage, flat, bogo)."""
     offer = await db.offers.find_one({"coupon_code": coupon_code, "is_active": True}, {"_id": 0})
     if not offer:
         raise HTTPException(status_code=404, detail="Invalid or expired coupon code")
+
+    if cart_total is not None and cart_total < offer.get("min_order_value", 0):
+        raise HTTPException(status_code=400, detail=f"Minimum order ₹{offer.get('min_order_value', 0)} required for this coupon")
+
+    computed_discount = 0.0
+    dtype = offer["discount_type"]
+    items = cart_items or []
+
+    if dtype == "bogo":
+        # B6: cheapest applicable item is free (buy one, get one). Needs >=2 units.
+        prices = sorted([float(i.get("price", 0)) for i in items])
+        if len(prices) >= 2:
+            computed_discount = prices[0]
+    elif dtype == "percentage" and cart_total is not None:
+        computed_discount = cart_total * (offer["discount_value"] / 100)
+        if offer.get("max_discount"):
+            computed_discount = min(computed_discount, offer["max_discount"])
+    elif dtype == "flat":
+        computed_discount = offer["discount_value"]
+        if offer.get("max_discount"):
+            computed_discount = min(computed_discount, offer["max_discount"])
+
     return {
         "offer_id": offer["id"],
         "title": offer["title"],
-        "discount_type": offer["discount_type"],
+        "discount_type": dtype,
         "discount_value": offer["discount_value"],
         "max_discount": offer.get("max_discount"),
         "min_order_value": offer.get("min_order_value", 0),
         "applicable_to": offer["applicable_to"],
         "applicable_category": offer.get("applicable_category"),
+        "computed_discount": round(computed_discount, 2),
     }
 
 # ========== SMART PORTION ADJUSTER ==========
@@ -2900,10 +3067,12 @@ async def notify_order_status(order_id: str, status: str):
     if not user or not user.get("expo_push_token"):
         return
     status_messages = {
+        "accepted": ("Order accepted!", f"Order #{order_id} has been accepted and is queued"),
         "preparing": ("Your order is being prepared!", f"Order #{order_id} is now in the kitchen"),
         "ready": ("Your order is ready!", f"Order #{order_id} is ready for pickup"),
         "completed": ("Order completed!", f"Thanks for ordering! Order #{order_id}"),
         "cancelled": ("Order cancelled", f"Order #{order_id} has been cancelled"),
+        "out_for_delivery": ("Out for delivery!", f"Order #{order_id} is on its way"),
     }
     if status not in status_messages:
         return
@@ -3179,6 +3348,8 @@ async def update_stock(data: StockUpdateRequest, user=Depends(get_current_user))
     # Re-activate product if stock was added and was inactive
     if new_qty > 0 and not product.get("is_active", True):
         await db.products.update_one({"id": data.product_id}, {"$set": {"is_active": True}})
+    # C3: tell all surfaces the menu/stock changed (auto-hide / re-show in customer app + POS)
+    await broadcast_event("menu_update", {"action": "stock_changed", "product_id": data.product_id})
     # Log stock change
     await db.stock_logs.insert_one({
         "id": str(uuid.uuid4()),
@@ -3286,7 +3457,7 @@ async def active_orders(user=Depends(get_current_user)):
     if user["role"] not in ("admin", "kitchen", "cashier"):
         raise HTTPException(status_code=403, detail="Staff only")
     orders = await db.orders.find(
-        {"status": {"$in": ["pending", "preparing", "ready"]}},
+        {"status": {"$in": ["pending", "accepted", "preparing", "ready"]}},
         {"_id": 0}
     ).sort("created_at", 1).to_list(100)
     return orders
@@ -3492,7 +3663,7 @@ Respond in JSON:
         chat = LlmChat(
             api_key=os.environ.get('EMERGENT_LLM_KEY', ''),
             session_id=f"mealplan-{uuid.uuid4()}",
-            system_message="You are a nutrition expert. Respond in valid JSON only."
+            system_message="You are a nutrition expert. Respond in valid JSON only. You are NOT a doctor: never give medical/clinical/diagnostic advice; for health conditions advise consulting a professional."
         ).with_model("openai", "gpt-5.2")
         response = await chat.send_message(UserMessage(text=prompt))
         cleaned = response.strip()
@@ -3583,11 +3754,19 @@ async def get_kitchen_ticket(order_id: str, user=Depends(get_current_user)):
         "items": [],
         "special_notes": order.get("notes", ""),
         "table": order.get("table_number"),
+        "status": order.get("status", "pending"),
     }
+    max_prep = 0
     for item in order.get("items", []):
+        prep = 0
+        prod = await db.products.find_one({"id": item.get("product_id")}, {"_id": 0})
+        if prod and prod.get("preparation_time_minutes"):
+            prep = prod["preparation_time_minutes"]
+            max_prep = max(max_prep, prep)
         ticket_item = {
             "name": item.get("product_name", ""),
             "quantity": f"{item.get('grams', 0)}g" if item.get("product_type") != "ready_made" else f"x{item.get('quantity', 1)} plates",
+            "preparation_time_minutes": prep,
         }
         # Include ingredient breakdown for ready-made items
         if item.get("ingredients_breakdown"):
@@ -3599,6 +3778,7 @@ async def get_kitchen_ticket(order_id: str, user=Depends(get_current_user)):
             ticket_item["customized"] = True
             ticket_item["custom_ingredients"] = item["customized_ingredients"]
         ticket["items"].append(ticket_item)
+    ticket["total_preparation_time_minutes"] = max_prep  # B5: longest item prep drives the ticket ETA
     return ticket
 
 app.include_router(api_router)
@@ -3606,14 +3786,24 @@ app.include_router(api_router)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,  # A4: from ALLOWED_ORIGINS env (dev fallback ["*"])
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+@app.on_event("startup")
+async def on_startup():
+    # A5: TTL index so OTP documents auto-expire and survive restarts
+    try:
+        await db.otp_codes.create_index("expires_at", expireAfterSeconds=0)
+        logger.info("[startup] otp_codes TTL index ensured")
+    except Exception as e:
+        logger.error(f"[startup] index error: {e}")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
+
+# ========== WRAP FASTAPI WITH SOCKET.IO (Part C real-time) ==========
+# Supervisor imports `server:app`; this final ASGI app serves both REST (/api/*) and WS (/api/socket.io).
+app = socketio.ASGIApp(sio, other_asgi_app=app, socketio_path="/api/socket.io")

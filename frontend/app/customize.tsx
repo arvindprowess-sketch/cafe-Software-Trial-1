@@ -346,12 +346,34 @@ export default function CustomizeScreen() {
         orderBody.scheduled_ready_time = getScheduledReadyTime();
       }
 
-      await apiCall('/orders', { method: 'POST', body: orderBody });
-      const msg = isScheduled 
-        ? `Scheduled for ${scheduledHour}:${scheduledMinute.padStart(2, '0')}` 
-        : `Total: ₹${Math.round(totals.price + extra)}`;
-      Alert.alert(isScheduled ? 'Order Scheduled!' : 'Order Placed!', msg);
-      setTimeout(() => router.replace('/(tabs)/orders'), 1500);
+      const placeOrder = async (confirmDuplicate = false) => {
+        if (confirmDuplicate) orderBody.confirm_duplicate = true;
+        await apiCall('/orders', { method: 'POST', body: orderBody });
+        const msg = isScheduled
+          ? `Scheduled for ${scheduledHour}:${scheduledMinute.padStart(2, '0')}`
+          : `Total: ₹${Math.round(totals.price + extra)}`;
+        Alert.alert(isScheduled ? 'Order Scheduled!' : 'Order Placed!', msg);
+        setTimeout(() => router.replace('/(tabs)/orders'), 1500);
+      };
+
+      try {
+        await placeOrder(false);
+      } catch (e: any) {
+        // B3: duplicate-order guard -> ask the customer to confirm
+        if (e?.status === 409 && e?.detail?.warning === 'duplicate_order') {
+          setOrdering(false);
+          Alert.alert(
+            'Duplicate order?',
+            e.detail.message || 'An identical order was just placed. Place it again?',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Place anyway', onPress: async () => { setOrdering(true); try { await placeOrder(true); } catch (er: any) { Alert.alert('Error', er.message); } finally { setOrdering(false); } } },
+            ]
+          );
+          return;
+        }
+        throw e;
+      }
     } catch (e: any) { Alert.alert('Error', e.message); } finally { setOrdering(false); }
   };
 

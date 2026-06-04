@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { apiCall } from '../../utils/api';
+import { useRealtime } from '../../utils/realtime';
 
 const BK_RED = '#D62300';
 const BK_ORANGE = '#FF8732';
@@ -28,6 +29,13 @@ export default function OrdersScreen() {
   useEffect(() => {
     loadOrders();
   }, []);
+
+  // Live updates: refresh when order status changes or a new order is placed (C1/C2)
+  useRealtime((msg) => {
+    if (['order_status', 'new_order'].includes(msg.type)) {
+      loadOrders();
+    }
+  });
 
   const loadOrders = useCallback(async () => {
     try {
@@ -103,7 +111,10 @@ export default function OrdersScreen() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'completed': return BK_GREEN;
+      case 'ready': return BK_GREEN;
       case 'pending': return BK_ORANGE;
+      case 'accepted': return '#2F6F8F';
+      case 'preparing': return BK_ORANGE;
       case 'cancelled': return BK_RED;
       case 'scheduled': return '#FF9F0A';
       default: return BK_TEXT_LIGHT;
@@ -113,7 +124,10 @@ export default function OrdersScreen() {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'completed': return 'checkmark-circle';
+      case 'ready': return 'checkmark-done-circle';
       case 'pending': return 'time';
+      case 'accepted': return 'thumbs-up';
+      case 'preparing': return 'flame';
       case 'cancelled': return 'close-circle';
       case 'scheduled': return 'calendar';
       default: return 'ellipse';

@@ -9,6 +9,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { apiCall } from '../../utils/api';
 import SideDrawer from '../components/SideDrawer';
 import { getStoredUser } from '../../utils/api';
+import { useRealtime } from '../../utils/realtime';
 
 // BK Design System Colors
 const BK_RED = '#D62300';
@@ -77,6 +78,10 @@ export default function MenuScreen() {
   }, []);
 
   useEffect(() => { loadProducts(); }, []);
+  // Live menu/stock sync: re-fetch when admin edits menu or stock changes (C3)
+  useRealtime((msg) => {
+    if (msg.type === 'menu_update') loadProducts();
+  });
   const onRefresh = async () => { setRefreshing(true); await loadProducts(); setRefreshing(false); };
 
   // Add to cart

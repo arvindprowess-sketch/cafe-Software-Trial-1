@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../utils/api';
+import { useRealtime } from '../utils/realtime';
 
 export default function KitchenOrders() {
   const [orders, setOrders] = useState<any[]>([]);
@@ -106,9 +107,16 @@ export default function KitchenOrders() {
 
   useEffect(() => {
     load();
-    const iv = setInterval(load, 8000);
+    const iv = setInterval(load, 30000); // safety fallback; real-time push is primary
     return () => clearInterval(iv);
   }, []);
+
+  // Real-time: refresh instantly when orders arrive or change (C1/C5)
+  const { connected } = useRealtime(['kitchen'], (msg) => {
+    if (['new_order', 'order_status', 'menu_update', 'scheduled_order'].includes(msg.type)) {
+      load();
+    }
+  });
 
   const updateStatus = async (id: string, status: string) => {
     try { await api(`/orders/${id}/status?status=${status}`, { method: 'PUT' }); load(); } catch (e: any) { alert(e.message); }
@@ -178,6 +186,10 @@ export default function KitchenOrders() {
       <div className="page-header" style={{ marginBottom: 16 }}>
         <div><h1>Orders</h1><p>{orders.length} active{scheduledOrders.length > 0 ? ` • ${scheduledOrders.length} upcoming` : ''}</p></div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span data-testid="live-status" style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 20, background: connected ? '#E8F5E9' : '#FDECEC', color: connected ? '#267E3E' : '#C0392B', display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ width: 7, height: 7, borderRadius: 4, background: connected ? '#267E3E' : '#C0392B', display: 'inline-block', animation: connected ? 'pulse 1.5s infinite' : 'none' }} />
+            {connected ? 'LIVE' : 'OFFLINE'}
+          </span>
           <button
             className={`btn btn-sm ${soundEnabled ? 'btn-green' : 'btn-secondary'}`}
             onClick={() => setSoundEnabled(!soundEnabled)}
@@ -239,7 +251,7 @@ export default function KitchenOrders() {
               <div className="order-header">
                 <span className="order-id">#{o.id}</span>
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                  <span className={`badge ${o.status === 'pending' ? 'badge-orange' : o.status === 'preparing' ? 'badge-purple' : 'badge-green'}`}>{o.status.toUpperCase()}</span>
+                  <span className={`badge ${o.status === 'pending' ? 'badge-orange' : o.status === 'accepted' ? 'badge-blue' : o.status === 'preparing' ? 'badge-purple' : 'badge-green'}`}>{o.status.toUpperCase()}</span>
                   {p === 'urgent' && <span className="badge badge-red" style={{ animation: 'pulse 1s infinite' }}>URGENT</span>}
                 </div>
               </div>
@@ -273,7 +285,8 @@ export default function KitchenOrders() {
                 ))}
               </ul>
               <div className="order-actions">
-                {o.status === 'pending' && <button className="btn btn-sm btn-purple" onClick={() => updateStatus(o.id, 'preparing')} data-testid={`start-${o.id}`}>Start Preparing</button>}
+                {o.status === 'pending' && <button className="btn btn-sm btn-blue" onClick={() => updateStatus(o.id, 'accepted')} data-testid={`accept-${o.id}`}>Accept Order</button>}
+                {o.status === 'accepted' && <button className="btn btn-sm btn-purple" onClick={() => updateStatus(o.id, 'preparing')} data-testid={`start-${o.id}`}>Start Preparing</button>}
                 {o.status === 'preparing' && <button className="btn btn-sm btn-green" onClick={() => updateStatus(o.id, 'ready')} data-testid={`ready-${o.id}`}>Mark Ready</button>}
                 <button className="btn btn-sm btn-secondary" onClick={() => printTicket(o.id)} data-testid={`print-${o.id}`}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
@@ -428,6 +441,9 @@ export default function KitchenOrders() {
               <p><strong>Type:</strong> {showTicket.order_type}</p>
               <p><strong>Customer:</strong> {showTicket.customer}</p>
               <p><strong>Time:</strong> {new Date(showTicket.time).toLocaleString()}</p>
+              {showTicket.total_preparation_time_minutes > 0 && (
+                <p data-testid="ticket-prep-time"><strong>Prep ETA:</strong> {showTicket.total_preparation_time_minutes} min (longest item)</p>
+              )}
               {showTicket.table && <p><strong>Table:</strong> {showTicket.table}</p>}
               {showTicket.priority !== 'normal' && (
                 <div className={showTicket.priority === 'urgent' ? 'urgent' : 'high'}
@@ -441,6 +457,7 @@ export default function KitchenOrders() {
               {showTicket.items?.map((item: any, i: number) => (
                 <div key={i} style={{ margin: '6px 0' }}>
                   <strong>{item.name}</strong> — {item.quantity}
+                  {item.preparation_time_minutes > 0 && <span style={{ color: '#888', fontSize: 12 }}> ({item.preparation_time_minutes} min)</span>}
                   {item.ingredients && (
                     <div style={{ marginLeft: 12, fontSize: 12, color: '#666' }}>
                       {item.ingredients.map((ing: any, j: number) => (

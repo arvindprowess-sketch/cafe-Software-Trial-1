@@ -7,19 +7,21 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { apiCall } from '../utils/api';
+import { useRealtime } from '../utils/realtime';
 
 const Z_RED = '#D62300';
 const GREEN = '#509E2F';
 const PURPLE = '#FF8732';
 const { width, height } = Dimensions.get('window');
 
-// Status steps
+// Status steps (each maps one or more backend statuses)
 const DELIVERY_STEPS = [
-  { key: 'placed', label: 'Order Placed', icon: 'receipt' },
-  { key: 'preparing', label: 'Preparing', icon: 'flame' },
-  { key: 'ready', label: 'Ready', icon: 'checkmark-circle' },
-  { key: 'out_for_delivery', label: 'Out for Delivery', icon: 'bicycle' },
-  { key: 'delivered', label: 'Delivered', icon: 'home' },
+  { key: 'placed', label: 'Order Placed', icon: 'receipt', statuses: ['pending', 'placed'] },
+  { key: 'accepted', label: 'Accepted', icon: 'thumbs-up', statuses: ['accepted'] },
+  { key: 'preparing', label: 'Preparing', icon: 'flame', statuses: ['preparing'] },
+  { key: 'ready', label: 'Ready', icon: 'checkmark-circle', statuses: ['ready'] },
+  { key: 'out_for_delivery', label: 'Out for Delivery', icon: 'bicycle', statuses: ['out_for_delivery'] },
+  { key: 'delivered', label: 'Delivered', icon: 'home', statuses: ['delivered', 'completed'] },
 ];
 
 export default function DeliveryTrackingScreen() {
@@ -32,10 +34,17 @@ export default function DeliveryTrackingScreen() {
 
   useEffect(() => {
     loadTracking();
-    // Poll for updates every 10 seconds
-    intervalRef.current = setInterval(loadTracking, 10000);
+    // Safety fallback poll; real-time push is primary
+    intervalRef.current = setInterval(loadTracking, 30000);
     return () => clearInterval(intervalRef.current);
   }, [orderId]);
+
+  // Live status updates pushed to this customer (C1)
+  useRealtime((msg) => {
+    if (msg.type === 'order_status' && msg.data?.id === orderId) {
+      loadTracking();
+    }
+  });
 
   const loadTracking = async () => {
     try {
@@ -50,7 +59,8 @@ export default function DeliveryTrackingScreen() {
   };
 
   const getStatusIndex = (status: string) => {
-    return DELIVERY_STEPS.findIndex(s => s.key === status);
+    const i = DELIVERY_STEPS.findIndex(s => (s as any).statuses.includes(status));
+    return i < 0 ? 0 : i;
   };
 
   const openMaps = () => {
@@ -168,7 +178,7 @@ export default function DeliveryTrackingScreen() {
           {DELIVERY_STEPS.map((step, index) => {
             const isCompleted = index <= currentStatusIndex;
             const isCurrent = index === currentStatusIndex;
-            const showStep = isDelivery || index < 4; // Hide "Out for Delivery" for non-delivery orders
+            const showStep = isDelivery || step.key !== 'out_for_delivery'; // Hide "Out for Delivery" for non-delivery orders
             
             if (!showStep) return null;
             

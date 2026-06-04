@@ -26,6 +26,11 @@ export default function AdminProducts() {
   const [sGrams, setSGrams] = useState('');
   const [sCatId, setSCatId] = useState('');
   const [sDiet, setSDiet] = useState('');
+  const [sCal, setSCal] = useState('');
+  const [sPro, setSPro] = useState('');
+  const [sCarb, setSCarb] = useState('');
+  const [sFat, setSFat] = useState('');
+  const [sPrep, setSPrep] = useState('');
 
   // Ready-made form
   const [rName, setRName] = useState('');
@@ -33,6 +38,7 @@ export default function AdminProducts() {
   const [rServingGrams, setRServingGrams] = useState('300');
   const [rCatId, setRCatId] = useState('');
   const [rEditable, setREditable] = useState(false);
+  const [rPrep, setRPrep] = useState('');
   const [rIngredients, setRIngredients] = useState<Ingredient[]>([{ name: '', grams_per_serving: 0 }]);
   const [rImages, setRImages] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -57,7 +63,8 @@ export default function AdminProducts() {
 
   const resetForms = () => {
     setSName(''); setSPrice(''); setSGrams(''); setSCatId(''); setSDiet('');
-    setRName(''); setRPrice(''); setRServingGrams('300'); setRCatId(''); setREditable(false);
+    setSCal(''); setSPro(''); setSCarb(''); setSFat(''); setSPrep('');
+    setRName(''); setRPrice(''); setRServingGrams('300'); setRCatId(''); setREditable(false); setRPrep('');
     setRIngredients([{ name: '', grams_per_serving: 0 }]); setRImages([]);
   };
 
@@ -86,7 +93,14 @@ export default function AdminProducts() {
     if (!sName || !sPrice || !sGrams || !sCatId) { alert('Fill all required fields including category'); return; }
     setCreating(true);
     try {
-      const result = await api('/products/single', { method: 'POST', body: { name: sName, price: parseFloat(sPrice), grams: parseFloat(sGrams), category_id: sCatId, diet_type: sDiet || undefined } });
+      const result = await api('/products/single', { method: 'POST', body: {
+        name: sName, price: parseFloat(sPrice), grams: parseFloat(sGrams), category_id: sCatId, diet_type: sDiet || undefined,
+        calories_per_100g: sCal ? parseFloat(sCal) : undefined,
+        protein_per_100g: sPro ? parseFloat(sPro) : undefined,
+        carbs_per_100g: sCarb ? parseFloat(sCarb) : undefined,
+        fat_per_100g: sFat ? parseFloat(sFat) : undefined,
+        preparation_time_minutes: sPrep ? parseInt(sPrep) : undefined,
+      } });
       setCreatedProduct(result);
       load();
     } catch (e: any) { alert(e.message); } finally { setCreating(false); }
@@ -99,7 +113,7 @@ export default function AdminProducts() {
     if (validIng.length === 0) { alert('Add at least one ingredient'); return; }
     setCreating(true);
     try {
-      const result = await api('/products/ready-made', { method: 'POST', body: { name: rName, price: parseFloat(rPrice), serving_grams: parseFloat(rServingGrams) || 300, ingredients: validIng, is_editable: rEditable, category_id: rCatId, images: rImages } });
+      const result = await api('/products/ready-made', { method: 'POST', body: { name: rName, price: parseFloat(rPrice), serving_grams: parseFloat(rServingGrams) || 300, ingredients: validIng, is_editable: rEditable, category_id: rCatId, images: rImages, preparation_time_minutes: rPrep ? parseInt(rPrep) : undefined } });
       setCreatedProduct(result);
       load();
     } catch (e: any) { alert(e.message); } finally { setCreating(false); }
@@ -123,6 +137,11 @@ export default function AdminProducts() {
       category_id: categories.find(c => c.name === p.category)?.id || '',
       is_active: p.is_active !== false,
       is_editable: p.is_editable || false,
+      calories_per_100g: p.calories_per_100g ?? '',
+      protein_per_100g: p.protein_per_100g ?? '',
+      carbs_per_100g: p.carbs_per_100g ?? '',
+      fat_per_100g: p.fat_per_100g ?? '',
+      preparation_time_minutes: p.preparation_time_minutes ?? '',
     });
   };
 
@@ -143,6 +162,13 @@ export default function AdminProducts() {
         if (editForm.category_id !== origCatId) body.category_id = editForm.category_id;
       }
       if (editForm.is_active !== (editModal.is_active !== false)) body.is_active = editForm.is_active;
+      // B1 + B5: editable nutrition & prep time
+      ['calories_per_100g', 'protein_per_100g', 'carbs_per_100g', 'fat_per_100g'].forEach((f) => {
+        if (editForm[f] !== '' && parseFloat(editForm[f]) !== editModal[f]) body[f] = parseFloat(editForm[f]);
+      });
+      if (editForm.preparation_time_minutes !== '' && parseInt(editForm.preparation_time_minutes) !== editModal.preparation_time_minutes) {
+        body.preparation_time_minutes = parseInt(editForm.preparation_time_minutes);
+      }
       if (Object.keys(body).length > 0) await api(`/products/${editModal.id}`, { method: 'PUT', body });
       setEditModal(null);
       load();
@@ -286,6 +312,16 @@ export default function AdminProducts() {
                     <div className="form-group"><label>Diet Type</label>
                       <select value={sDiet} onChange={e => setSDiet(e.target.value)} data-testid="single-diet"><option value="">Auto-detect</option><option value="veg">Veg</option><option value="non-veg">Non-Veg</option></select>
                     </div>
+                    <div style={{ background: '#FAFAFA', borderRadius: 10, padding: 12, marginBottom: 12, border: '1px solid #EFEFEF' }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: '#9C9C9C', marginBottom: 8 }}>NUTRITION per 100g (optional — leave blank for auto)</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+                        <div className="form-group" style={{ margin: 0 }}><label>Cal</label><input type="number" value={sCal} onChange={e => setSCal(e.target.value)} placeholder="auto" data-testid="single-cal" /></div>
+                        <div className="form-group" style={{ margin: 0 }}><label>Protein</label><input type="number" value={sPro} onChange={e => setSPro(e.target.value)} placeholder="auto" data-testid="single-protein" /></div>
+                        <div className="form-group" style={{ margin: 0 }}><label>Carbs</label><input type="number" value={sCarb} onChange={e => setSCarb(e.target.value)} placeholder="auto" data-testid="single-carbs" /></div>
+                        <div className="form-group" style={{ margin: 0 }}><label>Fat</label><input type="number" value={sFat} onChange={e => setSFat(e.target.value)} placeholder="auto" data-testid="single-fat" /></div>
+                      </div>
+                    </div>
+                    <div className="form-group"><label>Preparation time (minutes)</label><input type="number" value={sPrep} onChange={e => setSPrep(e.target.value)} placeholder="8" data-testid="single-prep" /></div>
                     <div className="modal-actions">
                       <button type="button" className="btn btn-secondary" onClick={() => setShowForm(false)}>Cancel</button>
                       <button type="submit" className="btn btn-primary" disabled={creating} data-testid="save-single-btn">{creating ? 'Creating... AI is working' : 'Create Product'}</button>
@@ -333,6 +369,7 @@ export default function AdminProducts() {
                       <div className="form-group"><label>Price per plate (₹) *</label><input type="number" value={rPrice} onChange={e => setRPrice(e.target.value)} placeholder="200" required data-testid="meal-price" /></div>
                       <div className="form-group"><label>Serving (grams)</label><input type="number" value={rServingGrams} onChange={e => setRServingGrams(e.target.value)} placeholder="300" data-testid="meal-serving" /></div>
                     </div>
+                    <div className="form-group"><label>Preparation time (minutes)</label><input type="number" value={rPrep} onChange={e => setRPrep(e.target.value)} placeholder="15" data-testid="meal-prep" /></div>
                     <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <input type="checkbox" checked={rEditable} onChange={e => setREditable(e.target.checked)} id="editable-toggle" data-testid="meal-editable" />
                       <label htmlFor="editable-toggle" style={{ margin: 0, fontSize: 13 }}>Allow customers to customize ingredients</label>
@@ -405,15 +442,16 @@ export default function AdminProducts() {
                 <label htmlFor="edit-active" style={{ margin: 0 }}>Active (visible to customers & cashier)</label>
               </div>
 
-              {/* Nutrition (read-only) */}
+              {/* Nutrition (editable — B1) */}
               <div style={{ background: '#FAFAFA', borderRadius: 10, padding: 12, marginBottom: 14, border: '1px solid #EFEFEF' }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#9C9C9C', marginBottom: 6 }}>NUTRITION (auto-calculated — not editable)</div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, textAlign: 'center' }}>
-                  <div><div style={{ fontSize: 18, fontWeight: 800, color: '#FF9F0A' }}>{editModal.calories_per_100g}</div><div style={{ fontSize: 10, color: '#9C9C9C' }}>cal/100g</div></div>
-                  <div><div style={{ fontSize: 18, fontWeight: 800, color: '#E23744' }}>{editModal.protein_per_100g}g</div><div style={{ fontSize: 10, color: '#9C9C9C' }}>protein</div></div>
-                  <div><div style={{ fontSize: 18, fontWeight: 800, color: '#267E3E' }}>{editModal.carbs_per_100g}g</div><div style={{ fontSize: 10, color: '#9C9C9C' }}>carbs</div></div>
-                  <div><div style={{ fontSize: 18, fontWeight: 800, color: '#5B5FE0' }}>{editModal.fat_per_100g}g</div><div style={{ fontSize: 10, color: '#9C9C9C' }}>fat</div></div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#9C9C9C', marginBottom: 8 }}>NUTRITION per 100g (editable — leave as-is to keep)</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+                  <div className="form-group" style={{ margin: 0 }}><label style={{ color: '#FF9F0A' }}>Cal</label><input type="number" value={editForm.calories_per_100g} onChange={e => setEditForm({ ...editForm, calories_per_100g: e.target.value })} data-testid="edit-cal" /></div>
+                  <div className="form-group" style={{ margin: 0 }}><label style={{ color: '#E23744' }}>Protein</label><input type="number" value={editForm.protein_per_100g} onChange={e => setEditForm({ ...editForm, protein_per_100g: e.target.value })} data-testid="edit-protein" /></div>
+                  <div className="form-group" style={{ margin: 0 }}><label style={{ color: '#267E3E' }}>Carbs</label><input type="number" value={editForm.carbs_per_100g} onChange={e => setEditForm({ ...editForm, carbs_per_100g: e.target.value })} data-testid="edit-carbs" /></div>
+                  <div className="form-group" style={{ margin: 0 }}><label style={{ color: '#5B5FE0' }}>Fat</label><input type="number" value={editForm.fat_per_100g} onChange={e => setEditForm({ ...editForm, fat_per_100g: e.target.value })} data-testid="edit-fat" /></div>
                 </div>
+                <div className="form-group" style={{ marginTop: 10, marginBottom: 0 }}><label>Preparation time (minutes)</label><input type="number" value={editForm.preparation_time_minutes} onChange={e => setEditForm({ ...editForm, preparation_time_minutes: e.target.value })} data-testid="edit-prep" /></div>
               </div>
 
               <div className="modal-actions">

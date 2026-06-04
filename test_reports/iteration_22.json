@@ -1,0 +1,79 @@
+{
+  "summary": "FUEL Phase 1 backend regression: 19/19 pytest tests pass covering Part A (OTP security, no leak, wrong-attempt clear, resend rate limit, env JWT, admin login), Part B1 (admin nutrition persistence + keyword fallback + PUT update), B2 (accepted in status flow, invalid->400, kitchen list includes accepted), B3 (duplicate guard 409 + confirm_duplicate bypass), B5 (kitchen-ticket prep times), B6 (BOGO + percentage + flat), B4 AI smoke, C4 RBAC (customer 403 on product create), and Part C Socket.IO (new_order to kitchen, order_status to staff + user room, menu_update on product create, wrong path rejected). Web-panel UI spot-checked via Playwright.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "AdminKitchen.tsx (route /admin/kitchen)",
+        "issue": "No data-testid='live-status' LIVE/OFFLINE connection badge on admin-side Kitchen page. The badge exists ONLY on KitchenOrders.tsx (/kitchen route, kitchen-staff only). Spec says: 'Kitchen page shows a LIVE/OFFLINE connection badge' - admins navigating to Kitchen Monitor from sidebar will not see live status.",
+        "selector": "[data-testid='live-status']",
+        "priority": "MEDIUM"
+      },
+      {
+        "component": "AdminProducts edit modal",
+        "issue": "Edit modal opened against the first row of products did not expose [data-testid='edit-cal' / edit-protein / edit-carbs / edit-fat / edit-prep] to Playwright. The fields exist in code for single products only; ready-made meals likely show a different edit form. Recommend ensuring edit-cal/protein/carbs/fat/prep are present in BOTH single + ready-made edit modals (or product chosen was ready-made).",
+        "selector": "[data-testid='edit-cal']",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Web panel (all)",
+        "issues": [
+          "Still shows DIET CAFE branding / old theme (Phase 2 FUEL redesign not yet implemented - expected per agent_to_agent_context_note, NOT a bug)."
+        ]
+      }
+    ]
+  },
+  "passed_tests": [
+    "A1: /api/auth/otp/send does NOT leak OTP (no demo_otp / no numeric otp field in response)",
+    "A2: Wrong OTP returns 400 with attempts-remaining text; after 3 wrong attempts the record is cleared (subsequent verify -> 'OTP expired or not sent')",
+    "A2: Happy-path verify (with logged DEV OTP) returns token + user + is_new_user true; re-login returns is_new_user false",
+    "A2: /api/auth/otp/resend within 30s of a send returns 429",
+    "A3: admin login via env JWT works, /api/auth/me returns admin role",
+    "B1: POST /api/products/single persists explicit calories/protein/carbs/fat_per_100g + preparation_time_minutes; PUT updates them; omitting nutrition triggers NUTRITION_DB keyword fallback",
+    "B2: pending->accepted->preparing->ready->completed all return 200; invalid status returns 400; /api/orders/kitchen list includes accepted orders",
+    "B3: identical POST /api/orders within 2 min returns 409 detail.warning='duplicate_order'; confirm_duplicate=true creates the order",
+    "B5: /api/orders/{id}/kitchen-ticket returns per-item preparation_time_minutes + total_preparation_time_minutes (longest item)",
+    "B6: BOGO offer creation works; apply-coupon with cart_items [120,80] returns computed_discount=80; percentage(10%) of 200 = 20; flat 25 = 25",
+    "B4: /api/ai/adjust-portions returns 200 (smoke)",
+    "C4 RBAC: customer JWT on POST /api/products/single -> 403",
+    "C real-time: client in room 'kitchen' receives 'new_order' on POST /api/orders within ~2s",
+    "C real-time: status change broadcasts 'order_status' to kitchen room AND room 'user:<user_id>'",
+    "C real-time: product create broadcasts 'menu_update' to 'customers' room",
+    "C real-time: Socket.IO connect to wrong path fails (rejection)",
+    "Web panel: admin login works (admin@dietcafe.com / admin123) -> /admin",
+    "Web panel: AdminProducts '+ Single Product' opens form with [data-testid] single-cal/single-protein/single-carbs/single-fat/single-prep",
+    "Web panel: AdminOffers '+ New Offer' opens form; offer-type select options are ['percentage','flat','bogo']"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_fuel_phase1.py",
+    "/app/test_reports/pytest/fuel_phase1.xml"
+  ],
+  "action_items": [
+    "Add the LIVE/OFFLINE connection badge (data-testid='live-status') to the admin-facing Kitchen page (/admin/kitchen / AdminKitchen.tsx) so admins also see the realtime status, not only kitchen-PIN staff.",
+    "Ensure the edit modal in AdminProducts exposes nutrition + prep inputs (edit-cal/protein/carbs/fat/edit-prep) for BOTH single and ready_made product types so edits to nutrition/prep are uniformly possible from the admin UI."
+  ],
+  "critical_code_review_comments": [
+    "backend/server.py is 3809 lines (>700) - should be split by domain (auth, products, orders, offers, ai, sockets, admin) for maintainability.",
+    "OfferCreate requires both 'title' and 'subtitle' (subtitle has no default). Several frontend/test paths attempted to send only 'title' - if the admin UI does not always send subtitle this will 422. Consider giving subtitle a default of '' .",
+    "create_order broadcasts new_order via broadcast_event but the payload includes raw datetime fields - ensure JSON-safe in all branches (currently OK because everything is isoformat strings).",
+    "Auto-hide low-stock loop inside create_order is O(N*M) on every order - flag for later optimization.",
+    "Web panel: Admin kitchen route uses AdminKitchen but kitchen-PIN staff use KitchenOrders. Two separate kitchen views diverge (live-status, accept buttons) - consolidate or share a component."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_fuel_phase1.py (new)",
+    "/app/test_reports/pytest/fuel_phase1.xml (junit output)"
+  ],
+  "success_rate": {"backend": "100% (19/19)", "frontend": "~80% (4/5 spot-checks pass; 1 missing testid set on edit modal, 1 missing live-status on admin kitchen)"},
+  "test_credentials": "Admin: admin@dietcafe.com / admin123. Customer OTP: /api/auth/otp/send then read DEV OTP via `tail /var/log/supervisor/backend.*.log | grep [SMS][DEV]`.",
+  "seed_data_creation": "Suite creates TEST_* prefixed products, offers, customer phone accounts. No cleanup teardown - safe for next iteration but accumulates over time.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend suite at /app/backend/tests/test_fuel_phase1.py is canonical Phase 1 regression. Single-product create uses AI image generation -> can take 60-90s; use timeout>=120 for that endpoint. WebSocket tests use polling transport only (matches ws_smoke.py). For Playwright kitchen badge test, log in as a kitchen-PIN staff (not admin) - KitchenOrders.tsx renders only on /kitchen route guarded by role='kitchen'.",
+  "rca of the issue": "Web-panel LIVE badge gap: AdminKitchen.tsx subscribes via useRealtime but does not render a status pill. Spec'd badge lives only in KitchenOrders.tsx (kitchen-staff route). Fix: lift the connected state out of useRealtime / add the same data-testid='live-status' span to AdminKitchen header. Edit-modal nutrition fields: AdminProducts.tsx lines 449-454 only render edit-cal/protein/carbs/fat/prep when editForm corresponds to a single product; ready-made edit branch lacks them."
+}

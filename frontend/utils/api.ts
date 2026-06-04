@@ -51,8 +51,13 @@ export async function apiCall(endpoint: string, options: RequestOptions = {}) {
   });
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Request failed' }));
-    console.log(`[API] Error: ${error.detail || response.status}`);
-    throw new Error(error.detail || `HTTP ${response.status}`);
+    const detail = error.detail;
+    const message = typeof detail === 'string' ? detail : (detail?.message || `HTTP ${response.status}`);
+    console.log(`[API] Error: ${message}`);
+    const err: any = new Error(message);
+    err.status = response.status;
+    err.detail = detail;
+    throw err;
   }
   return response.json();
 }

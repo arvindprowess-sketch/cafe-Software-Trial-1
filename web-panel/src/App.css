@@ -118,6 +118,8 @@ input, select { font-family: inherit; }
 .btn-orange { background: var(--bk-orange); color: var(--bk-brown); }
 .btn-orange:hover { background: #E67420; }
 .btn-purple { background: var(--bk-red); color: var(--bk-cream); }
+.btn-blue { background: #2F6F8F; color: #FFFFFF; }
+.btn-blue:hover { background: #275d78; }
 .btn-danger { background: #FDE8E4; color: var(--bk-red); }
 .btn-danger:hover { background: #FFCDC4; }
 
@@ -144,6 +146,7 @@ input, select { font-family: inherit; }
 .badge-red { background: #FDE8E4; color: var(--bk-red); }
 .badge-purple { background: #FDE8E4; color: var(--bk-red); }
 .badge-gray { background: #F0E8E0; color: var(--bk-text-light); }
+.badge-blue { background: #E1EEF5; color: #2F6F8F; }
 
 /* Quick actions */
 .quick-actions { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; margin-bottom: 24px; }

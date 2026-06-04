@@ -1,10 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../utils/api';
+import { useRealtime } from '../utils/realtime';
 
 export default function AdminKitchen() {
   const [orders, setOrders] = useState<any[]>([]);
   const load = async () => { try { setOrders(await api('/orders/kitchen')); } catch {} };
-  useEffect(() => { load(); const iv = setInterval(load, 10000); return () => clearInterval(iv); }, []);
+  useEffect(() => { load(); const iv = setInterval(load, 30000); return () => clearInterval(iv); }, []);
+
+  useRealtime(['admin'], (msg) => {
+    if (['new_order', 'order_status', 'menu_update', 'scheduled_order'].includes(msg.type)) load();
+  });
 
   const updateStatus = async (id: string, status: string) => {
     try { await api(`/orders/${id}/status?status=${status}`, { method: 'PUT' }); load(); } catch (e: any) { alert(e.message); }
@@ -20,12 +25,13 @@ export default function AdminKitchen() {
         <div className={`order-card ${o.priority === 'urgent' ? 'urgent' : o.priority === 'high' ? 'high' : ''}`} key={o.id}>
           <div className="order-header">
             <span className="order-id">#{o.id}</span>
-            <span className={`badge ${o.status==='pending'?'badge-orange':o.status==='preparing'?'badge-purple':'badge-green'}`}>{o.status.toUpperCase()}</span>
+            <span className={`badge ${o.status==='pending'?'badge-orange':o.status==='accepted'?'badge-blue':o.status==='preparing'?'badge-purple':'badge-green'}`}>{o.status.toUpperCase()}</span>
           </div>
           <div className="order-meta"><span>{o.user_name}</span><span>{o.order_type}</span><span>₹{Math.round(o.total_price)}</span></div>
           <ul className="order-items">{o.items?.map((item: any, i: number) => <li key={i}><span>{item.product_name}</span><span>{item.grams}g</span></li>)}</ul>
           <div className="order-actions">
-            {o.status === 'pending' && <button className="btn btn-sm btn-purple" onClick={() => updateStatus(o.id, 'preparing')}>Start Preparing</button>}
+            {o.status === 'pending' && <button className="btn btn-sm btn-blue" onClick={() => updateStatus(o.id, 'accepted')}>Accept</button>}
+            {o.status === 'accepted' && <button className="btn btn-sm btn-purple" onClick={() => updateStatus(o.id, 'preparing')}>Start Preparing</button>}
             {o.status === 'preparing' && <button className="btn btn-sm btn-green" onClick={() => updateStatus(o.id, 'ready')}>Mark Ready</button>}
             <button className="btn btn-sm btn-secondary" onClick={() => updateStatus(o.id, 'completed')}>Complete</button>
           </div>

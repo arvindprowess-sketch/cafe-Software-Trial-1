@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../utils/api';
+import { useRealtime } from '../utils/realtime';
 
-const STATUS_COLORS: Record<string, string> = { pending: 'badge-orange', preparing: 'badge-purple', ready: 'badge-green', completed: 'badge-gray', cancelled: 'badge-red' };
+const STATUS_COLORS: Record<string, string> = { pending: 'badge-orange', accepted: 'badge-blue', preparing: 'badge-purple', ready: 'badge-green', completed: 'badge-gray', cancelled: 'badge-red' };
 const PAYMENT_COLORS: Record<string, string> = { paid: '#267E3E', unpaid: '#E23744', pending: '#FF9F0A' };
 
 export default function CashierOrders() {
@@ -18,7 +19,12 @@ export default function CashierOrders() {
       setHeldBills(h);
     } catch {}
   };
-  useEffect(() => { load(); const iv = setInterval(load, 10000); return () => clearInterval(iv); }, []);
+  useEffect(() => { load(); const iv = setInterval(load, 30000); return () => clearInterval(iv); }, []);
+
+  // Real-time updates from kitchen/customer orders (C1/C2)
+  useRealtime(['cashier'], (msg) => {
+    if (['new_order', 'order_status', 'menu_update'].includes(msg.type)) load();
+  });
 
   const filteredOrders = filter === 'all' ? orders : orders.filter(o => o.order_source === filter);
 
@@ -50,7 +56,7 @@ export default function CashierOrders() {
 
   const appOrders = orders.filter(o => o.order_source === 'app');
   const walkInOrders = orders.filter(o => o.order_source !== 'app');
-  const pendingCount = orders.filter(o => ['pending', 'preparing'].includes(o.status)).length;
+  const pendingCount = orders.filter(o => ['pending', 'accepted', 'preparing'].includes(o.status)).length;
 
   return (
     <div>
