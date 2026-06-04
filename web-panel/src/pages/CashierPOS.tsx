@@ -344,10 +344,10 @@ export default function CashierPOS() {
           <div style={{ display: 'flex', gap: 8, overflowX: 'auto', marginBottom: 10, paddingBottom: 4 }} data-testid="offers-banner">
             {offers.map(offer => (
               <button key={offer.id} onClick={() => handleOfferClick(offer)} data-testid={`offer-${offer.id}`}
-                style={{ minWidth: 180, padding: '10px 14px', borderRadius: 10, border: 'none', cursor: 'pointer', textAlign: 'left', background: offer.banner_color || '#15140F', color: '#fff', flexShrink: 0 }}>
-                <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 2 }}>{offer.title}</div>
+                style={{ minWidth: 180, padding: '10px 14px', borderRadius: 10, border: 'none', cursor: 'pointer', textAlign: 'left', background: '#15140F', color: '#F4F1E9', flexShrink: 0 }}>
+                <div style={{ fontFamily: 'Anton, sans-serif', fontWeight: 400, fontSize: 15, marginBottom: 2, color: '#C7F24E', textTransform: 'uppercase', letterSpacing: '0.02em' }}>{offer.title}</div>
                 <div style={{ fontSize: 11, opacity: 0.85 }}>{offer.subtitle}</div>
-                {offer.coupon_code && <div style={{ fontSize: 10, marginTop: 4, background: 'rgba(255,255,255,0.2)', display: 'inline-block', padding: '2px 6px', borderRadius: 4 }}>Code: {offer.coupon_code}</div>}
+                {offer.coupon_code && <div style={{ fontSize: 10, marginTop: 4, background: 'rgba(199,242,78,0.18)', color: '#C7F24E', display: 'inline-block', padding: '2px 6px', borderRadius: 4 }}>Code: {offer.coupon_code}</div>}
               </button>
             ))}
           </div>

@@ -40,18 +40,41 @@ RAZORPAY_KEY_ID/RAZORPAY_KEY_SECRET (empty; not used — user declined online pa
 - C4: role-based access enforced (customer 403 on admin endpoints).
 
 ## Prioritized backlog
-- P0 (Phase 2): "FUEL" design system across mobile + web panel (sand/ink/lime tokens,
-  Anton + Hanken Grotesk fonts, macro chips, goal-first ordering, build-your-own meal screen,
-  pill buttons, ink bottom nav w/ raised lime center button).
 - P1: real MSG91 keys (currently DEV-mode OTP logging); optional Razorpay if needed later.
 - P2 (tech debt): split 3.8k-line server.py by domain; optimize stock loop in create_order;
   consolidate AdminKitchen vs KitchenOrders into one shared component.
+- P2 (mobile polish): apply Anton/Hanken to every remaining Text across all mobile screens
+  (Phase 2 applied fonts on key brand/heading/price surfaces; deeper screens use system font
+  until fonts load); verify on a real device via Expo tunnel.
+
+## Phase 2 — "FUEL" design system (DONE — 2026-06-04)
+Skin-only rebrand from the Burger-King clone to FUEL. No routes / data-testids / API logic changed.
+- Tokens: --sand #F4F1E9 (canvas), --ink #15140F (structure), --lime #C7F24E (signature accent),
+  --lime-deep #A6D62E; macros protein #E2603F / carbs #D69A35 / fat #5E97B8; veg #3FA34D /
+  non-veg #C0392B. Rule enforced: never pure black, never red/orange as the PRIMARY brand color.
+- Fonts: Anton (display/headings/prices/CTAs, uppercase) + Hanken Grotesk (body). Web via Google
+  Fonts in index.html; mobile via @expo-google-fonts/anton + /hanken-grotesk in app/_layout.tsx.
+- Web panel: web-panel/src/App.css fully rewritten to FUEL tokens (all class names preserved);
+  ink sidebar/top-nav with lime active item; pill buttons (lime fill + ink text); white cards;
+  ink data-table headers. Brand renamed "Diet Cafe" -> "FUEL" (login ⚡ mark, sidebar, POS).
+  Inline page hexes migrated via scripts/fuel_palette_migrate.py.
+- Mobile (frontend): new utils/theme.ts (FUEL palette + FONT names + GOALS). Ink bottom nav with
+  raised circular lime "⚡ BUILD" center button (app/(tabs)/_layout.tsx). Home goal selector
+  (Fat Loss / Muscle Gain / Maintenance / Beginner) feeding the AI meal builder. Macro chips
+  (P/C/F) + Ready-made vs BUILD tag on every menu card. Lime cart bar, lime login CTA, Anton
+  headings/prices. customize.tsx already had the live sticky kcal/P/C/F/price summary.
+- DB: scripts/fuel_db_recolor.py recolored existing offers to ink; categories seeded with FUEL
+  macro/diet colors; backend OfferCreate/category/banner defaults updated to FUEL tokens.
+- design_guidelines.json rewritten to the FUEL spec.
+- Verification: web-panel login screenshot (Anton+lime+ink confirmed); testing agent iteration_23
+  -> backend 19/19 green, all admin/kitchen/cashier flows pass, FUEL theme confirmed on rendered
+  surfaces, no leftover BK colors, no console errors. ESLint clean on both codebases.
 
 ## Next tasks
-1. Implement Phase 2 FUEL design (mobile + web panel).
-2. After Phase 2, full regression on both surfaces.
+1. (Optional) Deeper mobile font coverage + on-device Expo verification.
+2. Add real MSG91 keys to enable live SMS OTP.
 
 ## Test artifacts
 - /app/backend/tests/test_fuel_phase1.py (canonical Phase 1 regression)
 - /app/backend/tests/ws_smoke.py (Socket.IO smoke)
-- /app/test_reports/iteration_22.json
+- /app/test_reports/iteration_22.json, /app/test_reports/iteration_23.json (Phase 2 regression)

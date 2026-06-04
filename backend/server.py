@@ -281,7 +281,7 @@ class CategoryCreate(BaseModel):
     key: Optional[str] = None
     label: Optional[str] = None
     icon: str = "grid"
-    color: str = "#E23744"
+    color: str = "#15140F"
     image_url: Optional[str] = None
     description: Optional[str] = None
     sort_order: int = 0
@@ -788,17 +788,17 @@ async def seed_default_categories(user=Depends(get_current_user)):
         return {"message": f"{count} categories already exist", "seeded": 0}
     
     default_categories = [
-        {"name": "Protein", "key": "Protein", "label": "High Protein", "icon": "barbell", "color": "#E23744", 
+        {"name": "Protein", "key": "Protein", "label": "High Protein", "icon": "barbell", "color": "#E2603F", 
          "image_url": "https://images.unsplash.com/photo-1532550907401-a500c9a57435?w=400&h=400&fit=crop&q=80", "sort_order": 1},
-        {"name": "Carb", "key": "Carb", "label": "Healthy Carbs", "icon": "leaf", "color": "#FF9F0A",
+        {"name": "Carb", "key": "Carb", "label": "Healthy Carbs", "icon": "leaf", "color": "#D69A35",
          "image_url": "https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&h=400&fit=crop&q=80", "sort_order": 2},
-        {"name": "Fat", "key": "Fat", "label": "Good Fats", "icon": "water", "color": "#5B5FE0",
+        {"name": "Fat", "key": "Fat", "label": "Good Fats", "icon": "water", "color": "#5E97B8",
          "image_url": "https://images.unsplash.com/photo-1523049673857-eb18f1d7b578?w=400&h=400&fit=crop&q=80", "sort_order": 3},
-        {"name": "Meal", "key": "Meal", "label": "Ready Meals", "icon": "fast-food", "color": "#267E3E",
+        {"name": "Meal", "key": "Meal", "label": "Ready Meals", "icon": "fast-food", "color": "#15140F",
          "image_url": "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400&h=400&fit=crop&q=80", "sort_order": 4},
-        {"name": "Veg", "key": "veg", "label": "Veg Only", "icon": "nutrition", "color": "#4CAF50",
+        {"name": "Veg", "key": "veg", "label": "Veg Only", "icon": "nutrition", "color": "#3FA34D",
          "image_url": "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400&h=400&fit=crop&q=80", "sort_order": 5},
-        {"name": "Non-Veg", "key": "non-veg", "label": "Non-Veg", "icon": "flame", "color": "#E23744",
+        {"name": "Non-Veg", "key": "non-veg", "label": "Non-Veg", "icon": "flame", "color": "#C0392B",
          "image_url": "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400&h=400&fit=crop&q=80", "sort_order": 6},
     ]
     
@@ -2161,7 +2161,7 @@ async def get_banners():
             "offer_id": o["id"],
             "title": o["title"],
             "subtitle": o["subtitle"],
-            "color": o.get("banner_color", "#E23744"),
+            "color": o.get("banner_color", "#15140F"),
             "discount_value": o.get("discount_value", 0),
             "discount_type": o.get("discount_type", "percentage"),
         })
@@ -2173,13 +2173,13 @@ async def get_banners():
             "pack_id": p["id"],
             "title": p["name"],
             "subtitle": p.get("description", ""),
-            "color": p.get("banner_color", "#267E3E"),
+            "color": p.get("banner_color", "#15140F"),
             "goal": p.get("goal", ""),
         })
     # Fallback if no offers/packs yet
     if not banners:
         banners = [
-            {"id": "default-1", "type": "info", "title": "Welcome to Diet Cafe", "subtitle": "Healthy meals, your way", "color": "#E23744"},
+            {"id": "default-1", "type": "info", "title": "Welcome to FUEL", "subtitle": "Eat for your goal", "color": "#15140F"},
             {"id": "default-2", "type": "info", "title": "AI Meal Planner", "subtitle": "Get personalized diet suggestions", "color": "#5B5FE0"},
         ]
     return banners
@@ -2325,7 +2325,7 @@ class OfferCreate(BaseModel):
     applicable_to: str = "all"  # "all", "category", "products"
     applicable_category: Optional[str] = None  # "Protein", "Carb", etc.
     applicable_product_ids: Optional[List[str]] = []
-    banner_color: str = "#E23744"
+    banner_color: str = "#15140F"
     coupon_code: Optional[str] = None
     min_order_value: float = 0
     max_discount: Optional[float] = None
@@ -2441,7 +2441,7 @@ class PackCreate(BaseModel):
     diet_type: str = "both"  # "veg", "non-veg", "both"
     items: List[PackItem]
     pack_price: float
-    banner_color: str = "#267E3E"
+    banner_color: str = "#15140F"
     image_url: Optional[str] = None
     is_active: bool = True
 
@@ -3110,9 +3110,9 @@ async def seed_offers_and_packs():
         products = await db.products.find({"is_active": True}, {"_id": 0}).to_list(20)
         protein_ids = [p["id"] for p in products if p.get("category") == "Protein"]
         default_offers = [
-            {"id": str(uuid.uuid4()), "title": "Flat 20% OFF", "subtitle": "On all protein items today", "discount_type": "percentage", "discount_value": 20, "applicable_to": "category", "applicable_category": "Protein", "applicable_product_ids": [], "banner_color": "#E23744", "coupon_code": "PROTEIN20", "min_order_value": 50, "max_discount": 100, "is_active": True, "created_at": datetime.now(timezone.utc).isoformat()},
-            {"id": str(uuid.uuid4()), "title": "₹30 OFF on Carbs", "subtitle": "Fuel your workout with healthy carbs", "discount_type": "flat", "discount_value": 30, "applicable_to": "category", "applicable_category": "Carb", "applicable_product_ids": [], "banner_color": "#FF9F0A", "coupon_code": "CARB30", "min_order_value": 100, "max_discount": None, "is_active": True, "created_at": datetime.now(timezone.utc).isoformat()},
-            {"id": str(uuid.uuid4()), "title": "Free Delivery", "subtitle": "On orders above ₹299", "discount_type": "flat", "discount_value": 30, "applicable_to": "all", "applicable_category": None, "applicable_product_ids": [], "banner_color": "#267E3E", "coupon_code": "FREEDEL", "min_order_value": 299, "max_discount": 30, "is_active": True, "created_at": datetime.now(timezone.utc).isoformat()},
+            {"id": str(uuid.uuid4()), "title": "Flat 20% OFF", "subtitle": "On all protein items today", "discount_type": "percentage", "discount_value": 20, "applicable_to": "category", "applicable_category": "Protein", "applicable_product_ids": [], "banner_color": "#15140F", "coupon_code": "PROTEIN20", "min_order_value": 50, "max_discount": 100, "is_active": True, "created_at": datetime.now(timezone.utc).isoformat()},
+            {"id": str(uuid.uuid4()), "title": "₹30 OFF on Carbs", "subtitle": "Fuel your workout with healthy carbs", "discount_type": "flat", "discount_value": 30, "applicable_to": "category", "applicable_category": "Carb", "applicable_product_ids": [], "banner_color": "#26251D", "coupon_code": "CARB30", "min_order_value": 100, "max_discount": None, "is_active": True, "created_at": datetime.now(timezone.utc).isoformat()},
+            {"id": str(uuid.uuid4()), "title": "Free Delivery", "subtitle": "On orders above ₹299", "discount_type": "flat", "discount_value": 30, "applicable_to": "all", "applicable_category": None, "applicable_product_ids": [], "banner_color": "#15140F", "coupon_code": "FREEDEL", "min_order_value": 299, "max_discount": 30, "is_active": True, "created_at": datetime.now(timezone.utc).isoformat()},
         ]
         await db.offers.insert_many(default_offers)
         seeded["offers"] = len(default_offers)
@@ -3125,19 +3125,19 @@ async def seed_offers_and_packs():
                 {"product_id": p_map.get("Brown Rice", ""), "product_name": "Brown Rice", "grams": 150},
                 {"product_id": p_map.get("Egg White", ""), "product_name": "Egg White", "grams": 150},
                 {"product_id": p_map.get("Banana", ""), "product_name": "Banana", "grams": 100},
-            ], "pack_price": 199, "banner_color": "#267E3E", "is_active": True, "created_at": datetime.now(timezone.utc).isoformat()},
+            ], "pack_price": 199, "banner_color": "#15140F", "is_active": True, "created_at": datetime.now(timezone.utc).isoformat()},
             {"id": str(uuid.uuid4()), "name": "Fat Loss Pack", "description": "Low-cal, high-protein for effective fat loss", "goal": "fat_loss", "diet_type": "both", "items": [
                 {"product_id": p_map.get("Grilled Fish", ""), "product_name": "Grilled Fish", "grams": 150},
                 {"product_id": p_map.get("Salad", ""), "product_name": "Salad", "grams": 200},
                 {"product_id": p_map.get("Greek Yogurt", ""), "product_name": "Greek Yogurt", "grams": 100},
                 {"product_id": p_map.get("Sprouts", ""), "product_name": "Sprouts", "grams": 100},
-            ], "pack_price": 179, "banner_color": "#E23744", "is_active": True, "created_at": datetime.now(timezone.utc).isoformat()},
+            ], "pack_price": 179, "banner_color": "#26251D", "is_active": True, "created_at": datetime.now(timezone.utc).isoformat()},
             {"id": str(uuid.uuid4()), "name": "Veg Power Pack", "description": "Pure vegetarian protein-rich meal", "goal": "muscle_gain", "diet_type": "veg", "items": [
                 {"product_id": p_map.get("Paneer Tikka", ""), "product_name": "Paneer Tikka", "grams": 200},
                 {"product_id": p_map.get("Quinoa", ""), "product_name": "Quinoa", "grams": 150},
                 {"product_id": p_map.get("Soya Chunks", ""), "product_name": "Soya Chunks", "grams": 100},
                 {"product_id": p_map.get("Almonds", ""), "product_name": "Almonds", "grams": 50},
-            ], "pack_price": 249, "banner_color": "#4CAF50", "is_active": True, "created_at": datetime.now(timezone.utc).isoformat()},
+            ], "pack_price": 249, "banner_color": "#15140F", "is_active": True, "created_at": datetime.now(timezone.utc).isoformat()},
         ]
         await db.packs.insert_many(default_packs)
         seeded["packs"] = len(default_packs)
