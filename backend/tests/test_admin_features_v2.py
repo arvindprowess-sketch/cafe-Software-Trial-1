@@ -11,7 +11,7 @@ import requests
 import os
 import uuid
 
-BASE_URL = "https://fuel-rebrand.preview.emergentagent.com"
+BASE_URL = "https://cafe-app-22.preview.emergentagent.com"
 
 @pytest.fixture
 def api_client():

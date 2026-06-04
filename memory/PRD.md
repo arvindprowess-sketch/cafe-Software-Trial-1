@@ -78,3 +78,22 @@ Skin-only rebrand from the Burger-King clone to FUEL. No routes / data-testids /
 - /app/backend/tests/test_fuel_phase1.py (canonical Phase 1 regression)
 - /app/backend/tests/ws_smoke.py (Socket.IO smoke)
 - /app/test_reports/iteration_22.json, /app/test_reports/iteration_23.json (Phase 2 regression)
+
+## 2026-06-04 — Dual preview enablement (resume session)
+Goal: give the user ONE preview URL to test BOTH the customer mobile app and the staff web portal.
+- Recreated missing `backend/.env` (MONGO_URL, DB_NAME, JWT_SECRET, EMERGENT_LLM_KEY, MSG91 blank=DEV)
+  and `frontend/.env` (EXPO_PUBLIC_BACKEND_URL = preview URL).
+- Re-seeded DB: 16 products + admin(admin@dietcafe.com/admin123), 6 categories, 3 offers/3 packs,
+  kitchen PIN 4321, cashier PIN 5678.
+- Single-port (3000) dual serving:
+  * Web portal (Vite dev) served at `/`.
+  * Mobile app = Expo static web export with `expo.experiments.baseUrl="/mobile"`,
+    output copied to `web-panel/public/mobile`, served at `/mobile`.
+  * Added a Vite middleware (`vite.config.ts` serveMobile plugin) so extension-less `/mobile/*`
+    routes return the Expo index.html (instead of the web-panel SPA fallback).
+  * `scripts/start-both.sh` now runs the web-panel; `scripts/build-mobile.sh` rebuilds the mobile bundle.
+- Verified: web portal admin login → dashboard OK; mobile phone+OTP (DEV log) → token+user OK.
+- NOTE: react-native-maps is in package.json but unused; only expo-camera is used (web-compatible),
+  so the Expo web export succeeds cleanly.
+- Mobile app is a STATIC build → re-run `bash /app/scripts/build-mobile.sh` after editing `frontend/`.
+- OTP is DEV-mode (no MSG91 keys) → OTP not sent to phone; appears in backend log.
