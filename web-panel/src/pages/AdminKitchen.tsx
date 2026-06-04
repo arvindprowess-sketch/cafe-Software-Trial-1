@@ -7,7 +7,7 @@ export default function AdminKitchen() {
   const load = async () => { try { setOrders(await api('/orders/kitchen')); } catch {} };
   useEffect(() => { load(); const iv = setInterval(load, 30000); return () => clearInterval(iv); }, []);
 
-  useRealtime(['admin'], (msg) => {
+  const { connected } = useRealtime(['admin'], (msg) => {
     if (['new_order', 'order_status', 'menu_update', 'scheduled_order'].includes(msg.type)) load();
   });
 
@@ -18,7 +18,13 @@ export default function AdminKitchen() {
   return (
     <div>
       <div className="page-header"><div><h1>Kitchen View</h1><p>{orders.length} active orders</p></div>
-        <button className="btn btn-secondary" onClick={load}>Refresh</button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span data-testid="live-status" style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 20, background: connected ? '#E8F5E9' : '#FDECEC', color: connected ? '#267E3E' : '#C0392B', display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ width: 7, height: 7, borderRadius: 4, background: connected ? '#267E3E' : '#C0392B', display: 'inline-block' }} />
+            {connected ? 'LIVE' : 'OFFLINE'}
+          </span>
+          <button className="btn btn-secondary" onClick={load}>Refresh</button>
+        </div>
       </div>
       {orders.length === 0 && <div className="empty-state"><div className="empty-icon">✅</div><h3>All caught up!</h3><p>No pending orders</p></div>}
       {orders.map(o => (

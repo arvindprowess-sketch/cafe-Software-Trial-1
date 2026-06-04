@@ -2319,7 +2319,7 @@ async def mark_notification_read(notification_id: str, user=Depends(get_current_
 # ========== OFFERS & BANNERS SYSTEM (Admin-Managed) ==========
 class OfferCreate(BaseModel):
     title: str
-    subtitle: str
+    subtitle: str = ""
     discount_type: str = "percentage"  # "percentage", "flat", or "bogo" (buy-one-get-one)
     discount_value: float = 10  # 10% or ₹10
     applicable_to: str = "all"  # "all", "category", "products"
