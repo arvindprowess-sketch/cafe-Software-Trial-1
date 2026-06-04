@@ -1899,6 +1899,31 @@ class AIChatRequest(BaseModel):
     diet_preference: Optional[str] = "both"
     current_cart: Optional[List[Dict]] = []
 
+def strip_action_json(response: str):
+    """Extract a trailing AI action JSON block ({"add":[...]} or {"action":...}) and
+    ALWAYS remove it (plus any markdown code fences) from the user-facing message so
+    raw structured data never leaks into the chat bubble. Returns (clean_text, actions)."""
+    actions = None
+    # Locate a JSON action block (must contain "add" or "action"). The trailing
+    # [\s\S]*\} is greedy to the LAST '}' so nested arrays like
+    # {"add":[{...},{...}]} are captured whole.
+    m = re.search(r'\{[\s\S]*?(?:"add"|"action")[\s\S]*\}', response)
+    if m:
+        try:
+            actions = json.loads(m.group(0))
+        except Exception:
+            actions = None
+        # Remove the JSON block from the displayed message even if parsing failed,
+        # so the raw object never leaks into the chat bubble.
+        response = response[:m.start()] + response[m.end():]
+    # Strip leftover markdown code fences / language labels (```json, ```).
+    response = re.sub(r'```[a-zA-Z]*', '', response).replace('```', '').strip()
+    # If the model returned ONLY a JSON block, show a friendly fallback line.
+    if not response:
+        response = "Here's a meal suggestion for you! 💪"
+    return response, actions
+
+
 @api_router.post("/ai/chat")
 async def ai_chat(data: AIChatRequest, user=Depends(get_current_user)):
     """Conversational AI assistant for meal planning and nutrition advice"""
@@ -1980,20 +2005,9 @@ RULES:
         
         response = await chat.send_message(UserMessage(text=data.message))
         
-        # Parse any actions from response
-        actions = None
-        try:
-            # Check if response contains JSON action (capture the WHOLE object:
-            # first '{' to last '}') so nested arrays like {"add":[{...},{...}]} parse.
-            if "{" in response and "}" in response:
-                json_start = response.find("{")
-                json_end = response.rfind("}") + 1
-                json_str = response[json_start:json_end]
-                actions = json.loads(json_str)
-                # Remove JSON from displayed message
-                response = response[:json_start].strip()
-        except:
-            pass
+        # Parse any actions from the response, then ALWAYS strip the structured
+        # JSON (and any markdown code fences around it) from the user-facing text.
+        response, actions = strip_action_json(response)
         
         # Reliability fallback: if the model named specific menu items with portions
         # (e.g. "Soya Chunks 100g") but did NOT emit the structured JSON, extract them

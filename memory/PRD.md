@@ -143,3 +143,17 @@ Goal: give the user ONE preview URL to test BOTH the customer mobile app and the
   + server total. /ai/chat now reliably emits actions.add (prompt + first-brace JSON parse + deterministic
   name+grams fallback parser; import re added).
 - Tested 11/12 then AI-add fixed. Mobile is static export: rebuild via scripts/build-mobile.sh.
+
+## 2026-06 — Round 3 closeout: AI chat JSON leak fixed (P0 DONE)
+- BUG: AI Diet Assistant chat bubble leaked raw `{"add":[...]}` / ```` ```json ```` fences.
+  Root cause: old logic only stripped the JSON from `message` when `json.loads` succeeded;
+  when the LLM wrapped it in markdown fences or added trailing text, the fence/prefix stayed.
+- FIX (backend-only, server.py): new module-level helper `strip_action_json(response)` —
+  regex-extracts the action block (greedy to last `}` so nested arrays parse), ALWAYS removes
+  it from the user-facing text (even if parse fails), strips leftover ```` ``` ````/```json fences,
+  and falls back to a friendly line if only JSON was returned. `ai_chat` now calls this helper.
+  Deterministic name+grams fallback retained for when no JSON is emitted.
+- Regression test: /app/backend/tests/test_ai_chat_strip.py (6 cases: fenced/bare/checkout/
+  json-only/malformed/plain — all green). Verified e2e via external ingress URL: CLEAN + actions intact.
+- NOTE: pure backend fix → no mobile rebuild needed (ai-chat.tsx just renders result.message).
+
