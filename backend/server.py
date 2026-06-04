@@ -30,6 +30,25 @@ security = HTTPBearer()
 JWT_SECRET = "dietcafe_secret_key_2024"
 JWT_ALGORITHM = "HS256"
 
+DEFAULT_DEMO_USERS = [
+    {
+        "email": "admin@dietcafe.com",
+        "password": "admin123",
+        "name": "Admin",
+        "role": "admin",
+    },
+    {
+        "name": "Kitchen Staff",
+        "role": "kitchen",
+        "pin": "1111",
+    },
+    {
+        "name": "Cashier Staff",
+        "role": "cashier",
+        "pin": "2222",
+    },
+]
+
 # ========== NUTRITION DATABASE (per 100g) ==========
 NON_VEG_KEYWORDS = {"chicken", "egg", "fish", "kabab", "seekh", "mutton", "lamb", "prawn", "shrimp", "meat", "pork", "beef", "turkey"}
 
@@ -237,6 +256,42 @@ def verify_password(password: str, hashed: str) -> bool:
 def create_token(user_id: str, role: str) -> str:
     payload = {"user_id": user_id, "role": role, "exp": datetime.now(timezone.utc).timestamp() + 86400 * 7}
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+async def ensure_default_demo_users():
+    """Guarantee demo credentials exist so first login works in fresh setups."""
+    admin = DEFAULT_DEMO_USERS[0]
+    admin_exists = await db.users.find_one({"email": admin["email"]}, {"_id": 0})
+    if not admin_exists:
+        await db.users.insert_one({
+            "id": str(uuid.uuid4()),
+            "email": admin["email"],
+            "password_hash": hash_password(admin["password"]),
+            "name": admin["name"],
+            "role": admin["role"],
+            "fitness_goal": "maintenance",
+            "daily_calories": 2000,
+            "daily_protein": 100,
+            "daily_carbs": 250,
+            "daily_fat": 65,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+
+    for staff in DEFAULT_DEMO_USERS[1:]:
+        staff_exists = await db.users.find_one(
+            {"role": staff["role"], "pin_plain": staff["pin"]},
+            {"_id": 0}
+        )
+        if staff_exists:
+            continue
+        await db.users.insert_one({
+            "id": str(uuid.uuid4()),
+            "name": staff["name"],
+            "role": staff["role"],
+            "pin_hash": hash_password(staff["pin"]),
+            "pin_plain": staff["pin"],
+            "is_active": True,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     try:
@@ -3613,6 +3668,14 @@ app.add_middleware(
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+@app.on_event("startup")
+async def startup_seed_demo_users():
+    try:
+        await ensure_default_demo_users()
+        logger.info("Default demo users are ready")
+    except Exception as exc:
+        logger.error(f"Unable to prepare default demo users: {exc}")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

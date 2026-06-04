@@ -47,6 +47,21 @@ export default function Login() {
           <p>Management Panel</p>
         </div>
 
+        <div style={{
+          background: '#fff6f7',
+          border: '1px solid #ffd5d9',
+          borderRadius: 12,
+          padding: 12,
+          marginBottom: 16,
+          fontSize: 13,
+          color: '#6d1f28'
+        }}>
+          <strong style={{ display: 'block', marginBottom: 6 }}>Preview before testing</strong>
+          <div>Admin: <code>admin@dietcafe.com</code> / <code>admin123</code></div>
+          <div>Kitchen PIN: <code>1111</code> · Cashier PIN: <code>2222</code></div>
+          <div style={{ marginTop: 6, opacity: 0.8 }}>Use these credentials to verify login flow, then share next changes.</div>
+        </div>
+
         <div className="login-tabs">
           <button className={`login-tab ${tab === 'admin' ? 'active' : ''}`} onClick={() => { setTab('admin'); setError(''); }} data-testid="tab-admin">
             Admin Login
@@ -99,9 +114,6 @@ export default function Login() {
             <button type="submit" className="login-btn" disabled={loading || pin.length < 4} data-testid="pin-login-btn">
               {loading ? 'Verifying...' : 'Login with PIN'}
             </button>
-            <p style={{ textAlign: 'center', fontSize: 13, color: '#9C9C9C', marginTop: 16 }}>
-              Kitchen & Cashier staff use PIN login
-            </p>
           </form>
         )}
       </div>
