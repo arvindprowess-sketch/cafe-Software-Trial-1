@@ -19,8 +19,8 @@ export default function AdminKitchen() {
     <div>
       <div className="page-header"><div><h1>Kitchen View</h1><p>{orders.length} active orders</p></div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <span data-testid="live-status" style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 20, background: connected ? '#E8F5E9' : '#FDECEC', color: connected ? '#267E3E' : '#C0392B', display: 'flex', alignItems: 'center', gap: 5 }}>
-            <span style={{ width: 7, height: 7, borderRadius: 4, background: connected ? '#267E3E' : '#C0392B', display: 'inline-block' }} />
+          <span data-testid="live-status" style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 20, background: connected ? '#EAF2DD' : '#F1E7E1', color: connected ? '#3FA34D' : '#C0392B', display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ width: 7, height: 7, borderRadius: 4, background: connected ? '#3FA34D' : '#C0392B', display: 'inline-block' }} />
             {connected ? 'LIVE' : 'OFFLINE'}
           </span>
           <button className="btn btn-secondary" onClick={load}>Refresh</button>

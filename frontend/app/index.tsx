@@ -8,13 +8,14 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiCall } from '../utils/api';
+import { FUEL, FONT } from '../utils/theme';
 
-const Z_RED = '#D62300';
-const GREEN = '#509E2F';
-const BK_BROWN = '#502314';
-const BK_CREAM = '#F5EBDC';
-const BK_ORANGE = '#FF8732';
-const BK_TEXT_LIGHT = '#8B6F61';
+const Z_RED = '#15140F';
+const GREEN = '#3FA34D';
+const BK_BROWN = '#15140F';
+const BK_CREAM = '#F4F1E9';
+const BK_ORANGE = '#15140F';
+const BK_TEXT_LIGHT = '#6B6A5E';
 
 type Step = 'phone' | 'otp' | 'name';
 
@@ -225,7 +226,7 @@ export default function AuthScreen() {
   const renderOtpStep = () => (
     <>
       <TouchableOpacity style={styles.backBtn} onPress={() => { setStep('phone'); setOtp(['', '', '', '', '', '']); setError(''); }}>
-        <Ionicons name="arrow-back" size={24} color="#1C1C2E" />
+        <Ionicons name="arrow-back" size={24} color="#15140F" />
       </TouchableOpacity>
 
       <View style={styles.iconContainer}>
@@ -240,7 +241,7 @@ export default function AuthScreen() {
       {/* Demo OTP Display */}
       {demoOtp && (
         <View style={styles.demoOtpBox}>
-          <Ionicons name="information-circle" size={16} color="#FF9F0A" />
+          <Ionicons name="information-circle" size={16} color="#D69A35" />
           <Text style={styles.demoOtpText}>Demo OTP: <Text style={styles.demoOtpCode}>{demoOtp}</Text></Text>
         </View>
       )}
@@ -296,7 +297,7 @@ export default function AuthScreen() {
     <>
       <View style={styles.iconContainer}>
         <View style={styles.nameBg}>
-          <Ionicons name="person" size={40} color="#5B5FE0" />
+          <Ionicons name="person" size={40} color="#5E97B8" />
         </View>
       </View>
       
@@ -335,7 +336,7 @@ export default function AuthScreen() {
             <View style={styles.logoBg}>
               <Ionicons name="restaurant" size={32} color="#FFF" />
             </View>
-            <Text style={styles.brand}>diet cafe</Text>
+            <Text style={styles.brand}>FUEL</Text>
           </View>
 
           <View style={styles.formCard}>
@@ -359,8 +360,8 @@ const styles = StyleSheet.create({
   
   // Logo
   logoSection: { alignItems: 'center', marginBottom: 32 },
-  logoBg: { width: 68, height: 68, borderRadius: 16, backgroundColor: Z_RED, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
-  brand: { fontSize: 30, fontWeight: '800', color: BK_CREAM, textTransform: 'uppercase', letterSpacing: 1 },
+  logoBg: { width: 68, height: 68, borderRadius: 16, backgroundColor: FUEL.lime, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
+  brand: { fontFamily: FONT.display, fontSize: 40, fontWeight: '800', color: BK_CREAM, textTransform: 'uppercase', letterSpacing: 1 },
   
   // Form Card
   formCard: { backgroundColor: '#FFF', borderRadius: 20, padding: 28, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 20, elevation: 6 },
@@ -370,49 +371,49 @@ const styles = StyleSheet.create({
   
   // Icon containers
   iconContainer: { alignItems: 'center', marginBottom: 20, marginTop: 8 },
-  phoneBg: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#FDE8E4', alignItems: 'center', justifyContent: 'center' },
-  otpBg: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#E8F5E1', alignItems: 'center', justifyContent: 'center' },
-  nameBg: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#FFF0E0', alignItems: 'center', justifyContent: 'center' },
+  phoneBg: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#F1E7E1', alignItems: 'center', justifyContent: 'center' },
+  otpBg: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#EAF2DD', alignItems: 'center', justifyContent: 'center' },
+  nameBg: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#F2EEE0', alignItems: 'center', justifyContent: 'center' },
   
   // Titles
   title: { fontSize: 24, fontWeight: '800', color: BK_BROWN, textAlign: 'center', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.3 },
   subtitle: { fontSize: 14, color: BK_TEXT_LIGHT, textAlign: 'center', marginBottom: 24 },
   
   // Phone input
-  phoneInputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: BK_CREAM, borderRadius: 14, overflow: 'hidden', marginBottom: 16, borderWidth: 2, borderColor: '#E8DDD4' },
-  countryCode: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 14, backgroundColor: '#E8DDD4', gap: 6 },
+  phoneInputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: BK_CREAM, borderRadius: 14, overflow: 'hidden', marginBottom: 16, borderWidth: 2, borderColor: '#E6E1D4' },
+  countryCode: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 14, backgroundColor: '#E6E1D4', gap: 6 },
   flag: { fontSize: 18 },
   countryText: { fontSize: 16, fontWeight: '700', color: BK_BROWN },
   phoneInput: { flex: 1, fontSize: 18, fontWeight: '600', color: BK_BROWN, paddingHorizontal: 14, paddingVertical: 14, letterSpacing: 1 },
   
   // OTP input
   otpContainer: { flexDirection: 'row', justifyContent: 'center', gap: 10, marginBottom: 20 },
-  otpInput: { width: 48, height: 56, borderRadius: 12, backgroundColor: BK_CREAM, borderWidth: 2, borderColor: '#E8DDD4', textAlign: 'center', fontSize: 22, fontWeight: '800', color: BK_BROWN },
-  otpInputFilled: { borderColor: GREEN, backgroundColor: '#E8F5E1' },
+  otpInput: { width: 48, height: 56, borderRadius: 12, backgroundColor: BK_CREAM, borderWidth: 2, borderColor: '#E6E1D4', textAlign: 'center', fontSize: 22, fontWeight: '800', color: BK_BROWN },
+  otpInputFilled: { borderColor: GREEN, backgroundColor: '#EAF2DD' },
   
   // Demo OTP box
-  demoOtpBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#FFF0E0', borderRadius: 12, padding: 12, marginBottom: 16 },
+  demoOtpBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#F2EEE0', borderRadius: 12, padding: 12, marginBottom: 16 },
   demoOtpText: { fontSize: 13, color: BK_ORANGE },
   demoOtpCode: { fontWeight: '800', fontSize: 16, letterSpacing: 2, color: BK_BROWN },
   
   // Name input
-  nameInput: { backgroundColor: BK_CREAM, borderRadius: 14, padding: 16, fontSize: 18, fontWeight: '600', color: BK_BROWN, marginBottom: 16, textAlign: 'center', borderWidth: 2, borderColor: '#E8DDD4' },
+  nameInput: { backgroundColor: BK_CREAM, borderRadius: 14, padding: 16, fontSize: 18, fontWeight: '600', color: BK_BROWN, marginBottom: 16, textAlign: 'center', borderWidth: 2, borderColor: '#E6E1D4' },
   
   // Buttons (BK pill style)
   primaryBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Z_RED, borderRadius: 28, paddingVertical: 16, marginBottom: 12 },
-  primaryBtnDisabled: { backgroundColor: '#C4A99A' },
-  primaryBtnText: { color: BK_CREAM, fontSize: 16, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
+  primaryBtnDisabled: { backgroundColor: '#CFCBBE' },
+  primaryBtnText: { color: FUEL.lime, fontSize: 16, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
   
   resendBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12 },
   resendText: { fontSize: 14, fontWeight: '700', color: BK_ORANGE },
   
   // Divider
   divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 20 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: '#E8DDD4' },
+  dividerLine: { flex: 1, height: 1, backgroundColor: '#E6E1D4' },
   dividerText: { paddingHorizontal: 16, fontSize: 13, color: BK_TEXT_LIGHT },
   
   // Admin button
-  adminBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#FDE8E4', borderRadius: 14, paddingVertical: 14 },
+  adminBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#F1E7E1', borderRadius: 14, paddingVertical: 14 },
   adminBtnText: { fontSize: 14, fontWeight: '700', color: Z_RED },
   
   // Staff button
@@ -425,3 +426,4 @@ const styles = StyleSheet.create({
   // Terms
   terms: { fontSize: 11, color: 'rgba(245,235,220,0.5)', textAlign: 'center', marginTop: 24 },
 });
+);

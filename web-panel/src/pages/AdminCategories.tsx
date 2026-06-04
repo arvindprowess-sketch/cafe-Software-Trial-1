@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../utils/api';
 
-const COLOR_PRESETS = ['#E23744', '#FF9F0A', '#267E3E', '#5B5FE0', '#9C27B0', '#00BCD4', '#FF6B6B', '#4CAF50', '#1C1C2E', '#795548'];
+const COLOR_PRESETS = ['#15140F', '#D69A35', '#3FA34D', '#15140F', '#15140F', '#5E97B8', '#C0392B', '#3FA34D', '#15140F', '#26251D'];
 
 type FormMode = 'create' | 'edit';
 
@@ -10,7 +10,7 @@ export default function AdminCategories() {
   const [showForm, setShowForm] = useState(false);
   const [formMode, setFormMode] = useState<FormMode>('create');
   const [editId, setEditId] = useState('');
-  const [form, setForm] = useState({ name: '', icon: 'grid', color: '#E23744', sort_order: 0, font_style: 'default', description: '', is_active: true, image_url: '' });
+  const [form, setForm] = useState({ name: '', icon: 'grid', color: '#15140F', sort_order: 0, font_style: 'default', description: '', is_active: true, image_url: '' });
   const [saving, setSaving] = useState(false);
   const [imagePreview, setImagePreview] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -21,7 +21,7 @@ export default function AdminCategories() {
   const openCreate = () => {
     setFormMode('create');
     setEditId('');
-    setForm({ name: '', icon: 'grid', color: '#E23744', sort_order: categories.length + 1, font_style: 'default', description: '', is_active: true, image_url: '' });
+    setForm({ name: '', icon: 'grid', color: '#15140F', sort_order: categories.length + 1, font_style: 'default', description: '', is_active: true, image_url: '' });
     setImagePreview('');
     setShowForm(true);
   };
@@ -30,7 +30,7 @@ export default function AdminCategories() {
     setFormMode('edit');
     setEditId(cat.id);
     setForm({
-      name: cat.name, icon: cat.icon || 'grid', color: cat.color || '#E23744',
+      name: cat.name, icon: cat.icon || 'grid', color: cat.color || '#15140F',
       sort_order: cat.sort_order || 0, font_style: cat.font_style || 'default',
       description: cat.description || '', is_active: cat.is_active !== false,
       image_url: cat.image_url || ''
@@ -141,7 +141,7 @@ export default function AdminCategories() {
           z-index: 2;
           font-family: var(--font-brand);
         }
-        .cat-tile-badge.active { background: #267E3E; color: #FFF; }
+        .cat-tile-badge.active { background: #3FA34D; color: #FFF; }
         .cat-tile-badge.inactive { background: #666; color: #FFF; }
         .cat-tile-footer {
           padding: 8px 4px 0;
@@ -153,7 +153,7 @@ export default function AdminCategories() {
           font-weight: 600;
           font-size: 15px;
           line-height: 1.3;
-          color: #1C1C2E;
+          color: #15140F;
           text-transform: uppercase;
           letter-spacing: -0.02em;
         }
@@ -195,7 +195,7 @@ export default function AdminCategories() {
           letter-spacing: 0.02em;
         }
         .cat-tile-actions button:hover { transform: scale(1.05); }
-        .cat-tile-actions .btn-edit { background: #FFF; color: #1C1C2E; }
+        .cat-tile-actions .btn-edit { background: #FFF; color: #15140F; }
         .cat-tile-actions .btn-edit:hover { background: #F0F0F0; }
         .cat-tile-actions .btn-toggle { background: transparent; color: #FFF; border: 2px solid rgba(255,255,255,0.7); }
         .cat-tile-actions .btn-toggle:hover { background: rgba(255,255,255,0.1); }
@@ -216,7 +216,7 @@ export default function AdminCategories() {
           background: #FAFAFA;
           position: relative;
         }
-        .cat-form-img-upload:hover { border-color: #E23744; }
+        .cat-form-img-upload:hover { border-color: #15140F; }
         .cat-form-img-upload img {
           width: 100%;
           height: 100%;
@@ -232,7 +232,7 @@ export default function AdminCategories() {
         .cat-form-img-upload .upload-placeholder svg { opacity: 0.4; }
         .cat-form-img-upload .upload-placeholder span { font-size: 13px; font-weight: 600; }
         .cat-form-preview {
-          background: #1C1C2E;
+          background: #15140F;
           border-radius: 16px;
           padding: 20px;
           display: flex;
@@ -269,7 +269,7 @@ export default function AdminCategories() {
           font-family: var(--font-brand);
           font-weight: 600;
           font-size: 13px;
-          color: #1C1C2E;
+          color: #15140F;
           text-transform: uppercase;
           letter-spacing: -0.01em;
         }
@@ -318,7 +318,7 @@ export default function AdminCategories() {
       {categories.length === 0 && (
         <div className="empty-state" style={{ marginTop: 40 }}>
           <div style={{ fontSize: 56, marginBottom: 12, opacity: 0.2 }}>
-            <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#5B5FE0" strokeWidth="2"><path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z"/></svg>
+            <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#15140F" strokeWidth="2"><path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z"/></svg>
           </div>
           <h3 style={{ fontFamily: "var(--font-brand)", fontWeight: 600, textTransform: 'uppercase' }}>No Categories Yet</h3>
           <p>Create your first category with a branded image</p>
@@ -353,7 +353,7 @@ export default function AdminCategories() {
                   <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} data-testid="cat-image-file-input" />
                   {imagePreview && (
                     <button type="button" onClick={() => { setImagePreview(''); setForm(f => ({ ...f, image_url: '' })); }}
-                      style={{ marginTop: 6, fontSize: 11, color: '#E23744', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}
+                      style={{ marginTop: 6, fontSize: 11, color: '#15140F', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}
                       data-testid="cat-image-remove">
                       Remove image
                     </button>
@@ -396,7 +396,7 @@ export default function AdminCategories() {
                       onClick={() => setForm({ ...form, color: clr })}
                       style={{
                         width: 34, height: 34, borderRadius: 10, background: clr,
-                        border: form.color === clr ? '3px solid #1C1C2E' : '2px solid transparent',
+                        border: form.color === clr ? '3px solid #15140F' : '2px solid transparent',
                         cursor: 'pointer', transition: 'transform 0.15s',
                         transform: form.color === clr ? 'scale(1.15)' : 'scale(1)',
                         boxShadow: form.color === clr ? '0 2px 8px rgba(0,0,0,0.2)' : 'none'

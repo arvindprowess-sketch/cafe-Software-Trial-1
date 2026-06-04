@@ -42,8 +42,8 @@ export default function Login() {
     <div className="login-page">
       <div className="login-card">
         <div className="login-logo">
-          <div className="icon-bg">🍽</div>
-          <h1>Diet Cafe</h1>
+          <div className="icon-bg">⚡</div>
+          <h1>FUEL</h1>
           <p>Management Panel</p>
         </div>
 

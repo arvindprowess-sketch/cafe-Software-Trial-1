@@ -8,7 +8,7 @@ export default function KitchenLayout() {
     <div>
       <div className="top-nav">
         <div className="top-nav-brand">
-          <div className="brand-dot" style={{ background: '#FF9F0A' }} />
+          <div className="brand-dot" style={{ background: '#C7F24E' }} />
           <h2>Kitchen Display</h2>
         </div>
         <div className="top-nav-links">

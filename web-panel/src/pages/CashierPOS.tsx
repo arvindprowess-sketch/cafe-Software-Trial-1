@@ -344,7 +344,7 @@ export default function CashierPOS() {
           <div style={{ display: 'flex', gap: 8, overflowX: 'auto', marginBottom: 10, paddingBottom: 4 }} data-testid="offers-banner">
             {offers.map(offer => (
               <button key={offer.id} onClick={() => handleOfferClick(offer)} data-testid={`offer-${offer.id}`}
-                style={{ minWidth: 180, padding: '10px 14px', borderRadius: 10, border: 'none', cursor: 'pointer', textAlign: 'left', background: offer.banner_color || '#5B5FE0', color: '#fff', flexShrink: 0 }}>
+                style={{ minWidth: 180, padding: '10px 14px', borderRadius: 10, border: 'none', cursor: 'pointer', textAlign: 'left', background: offer.banner_color || '#15140F', color: '#fff', flexShrink: 0 }}>
                 <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 2 }}>{offer.title}</div>
                 <div style={{ fontSize: 11, opacity: 0.85 }}>{offer.subtitle}</div>
                 {offer.coupon_code && <div style={{ fontSize: 10, marginTop: 4, background: 'rgba(255,255,255,0.2)', display: 'inline-block', padding: '2px 6px', borderRadius: 4 }}>Code: {offer.coupon_code}</div>}
@@ -367,7 +367,7 @@ export default function CashierPOS() {
             return (
               <button key={c.id || c.key} className={`pos-cat ${selectedCat === c.key ? 'active' : ''}`}
                 onClick={() => setSelectedCat(c.key)} data-testid={`cat-${c.key}`}
-                style={{ ...fontStyle, borderColor: selectedCat === c.key ? (c.color || '#5B5FE0') : undefined }}>
+                style={{ ...fontStyle, borderColor: selectedCat === c.key ? (c.color || '#15140F') : undefined }}>
                 {c.name}
               </button>
             );
@@ -385,11 +385,11 @@ export default function CashierPOS() {
                 onClick={() => !unavailable && openDetail(p)} data-testid={`product-${p.id}`}
                 style={unavailable ? { opacity: 0.4, cursor: 'not-allowed' } : {}}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                  <span className="pos-product-badge" style={{ background: p.diet_type === 'non-veg' ? '#FDE8EA' : '#E8F5E9', color: p.diet_type === 'non-veg' ? '#E23744' : '#267E3E', fontSize: 10 }}>{p.diet_type === 'non-veg' ? 'Non-Veg' : 'Veg'}</span>
-                  {isRM && <span style={{ fontSize: 9, fontWeight: 700, background: '#5B5FE015', color: '#5B5FE0', padding: '2px 6px', borderRadius: 4 }}>MEAL</span>}
+                  <span className="pos-product-badge" style={{ background: p.diet_type === 'non-veg' ? '#F1E7E1' : '#EAF2DD', color: p.diet_type === 'non-veg' ? '#15140F' : '#3FA34D', fontSize: 10 }}>{p.diet_type === 'non-veg' ? 'Non-Veg' : 'Veg'}</span>
+                  {isRM && <span style={{ fontSize: 9, fontWeight: 700, background: '#15140F15', color: '#15140F', padding: '2px 6px', borderRadius: 4 }}>MEAL</span>}
                 </div>
                 <div className="pos-product-name">{p.name}</div>
-                {unavailable && <div style={{ fontSize: 11, color: '#E23744', fontWeight: 700 }}>Unavailable</div>}
+                {unavailable && <div style={{ fontSize: 11, color: '#15140F', fontWeight: 700 }}>Unavailable</div>}
                 {isRM ? (
                   <><div className="pos-product-price">₹{p.fixed_price || Math.round(p.cost_per_100g * (p.serving_grams || 200) / 100)}/plate</div>
                   <div className="pos-product-nutrition">{p.total_calories_per_serving || Math.round(p.calories_per_100g * (p.serving_grams || 200) / 100)} cal</div></>
@@ -397,7 +397,7 @@ export default function CashierPOS() {
                   <><div className="pos-product-price">₹{p.cost_per_100g}/100g</div>
                   <div className="pos-product-nutrition">{p.calories_per_100g} cal | P:{p.protein_per_100g}g</div></>
                 )}
-                {inCart && <div style={{ marginTop: 4, fontSize: 11, fontWeight: 700, color: '#5B5FE0' }}>In cart</div>}
+                {inCart && <div style={{ marginTop: 4, fontSize: 11, fontWeight: 700, color: '#15140F' }}>In cart</div>}
               </div>
             );
           })}
@@ -423,7 +423,7 @@ export default function CashierPOS() {
             <div className="pos-cart-item" key={`${c.id}_${idx}`} style={{ flexDirection: 'column', gap: 4 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
                 <div className="pos-cart-info" style={{ flex: 1 }}>
-                  <div className="pos-cart-name">{c.name} {c.product_type === 'ready_made' && <span style={{ fontSize: 10, color: '#5B5FE0' }}>MEAL</span>}</div>
+                  <div className="pos-cart-name">{c.name} {c.product_type === 'ready_made' && <span style={{ fontSize: 10, color: '#15140F' }}>MEAL</span>}</div>
                   {c.product_type === 'ready_made' ? (
                     <div className="pos-cart-detail">x{c.plateQty || 1} plate | {c.calories} cal</div>
                   ) : (
@@ -455,7 +455,7 @@ export default function CashierPOS() {
                 </div>
               )}
               {c.product_type !== 'ready_made' && editingIdx !== idx && (
-                <button style={{ fontSize: 11, color: '#5B5FE0', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', padding: 0, fontWeight: 600 }}
+                <button style={{ fontSize: 11, color: '#15140F', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', padding: 0, fontWeight: 600 }}
                   onClick={() => { setEditingIdx(idx); setEditGramsVal(String(c.grams)); setEditPriceVal(String(Math.round(c.price))); }}>
                   Edit grams / price
                 </button>
@@ -471,9 +471,9 @@ export default function CashierPOS() {
                 <input value={couponCode} onChange={e => { setCouponCode(e.target.value.toUpperCase()); setCouponError(''); }} placeholder="Coupon code" data-testid="coupon-input" style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: '1px solid #EFEFEF', fontSize: 13, fontWeight: 600 }} />
                 <button className="btn btn-sm btn-orange" onClick={applyCoupon} data-testid="apply-coupon-btn" disabled={!couponCode.trim()}>Apply</button>
               </div>
-              {couponError && <p style={{ color: '#E23744', fontSize: 12, marginTop: 4 }} data-testid="coupon-error">{couponError}</p>}
+              {couponError && <p style={{ color: '#15140F', fontSize: 12, marginTop: 4 }} data-testid="coupon-error">{couponError}</p>}
               {couponDiscount && (
-                <div style={{ background: '#E8F5E9', borderRadius: 8, padding: '6px 10px', marginTop: 6, fontSize: 12, color: '#267E3E', display: 'flex', justifyContent: 'space-between' }} data-testid="coupon-applied">
+                <div style={{ background: '#EAF2DD', borderRadius: 8, padding: '6px 10px', marginTop: 6, fontSize: 12, color: '#3FA34D', display: 'flex', justifyContent: 'space-between' }} data-testid="coupon-applied">
                   <span>{couponDiscount.title}</span><span style={{ fontWeight: 700 }}>-₹{couponDiscount.calculated_discount}</span>
                 </div>
               )}
@@ -487,7 +487,7 @@ export default function CashierPOS() {
           <div className="pos-totals">
             <div className="pos-total-row"><span>Item Total</span><span>₹{Math.round(totals.price)}</span></div>
             {orderType === 'takeaway' && <div className="pos-total-row"><span>Packaging</span><span>₹10</span></div>}
-            {couponDiscount && <div className="pos-total-row" style={{ color: '#267E3E' }}><span>Discount</span><span>-₹{couponDiscount.calculated_discount}</span></div>}
+            {couponDiscount && <div className="pos-total-row" style={{ color: '#3FA34D' }}><span>Discount</span><span>-₹{couponDiscount.calculated_discount}</span></div>}
             <div className="pos-total-row" style={{ fontSize: 12, color: '#9C9C9C' }}><span>Base Amount</span><span>₹{getBaseAmount()}</span></div>
             <div className="pos-total-row" style={{ fontSize: 12, color: '#9C9C9C' }}><span>GST (5% incl.)</span><span>₹{getGST()}</span></div>
             <div className="pos-total-row grand"><span>Total</span><span>₹{getFinalTotal()}</span></div>
@@ -503,7 +503,7 @@ export default function CashierPOS() {
           <div className="modal" style={{ maxWidth: 420 }}>
             <h2>{detailProduct.name}</h2>
             <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-              <span className="badge" style={{ background: detailProduct.diet_type === 'non-veg' ? '#FDE8EA' : '#E8F5E9', color: detailProduct.diet_type === 'non-veg' ? '#E23744' : '#267E3E' }}>{detailProduct.diet_type === 'non-veg' ? 'Non-Veg' : 'Veg'}</span>
+              <span className="badge" style={{ background: detailProduct.diet_type === 'non-veg' ? '#F1E7E1' : '#EAF2DD', color: detailProduct.diet_type === 'non-veg' ? '#15140F' : '#3FA34D' }}>{detailProduct.diet_type === 'non-veg' ? 'Non-Veg' : 'Veg'}</span>
               <span className="badge badge-purple">{detailProduct.category}</span>
             </div>
             {detailProduct.product_type === 'ready_made' ? (
@@ -513,7 +513,7 @@ export default function CashierPOS() {
                   {(detailProduct.ingredients || []).map((ing: any, i: number) => (
                     <div key={i} style={{ fontSize: 13, color: '#666', display: 'flex', justifyContent: 'space-between' }}><span>{ing.name}</span><span>{ing.grams_per_serving}g</span></div>
                   ))}
-                  {!detailProduct.is_editable && <div style={{ marginTop: 8, fontSize: 11, color: '#E23744', fontStyle: 'italic' }}>Fixed recipe — cannot be modified</div>}
+                  {!detailProduct.is_editable && <div style={{ marginTop: 8, fontSize: 11, color: '#15140F', fontStyle: 'italic' }}>Fixed recipe — cannot be modified</div>}
                 </div>
                 <div className="form-group"><label>Plates</label>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -558,7 +558,7 @@ export default function CashierPOS() {
                   return (
                     <div style={{ background: '#F8F8F8', borderRadius: 10, padding: 14, marginBottom: 14 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
-                        <span style={{ fontWeight: 700 }}>{g}g</span><span style={{ fontWeight: 800, color: '#5B5FE0' }}>₹{Math.round(f * detailProduct.cost_per_100g)}</span>
+                        <span style={{ fontWeight: 700 }}>{g}g</span><span style={{ fontWeight: 800, color: '#15140F' }}>₹{Math.round(f * detailProduct.cost_per_100g)}</span>
                       </div>
                       <div style={{ display: 'flex', gap: 12, marginTop: 8, fontSize: 12, color: '#9C9C9C' }}>
                         <span>{Math.round(f * detailProduct.calories_per_100g)} cal</span>
@@ -593,7 +593,7 @@ export default function CashierPOS() {
               <div style={{ borderTop: '1px dashed #ccc', paddingTop: 8, marginTop: 8 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><span>Item Total</span><span>₹{Math.round(totals.price)}</span></div>
                 {orderType === 'takeaway' && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><span>Packaging</span><span>₹10</span></div>}
-                {couponDiscount && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#267E3E' }}><span>Discount</span><span>-₹{couponDiscount.calculated_discount}</span></div>}
+                {couponDiscount && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#3FA34D' }}><span>Discount</span><span>-₹{couponDiscount.calculated_discount}</span></div>}
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#9C9C9C', marginTop: 4 }}><span>Base (excl. GST)</span><span>₹{getBaseAmount()}</span></div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#9C9C9C' }}><span>CGST (2.5%)</span><span>₹{Math.round(getGST() / 2 * 100) / 100}</span></div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#9C9C9C' }}><span>SGST (2.5%)</span><span>₹{Math.round(getGST() / 2 * 100) / 100}</span></div>
@@ -606,8 +606,8 @@ export default function CashierPOS() {
                 {PAYMENT_MODES.map(pm => (
                   <button key={pm.key} data-testid={`pay-${pm.key}`} onClick={() => setPaymentMode(pm.key)}
                     style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '14px 8px', borderRadius: 12, cursor: 'pointer',
-                      border: paymentMode === pm.key ? '2px solid #5B5FE0' : '2px solid #EFEFEF', background: paymentMode === pm.key ? '#5B5FE010' : '#fff',
-                      color: paymentMode === pm.key ? '#5B5FE0' : '#333', fontWeight: paymentMode === pm.key ? 700 : 500, fontSize: 13 }}>{pm.icon}{pm.label}</button>
+                      border: paymentMode === pm.key ? '2px solid #15140F' : '2px solid #EFEFEF', background: paymentMode === pm.key ? '#15140F10' : '#fff',
+                      color: paymentMode === pm.key ? '#15140F' : '#333', fontWeight: paymentMode === pm.key ? 700 : 500, fontSize: 13 }}>{pm.icon}{pm.label}</button>
                 ))}
               </div>
             </div>
@@ -642,13 +642,13 @@ export default function CashierPOS() {
                 {aiResult.meal_items?.map((item: any, i: number) => (
                   <div className="ai-result-item" key={i}>
                     <div><div style={{ fontWeight: 700 }}>{item.product_name}</div><div style={{ fontSize: 12, color: '#9C9C9C' }}>{item.grams}g | {Math.round(item.calories)} cal | P:{Math.round(item.protein)}g</div></div>
-                    <span style={{ fontWeight: 800, color: '#5B5FE0' }}>₹{Math.round(item.price)}</span>
+                    <span style={{ fontWeight: 800, color: '#15140F' }}>₹{Math.round(item.price)}</span>
                   </div>
                 ))}
                 {aiResult.totals && (
                   <div className="ai-totals" data-testid="ai-totals">
                     Total: ₹{Math.round(aiResult.totals.price)} | {Math.round(aiResult.totals.calories)} cal | P:{Math.round(aiResult.totals.protein)}g
-                    {parseFloat(aiBudget) > 0 && <span style={{ marginLeft: 8, fontSize: 11, color: '#267E3E' }}>({Math.round(aiResult.totals.price / parseFloat(aiBudget) * 100)}% of ₹{aiBudget})</span>}
+                    {parseFloat(aiBudget) > 0 && <span style={{ marginLeft: 8, fontSize: 11, color: '#3FA34D' }}>({Math.round(aiResult.totals.price / parseFloat(aiBudget) * 100)}% of ₹{aiBudget})</span>}
                   </div>
                 )}
                 <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
@@ -666,8 +666,8 @@ export default function CashierPOS() {
         <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowReceipt(null)}>
           <div className="modal" style={{ maxWidth: 380 }}>
             <div style={{ textAlign: 'center', marginBottom: 8 }}>
-              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#267E3E" strokeWidth="2"><path d="M20 6L9 17l-5-5"/></svg>
-              <h2 style={{ margin: '4px 0', color: '#267E3E' }}>Payment Received!</h2>
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#3FA34D" strokeWidth="2"><path d="M20 6L9 17l-5-5"/></svg>
+              <h2 style={{ margin: '4px 0', color: '#3FA34D' }}>Payment Received!</h2>
               <p style={{ fontSize: 13, color: '#9C9C9C' }}>Order sent to kitchen</p>
             </div>
             <div id="receipt-print" style={{ fontFamily: 'monospace', fontSize: 13 }}>
@@ -683,7 +683,7 @@ export default function CashierPOS() {
               ))}
               <div style={{ borderTop: '1px dashed #ccc', margin: '8px 0' }} />
               <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Subtotal</span><span>₹{Math.round(showReceipt.subtotal)}</span></div>
-              {showReceipt.discount > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', color: '#267E3E' }}><span>Discount</span><span>-₹{showReceipt.discount}</span></div>}
+              {showReceipt.discount > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', color: '#3FA34D' }}><span>Discount</span><span>-₹{showReceipt.discount}</span></div>}
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#9C9C9C' }}><span>Base (excl.GST)</span><span>₹{showReceipt.base_amount}</span></div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#9C9C9C' }}><span>CGST 2.5%</span><span>₹{Math.round((showReceipt.gst_amount || 0) / 2 * 100) / 100}</span></div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#9C9C9C' }}><span>SGST 2.5%</span><span>₹{Math.round((showReceipt.gst_amount || 0) / 2 * 100) / 100}</span></div>

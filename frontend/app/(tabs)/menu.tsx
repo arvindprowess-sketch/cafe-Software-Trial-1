@@ -10,15 +10,16 @@ import { apiCall } from '../../utils/api';
 import SideDrawer from '../components/SideDrawer';
 import { getStoredUser } from '../../utils/api';
 import { useRealtime } from '../../utils/realtime';
+import { FUEL, FONT } from '../../utils/theme';
 
 // BK Design System Colors
-const BK_RED = '#D62300';
-const BK_ORANGE = '#FF8732';
-const BK_BROWN = '#502314';
-const BK_CREAM = '#F5EBDC';
-const BK_GREEN = '#509E2F';
+const BK_RED = '#15140F';
+const BK_ORANGE = '#15140F';
+const BK_BROWN = '#15140F';
+const BK_CREAM = '#F4F1E9';
+const BK_GREEN = '#3FA34D';
 const BK_WHITE = '#FFFFFF';
-const BK_TEXT_LIGHT = '#8B6F61';
+const BK_TEXT_LIGHT = '#6B6A5E';
 const Z_RED = BK_RED;
 const GREEN = BK_GREEN;
 const PURPLE = BK_RED;
@@ -27,7 +28,7 @@ const { width, height } = Dimensions.get('window');
 // Default categories (used as fallback if no DB categories)
 const DEFAULT_CATS = [
   { key: 'Protein', label: 'Protein', icon: 'barbell', color: Z_RED, image_url: 'https://images.unsplash.com/photo-1632778149955-e80f8ceca2e8?w=80&h=80&fit=crop' },
-  { key: 'Carb', label: 'Carbs', icon: 'leaf', color: '#FF9F0A', image_url: 'https://images.unsplash.com/photo-1536304929831-ee1ca9d44726?w=80&h=80&fit=crop' },
+  { key: 'Carb', label: 'Carbs', icon: 'leaf', color: '#D69A35', image_url: 'https://images.unsplash.com/photo-1536304929831-ee1ca9d44726?w=80&h=80&fit=crop' },
   { key: 'Fat', label: 'Fats', icon: 'water', color: PURPLE, image_url: 'https://images.unsplash.com/photo-1523049673857-eb18f1d7b578?w=80&h=80&fit=crop' },
   { key: 'Meal', label: 'Meals', icon: 'fast-food', color: GREEN, image_url: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=80&h=80&fit=crop' },
 ];
@@ -167,7 +168,7 @@ export default function MenuScreen() {
     // Use name for filtering consistency (products use category name, not key)
     const catValue = cat.name;
     const isActive = selectedCat === catValue;
-    const catColor = cat.color || '#1C1C2E';
+    const catColor = cat.color || '#15140F';
     const fontStyleProp = cat.font_style === 'bold' ? { fontWeight: '800' as const } : cat.font_style === 'italic' ? { fontStyle: 'italic' as const } : cat.font_style === 'mono' ? { fontFamily: 'monospace' } : {};
     return (
       <TouchableOpacity
@@ -235,12 +236,11 @@ export default function MenuScreen() {
             <Text style={styles.proteinLabel}>Protein</Text>
           </View>
           
-          {/* NEW badge for ready-made */}
-          {isReadyMade && (
-            <View style={styles.newBadge}>
-              <Text style={styles.newBadgeText}>MEAL</Text>
-            </View>
-          )}
+          {/* Ready-made vs Build-your-own tag */}
+          <View style={[styles.typeTag, isReadyMade ? styles.typeTagMeal : styles.typeTagBuild]}>
+            <Ionicons name={isReadyMade ? 'fast-food' : 'construct'} size={9} color={isReadyMade ? '#FFF' : FUEL.ink} />
+            <Text style={[styles.typeTagText, !isReadyMade && { color: FUEL.ink }]}>{isReadyMade ? 'READY-MADE' : 'BUILD'}</Text>
+          </View>
         </View>
         
         {/* Product Info */}
@@ -256,7 +256,20 @@ export default function MenuScreen() {
           <Text style={styles.productDesc} numberOfLines={2}>
             {item.description || `${item.category} • ${item.calories_per_100g} cal${priceUnit}`}
           </Text>
-          
+
+          {/* Macro chips (P / C / F) — color-coded per-100g nutrition */}
+          <View style={styles.macroChips}>
+            <View style={[styles.macroChip, { backgroundColor: FUEL.proteinTint }]}>
+              <Text style={[styles.macroChipText, { color: FUEL.protein }]}>P {Math.round(item.protein_per_100g || 0)}g</Text>
+            </View>
+            <View style={[styles.macroChip, { backgroundColor: FUEL.carbsTint }]}>
+              <Text style={[styles.macroChipText, { color: '#9A6E1E' }]}>C {Math.round(item.carbs_per_100g || 0)}g</Text>
+            </View>
+            <View style={[styles.macroChip, { backgroundColor: FUEL.fatTint }]}>
+              <Text style={[styles.macroChipText, { color: '#3E6E8A' }]}>F {Math.round(item.fat_per_100g || 0)}g</Text>
+            </View>
+          </View>
+
           {/* Price and Add Button Row */}
           <View style={styles.productFooter}>
             <Text style={styles.productPrice}>₹ {displayPrice}{priceUnit && <Text style={styles.priceUnit}>{priceUnit}</Text>}</Text>
@@ -292,11 +305,11 @@ export default function MenuScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.menuBtn} onPress={() => setDrawerVisible(true)}>
-          <Ionicons name="menu" size={24} color="#F5EBDC" />
+          <Ionicons name="menu" size={24} color="#F4F1E9" />
         </TouchableOpacity>
         <Text style={styles.title}>Our Menu</Text>
         <TouchableOpacity style={styles.searchBtn} onPress={() => {}}>
-          <Ionicons name="search" size={22} color="#FF8732" />
+          <Ionicons name="search" size={22} color={FUEL.lime} />
         </TouchableOpacity>
       </View>
       
@@ -391,7 +404,7 @@ export default function MenuScreen() {
           </View>
           <View style={styles.cartRight}>
             <Text style={styles.cartAction}>View Cart</Text>
-            <Ionicons name="arrow-forward" size={18} color="#FFF" />
+            <Ionicons name="arrow-forward" size={18} color={FUEL.ink} />
           </View>
         </TouchableOpacity>
       )}
@@ -444,7 +457,7 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     gap: 8,
     borderWidth: 2,
-    borderColor: '#E8DDD4',
+    borderColor: '#E6E1D4',
   },
   searchInput: { flex: 1, fontSize: 13, color: BK_BROWN },
   
@@ -465,18 +478,18 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: BK_WHITE,
     borderWidth: 2,
-    borderColor: '#E8DDD4',
+    borderColor: '#E6E1D4',
   },
   dietToggleBtnAllActive: {
     backgroundColor: BK_BROWN,
     borderColor: BK_BROWN,
   },
   dietToggleBtnVegActive: {
-    backgroundColor: '#E8F5E1',
+    backgroundColor: '#EAF2DD',
     borderColor: BK_GREEN,
   },
   dietToggleBtnNonvegActive: {
-    backgroundColor: '#FDE8E4',
+    backgroundColor: '#F1E7E1',
     borderColor: BK_RED,
   },
   dietToggleDot: {
@@ -508,7 +521,7 @@ const styles = StyleSheet.create({
     width: SIDEBAR_WIDTH, 
     backgroundColor: BK_WHITE,
     borderRightWidth: 2,
-    borderRightColor: '#E8DDD4',
+    borderRightColor: '#E6E1D4',
     zIndex: 10,
   },
   sidebarContent: { 
@@ -527,7 +540,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   sidebarCatActive: { 
-    backgroundColor: '#FFF0E0',
+    backgroundColor: '#F2EEE0',
   },
   sidebarActiveBar: {
     position: 'absolute',
@@ -578,7 +591,7 @@ const styles = StyleSheet.create({
     borderRadius: 16, 
     overflow: 'hidden',
     borderWidth: 2,
-    borderColor: '#E8DDD4',
+    borderColor: '#E6E1D4',
     shadowColor: BK_BROWN,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.12,
@@ -673,7 +686,8 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   productPrice: { 
-    fontSize: 18, 
+    fontFamily: FONT.display,
+    fontSize: 19, 
     fontWeight: '800', 
     color: BK_BROWN 
   },
@@ -723,7 +737,7 @@ const styles = StyleSheet.create({
     bottom: 0, 
     left: 16, 
     right: 16, 
-    backgroundColor: BK_RED, 
+    backgroundColor: FUEL.lime, 
     borderRadius: 25, 
     paddingHorizontal: 22, 
     paddingVertical: 14, 
@@ -738,8 +752,19 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
   },
-  cartItems: { color: BK_CREAM, fontSize: 12, fontWeight: '600' },
-  cartTotal: { color: BK_CREAM, fontSize: 22, fontWeight: '800' },
+  cartItems: { color: FUEL.ink, fontSize: 12, fontWeight: '700' },
+  cartTotal: { color: FUEL.ink, fontFamily: FONT.display, fontSize: 24, fontWeight: '800' },
   cartRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  cartAction: { color: BK_CREAM, fontSize: 15, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
+  cartAction: { color: FUEL.ink, fontSize: 15, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
+
+  // Macro chips (P / C / F)
+  macroChips: { flexDirection: 'row', gap: 6, marginTop: 8 },
+  macroChip: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  macroChipText: { fontFamily: FONT.bodyExtrabold, fontSize: 10, fontWeight: '800', letterSpacing: 0.2 },
+
+  // Ready-made vs Build-your-own tag
+  typeTag: { position: 'absolute', bottom: 8, left: 8, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 20 },
+  typeTagMeal: { backgroundColor: FUEL.ink },
+  typeTagBuild: { backgroundColor: FUEL.lime },
+  typeTagText: { fontFamily: FONT.bodyExtrabold, fontSize: 9, fontWeight: '800', color: '#FFF', textTransform: 'uppercase', letterSpacing: 0.4 },
 });

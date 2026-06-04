@@ -32,7 +32,7 @@ export default function KitchenInventory() {
     low: inventory.filter(i => i.status === 'low').length,
     out: inventory.filter(i => i.status === 'out_of_stock').length
   };
-  const colors: Record<string, string> = { in_stock: '#267E3E', low: '#FF9F0A', out_of_stock: '#E23744' };
+  const colors: Record<string, string> = { in_stock: '#3FA34D', low: '#D69A35', out_of_stock: '#15140F' };
   const labels: Record<string, string> = { in_stock: 'In Stock', low: 'Low', out_of_stock: 'Out' };
 
   const openStockModal = (item: any, action: 'add' | 'remove') => {
@@ -78,31 +78,31 @@ export default function KitchenInventory() {
 
       <div className="stats-grid" style={{ marginBottom: 20 }}>
         <div className="stat-card" onClick={() => setFilter('in_stock')} style={{ cursor: 'pointer' }}>
-          <div className="stat-icon" style={{ background: '#267E3E15' }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#267E3E" strokeWidth="2"><path d="M20 6L9 17l-5-5"/></svg>
+          <div className="stat-icon" style={{ background: '#3FA34D15' }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3FA34D" strokeWidth="2"><path d="M20 6L9 17l-5-5"/></svg>
           </div>
-          <div className="stat-value" style={{ color: '#267E3E' }}>{counts.inStock}</div>
+          <div className="stat-value" style={{ color: '#3FA34D' }}>{counts.inStock}</div>
           <div className="stat-label">In Stock</div>
         </div>
         <div className="stat-card" onClick={() => setFilter('low')} style={{ cursor: 'pointer' }}>
-          <div className="stat-icon" style={{ background: '#FF9F0A15' }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FF9F0A" strokeWidth="2"><path d="M12 9v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          <div className="stat-icon" style={{ background: '#D69A3515' }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#D69A35" strokeWidth="2"><path d="M12 9v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
           </div>
-          <div className="stat-value" style={{ color: '#FF9F0A' }}>{counts.low}</div>
+          <div className="stat-value" style={{ color: '#D69A35' }}>{counts.low}</div>
           <div className="stat-label">Low Stock</div>
         </div>
         <div className="stat-card" onClick={() => setFilter('out_of_stock')} style={{ cursor: 'pointer' }}>
-          <div className="stat-icon" style={{ background: '#E2374415' }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#E23744" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          <div className="stat-icon" style={{ background: '#15140F15' }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#15140F" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
           </div>
-          <div className="stat-value" style={{ color: '#E23744' }}>{counts.out}</div>
+          <div className="stat-value" style={{ color: '#15140F' }}>{counts.out}</div>
           <div className="stat-label">Out of Stock</div>
         </div>
         <div className="stat-card" onClick={() => setFilter('all')} style={{ cursor: 'pointer' }}>
-          <div className="stat-icon" style={{ background: '#5B5FE015' }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5B5FE0" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+          <div className="stat-icon" style={{ background: '#15140F15' }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#15140F" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
           </div>
-          <div className="stat-value" style={{ color: '#5B5FE0' }}>{counts.total}</div>
+          <div className="stat-value" style={{ color: '#15140F' }}>{counts.total}</div>
           <div className="stat-label">All Items</div>
         </div>
       </div>
@@ -186,7 +186,7 @@ export default function KitchenInventory() {
                     <div style={{ fontSize: 11, color: '#9C9C9C' }}>{new Date(log.created_at).toLocaleString()}</div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <span style={{ fontWeight: 800, color: log.change_grams > 0 ? '#267E3E' : '#E23744', fontSize: 15 }}>
+                    <span style={{ fontWeight: 800, color: log.change_grams > 0 ? '#3FA34D' : '#15140F', fontSize: 15 }}>
                       {log.change_grams > 0 ? '+' : ''}{log.change_grams >= 1000 ? `${(log.change_grams / 1000).toFixed(1)}kg` : `${log.change_grams}g`}
                     </span>
                     <div style={{ fontSize: 11, color: '#9C9C9C' }}>

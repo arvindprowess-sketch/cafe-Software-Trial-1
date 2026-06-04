@@ -5,9 +5,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { apiCall } from '../utils/api';
 
-const Z_RED = '#D62300';
-const GREEN = '#509E2F';
-const PURPLE = '#FF8732';
+const Z_RED = '#15140F';
+const GREEN = '#3FA34D';
+const PURPLE = '#15140F';
 
 const GOAL_LABELS: Record<string, { label: string; icon: string; color: string }> = {
   muscle_gain: { label: 'Muscle Gain', icon: 'trending-up', color: GREEN },
@@ -78,7 +78,7 @@ export default function PackDetailScreen() {
               { label: 'Calories', value: pack.total_calories, color: Z_RED },
               { label: 'Protein', value: `${pack.total_protein}g`, color: Z_RED },
               { label: 'Items', value: pack.items?.length || 0, color: PURPLE },
-              { label: 'Serving', value: `${pack.items?.reduce((a: number, i: any) => a + (i.grams || 0), 0)}g`, color: '#FF9F0A' },
+              { label: 'Serving', value: `${pack.items?.reduce((a: number, i: any) => a + (i.grams || 0), 0)}g`, color: '#D69A35' },
             ].map(n => (
               <View key={n.label} style={s.nutritionItem}>
                 <Text style={[s.nutritionValue, { color: n.color }]}>{n.value}</Text>
@@ -154,7 +154,7 @@ export default function PackDetailScreen() {
 }
 
 const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F5EBDC' },
+  safe: { flex: 1, backgroundColor: '#F4F1E9' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   heroBanner: { paddingTop: 20, paddingBottom: 30, paddingHorizontal: 20 },
   backBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
@@ -163,35 +163,35 @@ const s = StyleSheet.create({
   goalBadgeText: { fontSize: 12, fontWeight: '700', color: '#FFF' },
   heroTitle: { fontSize: 28, fontWeight: '800', color: '#FFF' },
   heroDesc: { fontSize: 14, color: 'rgba(255,255,255,0.85)', marginTop: 6 },
-  nutritionCard: { backgroundColor: '#FFF', margin: 16, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#E8DDD4' },
+  nutritionCard: { backgroundColor: '#FFF', margin: 16, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#E6E1D4' },
   nutritionGrid: { flexDirection: 'row', justifyContent: 'space-around' },
   nutritionItem: { alignItems: 'center' },
   nutritionValue: { fontSize: 22, fontWeight: '800' },
-  nutritionLabel: { fontSize: 10, color: '#8B6F61', marginTop: 4 },
-  sectionTitle: { fontSize: 18, fontWeight: '700', color: '#502314', paddingHorizontal: 16, marginBottom: 12 },
-  itemCard: { backgroundColor: '#FFF', marginHorizontal: 16, borderRadius: 12, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: '#E8DDD4' },
+  nutritionLabel: { fontSize: 10, color: '#6B6A5E', marginTop: 4 },
+  sectionTitle: { fontSize: 18, fontWeight: '700', color: '#15140F', paddingHorizontal: 16, marginBottom: 12 },
+  itemCard: { backgroundColor: '#FFF', marginHorizontal: 16, borderRadius: 12, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: '#E6E1D4' },
   itemRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  itemImg: { width: 56, height: 56, borderRadius: 10, backgroundColor: '#F5EBDC' },
+  itemImg: { width: 56, height: 56, borderRadius: 10, backgroundColor: '#F4F1E9' },
   imgPlaceholder: { alignItems: 'center', justifyContent: 'center' },
   itemInfo: { flex: 1 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   vegBox: { width: 12, height: 12, borderRadius: 2, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   vegDot: { width: 6, height: 6, borderRadius: 3 },
-  itemName: { fontSize: 14, fontWeight: '700', color: '#502314' },
-  itemMeta: { fontSize: 11, color: '#8B6F61', marginTop: 3 },
+  itemName: { fontSize: 14, fontWeight: '700', color: '#15140F' },
+  itemMeta: { fontSize: 11, color: '#6B6A5E', marginTop: 3 },
   itemRight: { alignItems: 'flex-end' },
-  itemGrams: { fontSize: 16, fontWeight: '800', color: '#502314' },
-  itemPrice: { fontSize: 12, color: '#8B6F61', marginTop: 2 },
-  priceCard: { backgroundColor: '#FFF', margin: 16, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#E8DDD4' },
+  itemGrams: { fontSize: 16, fontWeight: '800', color: '#15140F' },
+  itemPrice: { fontSize: 12, color: '#6B6A5E', marginTop: 2 },
+  priceCard: { backgroundColor: '#FFF', margin: 16, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#E6E1D4' },
   priceRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 },
-  priceLabel: { fontSize: 14, color: '#8B6F61' },
-  priceOld: { fontSize: 14, color: '#8B6F61', textDecorationLine: 'line-through' },
-  packPrice: { fontSize: 20, fontWeight: '800', color: '#502314' },
-  savingsRow: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#E8F5E9', borderRadius: 10, padding: 12, marginTop: 8 },
+  priceLabel: { fontSize: 14, color: '#6B6A5E' },
+  priceOld: { fontSize: 14, color: '#6B6A5E', textDecorationLine: 'line-through' },
+  packPrice: { fontSize: 20, fontWeight: '800', color: '#15140F' },
+  savingsRow: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#EAF2DD', borderRadius: 10, padding: 12, marginTop: 8 },
   savingsText: { fontSize: 15, fontWeight: '700', color: GREEN },
-  bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#FFF', borderTopWidth: 1, borderTopColor: '#E8DDD4', padding: 16, paddingBottom: 28, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  bottomPrice: { fontSize: 22, fontWeight: '800', color: '#502314' },
-  bottomSub: { fontSize: 11, color: '#8B6F61', marginTop: 2 },
+  bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#FFF', borderTopWidth: 1, borderTopColor: '#E6E1D4', padding: 16, paddingBottom: 28, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  bottomPrice: { fontSize: 22, fontWeight: '800', color: '#15140F' },
+  bottomSub: { fontSize: 11, color: '#6B6A5E', marginTop: 2 },
   orderBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 14 },
   orderText: { fontSize: 15, fontWeight: '700', color: '#FFF' },
 });

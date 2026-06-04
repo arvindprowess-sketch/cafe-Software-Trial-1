@@ -9,9 +9,9 @@ import { apiCall, logout } from '../../utils/api';
 
 const { width } = Dimensions.get('window');
 const DRAWER_WIDTH = width * 0.85;
-const Z_RED = '#D62300';
-const GREEN = '#509E2F';
-const PURPLE = '#FF8732';
+const Z_RED = '#15140F';
+const GREEN = '#3FA34D';
+const PURPLE = '#15140F';
 
 interface SideDrawerProps {
   visible: boolean;
@@ -127,10 +127,10 @@ export default function SideDrawer({ visible, onClose, user }: SideDrawerProps) 
           {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity style={styles.closeBtn} onPress={onClose} data-testid="drawer-close-btn">
-              <Ionicons name="arrow-back" size={24} color="#1C1C2E" />
+              <Ionicons name="arrow-back" size={24} color="#15140F" />
             </TouchableOpacity>
             <TouchableOpacity style={styles.notifBtn}>
-              <Ionicons name="notifications-outline" size={22} color="#1C1C2E" />
+              <Ionicons name="notifications-outline" size={22} color="#15140F" />
             </TouchableOpacity>
           </View>
 
@@ -199,7 +199,7 @@ export default function SideDrawer({ visible, onClose, user }: SideDrawerProps) 
                       style={[styles.goalPill, goal === g.key && { borderColor: g.color, backgroundColor: `${g.color}15` }]}
                       onPress={() => setGoal(g.key)}
                     >
-                      <Ionicons name={g.icon} size={16} color={goal === g.key ? g.color : '#8B6F61'} />
+                      <Ionicons name={g.icon} size={16} color={goal === g.key ? g.color : '#6B6A5E'} />
                       <Text style={[styles.goalPillText, goal === g.key && { color: g.color, fontWeight: '700' }]}>{g.label}</Text>
                     </TouchableOpacity>
                   ))}
@@ -210,7 +210,7 @@ export default function SideDrawer({ visible, onClose, user }: SideDrawerProps) 
                   {[
                     { label: 'Calories', val: calories, set: setCalories, unit: 'kcal', color: Z_RED },
                     { label: 'Protein', val: protein, set: setProtein, unit: 'g', color: Z_RED },
-                    { label: 'Carbs', val: carbs, set: setCarbs, unit: 'g', color: '#FF9F0A' },
+                    { label: 'Carbs', val: carbs, set: setCarbs, unit: 'g', color: '#D69A35' },
                     { label: 'Fat', val: fat, set: setFat, unit: 'g', color: PURPLE },
                   ].map(t => (
                     <View key={t.label} style={styles.targetCard}>
@@ -255,7 +255,7 @@ export default function SideDrawer({ visible, onClose, user }: SideDrawerProps) 
                   onPress={() => handleItemPress(item)}
                   data-testid={`drawer-${item.id}`}
                 >
-                  <Ionicons name={item.icon as any} size={22} color="#1C1C2E" />
+                  <Ionicons name={item.icon as any} size={22} color="#15140F" />
                   <Text style={styles.menuLabel}>{item.label}</Text>
                 </TouchableOpacity>
               );
@@ -288,7 +288,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0, top: 0, bottom: 0,
     width: DRAWER_WIDTH,
-    backgroundColor: '#FFF8F0',
+    backgroundColor: '#F7F4EC',
   },
   header: {
     flexDirection: 'row',
@@ -314,24 +314,24 @@ const styles = StyleSheet.create({
   },
   avatar: {
     width: 56, height: 56, borderRadius: 28,
-    backgroundColor: '#FDE8E4',
+    backgroundColor: '#F1E7E1',
     alignItems: 'center', justifyContent: 'center',
   },
   userInfo: { flex: 1 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  userName: { fontSize: 20, fontWeight: '700', color: '#502314' },
-  userPhone: { fontSize: 14, color: '#8B6F61', marginTop: 2 },
+  userName: { fontSize: 20, fontWeight: '700', color: '#15140F' },
+  userPhone: { fontSize: 14, color: '#6B6A5E', marginTop: 2 },
   editNameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   editNameInput: {
     flex: 1, backgroundColor: '#FFF', borderRadius: 8,
     paddingHorizontal: 10, paddingVertical: 6,
-    fontSize: 18, fontWeight: '700', color: '#502314',
+    fontSize: 18, fontWeight: '700', color: '#15140F',
     borderWidth: 1.5, borderColor: Z_RED,
   },
 
   goalCard: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#502314',
+    backgroundColor: '#15140F',
     marginHorizontal: 16, borderRadius: 14,
     padding: 14, gap: 12,
   },
@@ -341,33 +341,33 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   goalText: { fontSize: 15, fontWeight: '700', color: '#FFF' },
-  goalSub: { fontSize: 12, color: '#C4A882', marginTop: 2 },
+  goalSub: { fontSize: 12, color: '#CFC8B8', marginTop: 2 },
 
   menuList: { flex: 1, marginTop: 12 },
 
   // Goals expandable section
   goalsSection: { paddingHorizontal: 16, paddingTop: 8 },
-  sectionTitle: { fontSize: 14, fontWeight: '700', color: '#502314', marginBottom: 8, marginTop: 4 },
+  sectionTitle: { fontSize: 14, fontWeight: '700', color: '#15140F', marginBottom: 8, marginTop: 4 },
   goalsRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
   goalPill: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: 6, paddingVertical: 10, borderRadius: 20,
     backgroundColor: '#FFF', borderWidth: 1.5, borderColor: '#E8E8E8',
   },
-  goalPillText: { fontSize: 11, fontWeight: '600', color: '#8B6F61' },
+  goalPillText: { fontSize: 11, fontWeight: '600', color: '#6B6A5E' },
 
   targetsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 },
   targetCard: {
     width: '47%', backgroundColor: '#FFF', borderRadius: 10,
-    padding: 10, borderWidth: 1, borderColor: '#E8DDD4',
+    padding: 10, borderWidth: 1, borderColor: '#E6E1D4',
   },
   targetLabel: { fontSize: 11, fontWeight: '600', marginBottom: 4 },
   targetInputRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   targetInput: {
-    flex: 1, backgroundColor: '#F5EBDC', borderRadius: 6,
-    padding: 8, color: '#502314', fontSize: 16, fontWeight: '700',
+    flex: 1, backgroundColor: '#F4F1E9', borderRadius: 6,
+    padding: 8, color: '#15140F', fontSize: 16, fontWeight: '700',
   },
-  targetUnit: { fontSize: 11, color: '#8B6F61', fontWeight: '600' },
+  targetUnit: { fontSize: 11, color: '#6B6A5E', fontWeight: '600' },
 
   saveBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
@@ -380,7 +380,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 20, paddingVertical: 16, gap: 16,
   },
-  menuLabel: { fontSize: 16, fontWeight: '600', color: '#502314' },
+  menuLabel: { fontSize: 16, fontWeight: '600', color: '#15140F' },
   divider: { height: 1, backgroundColor: '#E8E8E8', marginVertical: 8, marginHorizontal: 20 },
 
   version: {

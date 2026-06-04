@@ -199,7 +199,7 @@ export default function AdminProducts() {
           style={{ flex: 1, maxWidth: 300, padding: '10px 14px', borderRadius: 10, border: '2px solid #E8E8E8', fontSize: 14, outline: 'none' }} />
         <div style={{ display: 'flex', gap: 4, background: '#F0F0F0', borderRadius: 10, padding: 3, flex: 1 }} data-testid="product-tabs">
           {([['all', 'All'], ['single', 'Single'], ['ready_made', 'Meals']] as [ProductTab, string][]).map(([key, label]) => (
-            <button key={key} style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: 'none', fontWeight: tab === key ? 700 : 500, background: tab === key ? '#1C1C2E' : 'transparent', color: tab === key ? '#FFF' : '#696969', cursor: 'pointer', fontSize: 13 }}
+            <button key={key} style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: 'none', fontWeight: tab === key ? 700 : 500, background: tab === key ? '#15140F' : 'transparent', color: tab === key ? '#FFF' : '#696969', cursor: 'pointer', fontSize: 13 }}
               onClick={() => setTab(key)} data-testid={`tab-${key}`}>{label} ({key === 'all' ? products.length : products.filter(p => p.product_type === key).length})</button>
           ))}
         </div>
@@ -231,7 +231,7 @@ export default function AdminProducts() {
               <td style={{ fontSize: 13 }}>
                 {p.product_type === 'ready_made'
                   ? <span>{p.available_servings ?? 20} plates</span>
-                  : <span style={{ color: (p.available_qty_grams || 0) < 500 ? '#E23744' : '#267E3E', fontWeight: 600 }}>
+                  : <span style={{ color: (p.available_qty_grams || 0) < 500 ? '#15140F' : '#3FA34D', fontWeight: 600 }}>
                       {p.available_qty_grams >= 1000 ? `${(p.available_qty_grams / 1000).toFixed(1)}kg` : `${Math.round(p.available_qty_grams || 0)}g`}
                     </span>
                 }
@@ -260,8 +260,8 @@ export default function AdminProducts() {
               /* ===== AI Result Preview ===== */
               <div data-testid="ai-result">
                 <div style={{ textAlign: 'center', marginBottom: 16 }}>
-                  <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#E8F5E9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px' }}>
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#267E3E" strokeWidth="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+                  <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#EAF2DD', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px' }}>
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#3FA34D" strokeWidth="2.5"><path d="M20 6L9 17l-5-5"/></svg>
                   </div>
                   <h2 style={{ margin: 0 }}>Product Created!</h2>
                   <p style={{ color: '#9C9C9C', fontSize: 13 }}>AI auto-generated the following</p>
@@ -280,10 +280,10 @@ export default function AdminProducts() {
                 <div style={{ background: '#FAFAFA', borderRadius: 10, padding: 14, border: '1px solid #EFEFEF' }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: '#9C9C9C', marginBottom: 8 }}>AI-CALCULATED NUTRITION (per 100g)</div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, textAlign: 'center' }}>
-                    <div><div style={{ fontSize: 22, fontWeight: 800, color: '#FF9F0A' }}>{createdProduct.calories_per_100g}</div><div style={{ fontSize: 10, color: '#9C9C9C' }}>Calories</div></div>
-                    <div><div style={{ fontSize: 22, fontWeight: 800, color: '#E23744' }}>{createdProduct.protein_per_100g}g</div><div style={{ fontSize: 10, color: '#9C9C9C' }}>Protein</div></div>
-                    <div><div style={{ fontSize: 22, fontWeight: 800, color: '#267E3E' }}>{createdProduct.carbs_per_100g}g</div><div style={{ fontSize: 10, color: '#9C9C9C' }}>Carbs</div></div>
-                    <div><div style={{ fontSize: 22, fontWeight: 800, color: '#5B5FE0' }}>{createdProduct.fat_per_100g}g</div><div style={{ fontSize: 10, color: '#9C9C9C' }}>Fat</div></div>
+                    <div><div style={{ fontSize: 22, fontWeight: 800, color: '#D69A35' }}>{createdProduct.calories_per_100g}</div><div style={{ fontSize: 10, color: '#9C9C9C' }}>Calories</div></div>
+                    <div><div style={{ fontSize: 22, fontWeight: 800, color: '#15140F' }}>{createdProduct.protein_per_100g}g</div><div style={{ fontSize: 10, color: '#9C9C9C' }}>Protein</div></div>
+                    <div><div style={{ fontSize: 22, fontWeight: 800, color: '#3FA34D' }}>{createdProduct.carbs_per_100g}g</div><div style={{ fontSize: 10, color: '#9C9C9C' }}>Carbs</div></div>
+                    <div><div style={{ fontSize: 22, fontWeight: 800, color: '#15140F' }}>{createdProduct.fat_per_100g}g</div><div style={{ fontSize: 10, color: '#9C9C9C' }}>Fat</div></div>
                   </div>
                 </div>
                 <div className="modal-actions" style={{ marginTop: 16 }}>
@@ -293,8 +293,8 @@ export default function AdminProducts() {
             ) : (
               <>
                 <div style={{ display: 'flex', gap: 4, marginBottom: 16, background: '#F0F0F0', borderRadius: 8, padding: 3 }}>
-                  <button type="button" style={{ flex: 1, padding: '10px 12px', borderRadius: 6, border: 'none', fontWeight: formType === 'single' ? 700 : 500, background: formType === 'single' ? '#5B5FE0' : 'transparent', color: formType === 'single' ? '#FFF' : '#696969', cursor: 'pointer' }} onClick={() => setFormType('single')}>Single Product</button>
-                  <button type="button" style={{ flex: 1, padding: '10px 12px', borderRadius: 6, border: 'none', fontWeight: formType === 'ready_made' ? 700 : 500, background: formType === 'ready_made' ? '#267E3E' : 'transparent', color: formType === 'ready_made' ? '#FFF' : '#696969', cursor: 'pointer' }} onClick={() => setFormType('ready_made')}>Ready-Made Meal</button>
+                  <button type="button" style={{ flex: 1, padding: '10px 12px', borderRadius: 6, border: 'none', fontWeight: formType === 'single' ? 700 : 500, background: formType === 'single' ? '#15140F' : 'transparent', color: formType === 'single' ? '#FFF' : '#696969', cursor: 'pointer' }} onClick={() => setFormType('single')}>Single Product</button>
+                  <button type="button" style={{ flex: 1, padding: '10px 12px', borderRadius: 6, border: 'none', fontWeight: formType === 'ready_made' ? 700 : 500, background: formType === 'ready_made' ? '#3FA34D' : 'transparent', color: formType === 'ready_made' ? '#FFF' : '#696969', cursor: 'pointer' }} onClick={() => setFormType('ready_made')}>Ready-Made Meal</button>
                 </div>
 
                 {formType === 'single' ? (
@@ -326,7 +326,7 @@ export default function AdminProducts() {
                       <button type="button" className="btn btn-secondary" onClick={() => setShowForm(false)}>Cancel</button>
                       <button type="submit" className="btn btn-primary" disabled={creating} data-testid="save-single-btn">{creating ? 'Creating... AI is working' : 'Create Product'}</button>
                     </div>
-                    {creating && <div style={{ textAlign: 'center', padding: 12, color: '#5B5FE0', fontSize: 13 }}><div className="spinner" /> Generating nutrition, description & image...</div>}
+                    {creating && <div style={{ textAlign: 'center', padding: 12, color: '#15140F', fontSize: 13 }}><div className="spinner" /> Generating nutrition, description & image...</div>}
                   </form>
                 ) : (
                   <form onSubmit={handleCreateReadyMade}>
@@ -344,7 +344,7 @@ export default function AdminProducts() {
                           <input value={ing.name} onChange={e => updateIngredient(idx, 'name', e.target.value)} placeholder="Ingredient" style={{ flex: 2 }} data-testid={`ing-name-${idx}`} />
                           <input type="number" value={ing.grams_per_serving || ''} onChange={e => updateIngredient(idx, 'grams_per_serving', e.target.value)} placeholder="g" style={{ flex: 1 }} data-testid={`ing-grams-${idx}`} />
                           <span style={{ fontSize: 12, color: '#9C9C9C', width: 12 }}>g</span>
-                          {rIngredients.length > 1 && <button type="button" onClick={() => removeIngredient(idx)} style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid #E0E0E0', background: '#FFF', cursor: 'pointer', color: '#E23744', fontWeight: 700, lineHeight: '26px', textAlign: 'center' }}>×</button>}
+                          {rIngredients.length > 1 && <button type="button" onClick={() => removeIngredient(idx)} style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid #E0E0E0', background: '#FFF', cursor: 'pointer', color: '#15140F', fontWeight: 700, lineHeight: '26px', textAlign: 'center' }}>×</button>}
                         </div>
                       ))}
                       <button type="button" className="btn btn-sm btn-secondary" onClick={addIngredient} data-testid="add-ingredient-btn">+ Add Ingredient</button>
@@ -356,7 +356,7 @@ export default function AdminProducts() {
                         {rImages.map((img, idx) => (
                           <div key={idx} style={{ position: 'relative' }}>
                             <img src={img} style={{ width: 64, height: 64, borderRadius: 8, objectFit: 'cover' }} />
-                            <button type="button" onClick={() => setRImages(rImages.filter((_, i) => i !== idx))} style={{ position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: '50%', background: '#E23744', color: '#FFF', border: 'none', cursor: 'pointer', fontSize: 12, lineHeight: '18px' }}>×</button>
+                            <button type="button" onClick={() => setRImages(rImages.filter((_, i) => i !== idx))} style={{ position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: '50%', background: '#15140F', color: '#FFF', border: 'none', cursor: 'pointer', fontSize: 12, lineHeight: '18px' }}>×</button>
                           </div>
                         ))}
                         <button type="button" onClick={() => fileInputRef.current?.click()} style={{ width: 64, height: 64, borderRadius: 8, border: '2px dashed #D0D0D0', background: '#FAFAFA', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9C9C9C' }} data-testid="upload-photos-btn">
@@ -378,7 +378,7 @@ export default function AdminProducts() {
                       <button type="button" className="btn btn-secondary" onClick={() => setShowForm(false)}>Cancel</button>
                       <button type="submit" className="btn btn-green" disabled={creating} data-testid="save-meal-btn">{creating ? 'Creating... AI is working' : 'Create Meal'}</button>
                     </div>
-                    {creating && <div style={{ textAlign: 'center', padding: 12, color: '#267E3E', fontSize: 13 }}>Generating nutrition, description & metadata...</div>}
+                    {creating && <div style={{ textAlign: 'center', padding: 12, color: '#3FA34D', fontSize: 13 }}>Generating nutrition, description & metadata...</div>}
                   </form>
                 )}
               </>
@@ -446,10 +446,10 @@ export default function AdminProducts() {
               <div style={{ background: '#FAFAFA', borderRadius: 10, padding: 12, marginBottom: 14, border: '1px solid #EFEFEF' }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: '#9C9C9C', marginBottom: 8 }}>NUTRITION per 100g (editable — leave as-is to keep)</div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-                  <div className="form-group" style={{ margin: 0 }}><label style={{ color: '#FF9F0A' }}>Cal</label><input type="number" value={editForm.calories_per_100g} onChange={e => setEditForm({ ...editForm, calories_per_100g: e.target.value })} data-testid="edit-cal" /></div>
-                  <div className="form-group" style={{ margin: 0 }}><label style={{ color: '#E23744' }}>Protein</label><input type="number" value={editForm.protein_per_100g} onChange={e => setEditForm({ ...editForm, protein_per_100g: e.target.value })} data-testid="edit-protein" /></div>
-                  <div className="form-group" style={{ margin: 0 }}><label style={{ color: '#267E3E' }}>Carbs</label><input type="number" value={editForm.carbs_per_100g} onChange={e => setEditForm({ ...editForm, carbs_per_100g: e.target.value })} data-testid="edit-carbs" /></div>
-                  <div className="form-group" style={{ margin: 0 }}><label style={{ color: '#5B5FE0' }}>Fat</label><input type="number" value={editForm.fat_per_100g} onChange={e => setEditForm({ ...editForm, fat_per_100g: e.target.value })} data-testid="edit-fat" /></div>
+                  <div className="form-group" style={{ margin: 0 }}><label style={{ color: '#D69A35' }}>Cal</label><input type="number" value={editForm.calories_per_100g} onChange={e => setEditForm({ ...editForm, calories_per_100g: e.target.value })} data-testid="edit-cal" /></div>
+                  <div className="form-group" style={{ margin: 0 }}><label style={{ color: '#15140F' }}>Protein</label><input type="number" value={editForm.protein_per_100g} onChange={e => setEditForm({ ...editForm, protein_per_100g: e.target.value })} data-testid="edit-protein" /></div>
+                  <div className="form-group" style={{ margin: 0 }}><label style={{ color: '#3FA34D' }}>Carbs</label><input type="number" value={editForm.carbs_per_100g} onChange={e => setEditForm({ ...editForm, carbs_per_100g: e.target.value })} data-testid="edit-carbs" /></div>
+                  <div className="form-group" style={{ margin: 0 }}><label style={{ color: '#15140F' }}>Fat</label><input type="number" value={editForm.fat_per_100g} onChange={e => setEditForm({ ...editForm, fat_per_100g: e.target.value })} data-testid="edit-fat" /></div>
                 </div>
                 <div className="form-group" style={{ marginTop: 10, marginBottom: 0 }}><label>Preparation time (minutes)</label><input type="number" value={editForm.preparation_time_minutes} onChange={e => setEditForm({ ...editForm, preparation_time_minutes: e.target.value })} data-testid="edit-prep" /></div>
               </div>
@@ -464,7 +464,7 @@ export default function AdminProducts() {
       )}
 
       <style>{`
-        .spinner { width: 20px; height: 20px; border: 3px solid #E0E0E0; border-top-color: #5B5FE0; border-radius: 50%; display: inline-block; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 8px; }
+        .spinner { width: 20px; height: 20px; border: 3px solid #E0E0E0; border-top-color: #15140F; border-radius: 50%; display: inline-block; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 8px; }
         @keyframes spin { to { transform: rotate(360deg); } }
       `}</style>
     </div>

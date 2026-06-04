@@ -56,7 +56,7 @@ export default function AdminShifts() {
     } catch (err: any) { alert(err.message); }
   };
 
-  const statusColors: Record<string, string> = { scheduled: '#5B5FE0', active: '#267E3E', completed: '#9C9C9C', cancelled: '#E23744' };
+  const statusColors: Record<string, string> = { scheduled: '#15140F', active: '#3FA34D', completed: '#9C9C9C', cancelled: '#15140F' };
   const statusBadge: Record<string, string> = { scheduled: 'badge-purple', active: 'badge-green', completed: 'badge-gray', cancelled: 'badge-red' };
 
   // Group shifts by date
@@ -88,10 +88,10 @@ export default function AdminShifts() {
 
       <div className="stats-grid" style={{ marginBottom: 20 }}>
         {[
-          { label: 'Total Staff', value: staff.length, icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5B5FE0" strokeWidth="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>, color: '#5B5FE0' },
-          { label: 'Kitchen Staff', value: staff.filter(s => s.role === 'kitchen').length, icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FF9F0A" strokeWidth="2"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2z"/></svg>, color: '#FF9F0A' },
-          { label: 'Cashier Staff', value: staff.filter(s => s.role === 'cashier').length, icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#267E3E" strokeWidth="2"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>, color: '#267E3E' },
-          { label: 'Scheduled', value: shifts.filter(s => s.status === 'scheduled').length, icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#E23744" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>, color: '#E23744' },
+          { label: 'Total Staff', value: staff.length, icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#15140F" strokeWidth="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>, color: '#15140F' },
+          { label: 'Kitchen Staff', value: staff.filter(s => s.role === 'kitchen').length, icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#D69A35" strokeWidth="2"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2z"/></svg>, color: '#D69A35' },
+          { label: 'Cashier Staff', value: staff.filter(s => s.role === 'cashier').length, icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3FA34D" strokeWidth="2"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>, color: '#3FA34D' },
+          { label: 'Scheduled', value: shifts.filter(s => s.status === 'scheduled').length, icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#15140F" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>, color: '#15140F' },
         ].map(s => (
           <div className="stat-card" key={s.label}>
             <div className="stat-icon" style={{ background: `${s.color}15` }}>{s.icon}</div>

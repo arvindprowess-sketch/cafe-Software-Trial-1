@@ -36,12 +36,12 @@ export default function AdminDashboard() {
 
       <div className="stats-grid" data-testid="stats-grid">
         {[
-          { label: 'Products', value: stats.products, color: '#267E3E', icon: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4' },
-          { label: 'Categories', value: stats.categories, color: '#5B5FE0', icon: 'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z' },
-          { label: "Today's Orders", value: stats.today_orders, color: '#FF9F0A', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2' },
-          { label: 'Revenue', value: `₹${Math.round(stats.revenue)}`, color: '#E23744', icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
-          { label: 'Pending', value: stats.pending_orders, color: '#9C27B0', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
-          { label: 'Low Stock', value: stats.low_stock_alerts?.length || 0, color: stats.low_stock_alerts?.length > 0 ? '#E23744' : '#267E3E', icon: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z' },
+          { label: 'Products', value: stats.products, color: '#3FA34D', icon: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4' },
+          { label: 'Categories', value: stats.categories, color: '#15140F', icon: 'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z' },
+          { label: "Today's Orders", value: stats.today_orders, color: '#D69A35', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2' },
+          { label: 'Revenue', value: `₹${Math.round(stats.revenue)}`, color: '#15140F', icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
+          { label: 'Pending', value: stats.pending_orders, color: '#15140F', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
+          { label: 'Low Stock', value: stats.low_stock_alerts?.length || 0, color: stats.low_stock_alerts?.length > 0 ? '#15140F' : '#3FA34D', icon: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z' },
         ].map(s => (
           <div className="stat-card" key={s.label} data-testid={`stat-${s.label.toLowerCase().replace(/[^a-z]/g, '-')}`}>
             <div className="stat-icon" style={{ background: `${s.color}12` }}>
@@ -56,13 +56,13 @@ export default function AdminDashboard() {
       {/* Low Stock Alerts */}
       {stats.low_stock_alerts?.length > 0 && (
         <div style={{ marginBottom: 24 }} data-testid="low-stock-section">
-          <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 10, color: '#E23744' }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#E23744" strokeWidth="2" style={{ verticalAlign: 'middle', marginRight: 6 }}><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+          <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 10, color: '#15140F' }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#15140F" strokeWidth="2" style={{ verticalAlign: 'middle', marginRight: 6 }}><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
             Low Stock Alerts
           </h2>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {stats.low_stock_alerts.map((item: any) => (
-              <div key={item.id} style={{ background: '#FDE8EA', borderRadius: 8, padding: '8px 14px', fontSize: 13 }}>
+              <div key={item.id} style={{ background: '#F1E7E1', borderRadius: 8, padding: '8px 14px', fontSize: 13 }}>
                 <strong>{item.name}</strong>: {Math.round(item.available_qty_grams)}g left
               </div>
             ))}
@@ -74,10 +74,10 @@ export default function AdminDashboard() {
       <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 12 }}>Quick Actions</h2>
       <div className="quick-actions" data-testid="quick-actions">
         {[
-          { to: '/admin/categories', title: 'Manage Categories', desc: 'Icons, fonts, ordering', color: '#5B5FE0', icon: 'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z' },
-          { to: '/admin/products', title: 'Manage Products', desc: 'Meals & single items', color: '#267E3E', icon: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4' },
-          { to: '/admin/orders', title: 'Orders', desc: 'All orders & history', color: '#FF9F0A', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2' },
-          { to: '/admin/kitchen', title: 'Kitchen Monitor', desc: 'Live kitchen view', color: '#E23744', icon: 'M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z' },
+          { to: '/admin/categories', title: 'Manage Categories', desc: 'Icons, fonts, ordering', color: '#15140F', icon: 'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z' },
+          { to: '/admin/products', title: 'Manage Products', desc: 'Meals & single items', color: '#3FA34D', icon: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4' },
+          { to: '/admin/orders', title: 'Orders', desc: 'All orders & history', color: '#D69A35', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2' },
+          { to: '/admin/kitchen', title: 'Kitchen Monitor', desc: 'Live kitchen view', color: '#15140F', icon: 'M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z' },
         ].map(a => (
           <Link to={a.to} className="action-card" key={a.to} data-testid={`goto-${a.title.toLowerCase().replace(/ /g, '-')}`}>
             <div className="action-icon" style={{ background: `${a.color}12` }}>

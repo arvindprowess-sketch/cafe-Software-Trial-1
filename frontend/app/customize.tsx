@@ -5,9 +5,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { apiCall, getStoredUser } from '../utils/api';
 
-const Z_RED = '#D62300';
-const GREEN = '#509E2F';
-const PURPLE = '#FF8732';
+const Z_RED = '#15140F';
+const GREEN = '#3FA34D';
+const PURPLE = '#15140F';
 
 export default function CustomizeScreen() {
   const router = useRouter();
@@ -425,7 +425,7 @@ export default function CustomizeScreen() {
         {/* Show conversion feedback - always show in rupees mode with calculated grams */}
         {mode === 'rupees' && (
           <View style={styles.conversionRow}>
-            <Ionicons name="swap-horizontal" size={14} color="#5B5FE0" />
+            <Ionicons name="swap-horizontal" size={14} color="#5E97B8" />
             <Text style={styles.conversionText}>
               ₹{displayRupees} = <Text style={styles.conversionHighlight}>{item.grams}g</Text> of {item.name}
             </Text>
@@ -539,7 +539,7 @@ export default function CustomizeScreen() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <View style={styles.topBar}>
           <TouchableOpacity testID="back-btn" onPress={() => router.back()} style={styles.backBtn}>
-            <Ionicons name="arrow-back" size={20} color="#1C1C2E" />
+            <Ionicons name="arrow-back" size={20} color="#15140F" />
           </TouchableOpacity>
           <Text style={styles.topTitle}>Customize Meal</Text>
           <View style={styles.orderTypeBadge}><Text style={styles.orderTypeBadgeText}>{selectedOrderType}</Text></View>
@@ -560,7 +560,7 @@ export default function CustomizeScreen() {
                 style={[styles.orderTypeChip, selectedOrderType === t.key && styles.orderTypeChipActive]}
                 onPress={() => setSelectedOrderType(t.key)}
               >
-                <Ionicons name={t.icon} size={16} color={selectedOrderType === t.key ? '#FFF' : '#8B6F61'} />
+                <Ionicons name={t.icon} size={16} color={selectedOrderType === t.key ? '#FFF' : '#6B6A5E'} />
                 <Text style={[styles.orderTypeChipText, selectedOrderType === t.key && { color: '#FFF' }]}>{t.label}</Text>
               </TouchableOpacity>
             ))}
@@ -609,7 +609,7 @@ export default function CustomizeScreen() {
                 </View>
                 {scheduledHour && scheduledMinute && (
                   <View style={styles.alertInfoRow}>
-                    <Ionicons name="notifications" size={14} color="#5B5FE0" />
+                    <Ionicons name="notifications" size={14} color="#5E97B8" />
                     <Text style={styles.alertInfoText}>
                       Kitchen will be alerted at {
                         (() => {
@@ -668,7 +668,7 @@ export default function CustomizeScreen() {
 
           {aiSuggestion && (
             <View style={styles.aiCard}>
-              <Text style={styles.aiTitle}><Ionicons name="sparkles" size={14} color="#5B5FE0" /> AI Recommendation</Text>
+              <Text style={styles.aiTitle}><Ionicons name="sparkles" size={14} color="#5E97B8" /> AI Recommendation</Text>
               <Text style={styles.aiSummary}>{aiSuggestion.summary}</Text>
               {aiSuggestion.suggestions?.map((s: any, i: number) => (
                 <View key={i} style={styles.aiSugRow}>
@@ -685,9 +685,9 @@ export default function CustomizeScreen() {
         {items.length > 0 && (
           <View style={[styles.calorieBanner, isOverGoal ? styles.calorieBannerOver : styles.calorieBannerOk]} testID="calorie-goal-banner">
             <View style={styles.calorieBannerLeft}>
-              <Ionicons name={isOverGoal ? 'alert-circle' : 'checkmark-circle'} size={18} color={isOverGoal ? '#D62300' : '#509E2F'} />
+              <Ionicons name={isOverGoal ? 'alert-circle' : 'checkmark-circle'} size={18} color={isOverGoal ? '#15140F' : '#3FA34D'} />
               <View style={{ flex: 1 }}>
-                <Text style={[styles.calorieBannerTitle, isOverGoal && { color: '#D62300' }]}>
+                <Text style={[styles.calorieBannerTitle, isOverGoal && { color: '#15140F' }]}>
                   {isOverGoal ? `${caloriesOver} cal over your daily goal` : 'Within your calorie goal'}
                 </Text>
                 <Text style={styles.calorieBannerSub}>
@@ -713,7 +713,7 @@ export default function CustomizeScreen() {
               {extra > 0 && <Text style={styles.extraText}>incl. ₹{extra} {selectedOrderType}</Text>}
               {isScheduled && scheduledHour && scheduledMinute && (
                 <Text style={styles.scheduledBadgeBottom}>
-                  <Ionicons name="time" size={11} color="#5B5FE0" /> {scheduledHour}:{scheduledMinute.padStart(2, '0')}
+                  <Ionicons name="time" size={11} color="#5E97B8" /> {scheduledHour}:{scheduledMinute.padStart(2, '0')}
                 </Text>
               )}
             </View>
@@ -731,7 +731,7 @@ export default function CustomizeScreen() {
             <View style={styles.modalCard}>
               <View style={styles.modalIconRow}>
                 <View style={styles.modalIconBg}>
-                  <Ionicons name="fitness" size={28} color="#E23744" />
+                  <Ionicons name="fitness" size={28} color="#15140F" />
                 </View>
               </View>
               <Text style={styles.modalTitle}>Calorie Goal Exceeded</Text>
@@ -753,7 +753,7 @@ export default function CustomizeScreen() {
                 </View>
               </View>
               <TouchableOpacity testID="calorie-warning-adjust-btn" style={styles.modalAdjustBtn} onPress={() => setShowCalorieWarning(false)}>
-                <Ionicons name="create" size={18} color="#5B5FE0" />
+                <Ionicons name="create" size={18} color="#5E97B8" />
                 <Text style={styles.modalAdjustText}>Adjust Manually</Text>
               </TouchableOpacity>
               <TouchableOpacity testID="ai-adjust-btn" style={styles.aiAdjustBtn} onPress={handleAiAdjust} disabled={aiAdjusting}>
@@ -783,7 +783,7 @@ export default function CustomizeScreen() {
                     </View>
                   ))}
                   <View style={styles.adjustSavings}>
-                    <Ionicons name="trending-down" size={14} color="#267E3E" />
+                    <Ionicons name="trending-down" size={14} color="#3FA34D" />
                     <Text style={styles.adjustSavingsText}>Saves {adjustedItems.saved_calories} cal</Text>
                   </View>
                   <TouchableOpacity testID="apply-ai-adjust-btn" style={styles.applyBtn} onPress={applyAdjustments}>
@@ -805,145 +805,145 @@ export default function CustomizeScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F5EBDC' },
-  topBar: { flexDirection: 'row', alignItems: 'center', padding: 16, gap: 12, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E8DDD4' },
-  backBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#F5EBDC', alignItems: 'center', justifyContent: 'center' },
-  topTitle: { flex: 1, fontSize: 18, fontWeight: '700', color: '#502314' },
-  orderTypeBadge: { backgroundColor: '#FDE8E4', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  safe: { flex: 1, backgroundColor: '#F4F1E9' },
+  topBar: { flexDirection: 'row', alignItems: 'center', padding: 16, gap: 12, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E6E1D4' },
+  backBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#F4F1E9', alignItems: 'center', justifyContent: 'center' },
+  topTitle: { flex: 1, fontSize: 18, fontWeight: '700', color: '#15140F' },
+  orderTypeBadge: { backgroundColor: '#F1E7E1', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
   orderTypeBadgeText: { color: Z_RED, fontSize: 11, fontWeight: '700', textTransform: 'capitalize' },
   scroll: { padding: 16 },
-  section: { fontSize: 16, fontWeight: '700', color: '#502314', marginBottom: 8, marginTop: 4 },
+  section: { fontSize: 16, fontWeight: '700', color: '#15140F', marginBottom: 8, marginTop: 4 },
   goalContainer: { marginBottom: 8 },
   goalRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
   goalChip: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center', backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E8E8E8' },
   goalActive: { backgroundColor: Z_RED, borderColor: Z_RED },
-  goalText: { fontSize: 12, fontWeight: '600', color: '#8B6F61' },
+  goalText: { fontSize: 12, fontWeight: '600', color: '#6B6A5E' },
   budgetRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 },
-  budgetLabel: { color: '#8B6F61', fontSize: 13, fontWeight: '600' },
-  budgetInput: { flex: 1, backgroundColor: '#FFF', borderRadius: 8, padding: 10, color: '#502314', fontSize: 15, borderWidth: 1, borderColor: '#E8E8E8' },
+  budgetLabel: { color: '#6B6A5E', fontSize: 13, fontWeight: '600' },
+  budgetInput: { flex: 1, backgroundColor: '#FFF', borderRadius: 8, padding: 10, color: '#15140F', fontSize: 15, borderWidth: 1, borderColor: '#E8E8E8' },
   
   // Item cards
-  itemCard: { backgroundColor: '#FFF', borderRadius: 12, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#E8DDD4' },
-  readyMadeCard: { borderColor: '#E8E0FF' },
+  itemCard: { backgroundColor: '#FFF', borderRadius: 12, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#E6E1D4' },
+  readyMadeCard: { borderColor: '#E6E1D4' },
   itemTop: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 },
   itemHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, flex: 1 },
   vegBox: { width: 14, height: 14, borderRadius: 2, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', marginTop: 3 },
   vegDot: { width: 7, height: 7, borderRadius: 4 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  itemName: { fontSize: 15, fontWeight: '700', color: '#502314' },
+  itemName: { fontSize: 15, fontWeight: '700', color: '#15140F' },
   typeBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-  fixedBadge: { backgroundColor: '#8B6F61' },
+  fixedBadge: { backgroundColor: '#6B6A5E' },
   editableBadge: { backgroundColor: GREEN },
   typeText: { fontSize: 9, fontWeight: '700', color: '#FFF' },
-  itemMeta: { fontSize: 11, color: '#8B6F61', marginTop: 2 },
+  itemMeta: { fontSize: 11, color: '#6B6A5E', marginTop: 2 },
   
   // Single product controls
   modeRow: { flexDirection: 'row', gap: 6, marginBottom: 10 },
-  modeBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 6, backgroundColor: '#F5EBDC' },
-  modeBtnActive: { backgroundColor: '#FDE8E4' },
-  modeText: { fontSize: 12, fontWeight: '600', color: '#8B6F61' },
+  modeBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 6, backgroundColor: '#F4F1E9' },
+  modeBtnActive: { backgroundColor: '#F1E7E1' },
+  modeText: { fontSize: 12, fontWeight: '600', color: '#6B6A5E' },
   qtyRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
-  qtyBtn: { width: 36, height: 36, borderRadius: 8, backgroundColor: '#FDE8E4', alignItems: 'center', justifyContent: 'center' },
-  qtyInput: { flex: 1, backgroundColor: '#F5EBDC', borderRadius: 8, padding: 10, color: '#502314', fontSize: 20, fontWeight: '800', textAlign: 'center' },
-  qtyUnit: { color: '#8B6F61', fontSize: 14, fontWeight: '600' },
+  qtyBtn: { width: 36, height: 36, borderRadius: 8, backgroundColor: '#F1E7E1', alignItems: 'center', justifyContent: 'center' },
+  qtyInput: { flex: 1, backgroundColor: '#F4F1E9', borderRadius: 8, padding: 10, color: '#15140F', fontSize: 20, fontWeight: '800', textAlign: 'center' },
+  qtyUnit: { color: '#6B6A5E', fontSize: 14, fontWeight: '600' },
   
   // Conversion feedback row
-  conversionRow: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#F0F0FF', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, marginBottom: 10 },
-  conversionText: { fontSize: 12, color: '#FF8732' },
-  conversionHighlight: { fontWeight: '800', color: '#502314', fontSize: 14 },
+  conversionRow: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#EEF1EC', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, marginBottom: 10 },
+  conversionText: { fontSize: 12, color: '#15140F' },
+  conversionHighlight: { fontWeight: '800', color: '#15140F', fontSize: 14 },
   
   // Ready-made plate controls
-  plateRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, backgroundColor: '#F8F5FF', padding: 12, borderRadius: 10 },
+  plateRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, backgroundColor: '#F7F4EC', padding: 12, borderRadius: 10 },
   plateLabel: { fontSize: 14, fontWeight: '700', color: PURPLE },
   plateSelector: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  plateBtn: { width: 32, height: 32, borderRadius: 8, backgroundColor: '#F0E8FF', alignItems: 'center', justifyContent: 'center' },
+  plateBtn: { width: 32, height: 32, borderRadius: 8, backgroundColor: '#EEF1EC', alignItems: 'center', justifyContent: 'center' },
   plateCount: { fontSize: 22, fontWeight: '800', color: PURPLE, minWidth: 40, textAlign: 'center' },
   
   // Ingredients breakdown
   ingredientsBox: { backgroundColor: '#FAFAFA', borderRadius: 8, padding: 10, marginBottom: 10 },
   ingredientsTitle: { fontSize: 11, fontWeight: '700', color: PURPLE, marginBottom: 8 },
-  ingredientRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#E8DDD4' },
-  ingredientName: { fontSize: 13, color: '#502314', flex: 1 },
+  ingredientRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#E6E1D4' },
+  ingredientName: { fontSize: 13, color: '#15140F', flex: 1 },
   ingredientEdit: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  ingEditBtn: { width: 24, height: 24, borderRadius: 6, backgroundColor: '#F0E8FF', alignItems: 'center', justifyContent: 'center' },
+  ingEditBtn: { width: 24, height: 24, borderRadius: 6, backgroundColor: '#EEF1EC', alignItems: 'center', justifyContent: 'center' },
   ingredientGrams: { fontSize: 13, fontWeight: '700', color: PURPLE, minWidth: 40, textAlign: 'center' },
-  ingredientTotal: { fontSize: 11, color: '#8B6F61', marginLeft: 4 },
-  ingredientGramsFixed: { fontSize: 12, color: '#8B6F61' },
+  ingredientTotal: { fontSize: 11, color: '#6B6A5E', marginLeft: 4 },
+  ingredientGramsFixed: { fontSize: 12, color: '#6B6A5E' },
   
   // Nutrition row
   nutriRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  nutriText: { fontSize: 11, color: '#8B6F61' },
+  nutriText: { fontSize: 11, color: '#6B6A5E' },
   priceText: { fontSize: 14, fontWeight: '700', color: Z_RED },
   
   // AI suggestion
-  aiBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#FF8732', borderRadius: 12, paddingVertical: 14, marginTop: 8 },
+  aiBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#15140F', borderRadius: 12, paddingVertical: 14, marginTop: 8 },
   aiBtnText: { color: '#FFF', fontSize: 14, fontWeight: '700' },
-  aiCard: { backgroundColor: '#FFF', borderRadius: 12, padding: 14, marginTop: 12, borderWidth: 1, borderColor: '#FF8732' },
-  aiTitle: { fontSize: 14, fontWeight: '700', color: '#FF8732', marginBottom: 6 },
-  aiSummary: { color: '#8B6F61', fontSize: 13, lineHeight: 18, marginBottom: 10 },
-  aiSugRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderTopWidth: 1, borderTopColor: '#E8DDD4' },
-  aiSugName: { color: '#502314', fontSize: 13, fontWeight: '600' },
-  aiSugReason: { color: '#8B6F61', fontSize: 11, marginTop: 2 },
-  applyBtn: { backgroundColor: '#FF8732', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 },
+  aiCard: { backgroundColor: '#FFF', borderRadius: 12, padding: 14, marginTop: 12, borderWidth: 1, borderColor: '#15140F' },
+  aiTitle: { fontSize: 14, fontWeight: '700', color: '#15140F', marginBottom: 6 },
+  aiSummary: { color: '#6B6A5E', fontSize: 13, lineHeight: 18, marginBottom: 10 },
+  aiSugRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderTopWidth: 1, borderTopColor: '#E6E1D4' },
+  aiSugName: { color: '#15140F', fontSize: 13, fontWeight: '600' },
+  aiSugReason: { color: '#6B6A5E', fontSize: 11, marginTop: 2 },
+  applyBtn: { backgroundColor: '#15140F', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 },
   applyText: { color: '#FFF', fontSize: 12, fontWeight: '700' },
   
   // Bottom bar
-  bottomBar: { backgroundColor: '#FFF', borderTopWidth: 1, borderTopColor: '#E8DDD4', padding: 16, paddingBottom: 24, flexDirection: 'row', alignItems: 'center', gap: 14 },
+  bottomBar: { backgroundColor: '#FFF', borderTopWidth: 1, borderTopColor: '#E6E1D4', padding: 16, paddingBottom: 24, flexDirection: 'row', alignItems: 'center', gap: 14 },
   bottomInfo: { flex: 1 },
   bottomRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
-  bottomCal: { fontSize: 14, fontWeight: '700', color: '#502314' },
-  bottomMacro: { fontSize: 11, color: '#8B6F61' },
-  bottomPrice: { fontSize: 20, fontWeight: '800', color: '#502314' },
-  extraText: { fontSize: 10, color: '#8B6F61' },
+  bottomCal: { fontSize: 14, fontWeight: '700', color: '#15140F' },
+  bottomMacro: { fontSize: 11, color: '#6B6A5E' },
+  bottomPrice: { fontSize: 20, fontWeight: '800', color: '#15140F' },
+  extraText: { fontSize: 10, color: '#6B6A5E' },
   orderBtn: { backgroundColor: Z_RED, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 28, alignItems: 'center' },
   orderBtnText: { color: '#FFF', fontSize: 15, fontWeight: '700' },
 
   // Calorie Goal Banner
   calorieBanner: { marginHorizontal: 0, paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: 1 },
-  calorieBannerOk: { backgroundColor: '#F0FFF4', borderTopColor: '#C6F6D5' },
-  calorieBannerOver: { backgroundColor: '#FFF5F5', borderTopColor: '#FED7D7' },
+  calorieBannerOk: { backgroundColor: '#F1F7E9', borderTopColor: '#D8ECC0' },
+  calorieBannerOver: { backgroundColor: '#F7F4EC', borderTopColor: '#F1E7E1' },
   calorieBannerLeft: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  calorieBannerTitle: { fontSize: 13, fontWeight: '700', color: '#509E2F' },
-  calorieBannerSub: { fontSize: 11, color: '#8B6F61', marginTop: 2 },
+  calorieBannerTitle: { fontSize: 13, fontWeight: '700', color: '#3FA34D' },
+  calorieBannerSub: { fontSize: 11, color: '#6B6A5E', marginTop: 2 },
   calorieMiniBar: { height: 4, backgroundColor: '#E8E8E8', borderRadius: 2, marginTop: 8, overflow: 'hidden', flexDirection: 'row' },
-  calorieMiniBarFill: { height: '100%', backgroundColor: '#509E2F', borderRadius: 2 },
-  calorieMiniBarOver: { backgroundColor: '#D62300' },
-  calorieMiniBarExcess: { height: '100%', backgroundColor: '#FF6B6B', borderRadius: 2 },
+  calorieMiniBarFill: { height: '100%', backgroundColor: '#3FA34D', borderRadius: 2 },
+  calorieMiniBarOver: { backgroundColor: '#15140F' },
+  calorieMiniBarExcess: { height: '100%', backgroundColor: '#C0392B', borderRadius: 2 },
 
   // Calorie Warning Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 24 },
   modalCard: { backgroundColor: '#FFF', borderRadius: 20, padding: 24, width: '100%', maxWidth: 360, alignItems: 'center' },
   modalIconRow: { marginBottom: 16 },
-  modalIconBg: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#FDE8E4', alignItems: 'center', justifyContent: 'center' },
-  modalTitle: { fontSize: 20, fontWeight: '800', color: '#502314', marginBottom: 8 },
-  modalDesc: { fontSize: 14, color: '#8B6F61', textAlign: 'center', lineHeight: 20, marginBottom: 16 },
-  modalHighlight: { fontWeight: '800', color: '#D62300' },
+  modalIconBg: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#F1E7E1', alignItems: 'center', justifyContent: 'center' },
+  modalTitle: { fontSize: 20, fontWeight: '800', color: '#15140F', marginBottom: 8 },
+  modalDesc: { fontSize: 14, color: '#6B6A5E', textAlign: 'center', lineHeight: 20, marginBottom: 16 },
+  modalHighlight: { fontWeight: '800', color: '#15140F' },
   modalBreakdown: { backgroundColor: '#FAFAFA', borderRadius: 12, padding: 14, width: '100%', marginBottom: 20 },
   modalBreakdownRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 },
-  modalBreakdownLabel: { fontSize: 13, color: '#8B6F61' },
-  modalBreakdownVal: { fontSize: 13, fontWeight: '600', color: '#502314' },
+  modalBreakdownLabel: { fontSize: 13, color: '#6B6A5E' },
+  modalBreakdownVal: { fontSize: 13, fontWeight: '600', color: '#15140F' },
   modalBreakdownTotal: { borderTopWidth: 1, borderTopColor: '#E8E8E8', marginTop: 4, paddingTop: 10 },
-  modalBreakdownTotalLabel: { fontSize: 14, fontWeight: '700', color: '#502314' },
-  modalBreakdownTotalVal: { fontSize: 14, fontWeight: '800', color: '#D62300' },
-  modalAdjustBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#F0F0FF', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 20, width: '100%', justifyContent: 'center', marginBottom: 10 },
-  modalAdjustText: { fontSize: 15, fontWeight: '700', color: '#FF8732' },
-  aiAdjustBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FF8732', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 20, width: '100%', justifyContent: 'center', marginBottom: 10 },
+  modalBreakdownTotalLabel: { fontSize: 14, fontWeight: '700', color: '#15140F' },
+  modalBreakdownTotalVal: { fontSize: 14, fontWeight: '800', color: '#15140F' },
+  modalAdjustBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#EEF1EC', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 20, width: '100%', justifyContent: 'center', marginBottom: 10 },
+  modalAdjustText: { fontSize: 15, fontWeight: '700', color: '#15140F' },
+  aiAdjustBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#15140F', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 20, width: '100%', justifyContent: 'center', marginBottom: 10 },
   aiAdjustText: { fontSize: 15, fontWeight: '700', color: '#FFF' },
-  adjustResults: { backgroundColor: '#F0FFF4', borderRadius: 12, padding: 14, width: '100%', marginBottom: 10, borderWidth: 1, borderColor: '#C6F6D5' },
-  adjustTitle: { fontSize: 14, fontWeight: '700', color: '#509E2F', marginBottom: 4 },
-  adjustSummary: { fontSize: 12, color: '#8B6F61', marginBottom: 10 },
+  adjustResults: { backgroundColor: '#F1F7E9', borderRadius: 12, padding: 14, width: '100%', marginBottom: 10, borderWidth: 1, borderColor: '#D8ECC0' },
+  adjustTitle: { fontSize: 14, fontWeight: '700', color: '#3FA34D', marginBottom: 4 },
+  adjustSummary: { fontSize: 12, color: '#6B6A5E', marginBottom: 10 },
   adjustRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 },
-  adjustName: { fontSize: 13, fontWeight: '600', color: '#502314' },
+  adjustName: { fontSize: 13, fontWeight: '600', color: '#15140F' },
   adjustChange: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  adjustOld: { fontSize: 12, color: '#8B6F61', textDecorationLine: 'line-through' },
-  adjustNew: { fontSize: 13, fontWeight: '700', color: '#509E2F' },
-  adjustSavings: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#C6F6D5' },
-  adjustSavingsText: { fontSize: 13, fontWeight: '700', color: '#509E2F' },
-  applyBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#509E2F', borderRadius: 10, paddingVertical: 12, marginTop: 10 },
+  adjustOld: { fontSize: 12, color: '#6B6A5E', textDecorationLine: 'line-through' },
+  adjustNew: { fontSize: 13, fontWeight: '700', color: '#3FA34D' },
+  adjustSavings: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#D8ECC0' },
+  adjustSavingsText: { fontSize: 13, fontWeight: '700', color: '#3FA34D' },
+  applyBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#3FA34D', borderRadius: 10, paddingVertical: 12, marginTop: 10 },
   applyText: { fontSize: 14, fontWeight: '700', color: '#FFF' },
-  recommendedBadge: { backgroundColor: '#FF8732', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
+  recommendedBadge: { backgroundColor: '#15140F', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
   recommendedText: { fontSize: 9, fontWeight: '700', color: '#FFF' },
-  modalContinueBtn: { backgroundColor: '#502314', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 20, width: '100%', alignItems: 'center', marginBottom: 12 },
+  modalContinueBtn: { backgroundColor: '#15140F', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 20, width: '100%', alignItems: 'center', marginBottom: 12 },
   modalContinueText: { fontSize: 15, fontWeight: '700', color: '#FFF' },
   modalNote: { fontSize: 11, color: '#B0B0B0', textAlign: 'center', fontStyle: 'italic' },
 
@@ -951,24 +951,24 @@ const styles = StyleSheet.create({
   orderTypeRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
   orderTypeChip: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 12, backgroundColor: '#FFF', borderWidth: 1.5, borderColor: '#E8E8E8' },
   orderTypeChipActive: { backgroundColor: Z_RED, borderColor: Z_RED },
-  orderTypeChipText: { fontSize: 13, fontWeight: '700', color: '#8B6F61' },
+  orderTypeChipText: { fontSize: 13, fontWeight: '700', color: '#6B6A5E' },
 
   // Schedule section
-  scheduleSection: { backgroundColor: '#FFF', borderRadius: 12, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: '#E8DDD4' },
+  scheduleSection: { backgroundColor: '#FFF', borderRadius: 12, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: '#E6E1D4' },
   scheduleToggleRow: { flexDirection: 'row', alignItems: 'center' },
-  scheduleLabel: { fontSize: 15, fontWeight: '700', color: '#502314' },
-  scheduleHint: { fontSize: 11, color: '#8B6F61', marginTop: 2 },
+  scheduleLabel: { fontSize: 15, fontWeight: '700', color: '#15140F' },
+  scheduleHint: { fontSize: 11, color: '#6B6A5E', marginTop: 2 },
   scheduleToggle: { width: 50, height: 28, borderRadius: 14, backgroundColor: '#E0E0E0', justifyContent: 'center', paddingHorizontal: 3 },
-  scheduleToggleActive: { backgroundColor: '#FF8732' },
+  scheduleToggleActive: { backgroundColor: '#15140F' },
   scheduleToggleThumb: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#FFF' },
   scheduleToggleThumbActive: { alignSelf: 'flex-end' },
-  timePickerContainer: { marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: '#E8DDD4' },
-  timePickerLabel: { fontSize: 13, fontWeight: '600', color: '#8B6F61', marginBottom: 8 },
+  timePickerContainer: { marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: '#E6E1D4' },
+  timePickerLabel: { fontSize: 13, fontWeight: '600', color: '#6B6A5E', marginBottom: 8 },
   timeInputRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  timeInput: { width: 60, height: 48, backgroundColor: '#F5EBDC', borderRadius: 10, fontSize: 22, fontWeight: '800', color: '#502314', textAlign: 'center', borderWidth: 1.5, borderColor: '#E0E0E0' },
-  timeColon: { fontSize: 24, fontWeight: '800', color: '#502314', marginHorizontal: 4 },
-  alertInfoRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, backgroundColor: '#F0F0FF', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
-  alertInfoText: { fontSize: 12, color: '#FF8732', fontWeight: '500', flex: 1 },
-  scheduledBadgeBottom: { fontSize: 11, color: '#FF8732', fontWeight: '700', marginLeft: 8 },
-  orderBtnScheduled: { backgroundColor: '#FF8732' },
+  timeInput: { width: 60, height: 48, backgroundColor: '#F4F1E9', borderRadius: 10, fontSize: 22, fontWeight: '800', color: '#15140F', textAlign: 'center', borderWidth: 1.5, borderColor: '#E0E0E0' },
+  timeColon: { fontSize: 24, fontWeight: '800', color: '#15140F', marginHorizontal: 4 },
+  alertInfoRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, backgroundColor: '#EEF1EC', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
+  alertInfoText: { fontSize: 12, color: '#15140F', fontWeight: '500', flex: 1 },
+  scheduledBadgeBottom: { fontSize: 11, color: '#15140F', fontWeight: '700', marginLeft: 8 },
+  orderBtnScheduled: { backgroundColor: '#15140F' },
 });

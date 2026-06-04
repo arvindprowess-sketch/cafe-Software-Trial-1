@@ -169,7 +169,7 @@ export default function KitchenOrders() {
       <style>body{font-family:monospace;padding:16px;font-size:14px}h2{text-align:center;margin:0 0 8px}
       .line{border-top:1px dashed #000;margin:8px 0}.item{margin:4px 0}.bold{font-weight:bold}
       .center{text-align:center}.priority{text-transform:uppercase;font-weight:bold;text-align:center;padding:4px;margin:4px 0}
-      .urgent{background:#fee;color:#c00}.high{background:#fff3e0;color:#e65100}</style></head><body>`);
+      .urgent{background:#fee;color:#c00}.high{background:#F2EEE0;color:#9A6E1E}</style></head><body>`);
     w.document.write(printContent.innerHTML);
     w.document.write('</body></html>');
     w.document.close();
@@ -186,8 +186,8 @@ export default function KitchenOrders() {
       <div className="page-header" style={{ marginBottom: 16 }}>
         <div><h1>Orders</h1><p>{orders.length} active{scheduledOrders.length > 0 ? ` • ${scheduledOrders.length} upcoming` : ''}</p></div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <span data-testid="live-status" style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 20, background: connected ? '#E8F5E9' : '#FDECEC', color: connected ? '#267E3E' : '#C0392B', display: 'flex', alignItems: 'center', gap: 5 }}>
-            <span style={{ width: 7, height: 7, borderRadius: 4, background: connected ? '#267E3E' : '#C0392B', display: 'inline-block', animation: connected ? 'pulse 1.5s infinite' : 'none' }} />
+          <span data-testid="live-status" style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 20, background: connected ? '#EAF2DD' : '#F1E7E1', color: connected ? '#3FA34D' : '#C0392B', display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ width: 7, height: 7, borderRadius: 4, background: connected ? '#3FA34D' : '#C0392B', display: 'inline-block', animation: connected ? 'pulse 1.5s infinite' : 'none' }} />
             {connected ? 'LIVE' : 'OFFLINE'}
           </span>
           <button
@@ -213,7 +213,7 @@ export default function KitchenOrders() {
       <div style={{ display: 'flex', gap: 4, marginBottom: 16, background: '#F0F0F0', borderRadius: 10, padding: 3 }} data-testid="kitchen-tabs">
         <button
           className={`btn btn-sm ${activeTab === 'active' ? 'btn-green' : ''}`}
-          style={{ flex: 1, borderRadius: 8, fontWeight: activeTab === 'active' ? 700 : 500, background: activeTab === 'active' ? '#267E3E' : 'transparent', color: activeTab === 'active' ? '#FFF' : '#696969' }}
+          style={{ flex: 1, borderRadius: 8, fontWeight: activeTab === 'active' ? 700 : 500, background: activeTab === 'active' ? '#3FA34D' : 'transparent', color: activeTab === 'active' ? '#FFF' : '#696969' }}
           onClick={() => setActiveTab('active')}
           data-testid="tab-active"
         >
@@ -221,13 +221,13 @@ export default function KitchenOrders() {
         </button>
         <button
           className={`btn btn-sm ${activeTab === 'upcoming' ? 'btn-purple' : ''}`}
-          style={{ flex: 1, borderRadius: 8, fontWeight: activeTab === 'upcoming' ? 700 : 500, background: activeTab === 'upcoming' ? '#5B5FE0' : 'transparent', color: activeTab === 'upcoming' ? '#FFF' : '#696969', position: 'relative' }}
+          style={{ flex: 1, borderRadius: 8, fontWeight: activeTab === 'upcoming' ? 700 : 500, background: activeTab === 'upcoming' ? '#15140F' : 'transparent', color: activeTab === 'upcoming' ? '#FFF' : '#696969', position: 'relative' }}
           onClick={() => setActiveTab('upcoming')}
           data-testid="tab-upcoming"
         >
           Upcoming ({scheduledOrders.length})
           {scheduledOrders.some(o => o.alert_triggered) && (
-            <span style={{ position: 'absolute', top: 2, right: 8, width: 8, height: 8, borderRadius: 4, background: '#E23744', animation: 'pulse 1s infinite' }} />
+            <span style={{ position: 'absolute', top: 2, right: 8, width: 8, height: 8, borderRadius: 4, background: '#15140F', animation: 'pulse 1s infinite' }} />
           )}
         </button>
       </div>
@@ -235,7 +235,7 @@ export default function KitchenOrders() {
       {activeTab === 'active' && orders.length === 0 && (
         <div className="empty-state">
           <div className="empty-icon">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#267E3E" strokeWidth="2"><path d="M20 6L9 17l-5-5"/></svg>
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#3FA34D" strokeWidth="2"><path d="M20 6L9 17l-5-5"/></svg>
           </div>
           <h3>All caught up!</h3>
           <p>No pending orders right now</p>
@@ -259,7 +259,7 @@ export default function KitchenOrders() {
                 <span>{o.user_name || o.customer_name}</span>
                 <span>{timeSince(o.created_at)}</span>
                 <span className="badge badge-purple">{o.order_type}</span>
-                <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: o.order_source === 'app' ? '#5B5FE015' : '#FF9F0A15', color: o.order_source === 'app' ? '#5B5FE0' : '#FF9F0A' }}>
+                <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: o.order_source === 'app' ? '#15140F15' : '#D69A3515', color: o.order_source === 'app' ? '#15140F' : '#D69A35' }}>
                   {o.order_source === 'app' ? 'APP' : 'WALK-IN'}
                 </span>
               </div>
@@ -267,9 +267,9 @@ export default function KitchenOrders() {
                 {['normal', 'high', 'urgent'].map(pr => (
                   <button key={pr} className={`priority-btn ${p === pr ? `active-${pr}` : ''}`} onClick={() => setPriority(o.id, pr)} data-testid={`priority-${pr}-${o.id}`}>
                     {pr === 'urgent' ? (
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="#E23744"><circle cx="12" cy="12" r="10"/></svg>
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="#15140F"><circle cx="12" cy="12" r="10"/></svg>
                     ) : pr === 'high' ? (
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="#FF9F0A"><circle cx="12" cy="12" r="10"/></svg>
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="#D69A35"><circle cx="12" cy="12" r="10"/></svg>
                     ) : (
                       <svg width="10" height="10" viewBox="0 0 24 24" fill="#D0D0D0"><circle cx="12" cy="12" r="10"/></svg>
                     )} {pr}
@@ -305,7 +305,7 @@ export default function KitchenOrders() {
           {scheduledOrders.length === 0 ? (
             <div className="empty-state">
               <div className="empty-icon">
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#5B5FE0" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#15140F" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
               </div>
               <h3>No Scheduled Orders</h3>
               <p>Scheduled orders from customers will appear here</p>
@@ -314,7 +314,7 @@ export default function KitchenOrders() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(380px,1fr))', gap: 14 }}>
               {scheduledOrders.map(o => (
                 <div key={o.id} className={`order-card ${o.alert_triggered ? 'urgent' : ''}`} data-testid={`scheduled-card-${o.id}`}
-                  style={{ borderLeft: `4px solid ${o.alert_triggered ? '#E23744' : '#5B5FE0'}` }}
+                  style={{ borderLeft: `4px solid ${o.alert_triggered ? '#15140F' : '#15140F'}` }}
                 >
                   <div className="order-header">
                     <span className="order-id">#{o.id}</span>
@@ -325,22 +325,22 @@ export default function KitchenOrders() {
                   <div className="order-meta">
                     <span>{o.user_name || o.customer_name}</span>
                     <span className="badge badge-purple">{o.order_type}</span>
-                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: o.order_source === 'app' ? '#5B5FE015' : '#FF9F0A15', color: o.order_source === 'app' ? '#5B5FE0' : '#FF9F0A' }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: o.order_source === 'app' ? '#15140F15' : '#D69A3515', color: o.order_source === 'app' ? '#15140F' : '#D69A35' }}>
                       {o.order_source === 'app' ? 'APP' : 'WALK-IN'}
                     </span>
                   </div>
-                  <div style={{ display: 'flex', gap: 12, margin: '10px 0', padding: '10px 12px', background: '#F8F5FF', borderRadius: 8 }}>
+                  <div style={{ display: 'flex', gap: 12, margin: '10px 0', padding: '10px 12px', background: '#F7F4EC', borderRadius: 8 }}>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 11, color: '#9C9C9C', fontWeight: 600 }}>Ready at</div>
-                      <div style={{ fontSize: 18, fontWeight: 800, color: '#5B5FE0' }}>{formatTime(o.scheduled_ready_time)}</div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: '#15140F' }}>{formatTime(o.scheduled_ready_time)}</div>
                     </div>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 11, color: '#9C9C9C', fontWeight: 600 }}>Kitchen alert</div>
-                      <div style={{ fontSize: 18, fontWeight: 800, color: o.alert_triggered ? '#E23744' : '#1C1C2E' }}>{formatTime(o.kitchen_alert_time)}</div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: o.alert_triggered ? '#15140F' : '#15140F' }}>{formatTime(o.kitchen_alert_time)}</div>
                     </div>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 11, color: '#9C9C9C', fontWeight: 600 }}>Time until</div>
-                      <div style={{ fontSize: 18, fontWeight: 800, color: '#1C1C2E' }}>{timeUntil(o.scheduled_ready_time)}</div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: '#15140F' }}>{timeUntil(o.scheduled_ready_time)}</div>
                     </div>
                   </div>
                   <ul className="order-items">
@@ -371,35 +371,35 @@ export default function KitchenOrders() {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           data-testid="scheduled-alert-overlay"
         >
-          <div style={{ background: '#FFF', borderRadius: 16, padding: 28, maxWidth: 480, width: '90%', textAlign: 'center', boxShadow: '0 20px 60px rgba(0,0,0,0.3)', border: '3px solid #E23744', animation: 'popIn 0.3s ease-out' }}
+          <div style={{ background: '#FFF', borderRadius: 16, padding: 28, maxWidth: 480, width: '90%', textAlign: 'center', boxShadow: '0 20px 60px rgba(0,0,0,0.3)', border: '3px solid #15140F', animation: 'popIn 0.3s ease-out' }}
             data-testid="scheduled-alert-popup"
           >
-            <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#FDE8EA', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px', animation: 'pulse 1.5s infinite' }}>
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#E23744" strokeWidth="2.5">
+            <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#F1E7E1', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px', animation: 'pulse 1.5s infinite' }}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#15140F" strokeWidth="2.5">
                 <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/>
               </svg>
             </div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#E23744', letterSpacing: 2, marginBottom: 8 }}>SCHEDULED ORDER ALERT</div>
-            <div style={{ fontSize: 28, fontWeight: 800, color: '#1C1C2E', marginBottom: 4 }}>#{alertOrder.id}</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#15140F', letterSpacing: 2, marginBottom: 8 }}>SCHEDULED ORDER ALERT</div>
+            <div style={{ fontSize: 28, fontWeight: 800, color: '#15140F', marginBottom: 4 }}>#{alertOrder.id}</div>
             <div style={{ display: 'flex', justifyContent: 'center', gap: 16, margin: '14px 0' }}>
-              <div style={{ background: '#F8F5FF', borderRadius: 10, padding: '10px 18px' }}>
+              <div style={{ background: '#F7F4EC', borderRadius: 10, padding: '10px 18px' }}>
                 <div style={{ fontSize: 10, color: '#9C9C9C', fontWeight: 600 }}>Order Type</div>
-                <div style={{ fontSize: 16, fontWeight: 800, color: '#5B5FE0', textTransform: 'capitalize' }}>{alertOrder.order_type}</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: '#15140F', textTransform: 'capitalize' }}>{alertOrder.order_type}</div>
               </div>
-              <div style={{ background: '#FDE8EA', borderRadius: 10, padding: '10px 18px' }}>
+              <div style={{ background: '#F1E7E1', borderRadius: 10, padding: '10px 18px' }}>
                 <div style={{ fontSize: 10, color: '#9C9C9C', fontWeight: 600 }}>Ready At</div>
-                <div style={{ fontSize: 16, fontWeight: 800, color: '#E23744' }}>{formatTime(alertOrder.scheduled_ready_time)}</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: '#15140F' }}>{formatTime(alertOrder.scheduled_ready_time)}</div>
               </div>
-              <div style={{ background: '#F0FFF4', borderRadius: 10, padding: '10px 18px' }}>
+              <div style={{ background: '#F1F7E9', borderRadius: 10, padding: '10px 18px' }}>
                 <div style={{ fontSize: 10, color: '#9C9C9C', fontWeight: 600 }}>Customer</div>
-                <div style={{ fontSize: 16, fontWeight: 800, color: '#267E3E' }}>{alertOrder.user_name || alertOrder.customer_name}</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: '#3FA34D' }}>{alertOrder.user_name || alertOrder.customer_name}</div>
               </div>
             </div>
             <div style={{ textAlign: 'left', background: '#FAFAFA', borderRadius: 10, padding: 14, margin: '14px 0', border: '1px solid #EFEFEF' }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#1C1C2E', marginBottom: 8 }}>Items (ingredient-wise grams):</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#15140F', marginBottom: 8 }}>Items (ingredient-wise grams):</div>
               {alertOrder.items?.map((item: any, i: number) => (
                 <div key={i} style={{ marginBottom: 8, paddingBottom: 8, borderBottom: i < alertOrder.items.length - 1 ? '1px solid #EFEFEF' : 'none' }}>
-                  <div style={{ fontWeight: 700, color: '#1C1C2E', fontSize: 14 }}>
+                  <div style={{ fontWeight: 700, color: '#15140F', fontSize: 14 }}>
                     {item.product_name} {item.product_type === 'ready_made' ? `× ${item.quantity || 1}` : `— ${item.grams}g`}
                   </div>
                   {item.ingredients_breakdown?.map((ing: any, j: number) => (
@@ -408,7 +408,7 @@ export default function KitchenOrders() {
                     </div>
                   ))}
                   {item.customized_ingredients?.map((ing: any, j: number) => (
-                    <div key={`c${j}`} style={{ marginLeft: 14, fontSize: 12, color: '#E23744' }}>
+                    <div key={`c${j}`} style={{ marginLeft: 14, fontSize: 12, color: '#15140F' }}>
                       • {ing.name}: <strong>{ing.grams_per_serving}g</strong> (customized)
                     </div>
                   ))}
@@ -448,8 +448,8 @@ export default function KitchenOrders() {
               {showTicket.priority !== 'normal' && (
                 <div className={showTicket.priority === 'urgent' ? 'urgent' : 'high'}
                   style={{ textAlign: 'center', padding: 4, margin: '4px 0', fontWeight: 'bold', textTransform: 'uppercase',
-                    background: showTicket.priority === 'urgent' ? '#FDE8EA' : '#FFF3E0',
-                    color: showTicket.priority === 'urgent' ? '#E23744' : '#FF9F0A' }}>
+                    background: showTicket.priority === 'urgent' ? '#F1E7E1' : '#F2EEE0',
+                    color: showTicket.priority === 'urgent' ? '#15140F' : '#D69A35' }}>
                   {showTicket.priority} PRIORITY
                 </div>
               )}
@@ -465,7 +465,7 @@ export default function KitchenOrders() {
                       ))}
                     </div>
                   )}
-                  {item.customized && <div style={{ color: '#E23744', fontSize: 12, marginLeft: 12 }}>* CUSTOMIZED *</div>}
+                  {item.customized && <div style={{ color: '#15140F', fontSize: 12, marginLeft: 12 }}>* CUSTOMIZED *</div>}
                 </div>
               ))}
               {showTicket.special_notes && (

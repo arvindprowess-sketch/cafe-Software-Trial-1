@@ -21,7 +21,7 @@ export default function AdminTables() {
         {tables.map(t => (
           <div key={t.table_number} className={`table-card ${t.is_occupied?'occupied':'available'}`} onClick={() => toggle(t.table_number, t.is_occupied)} data-testid={`table-${t.table_number}`}>
             <span style={{fontSize:24}}>{t.is_occupied?'👥':'🪑'}</span>
-            <span className="table-number" style={{color:t.is_occupied?'#E23744':'#267E3E'}}>T{t.table_number}</span>
+            <span className="table-number" style={{color:t.is_occupied?'#15140F':'#3FA34D'}}>T{t.table_number}</span>
             <span className="table-status">{t.is_occupied?'Occupied':'Free'}</span>
           </div>
         ))}

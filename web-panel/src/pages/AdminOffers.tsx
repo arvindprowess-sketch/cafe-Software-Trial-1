@@ -98,7 +98,7 @@ export default function AdminOffers() {
                 </div>
               )}
               {form.discount_type === 'bogo' && (
-                <div style={{ background: '#F0F7E0', borderRadius: 8, padding: 10, marginBottom: 12, fontSize: 13, color: '#5b6b2e' }} data-testid="bogo-hint">
+                <div style={{ background: '#EAF2DD', borderRadius: 8, padding: 10, marginBottom: 12, fontSize: 13, color: '#A6D62E' }} data-testid="bogo-hint">
                   BOGO automatically makes the cheapest item free when the cart has 2+ items.
                 </div>
               )}

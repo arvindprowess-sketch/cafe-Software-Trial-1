@@ -8,7 +8,7 @@ export default function CashierLayout() {
     <div>
       <div className="top-nav">
         <div className="top-nav-brand">
-          <div className="brand-dot" style={{ background: '#5B5FE0' }} />
+          <div className="brand-dot" style={{ background: '#C7F24E' }} />
           <h2>Cashier POS</h2>
         </div>
         <div className="top-nav-links">

@@ -3,7 +3,7 @@ import { api } from '../utils/api';
 import { useRealtime } from '../utils/realtime';
 
 const STATUS_COLORS: Record<string, string> = { pending: 'badge-orange', accepted: 'badge-blue', preparing: 'badge-purple', ready: 'badge-green', completed: 'badge-gray', cancelled: 'badge-red' };
-const PAYMENT_COLORS: Record<string, string> = { paid: '#267E3E', unpaid: '#E23744', pending: '#FF9F0A' };
+const PAYMENT_COLORS: Record<string, string> = { paid: '#3FA34D', unpaid: '#15140F', pending: '#D69A35' };
 
 export default function CashierOrders() {
   const [orders, setOrders] = useState<any[]>([]);
@@ -70,7 +70,7 @@ export default function CashierOrders() {
             Orders ({orders.length})
           </button>
           <button className={`btn btn-sm ${activeTab === 'held' ? 'btn-orange' : 'btn-secondary'}`} onClick={() => setActiveTab('held')} data-testid="tab-held">
-            Hold {heldBills.length > 0 && <span style={{ background: '#FF9F0A', color: '#fff', borderRadius: '50%', padding: '1px 6px', fontSize: 10, marginLeft: 4 }}>{heldBills.length}</span>}
+            Hold {heldBills.length > 0 && <span style={{ background: '#D69A35', color: '#fff', borderRadius: '50%', padding: '1px 6px', fontSize: 10, marginLeft: 4 }}>{heldBills.length}</span>}
           </button>
           <button className="btn btn-secondary" onClick={load} data-testid="refresh-orders-btn">Refresh</button>
         </div>
@@ -89,7 +89,7 @@ export default function CashierOrders() {
             {heldBills.map(bill => {
               const billTotal = bill.items?.reduce((a: number, i: any) => a + (i.price || 0), 0) || 0;
               return (
-                <div key={bill.id} style={{ background: '#fff', borderRadius: 12, padding: 16, border: '2px solid #FF9F0A', borderLeft: '6px solid #FF9F0A' }} data-testid={`held-bill-${bill.id}`}>
+                <div key={bill.id} style={{ background: '#fff', borderRadius: 12, padding: 16, border: '2px solid #D69A35', borderLeft: '6px solid #D69A35' }} data-testid={`held-bill-${bill.id}`}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                     <div>
                       <div style={{ fontWeight: 800, fontSize: 16 }}>{bill.customer_name || 'Walk-in'}</div>
@@ -153,8 +153,8 @@ export default function CashierOrders() {
                     <td>
                       <span style={{
                         fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 4,
-                        background: isApp ? '#5B5FE015' : '#FF9F0A15',
-                        color: isApp ? '#5B5FE0' : '#FF9F0A',
+                        background: isApp ? '#15140F15' : '#D69A3515',
+                        color: isApp ? '#15140F' : '#D69A35',
                       }}>
                         {isApp ? 'APP' : 'WALK-IN'}
                       </span>

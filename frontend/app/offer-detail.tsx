@@ -5,8 +5,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { apiCall } from '../utils/api';
 
-const Z_RED = '#D62300';
-const GREEN = '#509E2F';
+const Z_RED = '#15140F';
+const GREEN = '#3FA34D';
 
 export default function OfferDetailScreen() {
   const router = useRouter();
@@ -46,7 +46,7 @@ export default function OfferDetailScreen() {
     <SafeAreaView style={s.safe}>
       <View style={s.header}>
         <TouchableOpacity testID="back-btn" onPress={() => router.back()} style={s.backBtn}>
-          <Ionicons name="arrow-back" size={20} color="#1C1C2E" />
+          <Ionicons name="arrow-back" size={20} color="#15140F" />
         </TouchableOpacity>
         <Text style={s.headerTitle} numberOfLines={1}>{offer?.title || 'Offer'}</Text>
       </View>
@@ -129,11 +129,11 @@ export default function OfferDetailScreen() {
 }
 
 const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F5EBDC' },
+  safe: { flex: 1, backgroundColor: '#F4F1E9' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: { flexDirection: 'row', alignItems: 'center', padding: 16, gap: 12, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E8DDD4' },
-  backBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#F5EBDC', alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { flex: 1, fontSize: 18, fontWeight: '700', color: '#502314' },
+  header: { flexDirection: 'row', alignItems: 'center', padding: 16, gap: 12, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E6E1D4' },
+  backBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#F4F1E9', alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { flex: 1, fontSize: 18, fontWeight: '700', color: '#15140F' },
   offerBanner: { margin: 16, borderRadius: 16, padding: 20 },
   offerTitle: { fontSize: 24, fontWeight: '800', color: '#FFF' },
   offerSub: { fontSize: 14, color: 'rgba(255,255,255,0.85)', marginTop: 4 },
@@ -141,28 +141,28 @@ const s = StyleSheet.create({
   couponText: { fontSize: 13, fontWeight: '700', color: '#FFF' },
   offerDiscount: { fontSize: 20, fontWeight: '800', color: '#FFF', marginTop: 8 },
   scroll: { padding: 16, paddingTop: 0 },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#502314', marginBottom: 12 },
-  productCard: { backgroundColor: '#FFF', borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#E8DDD4' },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#15140F', marginBottom: 12 },
+  productCard: { backgroundColor: '#FFF', borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#E6E1D4' },
   productRow: { flexDirection: 'row', gap: 12 },
-  productImg: { width: 80, height: 80, borderRadius: 12, backgroundColor: '#F5EBDC' },
+  productImg: { width: 80, height: 80, borderRadius: 12, backgroundColor: '#F4F1E9' },
   imgPlaceholder: { alignItems: 'center', justifyContent: 'center' },
   productInfo: { flex: 1 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   vegBox: { width: 14, height: 14, borderRadius: 2, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   vegDot: { width: 7, height: 7, borderRadius: 4 },
-  productName: { fontSize: 15, fontWeight: '700', color: '#502314' },
-  productMeta: { fontSize: 11, color: '#8B6F61', marginTop: 4 },
+  productName: { fontSize: 15, fontWeight: '700', color: '#15140F' },
+  productMeta: { fontSize: 11, color: '#6B6A5E', marginTop: 4 },
   priceRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 },
   discountedPrice: { fontSize: 16, fontWeight: '800', color: Z_RED },
-  originalPrice: { fontSize: 13, color: '#8B6F61', textDecorationLine: 'line-through' },
-  saveBadge: { backgroundColor: '#E8F5E9', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
+  originalPrice: { fontSize: 13, color: '#6B6A5E', textDecorationLine: 'line-through' },
+  saveBadge: { backgroundColor: '#EAF2DD', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
   saveText: { fontSize: 10, fontWeight: '700', color: GREEN },
   addBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: Z_RED, borderRadius: 10, paddingVertical: 10, marginTop: 10 },
   addedBtn: { backgroundColor: GREEN },
   addText: { fontSize: 14, fontWeight: '700', color: '#FFF' },
-  bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#FFF', borderTopWidth: 1, borderTopColor: '#E8DDD4', padding: 16, paddingBottom: 28, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  cartCount: { fontSize: 12, color: '#8B6F61' },
-  cartTotal: { fontSize: 22, fontWeight: '800', color: '#502314' },
+  bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#FFF', borderTopWidth: 1, borderTopColor: '#E6E1D4', padding: 16, paddingBottom: 28, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  cartCount: { fontSize: 12, color: '#6B6A5E' },
+  cartTotal: { fontSize: 22, fontWeight: '800', color: '#15140F' },
   checkoutBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Z_RED, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 14 },
   checkoutText: { fontSize: 15, fontWeight: '700', color: '#FFF' },
 });

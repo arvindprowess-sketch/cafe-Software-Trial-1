@@ -8,15 +8,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { apiCall, getStoredUser } from '../../utils/api';
 import SideDrawer from '../components/SideDrawer';
+import { FUEL, FONT, GOALS as FUEL_GOALS } from '../../utils/theme';
 
 // BK Design System Colors
-const BK_RED = '#D62300';
-const BK_ORANGE = '#FF8732';
-const BK_BROWN = '#502314';
-const BK_CREAM = '#F5EBDC';
-const BK_GREEN = '#509E2F';
+const BK_RED = '#15140F';
+const BK_ORANGE = '#15140F';
+const BK_BROWN = '#15140F';
+const BK_CREAM = '#F4F1E9';
+const BK_GREEN = '#3FA34D';
 const BK_WHITE = '#FFFFFF';
-const BK_TEXT_LIGHT = '#8B6F61';
+const BK_TEXT_LIGHT = '#6B6A5E';
 const Z_RED = BK_RED;
 const GREEN = BK_GREEN;
 const { width } = Dimensions.get('window');
@@ -24,12 +25,12 @@ const { width } = Dimensions.get('window');
 // Category grid for BK-style menu
 const MENU_CATEGORIES = [
   { key: 'Protein', label: 'High Protein', icon: 'barbell', color: BK_RED, image: 'https://images.unsplash.com/photo-1632778149955-e80f8ceca2e8?w=100&h=100&fit=crop' },
-  { key: 'Carb', label: 'Healthy Carbs', icon: 'leaf', color: '#FF9F0A', image: 'https://images.unsplash.com/photo-1536304929831-ee1ca9d44726?w=100&h=100&fit=crop' },
+  { key: 'Carb', label: 'Healthy Carbs', icon: 'leaf', color: '#D69A35', image: 'https://images.unsplash.com/photo-1536304929831-ee1ca9d44726?w=100&h=100&fit=crop' },
   { key: 'Fat', label: 'Good Fats', icon: 'water', color: BK_ORANGE, image: 'https://images.unsplash.com/photo-1523049673857-eb18f1d7b578?w=100&h=100&fit=crop' },
-  { key: 'Meal', label: 'Ready Meals', icon: 'restaurant', color: '#267E3E', image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=100&h=100&fit=crop' },
-  { key: 'veg', label: 'Veg Only', icon: 'nutrition', color: '#4CAF50', image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=100&h=100&fit=crop' },
+  { key: 'Meal', label: 'Ready Meals', icon: 'restaurant', color: '#3FA34D', image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=100&h=100&fit=crop' },
+  { key: 'veg', label: 'Veg Only', icon: 'nutrition', color: '#3FA34D', image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=100&h=100&fit=crop' },
   { key: 'non-veg', label: 'Non-Veg', icon: 'flame', color: BK_RED, image: 'https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=100&h=100&fit=crop' },
-  { key: 'budget', label: 'Budget Meals', icon: 'wallet', color: '#FF6B35', image: 'https://images.unsplash.com/photo-1490818387583-1baba5e638af?w=100&h=100&fit=crop' },
+  { key: 'budget', label: 'Budget Meals', icon: 'wallet', color: '#15140F', image: 'https://images.unsplash.com/photo-1490818387583-1baba5e638af?w=100&h=100&fit=crop' },
   { key: 'ai', label: 'AI Picks', icon: 'sparkles', color: BK_ORANGE, image: null },
 ];
 
@@ -146,7 +147,7 @@ export default function HomeScreen() {
         {/* ===== HEADER WITH HAMBURGER & ORDER TYPE TOGGLE ===== */}
         <View style={styles.header}>
           <TouchableOpacity testID="menu-drawer-btn" style={styles.menuBtn} onPress={() => setDrawerVisible(true)}>
-            <Ionicons name="menu" size={24} color="#F5EBDC" />
+            <Ionicons name="menu" size={24} color="#F4F1E9" />
           </TouchableOpacity>
           
           {/* Delivery / Dine-in Toggle */}
@@ -190,6 +191,28 @@ export default function HomeScreen() {
             </View>
           </View>
         )}
+
+        {/* ===== GOAL-FIRST ORDERING ===== */}
+        <View style={styles.goalSelector}>
+          <Text style={styles.goalSelectorTitle}>What's your goal?</Text>
+          <View style={styles.goalSelectorRow}>
+            {FUEL_GOALS.map((g) => {
+              const active = mealGoal === g.key;
+              return (
+                <TouchableOpacity
+                  key={g.key}
+                  testID={`home-goal-${g.key}`}
+                  style={[styles.goalSelectorChip, active && styles.goalSelectorChipActive]}
+                  onPress={() => { setMealGoal(g.key); setShowMealBuilder(true); }}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name={g.icon as any} size={20} color={active ? FUEL.ink : FUEL.limeDeep} />
+                  <Text style={[styles.goalSelectorLabel, active && styles.goalSelectorLabelActive]}>{g.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
 
         {/* ===== PROMOTIONAL BANNERS (ENHANCED) ===== */}
         {banners.length > 0 && (
@@ -278,7 +301,7 @@ export default function HomeScreen() {
           activeOpacity={0.8}
         >
           <View style={styles.nutriHeader}>
-            <Ionicons name="fitness" size={18} color={isCalorieOver ? '#FF6B6B' : Z_RED} />
+            <Ionicons name="fitness" size={18} color={isCalorieOver ? '#C0392B' : Z_RED} />
             <Text style={styles.nutriTitle}>Today's Nutrition</Text>
             <Text style={styles.nutriMeals}>{summary?.meals_count || 0} meals</Text>
             <Ionicons name="chevron-forward" size={18} color={BK_TEXT_LIGHT} style={{ marginLeft: 'auto' }} />
@@ -290,9 +313,9 @@ export default function HomeScreen() {
             </View>
             <View style={styles.macroRow}>
               {[
-                { label: 'Protein', val: consumed.protein, goal: goals.daily_protein, color: Z_RED },
-                { label: 'Carbs', val: consumed.carbs, goal: goals.daily_carbs, color: '#FF9F0A' },
-                { label: 'Fat', val: consumed.fat, goal: goals.daily_fat, color: BK_ORANGE },
+                { label: 'Protein', val: consumed.protein, goal: goals.daily_protein, color: FUEL.protein },
+                { label: 'Carbs', val: consumed.carbs, goal: goals.daily_carbs, color: '#D69A35' },
+                { label: 'Fat', val: consumed.fat, goal: goals.daily_fat, color: FUEL.fat },
               ].map(m => (
                 <View key={m.label} style={styles.macroItem}>
                   <Text style={[styles.macroVal, { color: m.color }]}>{Math.round(m.val || 0)}g</Text>
@@ -378,7 +401,7 @@ export default function HomeScreen() {
               {[
                 { key: 'veg', label: 'Veg', color: GREEN },
                 { key: 'non-veg', label: 'Non-Veg', color: Z_RED },
-                { key: 'both', label: 'Both', color: '#FF9F0A' },
+                { key: 'both', label: 'Both', color: '#D69A35' },
               ].map(d => (
                 <TouchableOpacity
                   key={d.key} testID={`diet-${d.key}`}
@@ -387,7 +410,7 @@ export default function HomeScreen() {
                 >
                   {d.key === 'veg' && <View style={[styles.vegIndicator, { borderColor: GREEN }]}><View style={[styles.vegDotInner, { backgroundColor: GREEN }]} /></View>}
                   {d.key === 'non-veg' && <View style={[styles.vegIndicator, { borderColor: Z_RED }]}><View style={[styles.vegDotInner, { backgroundColor: Z_RED }]} /></View>}
-                  {d.key === 'both' && <Ionicons name="ellipse-outline" size={14} color={dietPref === d.key ? '#FFF' : '#FF9F0A'} />}
+                  {d.key === 'both' && <Ionicons name="ellipse-outline" size={14} color={dietPref === d.key ? '#FFF' : '#D69A35'} />}
                   <Text style={[styles.dietText, dietPref === d.key && { color: '#FFF' }]}>{d.label}</Text>
                 </TouchableOpacity>
               ))}
@@ -414,8 +437,8 @@ export default function HomeScreen() {
               </View>
               <View style={styles.goalRow}>
                 {[
-                  { key: 'beginner', label: 'Beginner Phase', icon: 'ribbon' as const, color: '#5B5FE0' },
-                  { key: 'recovery', label: 'Recovery Phase', icon: 'heart' as const, color: '#FF6B9D' },
+                  { key: 'beginner', label: 'Beginner Phase', icon: 'ribbon' as const, color: '#5E97B8' },
+                  { key: 'recovery', label: 'Recovery Phase', icon: 'heart' as const, color: '#C77DA0' },
                 ].map(g => (
                   <TouchableOpacity
                     key={g.key} testID={`meal-goal-${g.key}`}
@@ -518,7 +541,7 @@ export default function HomeScreen() {
                 {[
                   { label: 'Calories', val: aiMeal.totals.calories, color: Z_RED },
                   { label: 'Protein', val: `${Math.round(aiMeal.totals.protein)}g`, color: Z_RED },
-                  { label: 'Carbs', val: `${Math.round(aiMeal.totals.carbs)}g`, color: '#FF9F0A' },
+                  { label: 'Carbs', val: `${Math.round(aiMeal.totals.carbs)}g`, color: '#D69A35' },
                   { label: 'Fat', val: `${Math.round(aiMeal.totals.fat)}g`, color: BK_ORANGE },
                 ].map(t => (
                   <View key={t.label} style={styles.totalItem}>
@@ -543,7 +566,7 @@ export default function HomeScreen() {
         {aiMeal && (!aiMeal.meal_items || aiMeal.meal_items.length === 0) && (
           <View style={styles.mealResultCard}>
             <View style={styles.mealErrorRow}>
-              <Ionicons name="alert-circle" size={24} color="#FF9F0A" />
+              <Ionicons name="alert-circle" size={24} color="#D69A35" />
               <Text style={styles.mealErrorText}>{aiMeal.summary || 'Could not build meal. Try again.'}</Text>
             </View>
             <TouchableOpacity style={styles.retryBtn} onPress={resetBuilder}><Text style={styles.retryText}>Try Again</Text></TouchableOpacity>
@@ -652,6 +675,15 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: BK_CREAM },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+
+  // Goal-first ordering
+  goalSelector: { paddingHorizontal: 16, marginTop: 18 },
+  goalSelectorTitle: { fontFamily: FONT.display, fontSize: 22, color: BK_BROWN, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12 },
+  goalSelectorRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  goalSelectorChip: { flexGrow: 1, minWidth: '46%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, paddingHorizontal: 14, borderRadius: 16, backgroundColor: BK_WHITE, borderWidth: 1.5, borderColor: '#E6E1D4' },
+  goalSelectorChipActive: { backgroundColor: FUEL.lime, borderColor: FUEL.lime },
+  goalSelectorLabel: { fontFamily: FONT.bodyExtrabold, fontSize: 13, fontWeight: '800', color: BK_TEXT_LIGHT, textTransform: 'uppercase', letterSpacing: 0.3 },
+  goalSelectorLabelActive: { color: FUEL.ink },
   
   // Header (BK Dark Brown)
   header: { 
@@ -693,7 +725,7 @@ const styles = StyleSheet.create({
     borderRadius: 20 
   },
   toggleBtnActive: { 
-    backgroundColor: BK_RED 
+    backgroundColor: FUEL.lime 
   },
   toggleText: { 
     fontSize: 12, 
@@ -702,7 +734,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   toggleTextActive: { 
-    color: BK_CREAM 
+    color: FUEL.ink 
   },
   
   // Location bar
@@ -714,7 +746,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12, 
     gap: 8, 
     borderBottomWidth: 1, 
-    borderBottomColor: '#E8DDD4' 
+    borderBottomColor: '#E6E1D4' 
   },
   locationText: { 
     fontSize: 11, 
@@ -771,11 +803,11 @@ const styles = StyleSheet.create({
   bannerBadgeText: { fontSize: 11, fontWeight: '800', color: BK_CREAM, letterSpacing: 0.5 },
   bannerImagePlaceholder: { width: 100, height: 100, alignItems: 'center', justifyContent: 'center' },
   dots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 12 },
-  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#D4C4B0' },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#CFC8B8' },
   dotActive: { backgroundColor: BK_ORANGE, width: 24 },
   
   // Category Grid (CLEAN - No Box)
-  sectionTitle: { fontSize: 22, fontWeight: '800', color: BK_BROWN, paddingHorizontal: 16, marginTop: 24, marginBottom: 14, letterSpacing: 0.3, textTransform: 'uppercase' },
+  sectionTitle: { fontFamily: FONT.display, fontSize: 24, fontWeight: '800', color: BK_BROWN, paddingHorizontal: 16, marginTop: 24, marginBottom: 14, letterSpacing: 0.3, textTransform: 'uppercase' },
   categoryGrid: { 
     flexDirection: 'row', 
     flexWrap: 'wrap', 
@@ -808,7 +840,7 @@ const styles = StyleSheet.create({
   },
   
   // Nutrition Card
-  nutriCard: { backgroundColor: BK_WHITE, marginHorizontal: 16, marginTop: 16, borderRadius: 16, padding: 18, borderWidth: 2, borderColor: '#E8DDD4' },
+  nutriCard: { backgroundColor: BK_WHITE, marginHorizontal: 16, marginTop: 16, borderRadius: 16, padding: 18, borderWidth: 2, borderColor: '#E6E1D4' },
   nutriHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
   nutriTitle: { flex: 1, fontSize: 16, fontWeight: '800', color: BK_BROWN, textTransform: 'uppercase', letterSpacing: 0.3 },
   nutriMeals: { fontSize: 12, color: BK_TEXT_LIGHT },
@@ -820,18 +852,18 @@ const styles = StyleSheet.create({
   macroItem: { alignItems: 'center' },
   macroVal: { fontSize: 16, fontWeight: '800' },
   macroLabel: { fontSize: 10, color: BK_TEXT_LIGHT, marginTop: 2, textTransform: 'uppercase', letterSpacing: 0.5 },
-  progressBg: { height: 6, backgroundColor: '#E8DDD4', borderRadius: 3, marginTop: 14, overflow: 'hidden' },
+  progressBg: { height: 6, backgroundColor: '#E6E1D4', borderRadius: 3, marginTop: 14, overflow: 'hidden' },
   progressFill: { height: '100%', backgroundColor: BK_ORANGE, borderRadius: 3 },
   progressFillOver: { backgroundColor: BK_RED },
-  overGoalBanner: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, backgroundColor: '#FDE8E4', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 },
+  overGoalBanner: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, backgroundColor: '#F1E7E1', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 },
   overGoalText: { fontSize: 11, color: BK_RED, fontWeight: '700', flex: 1 },
   
   // Scan Table CTA
-  scanTableCTA: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#E8F5E1', marginHorizontal: 16, marginTop: 16, borderRadius: 14, padding: 16, borderWidth: 2, borderColor: BK_GREEN },
+  scanTableCTA: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#EAF2DD', marginHorizontal: 16, marginTop: 16, borderRadius: 14, padding: 16, borderWidth: 2, borderColor: BK_GREEN },
   scanCtaLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
   scanCtaIconBg: { width: 44, height: 44, borderRadius: 12, backgroundColor: BK_GREEN, alignItems: 'center', justifyContent: 'center' },
   scanCtaTitle: { fontSize: 16, fontWeight: '800', color: BK_GREEN, textTransform: 'uppercase' },
-  scanCtaSub: { fontSize: 12, color: '#6DB84D', marginTop: 2 },
+  scanCtaSub: { fontSize: 12, color: '#5E9E4E', marginTop: 2 },
   
   // AI Meal Builder CTA
   mealBuilderCTA: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: BK_WHITE, marginHorizontal: 16, marginTop: 16, borderRadius: 14, padding: 16, borderWidth: 2, borderColor: BK_ORANGE, borderStyle: 'dashed' },
@@ -841,7 +873,7 @@ const styles = StyleSheet.create({
   ctaSub: { fontSize: 12, color: BK_TEXT_LIGHT, marginTop: 2 },
   
   // Schedule for Later CTA
-  scheduleCTA: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#E8F5E1', marginHorizontal: 16, marginTop: 12, borderRadius: 14, padding: 16, borderWidth: 2, borderColor: BK_GREEN },
+  scheduleCTA: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#EAF2DD', marginHorizontal: 16, marginTop: 12, borderRadius: 14, padding: 16, borderWidth: 2, borderColor: BK_GREEN },
   
   // Builder Card
   builderCard: { backgroundColor: BK_WHITE, marginHorizontal: 16, marginTop: 16, borderRadius: 16, padding: 18, borderWidth: 2, borderColor: BK_ORANGE },
@@ -850,59 +882,59 @@ const styles = StyleSheet.create({
   builderTitle: { fontSize: 18, fontWeight: '800', color: BK_BROWN, textTransform: 'uppercase' },
   builderLabel: { fontSize: 13, fontWeight: '800', color: BK_TEXT_LIGHT, marginBottom: 8, marginTop: 6, textTransform: 'uppercase', letterSpacing: 0.5 },
   dietRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-  dietChip: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 25, backgroundColor: BK_WHITE, borderWidth: 2, borderColor: '#E8DDD4' },
+  dietChip: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 25, backgroundColor: BK_WHITE, borderWidth: 2, borderColor: '#E6E1D4' },
   dietText: { fontSize: 13, fontWeight: '700', color: BK_TEXT_LIGHT },
   vegIndicator: { width: 14, height: 14, borderRadius: 2, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   vegDotInner: { width: 7, height: 7, borderRadius: 4 },
   goalContainer: { marginBottom: 8 },
   goalRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-  goalChip: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 12, borderRadius: 25, backgroundColor: BK_WHITE, borderWidth: 2, borderColor: '#E8DDD4' },
+  goalChip: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 12, borderRadius: 25, backgroundColor: BK_WHITE, borderWidth: 2, borderColor: '#E6E1D4' },
   goalText: { fontSize: 11, fontWeight: '700', color: BK_TEXT_LIGHT },
-  budgetInput: { backgroundColor: BK_CREAM, borderRadius: 12, padding: 14, color: BK_BROWN, fontSize: 15, fontWeight: '600', borderWidth: 2, borderColor: '#E8DDD4', marginBottom: 14 },
+  budgetInput: { backgroundColor: BK_CREAM, borderRadius: 12, padding: 14, color: BK_BROWN, fontSize: 15, fontWeight: '600', borderWidth: 2, borderColor: '#E6E1D4', marginBottom: 14 },
   buildBtn: { backgroundColor: BK_RED, borderRadius: 25, paddingVertical: 16, alignItems: 'center', justifyContent: 'center' },
   buildBtnContent: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  buildBtnText: { color: BK_CREAM, fontSize: 15, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
+  buildBtnText: { color: FUEL.lime, fontSize: 15, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
   
   // Meal Result
-  mealResultCard: { backgroundColor: BK_WHITE, marginHorizontal: 16, marginTop: 16, borderRadius: 16, padding: 16, borderWidth: 2, borderColor: '#E8DDD4' },
+  mealResultCard: { backgroundColor: BK_WHITE, marginHorizontal: 16, marginTop: 16, borderRadius: 16, padding: 16, borderWidth: 2, borderColor: '#E6E1D4' },
   mealResultHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   mealResultTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   mealResultTitle: { fontSize: 18, fontWeight: '800', color: BK_BROWN, textTransform: 'uppercase' },
-  rebuildBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FFF0E0', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+  rebuildBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F2EEE0', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
   rebuildText: { fontSize: 12, fontWeight: '800', color: BK_ORANGE },
   mealSummary: { color: BK_TEXT_LIGHT, fontSize: 13, lineHeight: 19, marginBottom: 12 },
   warningsContainer: { marginBottom: 12, gap: 8 },
   warningItem: {
     flexDirection: 'row',
-    backgroundColor: '#FFF3E0',
+    backgroundColor: '#F2EEE0',
     borderLeftWidth: 3,
-    borderLeftColor: '#FF9F0A',
+    borderLeftColor: '#D69A35',
     padding: 10,
     borderRadius: 8,
   },
   warningPositive: {
-    backgroundColor: '#E8F5E9',
-    borderLeftColor: '#509E2F',
+    backgroundColor: '#EAF2DD',
+    borderLeftColor: '#3FA34D',
   },
   warningCaution: {
-    backgroundColor: '#FDE8E4',
-    borderLeftColor: '#D62300',
+    backgroundColor: '#F1E7E1',
+    borderLeftColor: '#15140F',
   },
   warningText: {
     fontSize: 12,
-    color: '#8B6F61',
+    color: '#6B6A5E',
     lineHeight: 18,
     flex: 1,
   },
   warningTextPositive: {
-    color: '#509E2F',
+    color: '#3FA34D',
     fontWeight: '600',
   },
   warningTextCaution: {
-    color: '#D62300',
+    color: '#15140F',
     fontWeight: '600',
   },
-  mealItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#E8DDD4' },
+  mealItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#E6E1D4' },
   mealItemLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
   vegDot: { width: 16, height: 16, borderRadius: 2, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   vegDotFill: { width: 8, height: 8, borderRadius: 4 },
@@ -916,7 +948,7 @@ const styles = StyleSheet.create({
   totalItem: { alignItems: 'center' },
   totalLabel: { fontSize: 10, color: BK_TEXT_LIGHT, marginBottom: 3, textTransform: 'uppercase' },
   totalValue: { fontSize: 16, fontWeight: '800' },
-  totalPriceRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#E8DDD4', paddingTop: 10 },
+  totalPriceRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#E6E1D4', paddingTop: 10 },
   totalPriceLabel: { fontSize: 14, fontWeight: '600', color: BK_TEXT_LIGHT },
   totalPriceValue: { fontSize: 24, fontWeight: '800', color: BK_BROWN },
   orderMealBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: BK_RED, borderRadius: 25, paddingVertical: 16, marginTop: 14 },
@@ -934,7 +966,7 @@ const styles = StyleSheet.create({
     borderRadius: 18, 
     overflow: 'hidden', 
     borderWidth: 2, 
-    borderColor: '#E8DDD4',
+    borderColor: '#E6E1D4',
     shadowColor: BK_BROWN,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.15,

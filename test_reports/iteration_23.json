@@ -1,0 +1,56 @@
+{
+  "summary": "FUEL Phase 2 (skin-only) regression: backend Phase 1 suite (19/19) still PASSES — auth/OTP/JWT, B1 nutrition, B2 accepted-status flow, B3 duplicate guard, B5 prep-time, B6 BOGO/percentage/flat coupons, B4 AI smoke, C4 RBAC, and Socket.IO realtime (new_order, order_status to kitchen+user room, menu_update). Web-panel visual + interaction smoke confirms the FUEL theme is applied (sand canvas rgb(244,241,233), ink top-bar, lime active nav rgb(199,242,78), Hanken Grotesk body font, Anton uppercase headings via class, FUEL/CASHIER POS brand text), admin login lands on /admin, all 7 sidebar routes navigate, admin logout works, kitchen PIN 4321 -> /kitchen with LIVE badge visible, cashier PIN 5678 -> /cashier with POS+Orders+Tables all reachable, 16 seeded products listed plus the TEST_* products from prior runs. No console pageerrors. No leftover Burger-King red/orange/brown primary tokens in CSS/TSX (grep clean).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "CashierPOS offer banner",
+        "issues": [
+          "Offer cards on the POS render in tomato-red (#E23744). This is NOT a CSS regression — that hex is stored on each Offer document as `banner_color` (default in backend OfferCreate). It clashes visually with the FUEL palette (sand/ink/lime). Either (a) change the default banner_color on the model to FUEL ink (#15140F) or lime (#C7F24E), or (b) ignore offer.banner_color in CashierPOS.tsx line 347 and theme the offer card with FUEL tokens."
+        ]
+      }
+    ]
+  },
+  "passed_tests": [
+    "Backend pytest 19/19: A (OTP no-leak, wrong-attempts clear, happy-path, resend 429, admin env JWT), B1 nutrition persist+PUT+fallback, B2 status flow + invalid 400 + kitchen list, B3 duplicate 409 + confirm_duplicate bypass, B5 prep times, B6 BOGO=80 + percentage 10%=20 + flat=25, B4 AI smoke, C4 customer->/products 403, Socket.IO new_order+order_status+menu_update+wrong-path-rejected",
+    "curl: POST /api/auth/login admin -> token + role=admin (via /auth/me)",
+    "curl: GET /api/products returns 16 seeded items (19 with TEST_ products from prior run)",
+    "curl: POST /api/auth/otp/send body has no `otp`/`demo_otp` field — A1 enforced",
+    "curl: POST /api/auth/pin-login {pin:4321} -> role=kitchen, {pin:5678} -> role=cashier",
+    "curl: POST /api/products/single without admin token -> 403 (admin-only RBAC honored)",
+    "Web panel: admin@dietcafe.com / admin123 logs in via [data-testid='admin-login-btn'] and lands on /admin",
+    "Web panel: AdminLayout sidebar — nav-dashboard, nav-categories, nav-products, nav-orders, nav-kitchen-monitor, nav-offers, nav-tables all clickable + render; admin-logout-btn works",
+    "Web panel: KitchenLayout PIN 4321 -> /kitchen; nav-orders/nav-inventory work; live-status badge shows 'LIVE'",
+    "Web panel: CashierLayout PIN 5678 -> /cashier; nav-pos/nav-orders/nav-tables work; POS shows 19 products (16 seeded + TEST), 3 active offers, cart panel with subtotal/Total/Proceed-to-Payment",
+    "Visual: body bg rgb(244,241,233)=#F4F1E9 sand; active nav rgb(199,242,78)=#C7F24E lime; ink black top-bar; Anton 'CASHIER POS'/'ORDERS' uppercase headings; body font 'Hanken Grotesk'; brand text 'FUEL' (no 'Diet Cafe' on rendered surface)",
+    "Code grep: no #d62300/#e53935/#dc2626/#ef4444/#7c2d12/burger/brand-red residue in web-panel/src",
+    "No console pageerrors during any navigation; only React Router v7 future-flag warnings (benign)"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_fuel_phase1.py",
+    "/app/test_reports/pytest/fuel_phase2_skin.xml"
+  ],
+  "action_items": [
+    "(Cosmetic, optional) Change default Offer.banner_color from #E23744 to a FUEL token (#15140F ink, or #C7F24E lime with ink text) OR make CashierPOS ignore banner_color and use FUEL tokens — current red breaks the FUEL palette cohesion on the POS offers strip.",
+    "(Carry-over from iter 22, still open) Add [data-testid='live-status'] LIVE/OFFLINE badge to admin-side AdminKitchen.tsx (admins viewing Kitchen Monitor from sidebar still don't see realtime status; the badge is only on the kitchen-PIN-only route).",
+    "(Carry-over from iter 22, still open) AdminProducts edit modal: expose edit-cal/edit-protein/edit-carbs/edit-fat/edit-prep data-testids in both the single-product and ready-made edit branches."
+  ],
+  "critical_code_review_comments": [
+    "backend/server.py still 3800+ lines — recommend splitting by domain (auth, products, orders, offers, ai, sockets).",
+    "CashierPOS.tsx renders offer cards using inline style backgrounds from DB (`offer.banner_color || '#15140F'`). The DB default is tomato-red, defeating the FUEL skin on the POS. Move banner color out of DB or default to FUEL ink/lime.",
+    "App.css is now the FUEL token source-of-truth. Confirm no .tsx files still use raw hex from the old palette (grep clean during this run)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (19/19)", "frontend": "~95% (all flows + theme verified; one cosmetic mismatch on offers banner color)"},
+  "test_credentials": "Admin admin@dietcafe.com / admin123; Kitchen PIN 4321; Cashier PIN 5678 (per /app/memory/test_credentials.md)",
+  "seed_data_creation": "POST /api/seed run (returned 'already seeded'). Suite adds TEST_* products + offers each iteration; no teardown.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Phase 2 was a pure visual skin — no API/business-logic change. Backend regression suite /app/backend/tests/test_fuel_phase1.py is fully green. Two visual carry-over items from iter 22 remain (admin-kitchen live badge + edit-modal testids on ready-made products) — neither is a Phase-2 regression. Newly surfaced: offer banner_color default is still BK-red and is stored per offer in DB. Single-product POST takes 60-90s (AI image gen) — keep timeout>=120s. WebSocket tests must use polling transport on /api/socket.io.",
+  "rca of the issue": "Offer banner-color red on the FUEL POS: the field `banner_color` is persisted per Offer in MongoDB with default '#E23744' (set when offers were created in earlier iterations). CashierPOS.tsx line 347 reads this raw value as the inline background. Skin-only Phase 2 changed CSS tokens but cannot affect previously-persisted document fields. Mitigation: either patch existing offers in DB (e.g., UPDATE offers SET banner_color='#15140F' WHERE banner_color='#E23744') and change the OfferCreate default, OR have the POS map any non-FUEL hex back to a FUEL token before rendering."
+}

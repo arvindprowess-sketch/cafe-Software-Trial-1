@@ -9,13 +9,13 @@ import { useRouter } from 'expo-router';
 import { apiCall } from '../../utils/api';
 import { useRealtime } from '../../utils/realtime';
 
-const BK_RED = '#D62300';
-const BK_ORANGE = '#FF8732';
-const BK_BROWN = '#502314';
-const BK_CREAM = '#F5EBDC';
-const BK_GREEN = '#509E2F';
+const BK_RED = '#15140F';
+const BK_ORANGE = '#15140F';
+const BK_BROWN = '#15140F';
+const BK_CREAM = '#F4F1E9';
+const BK_GREEN = '#3FA34D';
 const BK_WHITE = '#FFFFFF';
-const BK_TEXT_LIGHT = '#8B6F61';
+const BK_TEXT_LIGHT = '#6B6A5E';
 
 export default function OrdersScreen() {
   const router = useRouter();
@@ -113,10 +113,10 @@ export default function OrdersScreen() {
       case 'completed': return BK_GREEN;
       case 'ready': return BK_GREEN;
       case 'pending': return BK_ORANGE;
-      case 'accepted': return '#2F6F8F';
+      case 'accepted': return '#5E97B8';
       case 'preparing': return BK_ORANGE;
       case 'cancelled': return BK_RED;
-      case 'scheduled': return '#FF9F0A';
+      case 'scheduled': return '#D69A35';
       default: return BK_TEXT_LIGHT;
     }
   };
@@ -397,12 +397,12 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     borderWidth: 2,
-    borderColor: '#E8DDD4',
+    borderColor: '#E6E1D4',
   },
   summaryItem: { flex: 1, alignItems: 'center' },
   summaryValue: { fontSize: 20, fontWeight: '800', color: BK_BROWN },
   summaryLabel: { fontSize: 11, color: BK_TEXT_LIGHT, marginTop: 4, textTransform: 'uppercase' },
-  summaryDivider: { width: 1, backgroundColor: '#E8DDD4', marginHorizontal: 8 },
+  summaryDivider: { width: 1, backgroundColor: '#E6E1D4', marginHorizontal: 8 },
   
   orderCard: {
     backgroundColor: BK_WHITE,
@@ -410,7 +410,7 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 12,
     borderWidth: 2,
-    borderColor: '#E8DDD4',
+    borderColor: '#E6E1D4',
   },
   orderHeader: {
     flexDirection: 'row',
@@ -426,7 +426,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: '#FDE8E4',
+    backgroundColor: '#F1E7E1',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -467,7 +467,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#E8DDD4',
+    borderTopColor: '#E6E1D4',
   },
   orderStats: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   statsText: { fontSize: 12, color: BK_TEXT_LIGHT },

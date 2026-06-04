@@ -7,13 +7,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { apiCall } from '../utils/api';
 
-const BK_RED = '#D62300';
-const BK_ORANGE = '#FF8732';
-const BK_BROWN = '#502314';
-const BK_CREAM = '#F5EBDC';
-const BK_GREEN = '#509E2F';
+const BK_RED = '#15140F';
+const BK_ORANGE = '#15140F';
+const BK_BROWN = '#15140F';
+const BK_CREAM = '#F4F1E9';
+const BK_GREEN = '#3FA34D';
 const BK_WHITE = '#FFFFFF';
-const BK_TEXT_LIGHT = '#8B6F61';
+const BK_TEXT_LIGHT = '#6B6A5E';
 
 export default function NutritionDetailScreen() {
   const router = useRouter();
@@ -186,7 +186,7 @@ export default function NutritionDetailScreen() {
             {[
               { label: 'Calories', consumed: consumed.calories || 0, goal: goals.daily_calories || 2000, color: BK_RED },
               { label: 'Protein', consumed: consumed.protein || 0, goal: goals.daily_protein || 150, color: BK_RED, unit: 'g' },
-              { label: 'Carbs', consumed: consumed.carbs || 0, goal: goals.daily_carbs || 200, color: '#FF9F0A', unit: 'g' },
+              { label: 'Carbs', consumed: consumed.carbs || 0, goal: goals.daily_carbs || 200, color: '#D69A35', unit: 'g' },
               { label: 'Fat', consumed: consumed.fat || 0, goal: goals.daily_fat || 60, color: BK_ORANGE, unit: 'g' }
             ].map(stat => (
               <View key={stat.label} style={styles.statBox}>
@@ -236,7 +236,7 @@ export default function NutritionDetailScreen() {
             {[
               { label: 'Calories', value: remaining.calories, icon: 'flame', color: BK_RED },
               { label: 'Protein', value: remaining.protein, icon: 'barbell', color: BK_RED, unit: 'g' },
-              { label: 'Carbs', value: remaining.carbs, icon: 'leaf', color: '#FF9F0A', unit: 'g' },
+              { label: 'Carbs', value: remaining.carbs, icon: 'leaf', color: '#D69A35', unit: 'g' },
               { label: 'Fat', value: remaining.fat, icon: 'water', color: BK_ORANGE, unit: 'g' }
             ].map(rem => (
               <View key={rem.label} style={styles.remainingBox}>
@@ -336,8 +336,8 @@ const styles = StyleSheet.create({
   backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(245,235,220,0.15)', alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 18, fontWeight: '800', color: BK_CREAM, textTransform: 'uppercase' },
   
-  summaryCard: { backgroundColor: BK_WHITE, margin: 16, borderRadius: 16, padding: 18, borderWidth: 2, borderColor: '#E8DDD4' },
-  card: { backgroundColor: BK_WHITE, marginHorizontal: 16, marginBottom: 16, borderRadius: 16, padding: 18, borderWidth: 2, borderColor: '#E8DDD4' },
+  summaryCard: { backgroundColor: BK_WHITE, margin: 16, borderRadius: 16, padding: 18, borderWidth: 2, borderColor: '#E6E1D4' },
+  card: { backgroundColor: BK_WHITE, marginHorizontal: 16, marginBottom: 16, borderRadius: 16, padding: 18, borderWidth: 2, borderColor: '#E6E1D4' },
   cardTitle: { fontSize: 18, fontWeight: '800', color: BK_BROWN, marginBottom: 14, textTransform: 'uppercase' },
   
   statsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
@@ -354,7 +354,7 @@ const styles = StyleSheet.create({
   itemRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },
   itemName: { flex: 1, fontSize: 13, color: BK_BROWN },
   itemCals: { fontSize: 13, fontWeight: '700', color: BK_RED },
-  mealTotal: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#E8DDD4' },
+  mealTotal: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#E6E1D4' },
   mealTotalLabel: { fontSize: 14, fontWeight: '700', color: BK_BROWN },
   mealTotalValue: { fontSize: 16, fontWeight: '800', color: BK_RED },
   
@@ -363,7 +363,7 @@ const styles = StyleSheet.create({
   remainingValue: { fontSize: 28, fontWeight: '800', color: BK_BROWN, marginTop: 8 },
   remainingLabel: { fontSize: 11, color: BK_TEXT_LIGHT, textTransform: 'uppercase', marginTop: 4 },
   
-  aiCard: { backgroundColor: '#FFF9F0', borderColor: BK_ORANGE },
+  aiCard: { backgroundColor: '#F7F4EC', borderColor: BK_ORANGE },
   aiHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
   aiSuggestion: { fontSize: 14, lineHeight: 22, color: BK_BROWN, marginBottom: 16 },
   aiLoading: { flexDirection: 'row', alignItems: 'center', gap: 12 },

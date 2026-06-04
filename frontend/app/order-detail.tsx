@@ -7,13 +7,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { apiCall } from '../utils/api';
 
-const BK_RED = '#D62300';
-const BK_ORANGE = '#FF8732';
-const BK_BROWN = '#502314';
-const BK_CREAM = '#F5EBDC';
-const BK_GREEN = '#509E2F';
+const BK_RED = '#15140F';
+const BK_ORANGE = '#15140F';
+const BK_BROWN = '#15140F';
+const BK_CREAM = '#F4F1E9';
+const BK_GREEN = '#3FA34D';
 const BK_WHITE = '#FFFFFF';
-const BK_TEXT_LIGHT = '#8B6F61';
+const BK_TEXT_LIGHT = '#6B6A5E';
 
 export default function OrderDetailScreen() {
   const router = useRouter();
@@ -40,11 +40,11 @@ export default function OrderDetailScreen() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'completed': return BK_GREEN;
-      case 'ready': return '#FF9F0A';
+      case 'ready': return '#D69A35';
       case 'preparing': return BK_ORANGE;
       case 'pending': return BK_RED;
       case 'cancelled': return '#888';
-      case 'scheduled': return '#5B5FE0';
+      case 'scheduled': return '#5E97B8';
       default: return BK_TEXT_LIGHT;
     }
   };
@@ -197,7 +197,7 @@ export default function OrderDetailScreen() {
                 <Text style={styles.nutritionLabel}>Protein</Text>
               </View>
               <View style={styles.nutritionItem}>
-                <Ionicons name="leaf" size={20} color="#FF9F0A" />
+                <Ionicons name="leaf" size={20} color="#D69A35" />
                 <Text style={styles.nutritionValue}>{Math.round(order.total_carbs || 0)}g</Text>
                 <Text style={styles.nutritionLabel}>Carbs</Text>
               </View>
@@ -381,7 +381,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 18,
     borderWidth: 2,
-    borderColor: '#E8DDD4',
+    borderColor: '#E6E1D4',
   },
   orderIdRow: {
     flexDirection: 'row',
@@ -408,7 +408,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#FDE8E4',
+    backgroundColor: '#F1E7E1',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 20,
@@ -418,7 +418,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#E8F5E1',
+    backgroundColor: '#EAF2DD',
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 20,
@@ -431,7 +431,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     borderWidth: 2,
-    borderColor: '#E8DDD4',
+    borderColor: '#E6E1D4',
   },
   itemRow: {
     flexDirection: 'row',
@@ -439,7 +439,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#E8DDD4',
+    borderBottomColor: '#E6E1D4',
   },
   itemLeft: { flexDirection: 'row', gap: 12, flex: 1 },
   dietDot: { 
@@ -465,7 +465,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     borderWidth: 2,
-    borderColor: '#E8DDD4',
+    borderColor: '#E6E1D4',
   },
   nutritionGrid: {
     flexDirection: 'row',
@@ -481,7 +481,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 18,
     borderWidth: 2,
-    borderColor: '#E8DDD4',
+    borderColor: '#E6E1D4',
   },
   invoiceRow: {
     flexDirection: 'row',
@@ -499,7 +499,7 @@ const styles = StyleSheet.create({
   },
   taxHeader: { fontSize: 13, fontWeight: '700', color: BK_BROWN, marginBottom: 8 },
   taxLabel: { fontSize: 13, color: BK_TEXT_LIGHT, paddingLeft: 12 },
-  divider: { height: 1, backgroundColor: '#E8DDD4', marginVertical: 8 },
+  divider: { height: 1, backgroundColor: '#E6E1D4', marginVertical: 8 },
   totalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -515,7 +515,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#E8DDD4',
+    borderTopColor: '#E6E1D4',
   },
   paymentStatusText: { fontSize: 13, fontWeight: '700' },
   
@@ -525,7 +525,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     borderWidth: 2,
-    borderColor: '#E8DDD4',
+    borderColor: '#E6E1D4',
   },
   infoRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
   infoText: { fontSize: 14, color: BK_BROWN, fontWeight: '600' },
@@ -535,7 +535,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 16,
     borderTopWidth: 2,
-    borderTopColor: '#E8DDD4',
+    borderTopColor: '#E6E1D4',
   },
   reorderBtn: {
     flexDirection: 'row',
