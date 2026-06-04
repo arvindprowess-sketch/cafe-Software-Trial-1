@@ -7,6 +7,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { apiCall } from '../utils/api';
+import { useCart } from '../utils/CartContext';
+import CartPill from './components/CartPill';
 
 const Z_RED = '#15140F';
 const PURPLE = '#15140F';
@@ -49,22 +51,32 @@ export default function AIChatScreen() {
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const { items: cart, addMeal, removeItem, subtotal, calories: cartCalories, protein: cartProtein, count: cartCount } = useCart();
   const [budget, setBudget] = useState(params.budget?.toString() || '200');
   const [goal, setGoal] = useState(params.goal?.toString() || 'maintenance');
   const [dietPref, setDietPref] = useState(params.diet?.toString() || 'both');
 
-  // Calculate cart totals
-  const cartTotal = cart.reduce((sum, item) => {
-    const f = item.grams / 100;
-    return {
-      price: sum.price + f * item.cost_per_100g,
-      protein: sum.protein + f * item.protein_per_100g,
-      calories: sum.calories + f * item.calories_per_100g,
-    };
-  }, { price: 0, protein: 0, calories: 0 });
+  const cartTotal = { price: subtotal, calories: cartCalories, protein: cartProtein };
+  const remaining = parseFloat(budget || '0') - subtotal;
 
-  const remaining = parseFloat(budget) - cartTotal.price;
+  // Add an AI-suggested meal (with the EXACT grams/portions the AI specified) to the shared cart.
+  const addSuggestionToCart = (addItems: any[]) => {
+    if (!Array.isArray(addItems) || addItems.length === 0) return;
+    addMeal(addItems.map((item: any) => ({
+      id: item.product_id || item.id,
+      product_id: item.product_id || item.id,
+      name: item.name || item.product_name,
+      product_type: 'single',
+      grams: item.grams || 100,
+      cost_per_100g: item.cost_per_100g || 0,
+      calories_per_100g: item.calories_per_100g ?? item.calories ?? 0,
+      protein_per_100g: item.protein_per_100g ?? item.protein ?? 0,
+      carbs_per_100g: item.carbs_per_100g ?? item.carbs ?? 0,
+      fat_per_100g: item.fat_per_100g ?? item.fat ?? 0,
+      diet_type: item.diet_type || 'veg',
+      image_url: item.image_url,
+    })));
+  };
 
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
@@ -103,50 +115,10 @@ export default function AIChatScreen() {
       
       setMessages(prev => [...prev, aiMsg]);
 
-      // Handle actions
-      if (result.actions) {
-        if (result.actions.add && Array.isArray(result.actions.add)) {
-          // Add items to cart with proper structure
-          setCart(prev => {
-            const newCart = [...prev];
-            result.actions.add.forEach((item: any) => {
-              // Normalize item structure - ensure all required fields
-              const normalizedItem: CartItem = {
-                id: item.product_id || item.id,
-                product_id: item.product_id || item.id,
-                name: item.name || item.product_name,
-                grams: item.grams || 100,
-                cost_per_100g: item.cost_per_100g || 0,
-                calories_per_100g: item.calories_per_100g || item.calories || 0,
-                protein_per_100g: item.protein_per_100g || item.protein || 0,
-                carbs_per_100g: item.carbs_per_100g || item.carbs || 0,
-                fat_per_100g: item.fat_per_100g || item.fat || 0,
-                diet_type: item.diet_type || 'veg',
-                image_url: item.image_url,
-              };
-              
-              const existingIdx = newCart.findIndex(c => 
-                c.name === normalizedItem.name || 
-                c.product_id === normalizedItem.product_id
-              );
-              
-              if (existingIdx >= 0) {
-                newCart[existingIdx].grams += normalizedItem.grams;
-              } else {
-                newCart.push(normalizedItem);
-              }
-            });
-            return newCart;
-          });
-        }
-        
-        if (result.actions.action === 'checkout') {
-          // Navigate to checkout
-          router.push({
-            pathname: '/customize',
-            params: { cart: JSON.stringify(cart), orderType: 'dine-in' }
-          });
-        }
+      // AI suggestions are shown with an explicit "Add" button per message (see renderer).
+      // We do NOT auto-add. Only honor an explicit checkout intent → unified cart.
+      if (result.actions?.action === 'checkout') {
+        router.push('/cart');
       }
     } catch (e: any) {
       const errMsg: Message = {
@@ -163,9 +135,7 @@ export default function AIChatScreen() {
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
   };
 
-  const removeFromCart = (index: number) => {
-    setCart(prev => prev.filter((_, i) => i !== index));
-  };
+  const removeFromCart = (id?: string) => { if (id) removeItem(id); };
 
   const quickPrompts = [
     "Build me a high protein meal under ₹150",
@@ -231,11 +201,11 @@ export default function AIChatScreen() {
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             {cart.map((item, i) => (
-              <View key={i} style={styles.cartChip}>
+              <View key={item.id || i} style={styles.cartChip}>
                 <View style={[styles.vegDot, { backgroundColor: item.diet_type === 'non-veg' ? Z_RED : GREEN }]} />
                 <Text style={styles.cartChipName}>{item.name}</Text>
                 <Text style={styles.cartChipGrams}>{item.grams}g</Text>
-                <TouchableOpacity onPress={() => removeFromCart(i)}>
+                <TouchableOpacity onPress={() => removeFromCart(item.id)}>
                   <Ionicons name="close-circle" size={18} color="#D0D0D0" />
                 </TouchableOpacity>
               </View>
@@ -269,16 +239,25 @@ export default function AIChatScreen() {
               <View style={[styles.msgBubble, msg.isUser ? styles.userBubble : styles.aiBubble]}>
                 <Text style={[styles.msgText, msg.isUser && { color: '#FFF' }]}>{msg.text}</Text>
                 
-                {/* Show add buttons for AI suggestions */}
-                {msg.actions?.add && (
+                {/* Explicit Add button under each AI meal suggestion */}
+                {msg.actions?.add && msg.actions.add.length > 0 && (
                   <View style={styles.actionButtons}>
-                    <Text style={styles.actionLabel}>Added to cart:</Text>
+                    <Text style={styles.actionLabel}>Suggested meal</Text>
                     {msg.actions.add.map((item: any, i: number) => (
                       <View key={i} style={styles.addedItem}>
-                        <Ionicons name="checkmark-circle" size={16} color={GREEN} />
-                        <Text style={styles.addedItemText}>{item.name} ({item.grams}g) - ₹{Math.round(item.price)}</Text>
+                        <View style={[styles.vegDot, { backgroundColor: item.diet_type === 'non-veg' ? Z_RED : GREEN }]} />
+                        <Text style={styles.addedItemText}>{item.name} · {item.grams}g · ₹{Math.round(item.price || 0)}</Text>
                       </View>
                     ))}
+                    <TouchableOpacity
+                      testID={`ai-add-meal-${msg.id}`}
+                      style={styles.aiAddBtn}
+                      onPress={() => addSuggestionToCart(msg.actions.add)}
+                      activeOpacity={0.85}
+                    >
+                      <Ionicons name="add-circle" size={18} color="#15140F" />
+                      <Text style={styles.aiAddText}>Add to cart</Text>
+                    </TouchableOpacity>
                   </View>
                 )}
               </View>
@@ -333,54 +312,19 @@ export default function AIChatScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Checkout Button */}
-        {cart.length > 0 && (
+        {/* Checkout Button → unified cart */}
+        {cartCount > 0 && (
           <TouchableOpacity 
+            testID="ai-view-cart-btn"
             style={styles.checkoutBtn}
-            onPress={() => {
-              try {
-                console.log('[AI Chat] Checkout clicked with cart items:', cart.length);
-                // Clean cart data - only include necessary fields
-                // IMPORTANT: Exclude image_url to prevent URL being too large with base64 data
-                const cleanCart = cart.map(item => ({
-                  id: item.id || item.product_id,
-                  product_id: item.product_id || item.id,
-                  name: item.name,
-                  grams: item.grams,
-                  cost_per_100g: item.cost_per_100g,
-                  calories_per_100g: item.calories_per_100g,
-                  protein_per_100g: item.protein_per_100g,
-                  carbs_per_100g: item.carbs_per_100g || 0,
-                  fat_per_100g: item.fat_per_100g || 0,
-                  diet_type: item.diet_type || 'veg',
-                  // Exclude image_url - it contains huge base64 data
-                  product_type: 'single'
-                }));
-                
-                console.log('[AI Chat] Clean cart items:', cleanCart.length);
-                const cartString = JSON.stringify(cleanCart);
-                console.log('[AI Chat] Cart string length:', cartString.length);
-                
-                router.push({
-                  pathname: '/customize',
-                  params: { 
-                    cart: cartString, 
-                    orderType: 'dine-in' 
-                  }
-                });
-                console.log('[AI Chat] Navigation triggered');
-              } catch (error) {
-                console.error('[AI Chat] Error during checkout:', error);
-                Alert.alert('Error', 'Failed to proceed to checkout. Please try again.');
-              }
-            }}
+            onPress={() => router.push('/cart')}
           >
             <View style={styles.checkoutLeft}>
               <Text style={styles.checkoutTotal}>₹{Math.round(cartTotal.price)}</Text>
               <Text style={styles.checkoutItems}>{cart.length} items • {Math.round(cartTotal.calories)} cal</Text>
             </View>
             <View style={styles.checkoutRight}>
-              <Text style={styles.checkoutText}>Place Order</Text>
+              <Text style={styles.checkoutText}>View Cart</Text>
               <Ionicons name="arrow-forward" size={20} color="#FFF" />
             </View>
           </TouchableOpacity>
@@ -441,6 +385,8 @@ const styles = StyleSheet.create({
   actionLabel: { fontSize: 11, color: GREEN, fontWeight: '600', marginBottom: 6 },
   addedItem: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
   addedItemText: { fontSize: 12, color: '#15140F' },
+  aiAddBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#D9F26E', borderRadius: 12, paddingVertical: 10, marginTop: 8 },
+  aiAddText: { fontSize: 13, fontWeight: '800', color: '#15140F', textTransform: 'uppercase', letterSpacing: 0.3 },
   
   // Quick prompts
   quickPrompts: { marginTop: 10, padding: 12, backgroundColor: '#FFF', borderRadius: 12, borderWidth: 1, borderColor: '#E6E1D4' },

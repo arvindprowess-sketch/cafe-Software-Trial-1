@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { apiCall } from '../utils/api';
+import { useCart } from '../utils/CartContext';
 import { GOALS as FUEL_GOALS } from '../utils/theme';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -30,6 +31,7 @@ const DIETS = [
 
 export default function ComboBuilderScreen() {
   const router = useRouter();
+  const { addMeal } = useCart();
   const [step, setStep] = useState(0);
   const [budget, setBudget] = useState(200);
   const [goal, setGoal] = useState('muscle_gain');
@@ -114,18 +116,9 @@ export default function ComboBuilderScreen() {
       }));
       
       console.log('[Combo Builder] Normalized cart items:', cart.length);
-      const cartString = JSON.stringify(cart);
-      console.log('[Combo Builder] Cart string length:', cartString.length);
-      
-      router.push({ 
-        pathname: '/customize', 
-        params: { 
-          cart: cartString, 
-          orderType: 'dine-in',
-          goal,
-          budget: String(budget),
-        } 
-      });
+      // CORE RULE: AI combo goes to the shared CART (no direct order).
+      addMeal(cart);
+      router.push('/cart');
       console.log('[Combo Builder] Navigation triggered to customize screen');
     } catch (error) {
       console.error('[Combo Builder] Error during order:', error);

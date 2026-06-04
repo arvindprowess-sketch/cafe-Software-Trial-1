@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { apiCall } from '../utils/api';
+import { useCart } from '../utils/CartContext';
 import { FUEL, FONT, getGoal } from '../utils/theme';
 
 const Z_RED = '#15140F';
@@ -13,6 +14,7 @@ const GREEN = '#3FA34D';
 
 export default function SmartFillScreen() {
   const router = useRouter();
+  const { addMeal } = useCart();
   const params = useLocalSearchParams();
 
   const budget = (params.budget as string) || '200';
@@ -88,8 +90,9 @@ export default function SmartFillScreen() {
       product_type: 'single',
       category: item.category || '',
     }));
-    // Carry goal + budget so checkout doesn't re-ask (FIX 3).
-    router.push({ pathname: '/customize', params: { cart: JSON.stringify(cart), orderType, goal, budget } });
+    // CORE RULE: Smart Fill meal goes to the shared CART (no direct order).
+    addMeal(cart);
+    router.push('/cart');
   };
 
   return (

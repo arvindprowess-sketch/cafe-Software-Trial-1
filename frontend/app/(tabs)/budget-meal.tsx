@@ -22,10 +22,8 @@ export default function BudgetMealScreen() {
   const [goal, setGoal] = useState('maintenance');
   const [dietPref, setDietPref] = useState('both');
   const [cart, setCart] = useState<any[]>([]);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiSuggestions, setAiSuggestions] = useState<any[]>([]);
-  const [lastAiDietPref, setLastAiDietPref] = useState<string>(''); // Track diet pref used for AI call
   const [orderType, setOrderType] = useState('dine-in');
+  const { addMeal } = useCart();
   const [userGoals, setUserGoals] = useState<any>({ daily_calories: 2000 });
   const [consumedToday, setConsumedToday] = useState(0);
   const [userOrderHistory, setUserOrderHistory] = useState<any[]>([]);
@@ -153,10 +151,9 @@ export default function BudgetMealScreen() {
       Alert.alert('Empty Cart', 'Add some items first!');
       return;
     }
-    router.push({
-      pathname: '/customize',
-      params: { cart: JSON.stringify(cart), orderType, goal, budget }
-    });
+    // CORE RULE: build-your-own goes to the shared CART (not direct to pay).
+    addMeal(cart.map((c: any) => ({ ...c, product_type: c.product_type || 'single' })));
+    router.push('/cart');
   };
 
   // What can fit in remaining budget

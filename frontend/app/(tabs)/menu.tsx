@@ -11,6 +11,8 @@ import SideDrawer from '../components/SideDrawer';
 import { getStoredUser } from '../../utils/api';
 import { useRealtime } from '../../utils/realtime';
 import { FUEL, FONT } from '../../utils/theme';
+import { useCart } from '../../utils/CartContext';
+import CartPill from '../components/CartPill';
 
 // BK Design System Colors
 const BK_RED = '#15140F';
@@ -38,7 +40,7 @@ export default function MenuScreen() {
   const params = useLocalSearchParams();
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>(DEFAULT_CATS);
-  const [cart, setCart] = useState<any[]>([]);
+  const { addItem, incItem, decItem, getItem, count: cartCount, subtotal: cartSubtotal } = useCart();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [orderType, setOrderType] = useState('dine-in');
@@ -85,43 +87,9 @@ export default function MenuScreen() {
   });
   const onRefresh = async () => { setRefreshing(true); await loadProducts(); setRefreshing(false); };
 
-  // Add to cart
-  const addToCart = (product: any) => {
-    if (product.product_type === 'ready_made') {
-      const exists = cart.find(c => c.id === product.id);
-      if (exists) {
-        setCart(cart.map(c => c.id === product.id ? { ...c, quantity: c.quantity + 1 } : c));
-      } else {
-        setCart([...cart, { ...product, quantity: 1, grams: product.serving_grams || 300 }]);
-      }
-    } else {
-      const exists = cart.find(c => c.id === product.id);
-      if (exists) setCart(cart.map(c => c.id === product.id ? { ...c, grams: c.grams + 100 } : c));
-      else setCart([...cart, { ...product, grams: 100, quantity: 1 }]);
-    }
-  };
-  
-  const updateQty = (id: string, delta: number, isReadyMade: boolean = false) => {
-    setCart(cart.map(c => {
-      if (c.id !== id) return c;
-      if (isReadyMade) {
-        const newQty = (c.quantity || 1) + delta;
-        return newQty > 0 ? { ...c, quantity: newQty, grams: (c.serving_grams || 300) * newQty } : c;
-      } else {
-        const newG = c.grams + delta;
-        return newG > 0 ? { ...c, grams: newG } : c;
-      }
-    }).filter(c => c.grams > 0 || (c.quantity || 0) > 0));
-  };
-
-  const cartTotal = cart.reduce((s, i) => {
-    if (i.product_type === 'ready_made') {
-      const price = i.fixed_price || (i.cost_per_100g * (i.serving_grams || 300) / 100);
-      return s + price * (i.quantity || 1);
-    }
-    return s + (i.grams / 100) * i.cost_per_100g;
-  }, 0);
-  const cartItems = cart.length;
+  // Add to cart now goes through the shared CartContext (one cart app-wide).
+  // addItem(product) handles single (+100g) vs ready-made (+1 plate);
+  // incItem/decItem drive the stepper.
 
   // Filter products (memoized for performance)
   const filtered = useMemo(() => {
@@ -152,15 +120,8 @@ export default function MenuScreen() {
   }, [products, search, dietFilter, selectedCat]);
 
   const goCustomize = () => {
-    if (cart.length === 0) { Alert.alert('Empty Cart', 'Add items first'); return; }
-    
-    // Remove image data to prevent navigation crash
-    const cleanedCart = cart.map(item => {
-      const { image_url, ...itemWithoutImage } = item;
-      return itemWithoutImage;
-    });
-    
-    router.push({ pathname: '/customize', params: { cart: JSON.stringify(cleanedCart), orderType } });
+    if (cartCount === 0) { Alert.alert('Empty Cart', 'Add items first'); return; }
+    router.push('/cart');
   };
 
   // Render left sidebar category card
@@ -198,7 +159,7 @@ export default function MenuScreen() {
 
   // Render product card (ENHANCED)
   const renderProduct = ({ item }: { item: any }) => {
-    const inCart = cart.find(c => c.id === item.id);
+    const inCart = getItem(item.id);
     const isReadyMade = item.product_type === 'ready_made';
     const displayPrice = isReadyMade 
       ? (item.fixed_price || Math.round(item.cost_per_100g * (item.serving_grams || 300) / 100))
@@ -276,16 +237,16 @@ export default function MenuScreen() {
             
             {inCart ? (
               <View style={[styles.qtyBox, isReadyMade && { backgroundColor: PURPLE }]}>
-                <TouchableOpacity testID={`minus-${item.id}`} style={styles.qtyBtn} onPress={() => updateQty(item.id, isReadyMade ? -1 : -50, isReadyMade)}>
+                <TouchableOpacity testID={`minus-${item.id}`} style={styles.qtyBtn} onPress={() => decItem(item.id)}>
                   <Ionicons name="remove" size={14} color="#FFF" />
                 </TouchableOpacity>
                 <Text style={styles.qtyText}>{isReadyMade ? inCart.quantity : `${inCart.grams}g`}</Text>
-                <TouchableOpacity testID={`plus-${item.id}`} style={styles.qtyBtn} onPress={() => updateQty(item.id, isReadyMade ? 1 : 50, isReadyMade)}>
+                <TouchableOpacity testID={`plus-${item.id}`} style={styles.qtyBtn} onPress={() => incItem(item.id)}>
                   <Ionicons name="add" size={14} color="#FFF" />
                 </TouchableOpacity>
               </View>
             ) : (
-              <TouchableOpacity testID={`add-${item.id}`} style={styles.addBtn} onPress={() => addToCart(item)}>
+              <TouchableOpacity testID={`add-${item.id}`} style={styles.addBtn} onPress={() => addItem(item)}>
                 <Text style={styles.addBtnText}>Add +</Text>
               </TouchableOpacity>
             )}
@@ -396,11 +357,11 @@ export default function MenuScreen() {
       </View>
 
       {/* Cart Bar */}
-      {cart.length > 0 && (
+      {cartCount > 0 && (
         <TouchableOpacity testID="customize-btn" style={styles.cartBar} onPress={goCustomize} activeOpacity={0.95}>
           <View>
-            <Text style={styles.cartItems}>{cartItems} item{cartItems > 1 ? 's' : ''}</Text>
-            <Text style={styles.cartTotal}>₹{Math.round(cartTotal)}</Text>
+            <Text style={styles.cartItems}>{cartCount} item{cartCount > 1 ? 's' : ''}</Text>
+            <Text style={styles.cartTotal}>₹{Math.round(cartSubtotal)}</Text>
           </View>
           <View style={styles.cartRight}>
             <Text style={styles.cartAction}>View Cart</Text>

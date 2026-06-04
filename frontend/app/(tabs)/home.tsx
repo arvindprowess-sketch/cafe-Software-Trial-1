@@ -5,11 +5,13 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiCall, getStoredUser } from '../../utils/api';
 import SideDrawer from '../components/SideDrawer';
+import CartPill from '../components/CartPill';
+import { useCart } from '../../utils/CartContext';
 import { FUEL, FONT, GOALS as FUEL_GOALS } from '../../utils/theme';
 
 // BK Design System Colors
@@ -38,6 +40,7 @@ const MENU_CATEGORIES = [
 
 export default function HomeScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const [user, setUser] = useState<any>(null);
   const [summary, setSummary] = useState<any>(null);
   const [products, setProducts] = useState<any[]>([]);
@@ -59,6 +62,7 @@ export default function HomeScreen() {
   const [locating, setLocating] = useState(false);
   const [manualAddress, setManualAddress] = useState('');
   const [locationError, setLocationError] = useState('');
+  const cartCtx = useCart();
 
   // AI Quick Meal Builder state
   const [showMealBuilder, setShowMealBuilder] = useState(false);
@@ -85,6 +89,9 @@ export default function HomeScreen() {
   useEffect(() => {
     AsyncStorage.getItem('delivery_address').then(a => { if (a) setDeliveryAddress(a); }).catch(() => {});
   }, []);
+  useEffect(() => {
+    if (params.openAi) { setShowMealBuilder(true); }
+  }, [params.openAi]);
   useEffect(() => {
     if (banners.length <= 1) return;
     const timer = setInterval(() => {
@@ -124,15 +131,16 @@ export default function HomeScreen() {
 
   const orderAiMeal = () => {
     if (!aiMeal?.meal_items?.length) return;
-    const cart = aiMeal.meal_items.map((item: any) => ({
-      id: item.product_id, name: item.product_name, grams: item.grams,
+    // CORE RULE: AI meal goes into the shared CART (no direct order).
+    cartCtx.addMeal(aiMeal.meal_items.map((item: any) => ({
+      id: item.product_id, product_id: item.product_id, name: item.product_name,
+      grams: item.grams, product_type: 'single',
       cost_per_100g: item.cost_per_100g, calories_per_100g: item.calories_per_100g,
       protein_per_100g: item.protein_per_100g, carbs_per_100g: item.carbs_per_100g,
       fat_per_100g: item.fat_per_100g, category: item.category,
       diet_type: item.diet_type, image_url: item.image_url,
-    }));
-    // FIX 3: carry the goal + budget the user already chose so checkout doesn't re-ask.
-    router.push({ pathname: '/customize', params: { cart: JSON.stringify(cart), orderType, goal: mealGoal, budget: mealBudget } });
+    })));
+    router.push('/cart');
   };
 
   // ===== FIX 1: Delivery location detection (expo-location) + manual fallback =====
@@ -689,9 +697,20 @@ export default function HomeScreen() {
                   <Text style={styles.popularDesc} numberOfLines={1}>{item.description || item.category}</Text>
                   <View style={styles.popularBottom}>
                     <Text style={styles.popularPrice}>₹{item.cost_per_100g}<Text style={styles.per100}>/100g</Text></Text>
-                    <TouchableOpacity style={styles.addBtn} onPress={() => router.push('/(tabs)/menu')}>
-                      <Text style={styles.addBtnText}>Add +</Text>
-                    </TouchableOpacity>
+                    {(() => {
+                      const ci = cartCtx.getItem(item.id);
+                      return ci ? (
+                        <View style={styles.popQtyBox}>
+                          <TouchableOpacity testID={`popular-dec-${item.id}`} style={styles.popQtyBtn} onPress={() => cartCtx.decItem(item.id)}><Ionicons name="remove" size={13} color="#FFF" /></TouchableOpacity>
+                          <Text style={styles.popQtyText}>{ci.grams}g</Text>
+                          <TouchableOpacity testID={`popular-inc-${item.id}`} style={styles.popQtyBtn} onPress={() => cartCtx.incItem(item.id)}><Ionicons name="add" size={13} color="#FFF" /></TouchableOpacity>
+                        </View>
+                      ) : (
+                        <TouchableOpacity testID={`popular-add-${item.id}`} style={styles.addBtn} onPress={() => cartCtx.addItem(item)}>
+                          <Text style={styles.addBtnText}>Add +</Text>
+                        </TouchableOpacity>
+                      );
+                    })()}
                   </View>
                 </View>
               </TouchableOpacity>
@@ -704,7 +723,7 @@ export default function HomeScreen() {
 
       {/* Floating AI Chat Button */}
       <TouchableOpacity 
-        style={styles.floatingAiBtn}
+        style={[styles.floatingAiBtn, cartCtx.count > 0 && { bottom: 150 }]}
         onPress={() => router.push('/ai-chat')}
         activeOpacity={0.9}
         testID="floating-ai-chat-btn"
@@ -773,6 +792,7 @@ export default function HomeScreen() {
           </View>
         </View>
       </Modal>
+      <CartPill bottom={80} />
     </SafeAreaView>
   );
 }
@@ -1126,6 +1146,9 @@ const styles = StyleSheet.create({
   popularBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 },
   popularPrice: { fontSize: 18, fontWeight: '800', color: BK_BROWN },
   per100: { fontSize: 10, fontWeight: '400', color: BK_TEXT_LIGHT },
+  popQtyBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: BK_RED, borderRadius: 20, paddingHorizontal: 4 },
+  popQtyBtn: { paddingHorizontal: 6, paddingVertical: 7 },
+  popQtyText: { color: BK_CREAM, fontSize: 12, fontWeight: '800', minWidth: 34, textAlign: 'center' },
   addBtn: { backgroundColor: BK_RED, paddingHorizontal: 20, paddingVertical: 9, borderRadius: 20 },
   addBtnText: { color: BK_CREAM, fontSize: 13, fontWeight: '800', textTransform: 'uppercase' },
   

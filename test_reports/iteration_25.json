@@ -1,0 +1,49 @@
+{
+  "summary": "Round-3 unified-cart end-to-end testing on FUEL mobile (/mobile/). Login, Menu add-stepper + 'View Cart' bar, unified /cart page (macros, order-type toggles, bill, coupon, schedule, GST, tip, address/table, place-order), Home popular-add + cart-pill, AI-Picks inline builder → /cart, Reorder → /cart, and Place Order → /order-detail are ALL working. ONE clear spec gap: AI Diet Assistant chat (/ai-chat) does NOT render per-suggestion 'Add to cart' buttons (no ai-add-meal-<id> in DOM) even though the AI returns a structured combo with prices/grams — so the AI-chat → shared-cart path is broken. The /budget-meal and /smart-fill direct routes also render blank when accessed directly (have to enter via BUILD bottom-nav, which itself was not click-targetable in headless because the visible BUILD label is a non-touch <div> in the tab bar — needs a clickable wrapper with proper testID like 'tab-build').",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "ai-chat.tsx", "issue": "AI replies with a structured meal suggestion (e.g. 'Soya Chunks 100g (₹12) + Dal 200g... = ₹108') but no per-suggestion 'Add to cart' button (data-testid='ai-add-meal-<id>') is rendered. The ai-view-cart-btn also never appears because no items get added from chat. This breaks the spec requirement: 'AI DIET ASSISTANT ADD' / 'BUILD/SMART FILL/COMBO → CART'.", "selector": "[data-testid^='ai-add-meal-']", "priority": "HIGH"},
+      {"component": "Bottom tab bar (BUILD tab)", "issue": "Clicking the BUILD label in the bottom nav does NOT navigate to the Budget/Smart-Fill builder screen — the rendered BUILD label is a 28x12 non-touch <div> sitting above the actual touch target. Also no testID like 'tab-build' is exposed on the touchable wrapper. Real users may still hit it via the larger touch target, but headless click on the visible label lands on the previous route (/orders). Direct nav to /budget-meal and /smart-fill returns BLANK content (route not registered at top level — must be reached via the (tabs) layout).", "selector": "tab bar BUILD button", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [
+      {"flow": "AI chat → shared cart", "issue": "Without ai-add-meal-<id> buttons there is no UI path from the AI chat into the unified cart from this surface. Cart still works for all other entry points (Menu add, Home popular-add, AI-Picks Order This Meal, Reorder).", "affected_selectors": ["[data-testid^='ai-add-meal-']", "[data-testid='ai-view-cart-btn']"]}
+    ],
+    "design_issues": []
+  },
+  "passed_tests": [
+    "LOGIN: phone 9888812345 → Demo OTP read from screen → OTP verified → /mobile/home",
+    "MENU add stepper: add-<id> on 2 items → DOM swaps to minus-<id> + qty + plus-<id>; bottom 'View Cart' bar (customize-btn) shows '2 items  ₹80  VIEW CART' and on tap navigates to /mobile/cart",
+    "CART page selectors all present: cart-macros (385 kcal · 47g P · 5g C · 19g F), ordertype-dine-in/takeaway/delivery, cart-inc-<id>/cart-dec-<id>/cart-remove-<id>, addon-add-<id> x10 (Forgot something? Add more carousel), coupon-input + apply-coupon-btn, bill-card with Item total / To Pay, place-order-btn",
+    "ORDER TYPE conditionals: DELIVERY → cart-delivery-address + tip-10/20/30/50/tip-custom + 'Delivery' line in bill all appear; DINE-IN → cart-table-number appears, address+tips hidden; TAKEAWAY → no address, no tips, no table (correct)",
+    "TIP: tip-20 increases To Pay (rider tip line added by /cart/quote)",
+    "SCHEDULE: schedule-switch toggles sched-hour + sched-min inputs in/out",
+    "GST: gst-switch toggles gstin-input + business-name-input in/out",
+    "COUPON: 'PROTEIN20' + apply-coupon-btn → coupon-applied chip ('PROTEIN20 applied · −₹16') visible, Discount line shows in bill, To Pay reduced from ₹80 → ₹64; FREEDEL and CARB30 offers shown as locked cards (under min)",
+    "PLACE ORDER (dine-in): place-order-btn → POST /orders 200 → cart clears → navigates to /mobile/order-detail?orderId=114F146B. Order detail shows item Greek Yogurt 100g, nutrition card, invoice (Base ₹19.05, GST 0%) and Reorder button",
+    "EMPTY CART STATE: /mobile/cart renders 'YOUR CART IS EMPTY', empty-ai-picks button (AI PICKS — BUILD MY MEAL), 'BROWSE MENU' link, and 'POPULAR RIGHT NOW' carousel with 3 items + plus buttons. NOT a blank screen.",
+    "ONE SHARED CART: Home popular-add-<id> → cart-pill (data-testid='cart-pill') visible with '1 item ₹20 VIEW CART'. Items added on Menu also appear in /cart immediately (CartContext + AsyncStorage works).",
+    "AI PICKS (Home cat-grid-ai inline builder): meal-goal-* (6 goals) + meal-budget-input + build-meal-btn → AI quick-meal call → Order This Meal navigates to /mobile/cart with the 4 generated items (Chicken 199g, Soya 625g, Brown Rice 940g, Oats 600g — 5871 kcal, ₹300). Routes to /cart, NOT a direct order. ✓",
+    "REORDER: orders tab → order-card-<id> → /order-detail → reorder-button → POST /orders/<id>/reorder → replaceCart → /mobile/cart with 1 item (Greek Yogurt 100g, ₹20). ✓"
+  ],
+  "test_report_links": [],
+  "action_items": [
+    "ai-chat.tsx: render per-suggestion 'Add to cart' button (testID='ai-add-meal-<idx>') under each parsed AI suggestion that contains items+grams+price, wire it to CartContext.addMeal(), and show the ai-view-cart-btn footer when items are queued. Right now the AI returns useful text but the user cannot push it into the shared cart from chat.",
+    "Bottom tab bar: add testID='tab-build' (and tab-home/tab-menu/tab-orders) to the actual TouchableOpacity wrapper around each tab icon+label. The BUILD label being a non-touch <div> caused the headless BUILD click to fall through. Also expose direct routes /budget-meal and /smart-fill — currently they render blank when navigated to outside the (tabs) Layout.",
+    "Cosmetic: ai-view-cart-btn was never reachable in this run because of the missing add buttons; once buttons are added please re-verify the bar appears with item count + ₹ and that tapping it goes to /cart.",
+    "Carry-over from iter 24: SideDrawer.tsx still using `data-testid` prop (RN-Web drops it) — should be `testID` so drawer-* selectors are queryable."
+  ],
+  "critical_code_review_comments": [
+    "ai-chat.tsx: the LLM is correctly returning a structured combo, but the renderer treats it as plain text. Parse the AI's combo (or have the API return a JSON `suggested_meal` field alongside `reply`) and render a CTA card with an Add-to-cart button so the AI chat surface participates in the unified cart, as required by Round 3.",
+    "(tabs)/_layout.tsx: tab labels in bottom nav need their TouchableOpacity wrappers to carry testID — the inner <Text/View> shouldn't be the only thing with a label, and there should be a single touch target per tab.",
+    "Routes /budget-meal and /smart-fill should either be accessible standalone (with a Stack screen) or the documentation should be updated; right now they render blank when deep-linked from outside the (tabs) layout. Verified by direct navigation."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend-only)", "frontend": "~88% — 11/12 spec items pass; AI-chat Add-to-cart is the failing one. BUILD-tab routing has a usability gap but is not a blocker (other Build entry points like cat-grid-ai work)."},
+  "test_credentials": "Phone 9888812345 + on-screen Demo OTP (DEV mode).",
+  "seed_data_creation": "Placed 1 new order: Order #114F146B (Greek Yogurt 100g, ₹20, dine-in, PREPARING). Plus reorder of same order reloaded the cart with 1 item.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Mobile customer app is at https://4602d0fe-b014-4bd5-b917-564d8a014f6c.preview.emergentagent.com/mobile/ . Login pattern: input[placeholder='9876543210'] → 'Get OTP' → regex 'Demo OTP: (\\d{6})' from body → fill input[maxlength='1'] x6 → 'Verify & Continue'. Unified /cart selectors verified live: cart-macros, ordertype-{dine-in,takeaway,delivery}, cart-{inc,dec,remove}-<id>, addon-add-<id>, coupon-input, apply-coupon-btn, coupon-applied, tip-{10,20,30,50}, tip-custom, schedule-switch, sched-hour, sched-min, gst-switch, gstin-input, business-name-input, cart-delivery-address, cart-table-number, bill-card, place-order-btn. cart-pill on home only when items exist. Reorder confirmed: POST /orders/<id>/reorder → replaceCart → /cart. PRIMARY OPEN BUG: ai-chat.tsx renders text reply only, no ai-add-meal-<id> buttons (broken AI→cart flow). Secondary: BUILD bottom-tab button click in headless can miss the touch target — clicking cat-grid-ai on Home is a working alternative path to the inline meal builder.",
+  "rca of the issue": "AI-chat Add-to-cart missing: /api/ai/chat returns a markdown string and ai-chat.tsx renders it as <Text> only. There is no parser/extractor that creates a `suggested_meal` object and no UI block under the AI bubble that exposes an 'Add to cart' TouchableOpacity. Fix: either (a) extend backend /ai/chat to return `{reply: '...', meal_suggestion: {items:[{product_id, grams, price}], totals:{...}}}` and render an Add-to-cart card when meal_suggestion is present, OR (b) parse the LLM reply on-device to detect lines like 'Soya Chunks 100g (₹12)' and map them to product_ids — server-side is more reliable. Then wire the button to CartContext.addMeal() and show ai-view-cart-btn footer pinned to bottom."
+}

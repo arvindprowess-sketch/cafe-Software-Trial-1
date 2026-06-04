@@ -222,6 +222,12 @@ class OrderCreate(BaseModel):
     scheduled_ready_time: Optional[str] = None  # ISO datetime string
     table_number: Optional[int] = None
     delivery_address: Optional[str] = None
+    delivery_time: Optional[str] = None
+    delivery_fee: Optional[float] = None
+    tip: Optional[float] = 0
+    gstin: Optional[str] = None
+    business_name: Optional[str] = None
+    item_subtotal: Optional[float] = None
     confirm_duplicate: Optional[bool] = False  # B3: bypass duplicate guard when user confirms
 
 class AISuggestRequest(BaseModel):
@@ -1159,11 +1165,17 @@ async def check_product_stock(product_id: str, quantity: int = 1):
 @api_router.post("/orders")
 async def create_order(data: OrderCreate, user=Depends(get_current_user)):
     order_id = str(uuid.uuid4())[:8].upper()
-    extra_charge = 0
-    if data.order_type == "takeaway":
+    # Delivery/takeaway charge: trust client-provided delivery_fee when present
+    # (it is computed & validated by /cart/quote), else fall back to defaults.
+    if data.delivery_fee is not None:
+        extra_charge = data.delivery_fee
+    elif data.order_type == "takeaway":
         extra_charge = 10
     elif data.order_type == "delivery":
         extra_charge = 30
+    else:
+        extra_charge = 0
+    tip_amount = (data.tip or 0) if data.order_type == "delivery" else 0
 
     # B3: Duplicate-order guard. Flag identical order from same user/table within 2 minutes.
     if not data.confirm_duplicate:
@@ -1257,8 +1269,14 @@ async def create_order(data: OrderCreate, user=Depends(get_current_user)):
         "user_name": user["name"],
         "order_type": data.order_type,
         "items": processed_items,
-        "total_price": data.total_price + extra_charge,
+        "total_price": round(data.total_price + extra_charge + tip_amount, 2),
         "extra_charge": extra_charge,
+        "delivery_fee": extra_charge if data.order_type == "delivery" else 0,
+        "tip": tip_amount,
+        "delivery_time": data.delivery_time if data.order_type == "delivery" else None,
+        "gstin": data.gstin,
+        "business_name": data.business_name,
+        "item_subtotal": data.item_subtotal if data.item_subtotal is not None else data.total_price,
         "total_calories": data.total_calories,
         "total_protein": data.total_protein,
         "total_carbs": data.total_carbs,
@@ -3031,6 +3049,149 @@ async def apply_coupon(
         "applicable_to": offer["applicable_to"],
         "applicable_category": offer.get("applicable_category"),
         "computed_discount": round(computed_discount, 2),
+    }
+
+FREE_DELIVERY_THRESHOLD = 300
+
+@api_router.post("/cart/quote")
+async def cart_quote(
+    items: List[Dict[str, Any]] = Body(...),
+    order_type: str = Body("dine-in"),
+    coupon_code: Optional[str] = Body(None),
+    tip: float = Body(0),
+    user=Depends(get_current_user),
+):
+    """Authoritative, server-side cart bill. Recomputes every price from the CURRENT
+    product records (anti-tamper), validates live stock, applies coupon/offer, and
+    computes delivery fee / GST / tip / savings. Used both for the live bill and the
+    pre-payment stock recheck."""
+    line_items = []
+    out_of_stock = []
+    price_changes = []
+    subtotal = 0.0
+    cal = prot = carbs = fat = 0.0
+    prep_times = []
+    for it in items:
+        pid = it.get("product_id") or it.get("id")
+        ptype = it.get("product_type", "single")
+        product = await db.products.find_one({"id": pid}, {"_id": 0}) if pid else None
+        if not product or product.get("is_active") is False:
+            out_of_stock.append({"product_id": pid, "name": it.get("name", "Item"), "reason": "no_longer_available"})
+            continue
+        if ptype == "ready_made":
+            qty = int(it.get("quantity", 1) or 1)
+            serving = product.get("serving_grams", 300)
+            unit_price = product.get("fixed_price") or round(product["cost_per_100g"] * serving / 100, 2)
+            line_price = round(unit_price * qty, 2)
+            stock_ok = (await check_ready_made_stock(pid, qty)).get("available", True)
+            line_grams = serving * qty
+            factor = (serving / 100) * qty
+        else:
+            grams = float(it.get("grams", 100) or 100)
+            qty = 1
+            stock_ok = product.get("available_qty_grams", 0) >= grams
+            unit_price = product["cost_per_100g"]
+            line_price = round(grams / 100 * unit_price, 2)
+            line_grams = grams
+            factor = grams / 100
+        if not stock_ok:
+            out_of_stock.append({"product_id": pid, "name": product["name"], "reason": "out_of_stock", "available_qty_grams": product.get("available_qty_grams", 0)})
+            continue
+        old_unit = it.get("cost_per_100g")
+        if old_unit is not None and ptype == "single" and abs(float(old_unit) - product["cost_per_100g"]) > 0.01:
+            price_changes.append({"product_id": pid, "name": product["name"], "old": float(old_unit), "new": product["cost_per_100g"]})
+        subtotal += line_price
+        cal += product["calories_per_100g"] * factor
+        prot += product["protein_per_100g"] * factor
+        carbs += product.get("carbs_per_100g", 0) * factor
+        fat += product.get("fat_per_100g", 0) * factor
+        if product.get("preparation_time_minutes"):
+            prep_times.append(product["preparation_time_minutes"])
+        line_items.append({
+            "product_id": pid, "name": product["name"], "product_type": ptype,
+            "grams": line_grams, "quantity": qty, "unit_price": unit_price,
+            "price": line_price, "diet_type": product.get("diet_type", "veg"),
+            "image_url": product.get("image_url"),
+        })
+    subtotal = round(subtotal, 2)
+
+    # Coupon / offer
+    discount = 0.0
+    coupon_info = None
+    coupon_error = None
+    if coupon_code:
+        offer = await db.offers.find_one({"coupon_code": coupon_code, "is_active": True}, {"_id": 0})
+        if not offer:
+            coupon_error = "Invalid or expired coupon code"
+        elif subtotal < offer.get("min_order_value", 0):
+            coupon_error = f"Add ₹{round(offer['min_order_value'] - subtotal)} more to use {coupon_code}"
+        else:
+            dtype = offer["discount_type"]
+            if dtype == "bogo":
+                prices = sorted([li["price"] for li in line_items])
+                if len(prices) >= 2:
+                    discount = prices[0]
+            elif dtype == "percentage":
+                discount = subtotal * offer["discount_value"] / 100
+                if offer.get("max_discount"):
+                    discount = min(discount, offer["max_discount"])
+            else:
+                discount = offer["discount_value"]
+                if offer.get("max_discount"):
+                    discount = min(discount, offer["max_discount"])
+            discount = round(min(discount, subtotal), 2)
+            coupon_info = {"code": coupon_code, "title": offer["title"], "discount_type": dtype}
+
+    # Delivery fee (free over threshold) + tip
+    free_delivery = subtotal >= FREE_DELIVERY_THRESHOLD
+    if order_type == "delivery":
+        base_delivery = 30.0
+        delivery_fee = 0.0 if free_delivery else base_delivery
+    elif order_type == "takeaway":
+        base_delivery = 10.0
+        delivery_fee = 10.0
+    else:
+        base_delivery = 0.0
+        delivery_fee = 0.0
+    tip_amount = round(max(0, tip), 2) if order_type == "delivery" else 0.0
+
+    net_food = round(max(0, subtotal - discount), 2)
+    gst_amount = round(net_food * 5 / 105, 2)
+    grand_total = round(net_food + delivery_fee + tip_amount, 2)
+    free_delivery_savings = round(base_delivery - delivery_fee, 2) if order_type == "delivery" else 0
+    total_savings = round(discount + free_delivery_savings, 2)
+
+    tiers = [
+        {"label": "Free Delivery", "threshold": 300},
+        {"label": "₹50 OFF", "threshold": 500},
+        {"label": "₹100 OFF", "threshold": 800},
+        {"label": "₹150 OFF", "threshold": 1000},
+    ]
+    for t in tiers:
+        t["unlocked"] = subtotal >= t["threshold"]
+    next_tier = next((t for t in tiers if not t["unlocked"]), None)
+
+    return {
+        "line_items": line_items,
+        "subtotal": subtotal,
+        "discount": discount,
+        "coupon": coupon_info,
+        "coupon_error": coupon_error,
+        "delivery_fee": delivery_fee,
+        "free_delivery": free_delivery,
+        "tip": tip_amount,
+        "gst_amount": gst_amount,
+        "gst_percent": 5,
+        "net_food": net_food,
+        "grand_total": grand_total,
+        "total_savings": total_savings,
+        "macros": {"calories": round(cal), "protein": round(prot), "carbs": round(carbs), "fat": round(fat)},
+        "max_prep_minutes": max(prep_times) if prep_times else 10,
+        "out_of_stock": out_of_stock,
+        "price_changes": price_changes,
+        "tiers": tiers,
+        "next_tier": next_tier,
+        "free_delivery_threshold": FREE_DELIVERY_THRESHOLD,
     }
 
 # ========== SMART PORTION ADJUSTER ==========

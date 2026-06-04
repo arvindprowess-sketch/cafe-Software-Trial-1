@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { apiCall } from '../utils/api';
+import { useCart } from '../utils/CartContext';
 
 const BK_RED = '#15140F';
 const BK_ORANGE = '#15140F';
@@ -18,8 +19,29 @@ const BK_TEXT_LIGHT = '#6B6A5E';
 export default function OrderDetailScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const { replaceCart, setOrderType } = useCart();
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+
+  // Reorder via backend guard (drops/flags unavailable or price-changed items), then → cart.
+  const handleReorder = async () => {
+    if (!order) return;
+    try {
+      const res = await apiCall(`/orders/${order.id}/reorder`, { method: 'POST' });
+      if (!res.cart_items?.length) {
+        Alert.alert('Items unavailable', 'None of these items are available right now.');
+        return;
+      }
+      replaceCart(res.cart_items);
+      if (res.order_type) setOrderType(res.order_type);
+      if (res.unavailable?.length) {
+        Alert.alert('Some items skipped', `No longer available: ${res.unavailable.join(', ')}. The rest are in your cart.`);
+      }
+      router.push('/cart');
+    } catch (e: any) {
+      Alert.alert('Could not reorder', e?.message || 'Please try again.');
+    }
+  };
 
   useEffect(() => {
     loadOrderDetails();
@@ -308,21 +330,7 @@ export default function OrderDetailScreen() {
       <View style={styles.bottomBar}>
         <TouchableOpacity 
           style={styles.reorderBtn}
-          onPress={() => {
-            // Navigate to customize with order items
-            router.push({
-              pathname: '/customize',
-              params: { 
-                cart: JSON.stringify(order.items.map((item: any) => ({
-                  id: item.product_id,
-                  name: item.product_name || item.name,
-                  grams: item.grams,
-                  ...item
-                }))),
-                orderType: order.order_type
-              }
-            });
-          }}
+          onPress={handleReorder}
           testID="reorder-button"
         >
           <Ionicons name="repeat" size={20} color={BK_WHITE} />
