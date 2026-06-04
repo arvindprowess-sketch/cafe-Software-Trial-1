@@ -157,3 +157,10 @@ Goal: give the user ONE preview URL to test BOTH the customer mobile app and the
   json-only/malformed/plain — all green). Verified e2e via external ingress URL: CLEAN + actions intact.
 - NOTE: pure backend fix → no mobile rebuild needed (ai-chat.tsx just renders result.message).
 
+## 2026-06 — BUGFIX: BUILD tab opened a blank/crashing page
+- Symptom (user): "build pe click karne per page open nahi ho raha hai".
+- Root cause: app/(tabs)/budget-meal.tsx called `useCart()` (line 26, added in Round 3) but
+  never imported it → ReferenceError on render → blank screen when tapping the ⚡ BUILD tab.
+- FIX: added `import { useCart } from '../../utils/CartContext';`. Rebuilt mobile bundle
+  (bash scripts/build-mobile.sh). Verified via screenshot: Budget Meal Builder renders fully.
+

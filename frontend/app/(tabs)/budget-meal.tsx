@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { apiCall, getStoredUser } from '../../utils/api';
+import { useCart } from '../../utils/CartContext';
 import { GOALS } from '../../utils/theme';
 
 const Z_RED = '#15140F';
