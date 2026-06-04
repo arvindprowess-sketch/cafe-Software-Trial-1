@@ -334,7 +334,7 @@ export default function AuthScreen() {
           {/* Logo */}
           <View style={styles.logoSection}>
             <View style={styles.logoBg}>
-              <Ionicons name="restaurant" size={32} color="#FFF" />
+              <Ionicons name="restaurant" size={32} color={FUEL.ink} />
             </View>
             <Text style={styles.brand}>FUEL</Text>
           </View>
@@ -426,4 +426,3 @@ const styles = StyleSheet.create({
   // Terms
   terms: { fontSize: 11, color: 'rgba(245,235,220,0.5)', textAlign: 'center', marginTop: 24 },
 });
-);
