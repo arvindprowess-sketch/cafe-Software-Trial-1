@@ -221,6 +221,7 @@ class OrderCreate(BaseModel):
     is_scheduled: Optional[bool] = False
     scheduled_ready_time: Optional[str] = None  # ISO datetime string
     table_number: Optional[int] = None
+    delivery_address: Optional[str] = None
     confirm_duplicate: Optional[bool] = False  # B3: bypass duplicate guard when user confirms
 
 class AISuggestRequest(BaseModel):
@@ -1278,6 +1279,7 @@ async def create_order(data: OrderCreate, user=Depends(get_current_user)):
         "kitchen_alert_time": kitchen_alert_time,
         "schedule_confirmed": False if is_scheduled else None,
         "table_number": data.table_number,
+        "delivery_address": data.delivery_address if data.order_type == "delivery" else None,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.orders.insert_one(order)
@@ -1598,6 +1600,24 @@ async def ai_quick_meal(data: QuickMealRequest, user=Depends(get_current_user)):
                 "foods_to_prioritize": "Quality proteins, Anti-inflammatory foods, Healthy fats (avocado, nuts), Vegetables",
                 "foods_to_avoid": "Excessive carbs, Processed foods, High-sugar items",
                 "portion_size": "Slightly smaller portions to aid recovery"
+            },
+            "recomposition": {
+                "description": "Recomposition / Body Recomp - Build muscle AND lose fat simultaneously at maintenance calories",
+                "target_calories": "500-650 kcal per meal (maintenance-level)",
+                "protein_priority": "45-55% of budget on high-quality protein (VERY high protein)",
+                "macro_ratio": "Very high protein (40-45%), Moderate carb (30-35%), Moderate fat (20-25%)",
+                "foods_to_prioritize": "Lean proteins (chicken, fish, egg whites, paneer, tofu), Fibrous vegetables, Moderate complex carbs",
+                "foods_to_avoid": "Refined sugars, Excess oils/fats, Empty-calorie carbs",
+                "portion_size": "Moderate, maintenance-level portions with a strong protein emphasis"
+            },
+            "lean_bulk": {
+                "description": "Lean Bulk - Slight calorie surplus to build muscle with minimal fat gain",
+                "target_calories": "650-850 kcal per meal (slight surplus ~+10-15%)",
+                "protein_priority": "40-50% of budget on protein sources (high protein)",
+                "macro_ratio": "High protein (30-35%), High carb (40-50%), Controlled fat (15-20%)",
+                "foods_to_prioritize": "Lean proteins, Complex carbs (brown rice, quinoa, oats), Controlled healthy fats",
+                "foods_to_avoid": "Excessive fats and fried foods, Empty calories that add fat instead of muscle",
+                "portion_size": "Slightly larger portions for a controlled surplus"
             }
         }
 
@@ -1679,6 +1699,8 @@ NOTE: This is ONE MEAL. Keep portions reasonable to fit within user's daily targ
    - {"Balance of all macros - variety is key." if data.goal == "maintenance" else ""}
    - {"Easy to digest proteins (paneer, dal, egg whites) and simple carbs. Avoid heavy foods." if data.goal == "beginner" else ""}
    - {"Quality proteins, healthy fats (nuts, avocado), vegetables. Lower carbs." if data.goal == "recovery" else ""}
+   - {"Maintenance-level calories with VERY high protein to build muscle and lose fat at the same time. Moderate carbs, moderate fats." if data.goal == "recomposition" else ""}
+   - {"Slight calorie surplus (~+10-15%) with high protein and controlled fats to gain lean muscle while minimizing fat gain." if data.goal == "lean_bulk" else ""}
 
 Respond ONLY in this JSON format (no markdown, no backticks):
 {{"items": [{{"product_name": "Exact Name", "budget_share_percent": 40, "reason": "Why this fits {data.goal} goal"}}], "summary": "One line explaining how this meal supports {data.goal}"}}"""

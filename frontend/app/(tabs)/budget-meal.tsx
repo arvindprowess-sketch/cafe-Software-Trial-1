@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { apiCall, getStoredUser } from '../../utils/api';
+import { GOALS } from '../../utils/theme';
 
 const Z_RED = '#15140F';
 const GREEN = '#3FA34D';
@@ -34,15 +35,6 @@ export default function BudgetMealScreen() {
     loadCalorieContext();
     loadUserOrderHistory();
   }, []);
-
-  // Re-fetch AI suggestions when diet preference changes (if suggestions exist)
-  useEffect(() => {
-    if (aiSuggestions.length > 0 && lastAiDietPref && lastAiDietPref !== dietPref) {
-      // User changed diet filter after getting AI suggestions - refresh with FULL budget
-      console.log('Diet preference changed, re-fetching AI suggestions with full budget...');
-      getAiSuggestions(true); // Use full budget, not remaining
-    }
-  }, [dietPref]);
 
   const loadCalorieContext = async () => {
     try {
@@ -148,45 +140,11 @@ export default function BudgetMealScreen() {
     updateItem(product, currentGrams + gramsToAdd);
   };
 
-  // Get AI suggestions for budget (uses full budget, not remaining, for better suggestions)
-  const getAiSuggestions = async (useFullBudget = false) => {
-    const budgetToUse = useFullBudget ? budgetNum : remaining;
-    
-    if (budgetToUse <= 10) {
-      Alert.alert('Budget Full', 'You\'ve used most of your budget!');
-      return;
-    }
-    setAiLoading(true);
-    try {
-      const result = await apiCall('/ai/quick-meal', {
-        method: 'POST',
-        body: {
-          diet_preference: dietPref,
-          goal: goal,
-          budget: budgetToUse,
-          order_type: orderType,
-        },
-      });
-      if (result.meal_items?.length > 0) {
-        setAiSuggestions(result.meal_items);
-        setLastAiDietPref(dietPref); // Track which diet pref was used
-      } else {
-        Alert.alert('No suggestions', result.summary || 'Try adjusting your budget');
-        setAiSuggestions([]);
-        setLastAiDietPref('');
-      }
-    } catch (e: any) {
-      Alert.alert('Error', e.message);
-    } finally { setAiLoading(false); }
-  };
-
-  // Add AI suggestion to cart
-  const addSuggestion = (item: any) => {
-    const product = products.find(p => p.id === item.product_id);
-    if (product) {
-      updateItem(product, item.grams);
-      setAiSuggestions(aiSuggestions.filter(s => s.product_id !== item.product_id));
-    }
+  // FIX 5: Smart Fill now opens a dedicated results screen (no frozen inline panel)
+  const goToSmartFill = () => {
+    const b = parseFloat(budget) || 0;
+    if (b < 50) { Alert.alert('Set a budget', 'Enter a budget of at least ₹50 to use Smart Fill.'); return; }
+    router.push({ pathname: '/smart-fill', params: { budget: String(b), dietPref, goal, orderType } });
   };
 
   // Proceed to checkout
@@ -197,7 +155,7 @@ export default function BudgetMealScreen() {
     }
     router.push({
       pathname: '/customize',
-      params: { cart: JSON.stringify(cart), orderType }
+      params: { cart: JSON.stringify(cart), orderType, goal, budget }
     });
   };
 
@@ -238,15 +196,9 @@ export default function BudgetMealScreen() {
           <Text style={styles.title}>Budget Meal Builder</Text>
           <Text style={styles.subtitle}>Build your perfect meal within budget</Text>
         </View>
-        <TouchableOpacity style={styles.aiHelpBtn} onPress={() => getAiSuggestions(true)} disabled={aiLoading}>
-          {aiLoading ? (
-            <ActivityIndicator size="small" color="#FFF" />
-          ) : (
-            <>
-              <Ionicons name="sparkles" size={20} color="#FFF" />
-              <Text style={styles.aiHelpText}>Smart Fill</Text>
-            </>
-          )}
+        <TouchableOpacity style={styles.aiHelpBtn} onPress={goToSmartFill} testID="smart-fill-btn">
+          <Ionicons name="sparkles" size={20} color="#FFF" />
+          <Text style={styles.aiHelpText}>Smart Fill</Text>
         </TouchableOpacity>
       </View>
 
@@ -338,6 +290,24 @@ export default function BudgetMealScreen() {
                 <View style={[styles.vegDotSmall, { backgroundColor: d.color }]} />
               )}
               <Text style={[styles.filterText, dietPref === d.key && { color: '#FFF' }]}>{d.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+
+      {/* Fitness Goal selector — all 6 canonical goals (shared source) */}
+      <View style={styles.goalFilterRow}>
+        <Text style={styles.goalFilterLabel}>Goal</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.goalFilterScroll}>
+          {GOALS.map(g => (
+            <TouchableOpacity
+              key={g.key}
+              testID={`budget-goal-${g.key}`}
+              style={[styles.goalFilterChip, goal === g.key && { backgroundColor: g.color, borderColor: g.color }]}
+              onPress={() => setGoal(g.key)}
+            >
+              <Ionicons name={g.icon as any} size={14} color={goal === g.key ? '#FFF' : g.color} />
+              <Text style={[styles.filterText, goal === g.key && { color: '#FFF' }]}>{g.shortLabel}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
@@ -465,43 +435,6 @@ export default function BudgetMealScreen() {
                 );
               })()}
             </View>
-          </View>
-        )}
-
-        {/* AI Suggestions */}
-        {aiSuggestions.length > 0 && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Ionicons name="sparkles" size={16} color={PURPLE} />
-              <Text style={styles.sectionTitle}>AI Suggestions ({dietPref === 'both' ? 'All' : dietPref === 'veg' ? 'Veg' : 'Non-Veg'})</Text>
-              <TouchableOpacity onPress={() => { setAiSuggestions([]); setLastAiDietPref(''); }}>
-                <Ionicons name="close-circle" size={20} color="#D0D0D0" />
-              </TouchableOpacity>
-            </View>
-            {aiSuggestions.map((item, i) => (
-              <TouchableOpacity 
-                key={i} 
-                style={styles.suggestionItem}
-                onPress={() => addSuggestion(item)}
-              >
-                <View style={styles.suggestionLeft}>
-                  <View style={[styles.vegIndicator, { borderColor: item.diet_type === 'non-veg' ? Z_RED : GREEN }]}>
-                    <View style={[styles.vegDot, { backgroundColor: item.diet_type === 'non-veg' ? Z_RED : GREEN }]} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.suggestionName} numberOfLines={1}>{item.product_name}</Text>
-                    <Text style={styles.suggestionReason} numberOfLines={2}>{item.reason}</Text>
-                  </View>
-                </View>
-                <View style={styles.suggestionRight}>
-                  <View style={styles.suggestionGramsBox}>
-                    <Text style={styles.suggestionGrams}>{item.grams}g</Text>
-                    <Text style={styles.suggestionPrice}>₹{Math.round(item.price)}</Text>
-                  </View>
-                  <Ionicons name="add-circle" size={24} color={PURPLE} />
-                </View>
-              </TouchableOpacity>
-            ))}
           </View>
         )}
 
@@ -692,6 +625,11 @@ const styles = StyleSheet.create({
   filterText: { fontSize: 12, fontWeight: '600', color: '#6B6A5E' },
   filterDivider: { width: 1, height: 24, backgroundColor: '#E8E8E8', marginHorizontal: 4 },
   vegDotSmall: { width: 10, height: 10, borderRadius: 5 },
+  // Goal filter row
+  goalFilterRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E6E1D4', paddingLeft: 16 },
+  goalFilterLabel: { fontSize: 12, fontWeight: '800', color: '#15140F', textTransform: 'uppercase', letterSpacing: 0.5, marginRight: 4 },
+  goalFilterScroll: { paddingRight: 16, paddingVertical: 10, gap: 8 },
+  goalFilterChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, backgroundColor: '#F4F1E9', borderWidth: 1.5, borderColor: '#E8E8E8' },
   
   // Scroll
   scroll: { flex: 1 },

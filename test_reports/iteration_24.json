@@ -1,0 +1,39 @@
+{
+  "summary": "FUEL Cafe MOBILE app Round-2 (5 fixes) — verified end-to-end via Playwright on /mobile/. Phone+OTP login works (Demo OTP shown on screen; new user name step handled). FIX 1 delivery address (manual entry+save+persist on DELIVER TO bar), FIX 2 six goals on Home/AI-Picks/Budget-Builder/Drawer, FIX 3 no duplicate goal/budget on Customize after AI Picks, FIX 4 Popular Items veg-badge moved onto product image (no Add+ overlap), and FIX 5 Smart Fill opens a dedicated /smart-fill screen with items + Back + Review Order -> Customize -> Place Order -> Orders tab, ALL FUNCTIONALLY PASS. Only gap: SideDrawer.tsx's drawer-* testIDs are missing from the rendered DOM (functionality is fine, only test hooks absent) because SideDrawer.tsx uses prop name `data-testid` on RN <TouchableOpacity/View>, which React-Native-Web silently drops; the rest of the codebase uses the correct `testID` prop (RN-Web auto-maps it to data-testid). All 6 drawer goals still render and are tappable.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "SideDrawer", "issue": "data-testid=\"drawer-fitness-toggle\" / drawer-goal-* / drawer-goals-section / drawer-close-btn / drawer-edit-name-btn / drawer-save-name-btn / drawer-edit-name-input / drawer-save-goals-btn / drawer-{menuItem} / drawer-logout / drawer-target-* are NOT present in DOM. Functionality renders correctly (all 6 goals visible after tapping the fitness card) but selectors fail.", "selector": "[data-testid='drawer-fitness-toggle']", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "passed_tests": [
+    "LOGIN: phone 9888812345 + on-screen Demo OTP + name step -> Home (WHAT'S YOUR GOAL)",
+    "FIX 1: order-delivery-toggle -> delivery-address-bar -> modal with detect-location-btn/manual-address-input/save-address-btn; saving '42 MG Road, Bengaluru' closes modal and bar shows 'DELIVER TO: 42 MG Road, Bengaluru'",
+    "FIX 2a: Home shows all 6 goals (home-goal-fat_loss..lean_bulk)",
+    "FIX 2b (functional only): drawer fitness card expands and shows 6 goal pills (Fat Loss/Muscle Gain/Maintenance/Beginner/Recomposition/Lean Bulk)",
+    "FIX 2c: cat-grid-ai -> inline AI Meal Builder has meal-goal-fat_loss..lean_bulk (6/6)",
+    "FIX 2d: Build tab Budget Meal Builder has budget-goal-fat_loss..lean_bulk (6/6)",
+    "FIX 3: After Build My Meal + Order This Meal, /customize shows NO customize-goal-* and NO meal-budget-input/customize-budget-input; place-order-btn present",
+    "FIX 4: Popular Items first card -> vegBadge at (200,547,20x20) on product image; 'Add +' button at (136,635,79x33) on price row below. No bounding-box overlap",
+    "FIX 5: smart-fill-btn -> navigates to /smart-fill?budget=250&dietPref=both&goal=recomposition&orderType=dine-in (dedicated screen with title 'Smart Fill'); 4 smart-fill-item-* visible; smart-fill-back-btn + smart-fill-review-btn present; Review Order -> /customize (no goal/budget duplicates) -> place-order-btn -> POST /orders 200 -> lands on /orders tab with new order visible (Order #0D4264E7, 4 items, 1372 cal, Rs 250, status PREPARING)"
+  ],
+  "test_report_links": [],
+  "action_items": [
+    "SideDrawer.tsx: replace ALL `data-testid=\"...\"` props with `testID=\"...\"` (React-Native-Web only maps testID -> data-testid; raw data-testid props on RN primitives like <TouchableOpacity>/<View> are stripped). This will restore drawer-fitness-toggle, drawer-goal-*, drawer-goals-section, drawer-close-btn, drawer-edit-name-btn, drawer-save-name-btn, drawer-edit-name-input, drawer-save-goals-btn, drawer-{menuItem}, drawer-logout, drawer-target-* selectors. After fix, rebuild mobile: `bash /app/scripts/build-mobile.sh`.",
+    "Carry-over from iter 23 (still open in admin web panel, not part of Round-2 mobile scope): admin-kitchen LIVE badge testid + AdminProducts edit-modal nutrition testids."
+  ],
+  "critical_code_review_comments": [
+    "Inconsistent test-id prop convention across the Expo app: home.tsx/budget-meal.tsx/etc correctly use `testID` (RN-Web maps to data-testid), but components/SideDrawer.tsx uses `data-testid`. This caused the only test-failure in this run. Recommend a quick repo grep `grep -RIn \"data-testid=\" frontend/app` and normalize to `testID=` for RN primitives.",
+    "Place-Order success uses a native Alert (not visible in web DOM). It still navigates to /orders so flow works, but for web parity consider a Toast or web-visible confirmation banner that surfaces in DOM tests."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend-only)", "frontend": "100% functional / 5/5 fixes pass; only the drawer test-id hooks are missing"},
+  "test_credentials": "Phone+OTP login. Any 10-digit phone (used 9888812345); OTP shown on-screen as 'Demo OTP: XXXXXX' (DEV mode).",
+  "seed_data_creation": "Created 1 new test customer (TestUser, +91 9888812345) and placed 1 new order Order #0D4264E7 (Chicken Breast 393g + Dal 250g + Salad 190g + Sweet Potato 460g, Rs 250, 1372 cal) via Smart Fill flow.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Round-2 5 fixes are all functionally working on /mobile/. Only outstanding item is SideDrawer.tsx using data-testid instead of testID — RN-Web drops it. Login pattern that works headlessly: phone in 9876543210 placeholder, click 'Get OTP', read 'Demo OTP: XXXXXX' from body, fill 6 individual <input> elements (await inputs[i].click() then fill ch one at a time), click 'Verify & Continue'. If first-time number then a name step appears; type any name and click Continue. Mobile bundle path: /app/web-panel/public/mobile/_expo/static/js/web/entry-*.js. Rebuild with `bash /app/scripts/build-mobile.sh` after Expo edits.",
+  "rca of the issue": "SideDrawer testIDs missing in DOM. Root cause: React-Native-Web only maps the canonical RN `testID` prop to the HTML `data-testid` attribute; passing a raw `data-testid` prop to React-Native primitives (TouchableOpacity/View/Text) is dropped because those components don't forward unknown DOM attrs. Mitigation: in /app/frontend/app/components/SideDrawer.tsx (~11 occurrences) replace `data-testid=` with `testID=`, then rebuild the Expo web export."
+}

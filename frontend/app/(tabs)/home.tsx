@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Image,
-  RefreshControl, FlatList, Dimensions, ActivityIndicator, Alert
+  RefreshControl, FlatList, Dimensions, ActivityIndicator, Alert, Modal
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import * as Location from 'expo-location';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiCall, getStoredUser } from '../../utils/api';
 import SideDrawer from '../components/SideDrawer';
 import { FUEL, FONT, GOALS as FUEL_GOALS } from '../../utils/theme';
@@ -51,6 +53,13 @@ export default function HomeScreen() {
   // Order type toggle
   const [orderType, setOrderType] = useState<'delivery' | 'dine-in'>('dine-in');
 
+  // FIX 1: Delivery address (detected via expo-location or entered manually, persisted)
+  const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [showAddressModal, setShowAddressModal] = useState(false);
+  const [locating, setLocating] = useState(false);
+  const [manualAddress, setManualAddress] = useState('');
+  const [locationError, setLocationError] = useState('');
+
   // AI Quick Meal Builder state
   const [showMealBuilder, setShowMealBuilder] = useState(false);
   const [dietPref, setDietPref] = useState('both');
@@ -73,6 +82,9 @@ export default function HomeScreen() {
   }, []);
 
   useEffect(() => { loadData(); }, []);
+  useEffect(() => {
+    AsyncStorage.getItem('delivery_address').then(a => { if (a) setDeliveryAddress(a); }).catch(() => {});
+  }, []);
   useEffect(() => {
     if (banners.length <= 1) return;
     const timer = setInterval(() => {
@@ -119,7 +131,62 @@ export default function HomeScreen() {
       fat_per_100g: item.fat_per_100g, category: item.category,
       diet_type: item.diet_type, image_url: item.image_url,
     }));
-    router.push({ pathname: '/customize', params: { cart: JSON.stringify(cart), orderType } });
+    // FIX 3: carry the goal + budget the user already chose so checkout doesn't re-ask.
+    router.push({ pathname: '/customize', params: { cart: JSON.stringify(cart), orderType, goal: mealGoal, budget: mealBudget } });
+  };
+
+  // ===== FIX 1: Delivery location detection (expo-location) + manual fallback =====
+  const persistAddress = async (addr: string) => {
+    setDeliveryAddress(addr);
+    try { await AsyncStorage.setItem('delivery_address', addr); } catch {}
+    setShowAddressModal(false);
+    setManualAddress('');
+    setLocationError('');
+  };
+
+  const detectLocation = async () => {
+    setLocating(true); setLocationError('');
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        setLocationError('Location permission denied. Please enter your delivery address manually below.');
+        setLocating(false);
+        return;
+      }
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const { latitude, longitude } = pos.coords;
+      let address = '';
+      // Native reverse geocode
+      try {
+        const geo = await Location.reverseGeocodeAsync({ latitude, longitude });
+        if (geo && geo.length > 0) {
+          const g: any = geo[0];
+          address = [g.name, g.street, g.district || g.subregion, g.city, g.region, g.postalCode]
+            .filter(Boolean)
+            .filter((v: string, i: number, a: string[]) => a.indexOf(v) === i)
+            .join(', ');
+        }
+      } catch {}
+      // Web fallback (expo reverseGeocode is unavailable on web)
+      if (!address) {
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`, { headers: { Accept: 'application/json' } });
+          const data = await res.json();
+          address = data?.display_name || '';
+        } catch {}
+      }
+      if (!address) address = `Lat ${latitude.toFixed(5)}, Lng ${longitude.toFixed(5)}`;
+      await persistAddress(address);
+    } catch (e) {
+      setLocationError('Could not detect your location. Please enter your address manually.');
+    } finally {
+      setLocating(false);
+    }
+  };
+
+  const saveManualAddress = () => {
+    if (!manualAddress.trim()) { setLocationError('Please enter an address first.'); return; }
+    persistAddress(manualAddress.trim());
   };
 
   const resetBuilder = () => { setAiMeal(null); setMealGoal(''); setMealBudget(''); setDietPref('both'); setShowMealBuilder(false); };
@@ -182,14 +249,14 @@ export default function HomeScreen() {
         )}
         
         {orderType === 'delivery' && (
-          <View style={styles.locationBar}>
+          <TouchableOpacity style={styles.locationBar} onPress={() => setShowAddressModal(true)} testID="delivery-address-bar" activeOpacity={0.8}>
             <Ionicons name="bicycle" size={18} color={Z_RED} />
             <Text style={styles.locationText}>DELIVER TO:</Text>
             <View style={styles.locationValue}>
-              <Text style={styles.locationName}>Select Address</Text>
+              <Text style={styles.locationName} numberOfLines={1}>{deliveryAddress || 'Select Address'}</Text>
               <Ionicons name="chevron-down" size={16} color="#9C9C9C" />
             </View>
-          </View>
+          </TouchableOpacity>
         )}
 
         {/* ===== GOAL-FIRST ORDERING ===== */}
@@ -416,37 +483,18 @@ export default function HomeScreen() {
               ))}
             </View>
 
-            {/* Fitness Goal */}
+            {/* Fitness Goal — all 6 canonical goals from the shared source */}
             <Text style={styles.builderLabel}>Fitness Goal</Text>
             <View style={styles.goalContainer}>
-              <View style={styles.goalRow}>
-                {[
-                  { key: 'fat_loss', label: 'Fat Loss', icon: 'trending-down' as const, color: Z_RED },
-                  { key: 'muscle_gain', label: 'Muscle Gain', icon: 'trending-up' as const, color: GREEN },
-                  { key: 'maintenance', label: 'Maintain', icon: 'swap-horizontal' as const, color: BK_ORANGE },
-                ].map(g => (
+              <View style={styles.goalGrid}>
+                {FUEL_GOALS.map(g => (
                   <TouchableOpacity
                     key={g.key} testID={`meal-goal-${g.key}`}
-                    style={[styles.goalChip, mealGoal === g.key && { backgroundColor: g.color, borderColor: g.color }]}
+                    style={[styles.goalChip6, mealGoal === g.key && { backgroundColor: g.color, borderColor: g.color }]}
                     onPress={() => setMealGoal(g.key)}
                   >
-                    <Ionicons name={g.icon} size={16} color={mealGoal === g.key ? '#FFF' : g.color} />
-                    <Text style={[styles.goalText, mealGoal === g.key && { color: '#FFF' }]}>{g.label}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              <View style={styles.goalRow}>
-                {[
-                  { key: 'beginner', label: 'Beginner Phase', icon: 'ribbon' as const, color: '#5E97B8' },
-                  { key: 'recovery', label: 'Recovery Phase', icon: 'heart' as const, color: '#C77DA0' },
-                ].map(g => (
-                  <TouchableOpacity
-                    key={g.key} testID={`meal-goal-${g.key}`}
-                    style={[styles.goalChip, mealGoal === g.key && { backgroundColor: g.color, borderColor: g.color }]}
-                    onPress={() => setMealGoal(g.key)}
-                  >
-                    <Ionicons name={g.icon} size={16} color={mealGoal === g.key ? '#FFF' : g.color} />
-                    <Text style={[styles.goalText, mealGoal === g.key && { color: '#FFF' }]}>{g.label}</Text>
+                    <Ionicons name={g.icon as any} size={15} color={mealGoal === g.key ? '#FFF' : g.color} />
+                    <Text style={[styles.goalText, mealGoal === g.key && { color: '#FFF' }]}>{g.shortLabel}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -668,6 +716,63 @@ export default function HomeScreen() {
           <Ionicons name="sparkles" size={10} color="#FFF" />
         </View>
       </TouchableOpacity>
+
+      {/* ===== FIX 1: Delivery Address Modal ===== */}
+      <Modal visible={showAddressModal} transparent animationType="slide" onRequestClose={() => setShowAddressModal(false)}>
+        <View style={styles.addrOverlay}>
+          <View style={styles.addrSheet}>
+            <View style={styles.addrHandle} />
+            <View style={styles.addrHeader}>
+              <Text style={styles.addrTitle}>Delivery Address</Text>
+              <TouchableOpacity testID="addr-close-btn" onPress={() => setShowAddressModal(false)}>
+                <Ionicons name="close-circle" size={26} color="#D0D0D0" />
+              </TouchableOpacity>
+            </View>
+
+            {!!deliveryAddress && (
+              <View style={styles.addrCurrent}>
+                <Ionicons name="checkmark-circle" size={16} color={GREEN} />
+                <Text style={styles.addrCurrentText} numberOfLines={2}>{deliveryAddress}</Text>
+              </View>
+            )}
+
+            <TouchableOpacity testID="detect-location-btn" style={styles.addrDetectBtn} onPress={detectLocation} disabled={locating} activeOpacity={0.85}>
+              {locating ? (
+                <><ActivityIndicator color="#FFF" size="small" /><Text style={styles.addrDetectText}>Detecting your location…</Text></>
+              ) : (
+                <><Ionicons name="navigate" size={18} color="#FFF" /><Text style={styles.addrDetectText}>Use my current location</Text></>
+              )}
+            </TouchableOpacity>
+
+            {!!locationError && (
+              <View style={styles.addrErrorRow} testID="addr-error">
+                <Ionicons name="alert-circle" size={14} color={Z_RED} />
+                <Text style={styles.addrErrorText}>{locationError}</Text>
+              </View>
+            )}
+
+            <View style={styles.addrDividerRow}>
+              <View style={styles.addrDividerLine} />
+              <Text style={styles.addrDividerText}>OR ENTER MANUALLY</Text>
+              <View style={styles.addrDividerLine} />
+            </View>
+
+            <TextInput
+              testID="manual-address-input"
+              style={styles.addrInput}
+              value={manualAddress}
+              onChangeText={setManualAddress}
+              placeholder="House / Flat, Street, Area, City"
+              placeholderTextColor="#B0B0B0"
+              multiline
+            />
+            <TouchableOpacity testID="save-address-btn" style={styles.addrSaveBtn} onPress={saveManualAddress} activeOpacity={0.85}>
+              <Ionicons name="checkmark" size={18} color={FUEL.ink} />
+              <Text style={styles.addrSaveText}>Save Address</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -888,6 +993,8 @@ const styles = StyleSheet.create({
   vegDotInner: { width: 7, height: 7, borderRadius: 4 },
   goalContainer: { marginBottom: 8 },
   goalRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  goalGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  goalChip6: { flexBasis: '31%', flexGrow: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 12, paddingHorizontal: 6, borderRadius: 25, backgroundColor: BK_WHITE, borderWidth: 2, borderColor: '#E6E1D4' },
   goalChip: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 12, borderRadius: 25, backgroundColor: BK_WHITE, borderWidth: 2, borderColor: '#E6E1D4' },
   goalText: { fontSize: 11, fontWeight: '700', color: BK_TEXT_LIGHT },
   budgetInput: { backgroundColor: BK_CREAM, borderRadius: 12, padding: 14, color: BK_BROWN, fontSize: 15, fontWeight: '600', borderWidth: 2, borderColor: '#E6E1D4', marginBottom: 14 },
@@ -1002,7 +1109,7 @@ const styles = StyleSheet.create({
   proteinLabel: { fontSize: 9, color: 'rgba(245,235,220,0.8)', textTransform: 'uppercase' },
   vegBadge: { 
     position: 'absolute', 
-    bottom: 10, 
+    top: 124, 
     right: 10, 
     width: 20, 
     height: 20, 
@@ -1026,4 +1133,23 @@ const styles = StyleSheet.create({
   floatingAiBtn: { position: 'absolute', bottom: 90, right: 20, width: 56, height: 56, borderRadius: 28, backgroundColor: BK_ORANGE, alignItems: 'center', justifyContent: 'center', shadowColor: BK_BROWN, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 10 },
   floatingAiInner: { width: 56, height: 56, borderRadius: 28, backgroundColor: BK_ORANGE, alignItems: 'center', justifyContent: 'center' },
   floatingAiBadge: { position: 'absolute', top: -2, right: -2, width: 20, height: 20, borderRadius: 10, backgroundColor: BK_RED, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: BK_WHITE },
+
+  // Delivery Address Modal (FIX 1)
+  addrOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  addrSheet: { backgroundColor: BK_CREAM, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 32 },
+  addrHandle: { alignSelf: 'center', width: 44, height: 5, borderRadius: 3, backgroundColor: '#D8D2C4', marginBottom: 14 },
+  addrHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
+  addrTitle: { fontFamily: FONT.display, fontSize: 22, color: BK_BROWN, textTransform: 'uppercase', letterSpacing: 0.5 },
+  addrCurrent: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#EAF2DD', borderRadius: 12, padding: 12, marginBottom: 14 },
+  addrCurrentText: { flex: 1, fontSize: 13, fontWeight: '600', color: BK_BROWN },
+  addrDetectBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: BK_RED, borderRadius: 16, paddingVertical: 16 },
+  addrDetectText: { color: FUEL.lime, fontSize: 15, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
+  addrErrorRow: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#F1E7E1', borderRadius: 10, padding: 10, marginTop: 12 },
+  addrErrorText: { flex: 1, fontSize: 12, color: BK_RED, fontWeight: '600' },
+  addrDividerRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 18 },
+  addrDividerLine: { flex: 1, height: 1, backgroundColor: '#E0DACB' },
+  addrDividerText: { fontSize: 10, fontWeight: '800', color: BK_TEXT_LIGHT, letterSpacing: 0.5 },
+  addrInput: { backgroundColor: BK_WHITE, borderRadius: 14, padding: 14, minHeight: 64, color: BK_BROWN, fontSize: 14, fontWeight: '600', borderWidth: 2, borderColor: '#E6E1D4', textAlignVertical: 'top' },
+  addrSaveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: FUEL.lime, borderRadius: 16, paddingVertical: 16, marginTop: 14 },
+  addrSaveText: { color: FUEL.ink, fontSize: 15, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
 });

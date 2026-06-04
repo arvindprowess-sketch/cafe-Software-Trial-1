@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { apiCall } from '../utils/api';
+import { GOALS as FUEL_GOALS } from '../utils/theme';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const Z_RED = '#15140F';
@@ -12,13 +13,15 @@ const PURPLE = '#15140F';
 const DARK = '#15140F';
 
 const BUDGETS = [100, 150, 200, 250, 300, 400, 500];
-const GOALS = [
-  { key: 'muscle_gain', label: 'Muscle Gain', icon: 'trending-up', desc: 'High protein, moderate carbs', color: GREEN, bg: '#EAF2DD' },
-  { key: 'fat_loss', label: 'Fat Loss', icon: 'flame', desc: 'Low cal, lean protein focus', color: Z_RED, bg: '#F1E7E1' },
-  { key: 'maintenance', label: 'Maintenance', icon: 'swap-horizontal', desc: 'Balanced macros, good variety', color: PURPLE, bg: '#EEF1EC' },
-  { key: 'beginner', label: 'Beginner Phase', icon: 'ribbon', desc: 'Easy to digest, moderate cal', color: '#5E97B8', bg: '#EEF1EC' },
-  { key: 'recovery', label: 'Recovery Phase', icon: 'heart', desc: 'Lower intensity, anti-inflammatory', color: '#C77DA0', bg: '#F1E7E1' },
-];
+// 6 canonical goals from the shared source of truth (utils/theme).
+const GOALS = FUEL_GOALS.map(g => ({
+  key: g.key,
+  label: g.label,
+  icon: g.icon,
+  desc: g.desc,
+  color: g.color,
+  bg: `${g.color}18`,
+}));
 const DIETS = [
   { key: 'veg', label: 'Vegetarian', icon: 'leaf', color: GREEN },
   { key: 'non-veg', label: 'Non-Veg', icon: 'restaurant', color: Z_RED },
@@ -118,7 +121,9 @@ export default function ComboBuilderScreen() {
         pathname: '/customize', 
         params: { 
           cart: cartString, 
-          orderType: 'dine-in' 
+          orderType: 'dine-in',
+          goal,
+          budget: String(budget),
         } 
       });
       console.log('[Combo Builder] Navigation triggered to customize screen');

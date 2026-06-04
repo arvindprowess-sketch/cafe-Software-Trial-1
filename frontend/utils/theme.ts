@@ -46,12 +46,22 @@ export const FONT = {
   bodyExtrabold: 'HankenGrotesk_800ExtraBold',
 } as const;
 
-// The four goal-first ordering options shown on the home screen.
+// ============================================================================
+// CANONICAL FITNESS GOALS — single source of truth used EVERYWHERE
+// (home goal selector, side-drawer menu, AI Picks, Budget/Build meal builder,
+//  combo builder, checkout). Never hardcode goals in a screen — import this.
+// Backend AI guidelines must stay in sync (server.py GOAL_GUIDELINES).
+// ============================================================================
 export const GOALS = [
-  { key: 'fat_loss', label: 'Fat Loss', icon: 'trending-down' },
-  { key: 'muscle_gain', label: 'Muscle Gain', icon: 'barbell' },
-  { key: 'maintenance', label: 'Maintenance', icon: 'swap-horizontal' },
-  { key: 'beginner', label: 'Beginner', icon: 'ribbon' },
+  { key: 'fat_loss',      label: 'Fat Loss',       shortLabel: 'Fat Loss',  icon: 'trending-down',    color: '#C0392B', desc: 'Low cal, lean protein focus' },
+  { key: 'muscle_gain',   label: 'Muscle Gain',    shortLabel: 'Muscle',    icon: 'barbell',          color: '#3FA34D', desc: 'High protein, moderate carbs' },
+  { key: 'maintenance',   label: 'Maintenance',    shortLabel: 'Maintain',  icon: 'swap-horizontal',  color: '#D69A35', desc: 'Balanced macros, good variety' },
+  { key: 'beginner',      label: 'Beginner',       shortLabel: 'Beginner',  icon: 'ribbon',           color: '#5E97B8', desc: 'Easy to digest, moderate cal' },
+  { key: 'recomposition', label: 'Recomposition',  shortLabel: 'Recomp',    icon: 'sync',             color: '#8E6FB8', desc: 'Build muscle + lose fat together' },
+  { key: 'lean_bulk',     label: 'Lean Bulk',      shortLabel: 'Lean Bulk', icon: 'trending-up',      color: '#E2603F', desc: 'Slight surplus, minimal fat gain' },
 ] as const;
+
+export type GoalKey = typeof GOALS[number]['key'];
+export const getGoal = (key?: string) => GOALS.find(g => g.key === key);
 
 export default FUEL;

@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { apiCall, getStoredUser } from '../utils/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const Z_RED = '#15140F';
 const GREEN = '#3FA34D';
@@ -39,8 +40,12 @@ export default function CustomizeScreen() {
   console.log('[Customize] Normalized cart:', normalizedCart);
   
   const [items, setItems] = useState<any[]>(normalizedCart);
-  const [goal, setGoal] = useState('');
-  const [budget, setBudget] = useState('');
+  // FIX 3: carry goal + budget forward from the AI Picks / builder flow so we
+  // don't ask the user for them a second time. When present, hide the selector.
+  const cameFromAI = !!(params.goal);
+  const [goal, setGoal] = useState((params.goal as string) || '');
+  const [budget, setBudget] = useState((params.budget as string) || '');
+  const [deliveryAddress, setDeliveryAddress] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiSuggestion, setAiSuggestion] = useState<any>(null);
   const [ordering, setOrdering] = useState(false);
@@ -62,6 +67,7 @@ export default function CustomizeScreen() {
 
   useEffect(() => {
     loadUserGoals();
+    AsyncStorage.getItem('delivery_address').then(a => { if (a) setDeliveryAddress(a); }).catch(() => {});
   }, []);
 
   const loadUserGoals = async () => {
@@ -340,6 +346,7 @@ export default function CustomizeScreen() {
         total_fat: totals.fat, 
         fitness_goal: goal || null, 
         budget: budget ? parseFloat(budget) : null,
+        delivery_address: selectedOrderType === 'delivery' ? (deliveryAddress || null) : null,
         is_scheduled: isScheduled,
       };
       if (isScheduled) {
@@ -566,6 +573,19 @@ export default function CustomizeScreen() {
             ))}
           </View>
 
+          {/* FIX 1: delivery address carried from Home (persisted) */}
+          {selectedOrderType === 'delivery' && (
+            <View style={styles.deliveryAddrCard} testID="customize-delivery-address">
+              <Ionicons name="location" size={16} color={Z_RED} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.deliveryAddrLabel}>Deliver to</Text>
+                <Text style={styles.deliveryAddrText} numberOfLines={2}>
+                  {deliveryAddress || 'No address set — add one from the Home screen'}
+                </Text>
+              </View>
+            </View>
+          )}
+
           {/* Schedule Toggle */}
           <View style={styles.scheduleSection} testID="schedule-section">
             <View style={styles.scheduleToggleRow}>
@@ -626,34 +646,39 @@ export default function CustomizeScreen() {
             )}
           </View>
 
-          <Text style={styles.section}>Fitness Goal</Text>
-          <View style={styles.goalContainer}>
-            <View style={styles.goalRow}>
-              {[
-                { key: 'fat_loss', label: 'Fat Loss' },
-                { key: 'muscle_gain', label: 'Muscle Gain' },
-                { key: 'maintenance', label: 'Maintain' }
-              ].map(g => (
-                <TouchableOpacity key={g.key} testID={`customize-goal-${g.key}`} style={[styles.goalChip, goal === g.key && styles.goalActive]} onPress={() => setGoal(g.key)}>
-                  <Text style={[styles.goalText, goal === g.key && { color: '#FFF' }]}>{g.label}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <View style={styles.goalRow}>
-              {[
-                { key: 'beginner', label: 'Beginner' },
-                { key: 'recovery', label: 'Recovery' }
-              ].map(g => (
-                <TouchableOpacity key={g.key} testID={`customize-goal-${g.key}`} style={[styles.goalChip, goal === g.key && styles.goalActive]} onPress={() => setGoal(g.key)}>
-                  <Text style={[styles.goalText, goal === g.key && { color: '#FFF' }]}>{g.label}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-          <View style={styles.budgetRow}>
-            <Text style={styles.budgetLabel}>Budget</Text>
-            <TextInput testID="budget-input" style={styles.budgetInput} value={budget} onChangeText={setBudget} placeholder="₹ optional" placeholderTextColor="#B0B0B0" keyboardType="number-pad" />
-          </View>
+          {!cameFromAI && (
+            <>
+              <Text style={styles.section}>Fitness Goal</Text>
+              <View style={styles.goalContainer}>
+                <View style={styles.goalRow}>
+                  {[
+                    { key: 'fat_loss', label: 'Fat Loss' },
+                    { key: 'muscle_gain', label: 'Muscle Gain' },
+                    { key: 'maintenance', label: 'Maintain' }
+                  ].map(g => (
+                    <TouchableOpacity key={g.key} testID={`customize-goal-${g.key}`} style={[styles.goalChip, goal === g.key && styles.goalActive]} onPress={() => setGoal(g.key)}>
+                      <Text style={[styles.goalText, goal === g.key && { color: '#FFF' }]}>{g.label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <View style={styles.goalRow}>
+                  {[
+                    { key: 'beginner', label: 'Beginner' },
+                    { key: 'recomposition', label: 'Recomp' },
+                    { key: 'lean_bulk', label: 'Lean Bulk' }
+                  ].map(g => (
+                    <TouchableOpacity key={g.key} testID={`customize-goal-${g.key}`} style={[styles.goalChip, goal === g.key && styles.goalActive]} onPress={() => setGoal(g.key)}>
+                      <Text style={[styles.goalText, goal === g.key && { color: '#FFF' }]}>{g.label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+              <View style={styles.budgetRow}>
+                <Text style={styles.budgetLabel}>Budget</Text>
+                <TextInput testID="budget-input" style={styles.budgetInput} value={budget} onChangeText={setBudget} placeholder="₹ optional" placeholderTextColor="#B0B0B0" keyboardType="number-pad" />
+              </View>
+            </>
+          )}
 
           <Text style={styles.section}>Your Items</Text>
           {items.map(item => 
@@ -949,6 +974,9 @@ const styles = StyleSheet.create({
 
   // Order type selector
   orderTypeRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
+  deliveryAddrCard: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#FFF', borderRadius: 12, padding: 14, marginBottom: 16, borderWidth: 1.5, borderColor: '#F1E7E1' },
+  deliveryAddrLabel: { fontSize: 10, fontWeight: '700', color: '#6B6A5E', textTransform: 'uppercase', letterSpacing: 0.5 },
+  deliveryAddrText: { fontSize: 13, fontWeight: '600', color: '#15140F', marginTop: 2 },
   orderTypeChip: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 12, backgroundColor: '#FFF', borderWidth: 1.5, borderColor: '#E8E8E8' },
   orderTypeChipActive: { backgroundColor: Z_RED, borderColor: Z_RED },
   orderTypeChipText: { fontSize: 13, fontWeight: '700', color: '#6B6A5E' },

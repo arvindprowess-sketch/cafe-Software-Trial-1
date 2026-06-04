@@ -25,7 +25,9 @@
       "edgeToEdgeEnabled": true,
       "permissions": [
         "READ_EXTERNAL_STORAGE",
-        "CAMERA"
+        "CAMERA",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
       ]
     },
     "web": {
@@ -49,6 +51,12 @@
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#E23744"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "FUEL uses your location to detect your delivery address."
         }
       ]
     ],

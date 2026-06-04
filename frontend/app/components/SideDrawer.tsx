@@ -6,6 +6,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { apiCall, logout } from '../../utils/api';
+import { GOALS, getGoal } from '../../utils/theme';
 
 const { width } = Dimensions.get('window');
 const DRAWER_WIDTH = width * 0.85;
@@ -18,12 +19,6 @@ interface SideDrawerProps {
   onClose: () => void;
   user: any;
 }
-
-const GOALS = [
-  { key: 'fat_loss', label: 'Fat Loss', icon: 'trending-down' as const, color: Z_RED },
-  { key: 'muscle_gain', label: 'Muscle Gain', icon: 'trending-up' as const, color: GREEN },
-  { key: 'maintenance', label: 'Maintain', icon: 'swap-horizontal' as const, color: PURPLE },
-];
 
 const MENU_ITEMS = [
   { id: 'orders', label: 'Recent Orders', icon: 'time-outline', route: '/(tabs)/orders' },
@@ -179,7 +174,7 @@ export default function SideDrawer({ visible, onClose, user }: SideDrawerProps) 
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.goalText}>
-                {goal === 'fat_loss' ? 'Fat Loss' : goal === 'muscle_gain' ? 'Muscle Gain' : 'Maintenance'}
+                {getGoal(goal)?.label || 'Maintenance'}
               </Text>
               <Text style={styles.goalSub}>{calories} kcal target</Text>
             </View>
@@ -199,8 +194,8 @@ export default function SideDrawer({ visible, onClose, user }: SideDrawerProps) 
                       style={[styles.goalPill, goal === g.key && { borderColor: g.color, backgroundColor: `${g.color}15` }]}
                       onPress={() => setGoal(g.key)}
                     >
-                      <Ionicons name={g.icon} size={16} color={goal === g.key ? g.color : '#6B6A5E'} />
-                      <Text style={[styles.goalPillText, goal === g.key && { color: g.color, fontWeight: '700' }]}>{g.label}</Text>
+                      <Ionicons name={g.icon as any} size={15} color={goal === g.key ? g.color : '#6B6A5E'} />
+                      <Text style={[styles.goalPillText, goal === g.key && { color: g.color, fontWeight: '700' }]}>{g.shortLabel}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -348,10 +343,10 @@ const styles = StyleSheet.create({
   // Goals expandable section
   goalsSection: { paddingHorizontal: 16, paddingTop: 8 },
   sectionTitle: { fontSize: 14, fontWeight: '700', color: '#15140F', marginBottom: 8, marginTop: 4 },
-  goalsRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
+  goalsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
   goalPill: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 6, paddingVertical: 10, borderRadius: 20,
+    minWidth: '30%', flexGrow: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 5, paddingVertical: 10, paddingHorizontal: 8, borderRadius: 20,
     backgroundColor: '#FFF', borderWidth: 1.5, borderColor: '#E8E8E8',
   },
   goalPillText: { fontSize: 11, fontWeight: '600', color: '#6B6A5E' },
