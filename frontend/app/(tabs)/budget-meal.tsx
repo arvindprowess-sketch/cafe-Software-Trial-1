@@ -114,10 +114,10 @@ export default function BudgetMealScreen() {
           </ScrollView>
         </View>
 
-        {/* Fitness Goal selector — all 6 canonical goals (shared source) */}
-        <View style={styles.goalFilterRow}>
+        {/* Fitness Goal selector — all 6 canonical goals, fixed (no horizontal scroll) */}
+        <View style={styles.goalSection}>
           <Text style={styles.goalFilterLabel}>Goal</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.goalFilterScroll}>
+          <View style={styles.goalWrap}>
             {GOALS.map(g => (
               <TouchableOpacity
                 key={g.key}
@@ -129,7 +129,7 @@ export default function BudgetMealScreen() {
                 <Text style={[styles.filterText, goal === g.key && { color: '#FFF' }]}>{g.shortLabel}</Text>
               </TouchableOpacity>
             ))}
-          </ScrollView>
+          </View>
         </View>
 
         {/* Primary Smart Fill CTA */}
@@ -163,9 +163,9 @@ const styles = StyleSheet.create({
   budgetSection: { backgroundColor: '#FFF', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#E6E1D4' },
   budgetInputRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   budgetLabel: { fontSize: 16, fontWeight: '700', color: '#15140F' },
-  budgetInputBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F4F1E9', borderRadius: 12, paddingHorizontal: 14, borderWidth: 2, borderColor: Z_RED },
-  rupeeSign: { fontSize: 20, fontWeight: '800', color: Z_RED },
-  budgetInput: { fontSize: 24, fontWeight: '800', color: '#15140F', minWidth: 80, textAlign: 'center', paddingVertical: 8 },
+  budgetInputBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F4F1E9', borderRadius: 12, paddingHorizontal: 12, borderWidth: 2, borderColor: Z_RED, width: 132 },
+  rupeeSign: { fontSize: 18, fontWeight: '800', color: Z_RED },
+  budgetInput: { flex: 1, minWidth: 0, fontSize: 20, fontWeight: '800', color: '#15140F', textAlign: 'center', paddingVertical: 8 },
   presetsRow: { flexDirection: 'row', gap: 8, marginBottom: 12, flexWrap: 'wrap' },
   presetBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: '#F4F1E9', borderWidth: 1, borderColor: '#E6E1D4' },
   presetBtnActive: { backgroundColor: Z_RED, borderColor: Z_RED },
@@ -185,10 +185,10 @@ const styles = StyleSheet.create({
   filterText: { fontSize: 12, fontWeight: '600', color: '#6B6A5E' },
   vegDotSmall: { width: 10, height: 10, borderRadius: 5 },
 
-  // Goal filter row
-  goalFilterRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E6E1D4', paddingLeft: 16 },
-  goalFilterLabel: { fontSize: 12, fontWeight: '800', color: '#15140F', textTransform: 'uppercase', letterSpacing: 0.5, marginRight: 4 },
-  goalFilterScroll: { paddingRight: 16, paddingVertical: 10, gap: 8 },
+  // Goal selector (fixed wrap — no horizontal scroll)
+  goalSection: { backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E6E1D4', paddingHorizontal: 16, paddingVertical: 12 },
+  goalFilterLabel: { fontSize: 12, fontWeight: '800', color: '#15140F', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 },
+  goalWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   goalFilterChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, backgroundColor: '#F4F1E9', borderWidth: 1.5, borderColor: '#E8E8E8' },
 
   // Smart Fill CTA
