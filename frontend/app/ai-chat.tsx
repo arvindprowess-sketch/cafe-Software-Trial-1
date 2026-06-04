@@ -295,6 +295,7 @@ export default function AIChatScreen() {
         {/* Input */}
         <View style={styles.inputContainer}>
           <TextInput
+            testID="ai-chat-input"
             style={styles.input}
             value={input}
             onChangeText={setInput}
@@ -304,6 +305,7 @@ export default function AIChatScreen() {
             maxLength={500}
           />
           <TouchableOpacity 
+            testID="ai-send-btn"
             style={[styles.sendBtn, !input.trim() && styles.sendBtnDisabled]}
             onPress={sendMessage}
             disabled={!input.trim() || loading}

@@ -16,17 +16,18 @@ export default function TabLayout() {
     >
       <Tabs.Screen
         name="home"
-        options={{ title: 'Home', tabBarIcon: ({ color, size }) => <Ionicons name="compass" size={size} color={color} /> }}
+        options={{ title: 'Home', tabBarButtonTestID: 'tab-home', tabBarIcon: ({ color, size }) => <Ionicons name="compass" size={size} color={color} /> }}
       />
       <Tabs.Screen
         name="menu"
-        options={{ title: 'Menu', tabBarIcon: ({ color, size }) => <Ionicons name="restaurant" size={size} color={color} /> }}
+        options={{ title: 'Menu', tabBarButtonTestID: 'tab-menu', tabBarIcon: ({ color, size }) => <Ionicons name="restaurant" size={size} color={color} /> }}
       />
       {/* Raised circular lime center button — "⚡ Build my meal" */}
       <Tabs.Screen
         name="budget-meal"
         options={{
           title: 'Build',
+          tabBarButtonTestID: 'tab-build',
           tabBarLabel: () => null,
           tabBarIcon: ({ focused }) => (
             <View style={styles.centerWrap} pointerEvents="none">
@@ -40,7 +41,7 @@ export default function TabLayout() {
       />
       <Tabs.Screen
         name="orders"
-        options={{ title: 'Orders', tabBarIcon: ({ color, size }) => <Ionicons name="receipt" size={size} color={color} /> }}
+        options={{ title: 'Orders', tabBarButtonTestID: 'tab-orders', tabBarIcon: ({ color, size }) => <Ionicons name="receipt" size={size} color={color} /> }}
       />
       <Tabs.Screen name="profile" options={{ href: null }} />
     </Tabs>

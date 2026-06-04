@@ -125,3 +125,21 @@ Goal: give the user ONE preview URL to test BOTH the customer mobile app and the
   suggestions panel from budget-meal.tsx; added a Goal selector row there.
 - Also normalized data-testid -> testID in SideDrawer.tsx & menu.tsx (RN-Web only maps testID).
 - Mobile is a static web export: after Expo edits run `bash /app/scripts/build-mobile.sh`.
+
+## 2026-06-04 — Round 3: Unified Cart + Checkout + AI Add
+- NEW shared cart (utils/CartContext.tsx, AsyncStorage-persisted) used by Menu, Home (popular + AI builder),
+  AI Diet Assistant, Build/Budget, Combo, Smart Fill, Reorder. One cart app-wide.
+- NEW app/cart.tsx unified checkout: macros hero (kcal+P/C/F), order-type toggle (dine-in table /
+  takeaway / delivery address+tip), coupons & offers, savings tiers bar, full bill breakdown,
+  schedule, GST invoice, "add more" photo carousel, empty state, payment mode, Place Order.
+- NEW components/CartPill.tsx floating pill on browsing screens.
+- Add-to-cart steppers everywhere (menu add-<id>/plus/minus, home popular, cart inc/dec).
+- AI chat: explicit "Add to cart" per suggestion (ai-add-meal-<id>) -> shared cart with exact grams.
+- All old direct-order paths now route to /cart (no checkout that skips the cart). /customize retired as checkout.
+- Reorder (order-detail) -> POST /orders/{id}/reorder -> replaceCart -> /cart with unavailable guard.
+- BACKEND: POST /api/cart/quote = authoritative bill (recomputes prices from current products = anti-tamper,
+  validates live stock -> out_of_stock, applies coupon/offer percentage/flat/bogo, delivery fee w/ free-over-300,
+  GST 5% incl, tip, savings tiers, max prep time). create_order stores delivery_fee/tip/gstin/business_name/delivery_time
+  + server total. /ai/chat now reliably emits actions.add (prompt + first-brace JSON parse + deterministic
+  name+grams fallback parser; import re added).
+- Tested 11/12 then AI-add fixed. Mobile is static export: rebuild via scripts/build-mobile.sh.

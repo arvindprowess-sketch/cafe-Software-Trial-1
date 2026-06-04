@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
+import re
 import logging
 import json
 import base64
@@ -1966,7 +1967,7 @@ RULES:
 5. For muscle_gain: high protein, moderate carbs
 6. Always use EXACT product names from menu
 7. If asked about nutrition, give practical advice
-8. If asked to add items, respond with JSON at the end like: {{\"add\": [{{\"name\": \"Product Name\", \"grams\": 100}}]}}
+8. CRITICAL: WHENEVER you suggest one or more specific meals/items (even if the user only asked for a "suggestion" or "what should I eat"), you MUST end your reply with a single JSON block on its own final line listing those items so the app can show an "Add to cart" button: {{\"add\": [{{\"name\": \"Exact Product Name\", \"grams\": 100}}, {{\"name\": \"Another Item\", \"grams\": 150}}]}}. Use EXACT menu names and the grams you recommended. Do NOT add the JSON if you are only giving general advice with no specific items.
 9. If customer says "order" or "checkout", respond with: {{\"action\": \"checkout\"}}
 10. Keep Indian food culture in mind
 11. IMPORTANT: You are NOT a doctor. Do NOT give medical, clinical, or diagnostic advice or treat health conditions (diabetes, BP, pregnancy, allergies, etc.). For any health condition, gently recommend consulting a qualified doctor/registered dietitian. Only give general food and menu guidance."""
@@ -1982,9 +1983,10 @@ RULES:
         # Parse any actions from response
         actions = None
         try:
-            # Check if response contains JSON action
+            # Check if response contains JSON action (capture the WHOLE object:
+            # first '{' to last '}') so nested arrays like {"add":[{...},{...}]} parse.
             if "{" in response and "}" in response:
-                json_start = response.rfind("{")
+                json_start = response.find("{")
                 json_end = response.rfind("}") + 1
                 json_str = response[json_start:json_end]
                 actions = json.loads(json_str)
@@ -1992,6 +1994,28 @@ RULES:
                 response = response[:json_start].strip()
         except:
             pass
+        
+        # Reliability fallback: if the model named specific menu items with portions
+        # (e.g. "Soya Chunks 100g") but did NOT emit the structured JSON, extract them
+        # deterministically so the app can always show an "Add to cart" button.
+        if not (actions and actions.get("add")):
+            found = []
+            used = set()
+            low_resp = response.lower()
+            for p in sorted(products, key=lambda x: -len(x["name"])):
+                name = p["name"]
+                idx = low_resp.find(name.lower())
+                if idx == -1 or p["id"] in used:
+                    continue
+                window = response[idx: idx + len(name) + 25]
+                gmatch = re.search(r'(\d{2,4})\s*g\b', window)
+                if not gmatch:
+                    continue  # only auto-add items the AI gave an explicit portion for
+                used.add(p["id"])
+                found.append({"name": name, "grams": int(gmatch.group(1))})
+            if found:
+                actions = actions or {}
+                actions["add"] = found
         
         # If action is to add items, enrich with product data
         if actions and "add" in actions:
