@@ -4,7 +4,7 @@ from collections import Counter
 import pytest
 import requests
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://86e42566-21ac-4110-a787-56bf0979d061.preview.emergentagent.com").rstrip("/")
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://meal-fit-goals.preview.emergentagent.com").rstrip("/")
 ADMIN_EMAIL = "admin@dietcafe.com"
 ADMIN_PASS = "admin123"
 REQUIRED_FIELDS = ["name", "category", "sales_count", "image_url", "cost_per_100g"]

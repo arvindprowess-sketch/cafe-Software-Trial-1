@@ -180,7 +180,7 @@ Goal: give the user ONE preview URL to test BOTH the customer mobile app and the
 ## 2026-06-05 — Resume + Phase 2 (Home) & Phase 3 (Cart)
 - Restored missing backend/.env + frontend/.env (gitignored), installed web-panel deps, re-seeded DB
   (16 products, 6 categories, 3 offers/packs, admin + kitchen 4321 + cashier 5678). Rebuilt mobile bundle.
-- Current preview: https://86e42566-21ac-4110-a787-56bf0979d061.preview.emergentagent.com  (/ = web portal, /mobile/ = customer app).
+- Current preview: https://meal-fit-goals.preview.emergentagent.com  (/ = web portal, /mobile/ = customer app).
 - 2A (home.tsx): Home floating CartPill lowered from bottom=80 -> bottom=6 to sit just above the bottom
   nav, matching the Menu screen cart bar. Floating AI button raised position adjusted 150 -> 76 when cart>0.
 - 2B (home.tsx): Popular Items capped at 6 (slice(0,6)); compact cards (popularCard 220->156, img 150->104,

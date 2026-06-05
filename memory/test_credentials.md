@@ -1,8 +1,8 @@
 # Test Credentials — FUEL Cafe Software
 
 ## 🔗 One Preview URL, two surfaces
-- **Staff WEB PORTAL / ADMIN** → `https://86e42566-21ac-4110-a787-56bf0979d061.preview.emergentagent.com/`
-- **Customer MOBILE APP** → `https://86e42566-21ac-4110-a787-56bf0979d061.preview.emergentagent.com/mobile/`
+- **Staff WEB PORTAL / ADMIN** → `https://meal-fit-goals.preview.emergentagent.com/`
+- **Customer MOBILE APP** → `https://meal-fit-goals.preview.emergentagent.com/mobile/`
 
 ## Admin (Web Portal — "ADMIN LOGIN" tab)
 - Email: `admin@dietcafe.com`
