@@ -190,3 +190,23 @@ Goal: give the user ONE preview URL to test BOTH the customer mobile app and the
   'Forgot something? Add more' now fetches this endpoint (fallback /products). Photo + Add per card kept.
 - Verified: testing agent iteration_26 — backend 5/5 pytest green, all 3 mobile changes confirmed on /mobile.
   Regression test: /app/backend/tests/test_top_selling_by_category.py.
+
+## 2026-06-05 — BUGFIX: mobile icons/thumbnails not showing (P0)
+- Symptom (user, Hindi): "home menu build orders... chote chote images nahi aa rahe" — small
+  icons + thumbnails blank across the customer mobile app.
+- ROOT CAUSE: the web-panel Vite dev server serves the Expo static export at /mobile. Vite
+  intercepts ANY URL containing "/node_modules/" and returned its SPA index.html
+  (Content-Type: text/html) for the Expo bundled assets at
+  /mobile/assets/node_modules/@expo/vector-icons/...Ionicons.<hash>.ttf (and the Google-font
+  ttf + bundled PNGs). So every bundled .ttf font (Ionicons + Anton + Hanken Grotesk) and PNG
+  decoded as HTML -> all icons + bundled images rendered as tofu/empty boxes. (Remote Unsplash
+  images were always fine.)
+- FIX (web-panel/vite.config.ts, serveMobile middleware rewrite): now intercepts EVERY /mobile/*
+  request before Vite's internal handlers. Extension-less paths -> Expo index.html (client routing);
+  any path WITH an extension -> read the real file from public/mobile and respond with the correct
+  MIME type (font/ttf, image/png, text/javascript, text/css, image/svg+xml, ...) + long Cache-Control.
+  Restarted frontend (no mobile rebuild needed — only serving changed).
+- VERIFIED: curl shows Ionicons.ttf -> font/ttf with valid SFNT magic 00 01 00 00 (was text/html);
+  bundled PNG -> image/png; JS -> text/javascript. Tab-bar icons render. Testing agent iteration_27:
+  zero /mobile/*.{ttf,png,js} returned text/html; document.fonts.ready = Ionicons+Anton loaded; cart
+  screen 8/8 <img> naturalWidth>0 + 13 icon glyphs. retest_needed=false.
