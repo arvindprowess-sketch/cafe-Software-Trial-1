@@ -2544,6 +2544,164 @@ async def nutrition_meal_plan(data: MealPlanRequest, user=Depends(get_current_us
         "disclaimer": TARGET_DISCLAIMER,
     }
 
+# ---------- Phase 4: full day plan + progress + coach nudge (CUSTOMER APP ONLY) ----------
+class DayPlanRequest(BaseModel):
+    meals_count: int = 3
+    diet_types: Optional[List[str]] = None
+    goal: Optional[str] = None
+
+class WeightLogCreate(BaseModel):
+    weight_kg: float
+    date: Optional[str] = None  # YYYY-MM-DD
+
+def _resolve_daily_target(user: dict, goal: str):
+    """Daily target tuple (cal, protein, carbs, fat) — recompute from body stats if present."""
+    if has_body_stats(user):
+        t = compute_daily_targets(user.get("height_cm"), user.get("weight_kg"), user.get("age"),
+                                  user.get("gender"), user.get("activity_level"), goal,
+                                  user.get("target_weight_kg")) or {}
+        return (t.get("daily_calories", 2000), t.get("daily_protein", 100),
+                t.get("daily_carbs", 250), t.get("daily_fat", 65))
+    return (user.get("daily_calories", 2000), user.get("daily_protein", 100),
+            user.get("daily_carbs", 250), user.get("daily_fat", 65))
+
+def _plan_item(p: dict, grams: float) -> dict:
+    """Cart-ready single item scaled to `grams` (rounded to 10g)."""
+    grams = max(10, round(grams / 10) * 10)
+    f = grams / 100.0
+    cpg = float(p.get("calories_per_100g") or 0)
+    ppg = float(p.get("protein_per_100g") or 0)
+    cbg = float(p.get("carbs_per_100g") or 0)
+    fpg = float(p.get("fat_per_100g") or 0)
+    cost = float(p.get("cost_per_100g") or 0)
+    return {
+        "product_id": p.get("id"), "id": p.get("id"), "name": p.get("name"),
+        "grams": grams, "product_type": "single", "cost_per_100g": cost,
+        "calories_per_100g": cpg, "protein_per_100g": ppg, "carbs_per_100g": cbg, "fat_per_100g": fpg,
+        "image_url": p.get("image_url"), "category": p.get("category"),
+        "diet_type": p.get("diet_type"), "diet_types": p.get("diet_types"),
+        "calories": round(cpg * f), "protein": round(ppg * f, 1),
+        "carbs": round(cbg * f, 1), "fat": round(fpg * f, 1), "price": round(cost * f),
+    }
+
+@api_router.post("/nutrition/day-plan")
+async def nutrition_day_plan(data: DayPlanRequest, user=Depends(get_current_user)):
+    """Phase 4: auto-build a full day from the available menu to hit the user's target (kcal+protein)."""
+    goal = data.goal or user.get("fitness_goal", "maintenance")
+    dc, dp, dca, df = _resolve_daily_target(user, goal)
+    slices = split_targets_into_meals(dc, dp, dca, df, data.meals_count)
+    prefs = diet_prefs_to_list(data.diet_types)
+    products = await fetch_active_products()
+    # scalable single dishes that are in stock and (optionally) match the chosen diet tags
+    pool = [p for p in products
+            if p.get("product_type", "single") != "ready_made"
+            and (p.get("available_qty_grams") or 0) > 0
+            and float(p.get("calories_per_100g") or 0) > 0
+            and (not prefs or product_matches_diet(p, prefs))]
+    if not pool:
+        raise HTTPException(status_code=400, detail="No available dishes match this diet — try fewer diet filters.")
+    protein_pool = sorted(pool, key=lambda p: -float(p.get("protein_per_100g") or 0))
+    # fillers add calories without piling on protein: prefer calorie-dense, non-meat items
+    filler_candidates = [p for p in pool if float(p.get("protein_per_100g") or 0) <= 18] or pool
+    filler_pool = sorted(filler_candidates, key=lambda p: -float(p.get("calories_per_100g") or 0))
+    meals_out = []
+    tot = {"calories": 0.0, "protein": 0.0, "carbs": 0.0, "fat": 0.0, "price": 0.0}
+    for i, s in enumerate(slices):
+        pitem = protein_pool[i % len(protein_pool)]
+        ppg = float(pitem.get("protein_per_100g") or 1) or 1
+        items = [_plan_item(pitem, min(300, max(30, (s["protein"] * 100.0) / ppg)))]
+        if items[0]["calories"] < s["calories"] * 0.9:
+            fitem = filler_pool[i % len(filler_pool)]
+            if fitem.get("id") == pitem.get("id"):
+                fitem = filler_pool[(i + 1) % len(filler_pool)]
+            cpg = float(fitem.get("calories_per_100g") or 1) or 1
+            rem = s["calories"] - items[0]["calories"]
+            items.append(_plan_item(fitem, min(500, max(20, (rem * 100.0) / cpg))))
+        mcal = sum(it["calories"] for it in items)
+        mpro = round(sum(it["protein"] for it in items), 1)
+        mcarb = round(sum(it["carbs"] for it in items), 1)
+        mfat = round(sum(it["fat"] for it in items), 1)
+        mprice = sum(it["price"] for it in items)
+        meals_out.append({"index": i, "label": s["label"],
+                          "target_calories": s["calories"], "target_protein": s["protein"],
+                          "calories": mcal, "protein": mpro, "carbs": mcarb, "fat": mfat,
+                          "price": mprice, "items": items})
+        tot["calories"] += mcal; tot["protein"] += mpro; tot["carbs"] += mcarb
+        tot["fat"] += mfat; tot["price"] += mprice
+    return {"goal": goal, "meals_count": len(meals_out),
+            "daily_calories": dc, "daily_protein": dp, "daily_carbs": dca, "daily_fat": df,
+            "meals": meals_out, "totals": {k: round(v, 1) for k, v in tot.items()},
+            "disclaimer": TARGET_DISCLAIMER}
+
+def _compute_progress(logs: list, user: dict) -> dict:
+    logs_sorted = sorted(logs, key=lambda l: l["date"])
+    out_logs = [{"date": l["date"], "weight_kg": l["weight_kg"]} for l in logs_sorted]
+    points = len(logs_sorted) * 10
+    dates = sorted({l["date"] for l in logs_sorted})
+    streak = 0
+    if dates:
+        try:
+            cur = datetime.strptime(dates[-1], "%Y-%m-%d").date()
+            dset = set(dates)
+            while cur.strftime("%Y-%m-%d") in dset:
+                streak += 1
+                cur = cur - timedelta(days=1)
+        except Exception:
+            streak = len(dates)
+    start_w = out_logs[0]["weight_kg"] if out_logs else user.get("weight_kg")
+    latest_w = out_logs[-1]["weight_kg"] if out_logs else user.get("weight_kg")
+    change = round(latest_w - start_w, 1) if (start_w is not None and latest_w is not None) else None
+    return {"logs": out_logs, "points": points, "current_streak": streak,
+            "start_weight": start_w, "latest_weight": latest_w,
+            "target_weight_kg": user.get("target_weight_kg"), "change": change}
+
+@api_router.post("/user/weight-log")
+async def add_weight_log(data: WeightLogCreate, user=Depends(get_current_user)):
+    if not data.weight_kg or data.weight_kg < 25 or data.weight_kg > 400:
+        raise HTTPException(status_code=400, detail="Please enter a valid weight in kg.")
+    d = data.date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    await db.weight_logs.update_one(
+        {"user_id": user["id"], "date": d},
+        {"$set": {"user_id": user["id"], "date": d, "weight_kg": float(data.weight_kg),
+                  "updated_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+    logs = await db.weight_logs.find({"user_id": user["id"]}, {"_id": 0}).to_list(400)
+    latest = max(logs, key=lambda l: l["date"]) if logs else None
+    if latest and latest["date"] == d:
+        await db.users.update_one({"id": user["id"]}, {"$set": {"weight_kg": float(data.weight_kg)}})
+    return _compute_progress(logs, {**user, "weight_kg": (latest["weight_kg"] if latest else user.get("weight_kg"))})
+
+@api_router.get("/user/weight-log")
+async def get_weight_log(user=Depends(get_current_user)):
+    logs = await db.weight_logs.find({"user_id": user["id"]}, {"_id": 0}).to_list(400)
+    return _compute_progress(logs, user)
+
+@api_router.get("/user/coach-nudge")
+async def coach_nudge(user=Depends(get_current_user)):
+    """Phase 4: gentle, non-shaming nudge based on today's intake vs target. Not medical advice."""
+    goal = user.get("fitness_goal", "maintenance")
+    dc, dp, _dca, _df = _resolve_daily_target(user, goal)
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    summary = await db.meal_history.find_one({"user_id": user["id"], "date": today}, {"_id": 0})
+    cons_cal = summary.get("total_calories", 0) if summary else 0
+    cons_pro = summary.get("total_protein", 0) if summary else 0
+    rem_cal = round(dc - cons_cal)
+    rem_pro = round(dp - cons_pro)
+    if cons_cal <= 0:
+        nudge, ntype, suggestion = (f"Fresh day! Aim for about {dc} kcal and {dp}g protein. You've got this.", "plan", "high-protein")
+    elif cons_pro < dp * 0.6 and cons_cal >= dc * 0.4:
+        nudge, ntype, suggestion = (f"You're a little low on protein today — a high-protein dish helps you reach {dp}g. No pressure!", "protein", "high-protein")
+    elif rem_cal > dc * 0.5:
+        nudge, ntype, suggestion = (f"You've still got room for ~{rem_cal} kcal today — a balanced meal keeps you on track.", "calories", None)
+    elif rem_cal < -150:
+        nudge, ntype, suggestion = ("A bit over today — totally okay. Tomorrow's a clean slate and every day counts.", "over", None)
+    else:
+        nudge, ntype, suggestion = ("Nicely balanced today — you're right on track. Keep it up!", "ontrack", None)
+    return {"nudge": nudge, "type": ntype, "suggestion": suggestion,
+            "remaining_calories": rem_cal, "remaining_protein": rem_pro,
+            "daily_calories": dc, "daily_protein": dp}
+
+
+
 
 
 @api_router.get("/user/nutrition-summary")

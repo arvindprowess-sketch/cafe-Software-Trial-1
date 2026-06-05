@@ -73,10 +73,18 @@ export default function HomeScreen() {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiMeal, setAiMeal] = useState<any>(null);
 
-  // Phase 2/3: personalized daily target (from body stats)
+  // Phase 2/3/4: personalized daily target + coach nudge (from body stats)
   const [dailyTarget, setDailyTarget] = useState<any>(null);
+  const [coachNudge, setCoachNudge] = useState<any>(null);
   const loadTarget = useCallback(async () => {
-    try { setDailyTarget(await apiCall('/user/daily-target')); } catch {}
+    try {
+      const [t, n] = await Promise.all([
+        apiCall('/user/daily-target'),
+        apiCall('/user/coach-nudge').catch(() => null),
+      ]);
+      setDailyTarget(t);
+      setCoachNudge(t?.has_body_stats ? n : null);
+    } catch {}
   }, []);
 
   const loadData = useCallback(async () => {
@@ -398,6 +406,14 @@ export default function HomeScreen() {
               <Text style={styles.targetSetupText}>Tap a goal to get a personalized daily target</Text>
             </TouchableOpacity>
           )}
+
+          {/* Phase 4: gentle coach nudge */}
+          {coachNudge?.nudge ? (
+            <TouchableOpacity testID="home-coach-nudge" style={styles.nudgeBanner} activeOpacity={0.9} onPress={() => router.push('/meal-plan')}>
+              <Ionicons name="megaphone" size={15} color="#4F5A2E" />
+              <Text style={styles.nudgeBannerText}>{coachNudge.nudge}</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
 
         {/* ===== PROMOTIONAL BANNERS (ENHANCED) ===== */}
@@ -865,6 +881,8 @@ const styles = StyleSheet.create({
   targetBannerCtaText: { fontSize: 11.5, fontWeight: '800', color: FUEL.ink, letterSpacing: 0.5 },
   targetSetup: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: FUEL.limeTint, borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14, marginTop: 12 },
   targetSetupText: { flex: 1, fontSize: 13, fontWeight: '600', color: '#4F5A2E' },
+  nudgeBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: FUEL.limeTint, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12, marginTop: 10 },
+  nudgeBannerText: { flex: 1, fontSize: 12.5, fontWeight: '600', color: '#4F5A2E', lineHeight: 17 },
   
   // Header (BK Dark Brown)
   header: { 
