@@ -7,7 +7,7 @@ import requests
 import os
 from datetime import datetime, timezone
 
-BASE_URL = "https://cafe-app-22.preview.emergentagent.com"
+BASE_URL = "https://mobile-app-changes.preview.emergentagent.com"
 
 # Admin credentials
 ADMIN_EMAIL = "admin@dietcafe.com"
