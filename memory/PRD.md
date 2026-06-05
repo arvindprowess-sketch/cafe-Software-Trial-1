@@ -176,3 +176,17 @@ Goal: give the user ONE preview URL to test BOTH the customer mobile app and the
   price/macros; toggle keeps/removes. Totals + bottom bar recompute live. Verified swap
   Chicken Breast->Grilled Fish recomputed 2726->2685 cal, Rs250->Rs278.
 
+
+## 2026-06-05 — Resume + Phase 2 (Home) & Phase 3 (Cart)
+- Restored missing backend/.env + frontend/.env (gitignored), installed web-panel deps, re-seeded DB
+  (16 products, 6 categories, 3 offers/packs, admin + kitchen 4321 + cashier 5678). Rebuilt mobile bundle.
+- Current preview: https://86e42566-21ac-4110-a787-56bf0979d061.preview.emergentagent.com  (/ = web portal, /mobile/ = customer app).
+- 2A (home.tsx): Home floating CartPill lowered from bottom=80 -> bottom=6 to sit just above the bottom
+  nav, matching the Menu screen cart bar. Floating AI button raised position adjusted 150 -> 76 when cart>0.
+- 2B (home.tsx): Popular Items capped at 6 (slice(0,6)); compact cards (popularCard 220->156, img 150->104,
+  badges/info/price/add-button scaled down). Horizontal scroll + page vertical scroll unchanged.
+- 3A (backend/server.py + cart.tsx): new GET /api/products/top-selling-by-category (auth) returns top 5
+  highest-selling products per ACTIVE category (units summed from all orders; rating fallback). cart.tsx
+  'Forgot something? Add more' now fetches this endpoint (fallback /products). Photo + Add per card kept.
+- Verified: testing agent iteration_26 — backend 5/5 pytest green, all 3 mobile changes confirmed on /mobile.
+  Regression test: /app/backend/tests/test_top_selling_by_category.py.
