@@ -210,3 +210,22 @@ Goal: give the user ONE preview URL to test BOTH the customer mobile app and the
   bundled PNG -> image/png; JS -> text/javascript. Tab-bar icons render. Testing agent iteration_27:
   zero /mobile/*.{ttf,png,js} returned text/html; document.fonts.ready = Ionicons+Anton loaded; cart
   screen 8/8 <img> naturalWidth>0 + 13 icon glyphs. retest_needed=false.
+
+## 2026-06-05 — Popular Items: 30 best-sellers in 5-row horizontal grid
+- User wanted Home "Popular Items" to show up to 30 best-sellers as 5 rows stacked vertically that
+  scroll sideways together (Swiggy/Zomato style = 6 cols x 5 rows). Source = highest selling (sales history).
+- Backend: new PUBLIC GET /api/products/best-sellers?limit=30 — sums item qty across all orders ->
+  sales_count, returns active products sorted by (-sales_count, -rating)[:limit]. Public so the grid
+  always loads (no 403).
+- Frontend home.tsx: loadData now fetches /products/best-sellers; popularProducts=slice(0,30);
+  popularColumns chunks into columns of POPULAR_ROWS(=5); section renders columns (vertical stacks of 5)
+  inside a horizontal ScrollView (popularGridScroll). Card made more compact (img 90, no desc). First 3
+  get POPULAR badge.
+- ALSO FIXED (real root-cause of a stuck-loading bug): Expo static export prerenders ONE html PER ROUTE
+  (home.html, menu.html, cart.html...). The serveMobile middleware (web-panel/vite.config.ts) was serving
+  the generic index.html for every /mobile/* route -> client hydrated 'home' against the login markup ->
+  React #418 hydration mismatch -> screen stuck on spinner. Middleware now serves the route-matching
+  prerendered html (verified: md5 of served /mobile/home == home.html on disk). #418 gone.
+- NOTE: only 16 active products exist, so the grid currently shows 16 (fills toward 30 as products/sales grow).
+- VERIFIED: testing agent iteration_28 — 100% frontend pass: 5 rows x multi-column grid, 16 cards + 16 Add
+  buttons, 15-16 photos load, 53 Ionicons glyphs render, Add+ -> cart pill, best-seller order correct. retest_needed=false.
