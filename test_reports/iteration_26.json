@@ -1,0 +1,28 @@
+{
+  "summary": "Verified Phase 2A, 2B, 3A mobile-app changes and Phase 3A backend endpoint. All four targeted items pass. Backend endpoint /api/products/top-selling-by-category requires Bearer auth, returns a JSON array with at most 5 items per category, each containing name/category/sales_count/image_url/cost_per_100g, and is sorted by sales_count desc per category (rating fallback). Mobile home Popular Items renders exactly 6 compact horizontal cards with working horizontal scroll while page vertical scroll still works. After adding an item, cart-pill is placed just above the bottom nav (~14px gap). Cart 'Forgot something? Add more' carousel renders 10 horizontally-scrollable addon cards with images and Add buttons; tapping addon-add-{id} adds the product to the unified cart.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "passed_tests": [
+    "BACKEND 3A: GET /api/products/top-selling-by-category without token => 403; with invalid token => 401; with admin token => 200 JSON array (11 items) grouped Carb=5, Protein=5, Fat=1 (<=5 per category). All items have name/category/sales_count/image_url/cost_per_100g. Items within each category sorted by sales_count desc. (pytest: 5/5 passed)",
+    "MOBILE 2B Popular Items: data-testid='popular-add-*' count = 6 (exactly the spec maximum). Horizontal scroll container observed scrollWidth=1020 vs clientWidth=420. Vertical page scroll works (scrollHeight=1701 vs clientHeight=814).",
+    "MOBILE 2A Cart pill placement: after popular-add tap, [data-testid='cart-pill'] visible at bottom y=808 in a viewport of 880 (tab bar starts at y=822) - the pill now sits just above the bottom navigation bar, not mid-screen.",
+    "MOBILE 3A Cart Add-more: /mobile/cart renders 'FORGOT SOMETHING? ADD MORE' section with 10 addon cards ([data-testid^='addon-']) and 10 add buttons ([data-testid^='addon-add-']). Container is horizontally scrollable (scrollWidth=1408 vs clientWidth=388). Each addon card has a product image. Tapping addon-add-<id> successfully updates the unified cart (CartContext)."
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_top_selling_by_category.py",
+    "/app/test_reports/pytest/iter26_top_selling.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "backend/server.py top_selling_by_category: confirm the per-category cap is enforced server-side (observed max=5). If sales_count==0 across the board, current fallback to 'rating' is in effect (all items in response showed sales_count=0). Consider exposing 'is_fallback_by_rating' flag in the response so the client can adjust UI if needed.",
+    "frontend/app/(tabs)/home.tsx: popularProducts.slice(0,6) and the smaller card sizes (popularCard width:156, popularImg height:104) look fine; consider memoizing the FlatList items if the list grows."
+  ],
+  "updated_files": ["/app/backend/tests/test_top_selling_by_category.py"],
+  "success_rate": {"backend": "100% (5/5 pytest)", "frontend": "100% (all 3 mobile changes verified)"},
+  "test_credentials": "Admin: admin@dietcafe.com / admin123. Mobile customer: phone 9876543210 + on-screen Demo OTP (DEV mode).",
+  "seed_data_creation": "None (only added 1 popular item to cart in-session; not placed as order).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Phase 2A/2B/3A confirmed working on /mobile. Mobile login pattern: POST /api/auth/otp/send {phone} -> use Demo OTP shown on /mobile verify screen. Useful testIDs verified live: popular-add-{id} (max 6 on home), cart-pill, addon-{id}/addon-add-{id} in /mobile/cart Forgot-something carousel. Backend endpoint /api/products/top-selling-by-category needs Bearer auth and returns <=5 items per category sorted by sales_count desc (rating fallback). Regression file: /app/backend/tests/test_top_selling_by_category.py.",
+  "rca of the issue": "N/A - all targeted features pass."
+}

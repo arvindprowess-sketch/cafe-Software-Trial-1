@@ -112,8 +112,8 @@ export default function HomeScreen() {
   const isCalorieOver = calPct > 100;
   const caloriesOverAmount = Math.round((consumed.calories || 0) - (goals.daily_calories || 2000));
 
-  // Memoize popular products to prevent re-computation
-  const popularProducts = useMemo(() => products.slice(0, 10), [products]);
+  // Memoize popular products to prevent re-computation (max 6)
+  const popularProducts = useMemo(() => products.slice(0, 6), [products]);
 
   // AI Quick Meal functions
   const buildMeal = async () => {
@@ -723,7 +723,7 @@ export default function HomeScreen() {
 
       {/* Floating AI Chat Button */}
       <TouchableOpacity 
-        style={[styles.floatingAiBtn, cartCtx.count > 0 && { bottom: 150 }]}
+        style={[styles.floatingAiBtn, cartCtx.count > 0 && { bottom: 76 }]}
         onPress={() => router.push('/ai-chat')}
         activeOpacity={0.9}
         testID="floating-ai-chat-btn"
@@ -792,7 +792,7 @@ export default function HomeScreen() {
           </View>
         </View>
       </Modal>
-      <CartPill bottom={80} />
+      <CartPill bottom={6} />
     </SafeAreaView>
   );
 }
@@ -1085,12 +1085,12 @@ const styles = StyleSheet.create({
   retryBtn: { backgroundColor: BK_ORANGE, borderRadius: 25, paddingVertical: 12, alignItems: 'center', marginTop: 14 },
   retryText: { color: BK_BROWN, fontSize: 14, fontWeight: '800', textTransform: 'uppercase' },
   
-  // Popular Items (ENHANCED)
-  popularScroll: { paddingHorizontal: 12, gap: 14 },
+  // Popular Items (ENHANCED) — compact cards
+  popularScroll: { paddingHorizontal: 12, gap: 12 },
   popularCard: { 
-    width: 220, 
+    width: 156, 
     backgroundColor: BK_WHITE, 
-    borderRadius: 18, 
+    borderRadius: 16, 
     overflow: 'hidden', 
     borderWidth: 2, 
     borderColor: '#E6E1D4',
@@ -1100,7 +1100,7 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 4,
   },
-  popularImg: { width: '100%', height: 150, backgroundColor: BK_CREAM },
+  popularImg: { width: '100%', height: 104, backgroundColor: BK_CREAM },
   popularImgPlaceholder: { alignItems: 'center', justifyContent: 'center' },
   popularBadge: {
     position: 'absolute',
@@ -1109,48 +1109,48 @@ const styles = StyleSheet.create({
     backgroundColor: BK_ORANGE,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
     borderRadius: 20,
   },
-  popularBadgeText: { fontSize: 9, fontWeight: '800', color: BK_WHITE, textTransform: 'uppercase', letterSpacing: 0.5 },
+  popularBadgeText: { fontSize: 8, fontWeight: '800', color: BK_WHITE, textTransform: 'uppercase', letterSpacing: 0.3 },
   proteinBadge: { 
     position: 'absolute', 
-    top: 10, 
-    right: 10, 
+    top: 8, 
+    right: 8, 
     backgroundColor: BK_BROWN, 
-    paddingHorizontal: 10, 
-    paddingVertical: 6, 
-    borderRadius: 20,
+    paddingHorizontal: 8, 
+    paddingVertical: 5, 
+    borderRadius: 18,
     alignItems: 'center',
   },
-  proteinText: { fontSize: 15, fontWeight: '800', color: BK_CREAM },
-  proteinLabel: { fontSize: 9, color: 'rgba(245,235,220,0.8)', textTransform: 'uppercase' },
+  proteinText: { fontSize: 13, fontWeight: '800', color: BK_CREAM },
+  proteinLabel: { fontSize: 8, color: 'rgba(245,235,220,0.8)', textTransform: 'uppercase' },
   vegBadge: { 
     position: 'absolute', 
-    top: 124, 
-    right: 10, 
-    width: 20, 
-    height: 20, 
+    top: 80, 
+    right: 8, 
+    width: 18, 
+    height: 18, 
     borderRadius: 4, 
     borderWidth: 2, 
     alignItems: 'center', 
     justifyContent: 'center', 
     backgroundColor: BK_WHITE 
   },
-  vegBadgeDot: { width: 10, height: 10, borderRadius: 5 },
-  popularInfo: { padding: 14 },
-  popularName: { fontSize: 16, fontWeight: '800', color: BK_BROWN },
-  popularDesc: { fontSize: 12, color: BK_TEXT_LIGHT, marginTop: 4 },
-  popularBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 },
-  popularPrice: { fontSize: 18, fontWeight: '800', color: BK_BROWN },
-  per100: { fontSize: 10, fontWeight: '400', color: BK_TEXT_LIGHT },
-  popQtyBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: BK_RED, borderRadius: 20, paddingHorizontal: 4 },
-  popQtyBtn: { paddingHorizontal: 6, paddingVertical: 7 },
-  popQtyText: { color: BK_CREAM, fontSize: 12, fontWeight: '800', minWidth: 34, textAlign: 'center' },
-  addBtn: { backgroundColor: BK_RED, paddingHorizontal: 20, paddingVertical: 9, borderRadius: 20 },
-  addBtnText: { color: BK_CREAM, fontSize: 13, fontWeight: '800', textTransform: 'uppercase' },
+  vegBadgeDot: { width: 9, height: 9, borderRadius: 5 },
+  popularInfo: { padding: 11 },
+  popularName: { fontSize: 14, fontWeight: '800', color: BK_BROWN },
+  popularDesc: { fontSize: 11, color: BK_TEXT_LIGHT, marginTop: 3 },
+  popularBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 },
+  popularPrice: { fontSize: 15, fontWeight: '800', color: BK_BROWN },
+  per100: { fontSize: 9, fontWeight: '400', color: BK_TEXT_LIGHT },
+  popQtyBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: BK_RED, borderRadius: 20, paddingHorizontal: 3 },
+  popQtyBtn: { paddingHorizontal: 5, paddingVertical: 6 },
+  popQtyText: { color: BK_CREAM, fontSize: 11, fontWeight: '800', minWidth: 30, textAlign: 'center' },
+  addBtn: { backgroundColor: BK_RED, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
+  addBtnText: { color: BK_CREAM, fontSize: 12, fontWeight: '800', textTransform: 'uppercase' },
   
   // Floating AI Button (BK Orange)
   floatingAiBtn: { position: 'absolute', bottom: 90, right: 20, width: 56, height: 56, borderRadius: 28, backgroundColor: BK_ORANGE, alignItems: 'center', justifyContent: 'center', shadowColor: BK_BROWN, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 10 },

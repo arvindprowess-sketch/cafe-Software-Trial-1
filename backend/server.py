@@ -1507,6 +1507,41 @@ async def get_popular_products(user=Depends(get_current_user)):
     
     return sorted_products[:12]  # Return top 12
 
+@api_router.get("/products/top-selling-by-category")
+async def top_selling_by_category(user=Depends(get_current_user)):
+    """Top 5 highest-selling products from EACH active category.
+    Sales are counted from all order history; ties (and zero-sales) fall back to rating."""
+    # Count units sold per product across all orders
+    orders = await db.orders.find({}, {"_id": 0, "items": 1}).to_list(2000)
+    product_sales: dict = {}
+    for order in orders:
+        for item in order.get("items", []):
+            pid = item.get("product_id")
+            if pid:
+                product_sales[pid] = product_sales.get(pid, 0) + (item.get("quantity") or 1)
+
+    # Only consider active categories
+    active_cats = await db.categories.find({"is_active": {"$ne": False}}, {"_id": 0, "name": 1}).to_list(100)
+    active_cat_names = {c["name"] for c in active_cats}
+
+    products = await db.products.find({"is_active": True}, {"_id": 0}).to_list(500)
+
+    # Group active products by category
+    by_cat: dict = {}
+    for p in products:
+        cat = p.get("category") or "Other"
+        if active_cat_names and cat not in active_cat_names:
+            continue
+        p["sales_count"] = product_sales.get(p["id"], 0)
+        by_cat.setdefault(cat, []).append(p)
+
+    # For each category, take the top 5 (by sales, then rating)
+    result = []
+    for cat in sorted(by_cat.keys()):
+        ranked = sorted(by_cat[cat], key=lambda x: (-x.get("sales_count", 0), -x.get("rating", 0)))
+        result.extend(ranked[:5])
+    return result
+
 # ========== AI ROUTES ==========
 @api_router.post("/ai/suggest")
 async def ai_suggest(data: AISuggestRequest, user=Depends(get_current_user)):

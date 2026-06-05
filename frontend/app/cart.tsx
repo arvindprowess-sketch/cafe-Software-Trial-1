@@ -68,10 +68,14 @@ export default function CartScreen() {
     getStoredUser().then(setUser);
     AsyncStorage.getItem('delivery_address').then(a => { if (a) setDeliveryAddress(a); }).catch(() => {});
     apiCall('/offers').then(setOffers).catch(() => {});
-    apiCall('/products').then((p: any[]) => {
-      const a = p.filter(x => x.product_type === 'ready_made' || ['Meal', 'Beverage', 'Snack', 'Drink'].includes(x.category)).slice(0, 12);
-      setAddons(a.length ? a : p.slice(0, 10));
-    }).catch(() => {});
+    apiCall('/products/top-selling-by-category')
+      .then((p: any[]) => { if (Array.isArray(p) && p.length) setAddons(p); })
+      .catch(() => {
+        // Fallback: derive from full catalog if the endpoint is unavailable
+        apiCall('/products')
+          .then((all: any[]) => setAddons(all.slice(0, 10)))
+          .catch(() => {});
+      });
   }, []);
 
   // Build the items payload for the server quote
