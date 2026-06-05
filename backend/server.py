@@ -12,7 +12,7 @@ import secrets
 import socketio
 from pathlib import Path
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 import uuid
 from datetime import datetime, timezone, timedelta
 import bcrypt
@@ -160,7 +160,8 @@ class ProductCreate(BaseModel):
     image_url: Optional[str] = None
     description: Optional[str] = None
     category: Optional[str] = None  # Admin can select category
-    diet_type: Optional[str] = None  # "veg" or "non-veg"
+    diet_type: Optional[str] = None  # "veg" or "non-veg" (legacy, kept for back-compat)
+    diet_types: Optional[List[str]] = None  # multi tags: veg, non-veg, vegan, eggetarian, jain, keto, high-protein
     # B1: admin-entered nutrition (per 100g). When set, these override NUTRITION_DB.
     calories_per_100g: Optional[float] = None
     protein_per_100g: Optional[float] = None
@@ -181,6 +182,7 @@ class ProductUpdate(BaseModel):
     category: Optional[str] = None
     category_id: Optional[str] = None
     diet_type: Optional[str] = None
+    diet_types: Optional[List[str]] = None
     description: Optional[str] = None
     is_editable: Optional[bool] = None
     # B1 + B5
@@ -238,7 +240,7 @@ class AISuggestRequest(BaseModel):
     current_nutrition: Dict[str, float]
 
 class QuickMealRequest(BaseModel):
-    diet_preference: str  # "veg", "non-veg", "both"
+    diet_preference: Union[str, List[str]] = "both"  # single (legacy) or multi diet tags
     goal: str  # "fat_loss", "muscle_gain", "maintenance", "beginner", "recovery"
     budget: Optional[float] = None
     order_type: str = "dine-in"
@@ -249,6 +251,7 @@ class SingleProductCreate(BaseModel):
     grams: float
     category_id: Optional[str] = None
     diet_type: Optional[str] = None
+    diet_types: Optional[List[str]] = None
     # B1 + B5
     calories_per_100g: Optional[float] = None
     protein_per_100g: Optional[float] = None
@@ -355,6 +358,50 @@ def resolved_nutrition(name: str, cal=None, pro=None, carb=None, fat=None) -> Di
         "category": base["category"],
         "diet_type": base.get("diet_type", detect_diet_type(name)),
     }
+
+# ========== DIET TAGS (multi) — shared across customer app, POS, Kitchen, Admin ==========
+ALLOWED_DIET_TAGS = ["veg", "non-veg", "vegan", "eggetarian", "jain", "keto", "high-protein"]
+
+def normalize_diet_types(diet_types, fallback_diet_type=None, name=None) -> List[str]:
+    """Clean a diet_types list to allowed tags. Falls back to migrating a single diet_type."""
+    tags: List[str] = []
+    if diet_types:
+        for t in diet_types:
+            if t in ALLOWED_DIET_TAGS and t not in tags:
+                tags.append(t)
+    if not tags:
+        dt = fallback_diet_type or (detect_diet_type(name) if name else None)
+        if dt in ALLOWED_DIET_TAGS:
+            tags = [dt]
+    return tags
+
+def ensure_product_diet_types(p: dict) -> dict:
+    """On-read migration: guarantee a product dict carries a diet_types array.
+    Derives veg/non-veg from legacy diet_type and auto-adds 'high-protein' from nutrition
+    only when the product has not been explicitly tagged yet."""
+    if isinstance(p, dict) and not p.get("diet_types"):
+        tags = normalize_diet_types(None, p.get("diet_type"), p.get("name"))
+        try:
+            if float(p.get("protein_per_100g") or 0) >= 18 and "high-protein" not in tags:
+                tags.append("high-protein")
+        except (TypeError, ValueError):
+            pass
+        p["diet_types"] = tags
+    return p
+
+def diet_prefs_to_list(diet_preference) -> List[str]:
+    """Accept legacy single string or new list; normalize to a list of tags (drop 'both'/empties)."""
+    if diet_preference is None:
+        return []
+    prefs = [diet_preference] if isinstance(diet_preference, str) else list(diet_preference)
+    return [str(p).strip() for p in prefs if p and str(p).strip() and str(p).strip() != "both"]
+
+def product_matches_diet(p: dict, prefs) -> bool:
+    """Match if the product carries ALL selected diet tags (AND/intersection semantics)."""
+    if not prefs:
+        return True
+    tags = p.get("diet_types") or normalize_diet_types(None, p.get("diet_type"), p.get("name"))
+    return all(pref in tags for pref in prefs)
 
 # ========== AUTH ROUTES ==========
 
@@ -655,7 +702,7 @@ async def create_product(data: ProductCreate, user=Depends(get_current_user)):
     return {k: v for k, v in product.items() if k != "_id"}
 
 @api_router.get("/products")
-async def list_products():
+async def list_products(diet: Optional[str] = None):
     # Get active category names
     active_cats = await db.categories.find({"is_active": {"$ne": False}}, {"_id": 0, "name": 1}).to_list(100)
     active_cat_names = {c["name"] for c in active_cats}
@@ -663,6 +710,12 @@ async def list_products():
     # Filter: only show products in active categories (or with no category set)
     if active_cat_names:
         products = [p for p in products if p.get("category", "") in active_cat_names or not p.get("category")]
+    products = [ensure_product_diet_types(p) for p in products]
+    # Optional multi diet-tag filter (?diet=vegan,keto) — AND semantics
+    if diet:
+        prefs = [d.strip() for d in diet.split(",") if d.strip()]
+        if prefs:
+            products = [p for p in products if product_matches_diet(p, prefs)]
     return products
 
 @api_router.get("/products/all")
@@ -670,13 +723,18 @@ async def list_all_products(user=Depends(get_current_user)):
     if user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Admin only")
     products = await db.products.find({}, {"_id": 0}).to_list(200)
-    return products
+    return [ensure_product_diet_types(p) for p in products]
 
 @api_router.put("/products/{product_id}")
 async def update_product(product_id: str, data: ProductUpdate, user=Depends(get_current_user)):
     if user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Admin only")
     update_data = {k: v for k, v in data.dict().items() if v is not None}
+    # Diet tags (multi): normalize + keep legacy diet_type in sync
+    if "diet_types" in update_data:
+        update_data["diet_types"] = normalize_diet_types(update_data["diet_types"])
+        if "diet_type" not in update_data and update_data["diet_types"]:
+            update_data["diet_type"] = next((t for t in update_data["diet_types"] if t in ("veg", "non-veg")), update_data["diet_types"][0])
     # Resolve category_id to category name
     if "category_id" in update_data:
         cat = await db.categories.find_one({"id": update_data["category_id"]}, {"_id": 0})
@@ -1022,6 +1080,7 @@ async def create_single_product(data: SingleProductCreate, user=Depends(get_curr
             category_name = cat["name"]
 
     diet_type = data.diet_type or nutrition.get("diet_type", detect_diet_type(data.name))
+    diet_types = normalize_diet_types(data.diet_types, diet_type, data.name)
 
     product_id = str(uuid.uuid4())
     product = {
@@ -1035,6 +1094,7 @@ async def create_single_product(data: SingleProductCreate, user=Depends(get_curr
         "category": category_name,
         "category_id": data.category_id,
         "diet_type": diet_type,
+        "diet_types": diet_types,
         "calories_per_100g": nutrition["calories"],
         "protein_per_100g": nutrition["protein"],
         "carbs_per_100g": nutrition["carbs"],
@@ -1708,14 +1768,12 @@ async def ai_quick_meal(data: QuickMealRequest, user=Depends(get_current_user)):
             "fitness_goal": user.get("fitness_goal", "maintenance")
         }
 
-        # Step 0: Fetch available products with real stock
-        query = {"is_active": True, "available_qty_grams": {"$gt": 50}}
-        if data.diet_preference == "veg":
-            query["diet_type"] = "veg"
-        elif data.diet_preference == "non-veg":
-            query["diet_type"] = "non-veg"
-
-        products = await db.products.find(query, {"_id": 0}).to_list(100)
+        # Step 0: Fetch available products with real stock (multi diet-tag match)
+        _prefs = diet_prefs_to_list(data.diet_preference)
+        products = await db.products.find({"is_active": True, "available_qty_grams": {"$gt": 50}}, {"_id": 0}).to_list(100)
+        products = [ensure_product_diet_types(p) for p in products]
+        if _prefs:
+            products = [p for p in products if product_matches_diet(p, _prefs)]
         if not products:
             return {"meal_items": [], "summary": "No products available for your preference.", "totals": {}}
 
@@ -1724,7 +1782,7 @@ async def ai_quick_meal(data: QuickMealRequest, user=Depends(get_current_user)):
             f"- {p['name']} ({p.get('diet_type','veg')}): ₹{p['cost_per_100g']}/100g | {p['calories_per_100g']}cal, P:{p['protein_per_100g']}g, C:{p['carbs_per_100g']}g, F:{p['fat_per_100g']}g per 100g | MAX available: {int(p['available_qty_grams'])}g"
             for p in products
         ])
-        diet_pref_str = {"veg": "VEGETARIAN ONLY", "non-veg": "NON-VEGETARIAN ONLY", "both": "Both veg and non-veg allowed"}.get(data.diet_preference, "Both")
+        diet_pref_str = (", ".join(_prefs).upper() + " ONLY") if _prefs else "Both veg and non-veg allowed"
         budget_str = f"Budget: ₹{data.budget}" if data.budget else "No specific budget"
 
         # User's fitness profile
@@ -1987,14 +2045,12 @@ async def ai_chat(data: AIChatRequest, user=Depends(get_current_user)):
     try:
         from emergentintegrations.llm.chat import LlmChat, UserMessage
         
-        # Get available products
-        query = {"is_active": True, "available_qty_grams": {"$gt": 50}}
-        if data.diet_preference == "veg":
-            query["diet_type"] = "veg"
-        elif data.diet_preference == "non-veg":
-            query["diet_type"] = "non-veg"
-        
-        products = await db.products.find(query, {"_id": 0}).to_list(100)
+        # Get available products (multi diet-tag match)
+        _prefs = diet_prefs_to_list(data.diet_preference)
+        products = await db.products.find({"is_active": True, "available_qty_grams": {"$gt": 50}}, {"_id": 0}).to_list(100)
+        products = [ensure_product_diet_types(p) for p in products]
+        if _prefs:
+            products = [p for p in products if product_matches_diet(p, _prefs)]
         
         # Get user's nutrition summary
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -3935,13 +3991,9 @@ async def ai_generate_meal_plan(
     try:
         from emergentintegrations.llm.chat import LlmChat, UserMessage
         products = await db.products.find({"is_active": True, "available_qty_grams": {"$gt": 50}}, {"_id": 0}).to_list(100)
-        query_filter = {}
-        if diet_preference == "veg":
-            query_filter = {"diet_type": "veg"}
-        elif diet_preference == "non-veg":
-            query_filter = {"diet_type": "non-veg"}
-        
-        filtered_products = [p for p in products if not query_filter or p.get("diet_type") == query_filter.get("diet_type", p.get("diet_type"))]
+        products = [ensure_product_diet_types(p) for p in products]
+        _prefs = diet_prefs_to_list(diet_preference)
+        filtered_products = [p for p in products if not _prefs or product_matches_diet(p, _prefs)]
         menu_str = "\n".join([f"- {p['name']}: ₹{p['cost_per_100g']}/100g | {p['calories_per_100g']}cal, P:{p['protein_per_100g']}g per 100g" for p in filtered_products[:25]])
         budget_str = f"Daily budget: ₹{budget_per_day}" if budget_per_day else "No budget limit"
         

@@ -8,6 +8,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { apiCall } from '../utils/api';
 import { useCart } from '../utils/CartContext';
 import { FUEL, FONT, getGoal } from '../utils/theme';
+import { DIET_LABEL } from '../utils/diet';
 
 const Z_RED = '#15140F';
 const GREEN = '#3FA34D';
@@ -18,7 +19,8 @@ export default function SmartFillScreen() {
   const params = useLocalSearchParams();
 
   const budget = (params.budget as string) || '200';
-  const dietPref = (params.dietPref as string) || 'both';
+  const dietPref = (params.dietPref as string) || '';
+  const dietArr = dietPref.split(',').map(s => s.trim()).filter(s => s && s !== 'both');
   const goal = (params.goal as string) || 'maintenance';
   const orderType = (params.orderType as string) || 'dine-in';
 
@@ -36,7 +38,7 @@ export default function SmartFillScreen() {
     try {
       const result = await apiCall('/ai/quick-meal', {
         method: 'POST',
-        body: { diet_preference: dietPref, goal, budget: parseFloat(budget), order_type: orderType },
+        body: { diet_preference: dietArr, goal, budget: parseFloat(budget), order_type: orderType },
       });
       if (result?.meal_items?.length > 0) {
         setItems(result.meal_items);
@@ -177,7 +179,7 @@ export default function SmartFillScreen() {
         </TouchableOpacity>
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>Smart Fill</Text>
-          <Text style={styles.headerSub}>₹{budget} · {goalInfo?.label || goal} · {dietPref === 'both' ? 'All' : dietPref === 'veg' ? 'Veg' : 'Non-Veg'}</Text>
+          <Text style={styles.headerSub}>₹{budget} · {goalInfo?.label || goal} · {dietArr.length ? dietArr.map(t => DIET_LABEL[t]).join(' + ') : 'All'}</Text>
         </View>
         <TouchableOpacity testID="smart-fill-refresh-btn" style={styles.backBtn} onPress={loadSuggestions} disabled={loading}>
           <Ionicons name="refresh" size={18} color={FUEL.ink} />

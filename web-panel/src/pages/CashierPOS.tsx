@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../utils/api';
 
 const GST_RATE = 5;
+const POS_DIET_TAGS = ['veg', 'non-veg', 'vegan', 'eggetarian', 'jain', 'keto', 'high-protein'];
+const POS_DIET_LABEL: Record<string, string> = { 'veg': 'Veg', 'non-veg': 'Non-Veg', 'vegan': 'Vegan', 'eggetarian': 'Egg', 'jain': 'Jain', 'keto': 'Keto', 'high-protein': 'High-Pro' };
+const dietTagsOf = (p: any): string[] => (p?.diet_types && p.diet_types.length ? p.diet_types : [p?.diet_type]).filter(Boolean);
 
 export default function CashierPOS() {
   const [products, setProducts] = useState<any[]>([]);
@@ -9,6 +12,7 @@ export default function CashierPOS() {
   const [offers, setOffers] = useState<any[]>([]);
   const [selectedCat, setSelectedCat] = useState('All');
   const [search, setSearch] = useState('');
+  const [dietFilter, setDietFilter] = useState<string[]>([]);
   const [cart, setCart] = useState<any[]>([]);
   const [orderType, setOrderType] = useState('dine-in');
   const [placing, setPlacing] = useState(false);
@@ -87,6 +91,10 @@ export default function CashierPOS() {
 
   const filtered = activeProducts.filter(p => {
     if (search && !p.name.toLowerCase().includes(search.toLowerCase())) return false;
+    if (dietFilter.length) {
+      const tags = dietTagsOf(p);
+      if (!dietFilter.every(t => tags.includes(t))) return false;
+    }
     if (selectedCat === 'All') return true;
     return p.category === selectedCat || p.diet_type === selectedCat;
   });
@@ -374,6 +382,21 @@ export default function CashierPOS() {
           })}
         </div>
 
+        {/* Diet filter (staff can answer "is this vegan/jain?") */}
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10, alignItems: 'center' }} data-testid="pos-diet-filter">
+          <span style={{ fontSize: 11, fontWeight: 700, color: '#9C9C9C' }}>DIET:</span>
+          {POS_DIET_TAGS.map(tag => {
+            const on = dietFilter.includes(tag);
+            return (
+              <button key={tag} type="button" data-testid={`pos-diet-${tag}`} onClick={() => setDietFilter(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag])}
+                style={{ padding: '4px 10px', borderRadius: 16, border: on ? '2px solid #3FA34D' : '1px solid #E0E0E0', background: on ? '#EAF2DD' : '#FFF', color: on ? '#2C7A3D' : '#696969', fontWeight: on ? 700 : 500, fontSize: 11, cursor: 'pointer' }}>
+                {POS_DIET_LABEL[tag]}
+              </button>
+            );
+          })}
+          {dietFilter.length > 0 && <button type="button" onClick={() => setDietFilter([])} style={{ fontSize: 11, color: '#15140F', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>clear</button>}
+        </div>
+
         <div className="pos-products">
           {filtered.length === 0 && <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: 40, color: '#9C9C9C' }}>{viewTab === 'readymade' ? 'No ready-made meals. Admin can create them.' : 'No items found'}</div>}
           {filtered.map(p => {
@@ -384,8 +407,12 @@ export default function CashierPOS() {
               <div key={p.id} className={`pos-product ${inCart ? 'in-cart' : ''} ${unavailable ? 'unavailable' : ''}`}
                 onClick={() => !unavailable && openDetail(p)} data-testid={`product-${p.id}`}
                 style={unavailable ? { opacity: 0.4, cursor: 'not-allowed' } : {}}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                  <span className="pos-product-badge" style={{ background: p.diet_type === 'non-veg' ? '#F1E7E1' : '#EAF2DD', color: p.diet_type === 'non-veg' ? '#15140F' : '#3FA34D', fontSize: 10 }}>{p.diet_type === 'non-veg' ? 'Non-Veg' : 'Veg'}</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }} data-testid={`pos-diet-tags-${p.id}`}>
+                    {dietTagsOf(p).slice(0, 3).map((t: string) => (
+                      <span key={t} className="pos-product-badge" style={{ background: t === 'non-veg' ? '#F1E7E1' : '#EAF2DD', color: t === 'non-veg' ? '#15140F' : '#3FA34D', fontSize: 9 }}>{POS_DIET_LABEL[t] || t}</span>
+                    ))}
+                  </div>
                   {isRM && <span style={{ fontSize: 9, fontWeight: 700, background: '#15140F15', color: '#15140F', padding: '2px 6px', borderRadius: 4 }}>MEAL</span>}
                 </div>
                 <div className="pos-product-name">{p.name}</div>
@@ -503,7 +530,9 @@ export default function CashierPOS() {
           <div className="modal" style={{ maxWidth: 420 }}>
             <h2>{detailProduct.name}</h2>
             <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-              <span className="badge" style={{ background: detailProduct.diet_type === 'non-veg' ? '#F1E7E1' : '#EAF2DD', color: detailProduct.diet_type === 'non-veg' ? '#15140F' : '#3FA34D' }}>{detailProduct.diet_type === 'non-veg' ? 'Non-Veg' : 'Veg'}</span>
+              {dietTagsOf(detailProduct).map((t: string) => (
+                <span key={t} className="badge" style={{ background: t === 'non-veg' ? '#F1E7E1' : '#EAF2DD', color: t === 'non-veg' ? '#15140F' : '#3FA34D' }}>{POS_DIET_LABEL[t] || t}</span>
+              ))}
               <span className="badge badge-purple">{detailProduct.category}</span>
             </div>
             {detailProduct.product_type === 'ready_made' ? (

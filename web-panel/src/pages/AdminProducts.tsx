@@ -1,6 +1,26 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../utils/api';
 
+const DIET_TAGS = ['veg', 'non-veg', 'vegan', 'eggetarian', 'jain', 'keto', 'high-protein'];
+const DIET_LABEL: Record<string, string> = { 'veg': 'Veg', 'non-veg': 'Non-Veg', 'vegan': 'Vegan', 'eggetarian': 'Eggetarian', 'jain': 'Jain', 'keto': 'Keto', 'high-protein': 'High-Protein' };
+const toggleTag = (arr: string[], tag: string) => arr.includes(tag) ? arr.filter(t => t !== tag) : [...arr, tag];
+
+function DietChips({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }} data-testid="diet-types-picker">
+      {DIET_TAGS.map(tag => {
+        const on = value.includes(tag);
+        return (
+          <button key={tag} type="button" data-testid={`diet-tag-${tag}`} onClick={() => onChange(toggleTag(value, tag))}
+            style={{ padding: '6px 12px', borderRadius: 20, border: on ? '2px solid #3FA34D' : '2px solid #E0E0E0', background: on ? '#EAF2DD' : '#FFF', color: on ? '#2C7A3D' : '#696969', fontWeight: on ? 700 : 500, fontSize: 12, cursor: 'pointer' }}>
+            {DIET_LABEL[tag]}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 type ProductTab = 'all' | 'single' | 'ready_made';
 type FormType = 'single' | 'ready_made';
 interface Ingredient { name: string; grams_per_serving: number; }
@@ -26,6 +46,7 @@ export default function AdminProducts() {
   const [sGrams, setSGrams] = useState('');
   const [sCatId, setSCatId] = useState('');
   const [sDiet, setSDiet] = useState('');
+  const [sDietTypes, setSDietTypes] = useState<string[]>([]);
   const [sCal, setSCal] = useState('');
   const [sPro, setSPro] = useState('');
   const [sCarb, setSCarb] = useState('');
@@ -62,7 +83,7 @@ export default function AdminProducts() {
   })();
 
   const resetForms = () => {
-    setSName(''); setSPrice(''); setSGrams(''); setSCatId(''); setSDiet('');
+    setSName(''); setSPrice(''); setSGrams(''); setSCatId(''); setSDiet(''); setSDietTypes([]);
     setSCal(''); setSPro(''); setSCarb(''); setSFat(''); setSPrep('');
     setRName(''); setRPrice(''); setRServingGrams('300'); setRCatId(''); setREditable(false); setRPrep('');
     setRIngredients([{ name: '', grams_per_serving: 0 }]); setRImages([]);
@@ -95,6 +116,7 @@ export default function AdminProducts() {
     try {
       const result = await api('/products/single', { method: 'POST', body: {
         name: sName, price: parseFloat(sPrice), grams: parseFloat(sGrams), category_id: sCatId, diet_type: sDiet || undefined,
+        diet_types: sDietTypes.length ? sDietTypes : undefined,
         calories_per_100g: sCal ? parseFloat(sCal) : undefined,
         protein_per_100g: sPro ? parseFloat(sPro) : undefined,
         carbs_per_100g: sCarb ? parseFloat(sCarb) : undefined,
@@ -135,6 +157,7 @@ export default function AdminProducts() {
       available_qty_grams: p.available_qty_grams || '',
       available_servings: p.available_servings || 20,
       category_id: categories.find(c => c.name === p.category)?.id || '',
+      diet_types: p.diet_types || [],
       is_active: p.is_active !== false,
       is_editable: p.is_editable || false,
       calories_per_100g: p.calories_per_100g ?? '',
@@ -162,6 +185,11 @@ export default function AdminProducts() {
         if (editForm.category_id !== origCatId) body.category_id = editForm.category_id;
       }
       if (editForm.is_active !== (editModal.is_active !== false)) body.is_active = editForm.is_active;
+      if (Array.isArray(editForm.diet_types)) {
+        const orig = JSON.stringify((editModal.diet_types || []).slice().sort());
+        const now = JSON.stringify(editForm.diet_types.slice().sort());
+        if (orig !== now) body.diet_types = editForm.diet_types;
+      }
       // B1 + B5: editable nutrition & prep time
       ['calories_per_100g', 'protein_per_100g', 'carbs_per_100g', 'fat_per_100g'].forEach((f) => {
         if (editForm[f] !== '' && parseFloat(editForm[f]) !== editModal[f]) body[f] = parseFloat(editForm[f]);
@@ -226,7 +254,13 @@ export default function AdminProducts() {
               </td>
               <td><span className={`badge ${p.product_type === 'ready_made' ? 'badge-green' : 'badge-purple'}`}>{p.product_type === 'ready_made' ? 'Meal' : 'Single'}</span></td>
               <td><span className="badge badge-purple">{p.category || '—'}</span></td>
-              <td><span className={`badge ${p.diet_type === 'non-veg' ? 'badge-red' : 'badge-green'}`} style={{ fontSize: 11 }}>{p.diet_type}</span></td>
+              <td>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, maxWidth: 150 }} data-testid={`diet-tags-${p.id}`}>
+                  {((p.diet_types && p.diet_types.length ? p.diet_types : [p.diet_type]).filter(Boolean)).map((t: string) => (
+                    <span key={t} className={`badge ${t === 'non-veg' ? 'badge-red' : 'badge-green'}`} style={{ fontSize: 10 }}>{DIET_LABEL[t] || t}</span>
+                  ))}
+                </div>
+              </td>
               <td style={{ fontWeight: 700, fontSize: 14 }}>{p.product_type === 'ready_made' ? `₹${p.fixed_price}` : `₹${p.cost_per_100g}/100g`}</td>
               <td style={{ fontSize: 13 }}>
                 {p.product_type === 'ready_made'
@@ -309,8 +343,12 @@ export default function AdminProducts() {
                       <div className="form-group"><label>Price (₹) *</label><input type="number" value={sPrice} onChange={e => setSPrice(e.target.value)} placeholder="450" required data-testid="single-price" /></div>
                       <div className="form-group"><label>Stock (grams) *</label><input type="number" value={sGrams} onChange={e => setSGrams(e.target.value)} placeholder="5000" required data-testid="single-grams" /></div>
                     </div>
-                    <div className="form-group"><label>Diet Type</label>
+                    <div className="form-group"><label>Base Diet Type</label>
                       <select value={sDiet} onChange={e => setSDiet(e.target.value)} data-testid="single-diet"><option value="">Auto-detect</option><option value="veg">Veg</option><option value="non-veg">Non-Veg</option></select>
+                    </div>
+                    <div className="form-group"><label>Diet Tags (multi-select)</label>
+                      <DietChips value={sDietTypes} onChange={setSDietTypes} />
+                      <div style={{ fontSize: 11, color: '#9C9C9C', marginTop: 6 }}>Leave empty to auto-derive from base diet + nutrition.</div>
                     </div>
                     <div style={{ background: '#FAFAFA', borderRadius: 10, padding: 12, marginBottom: 12, border: '1px solid #EFEFEF' }}>
                       <div style={{ fontSize: 11, fontWeight: 700, color: '#9C9C9C', marginBottom: 8 }}>NUTRITION per 100g (optional — leave blank for auto)</div>
@@ -409,6 +447,12 @@ export default function AdminProducts() {
                   <option value="">— Keep current ({editModal.category}) —</option>
                   {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
+              </div>
+
+              {/* Diet tags multi-select (shared attribute) */}
+              <div className="form-group">
+                <label>Diet Tags</label>
+                <DietChips value={editForm.diet_types || []} onChange={(v) => setEditForm({ ...editForm, diet_types: v })} />
               </div>
 
               {editModal.product_type === 'ready_made' ? (

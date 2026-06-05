@@ -2,6 +2,24 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../utils/api';
 import { useRealtime } from '../utils/realtime';
 
+const KITCHEN_DIET_LABEL: Record<string, string> = { 'veg': 'Veg', 'non-veg': 'Non-Veg', 'vegan': 'Vegan', 'eggetarian': 'Egg', 'jain': 'Jain', 'keto': 'Keto', 'high-protein': 'High-Pro' };
+const itemDietTags = (item: any, map: Record<string, string[]>): string[] => {
+  if (item.diet_types && item.diet_types.length) return item.diet_types;
+  if (item.diet_type) return [item.diet_type];
+  return map[item.product_id] || [];
+};
+const DietTagRow = ({ item, map }: { item: any; map: Record<string, string[]> }) => {
+  const tags = itemDietTags(item, map);
+  if (!tags.length) return null;
+  return (
+    <span style={{ marginLeft: 6, display: 'inline-flex', gap: 3, flexWrap: 'wrap', verticalAlign: 'middle' }} data-testid="kitchen-item-diet">
+      {tags.slice(0, 4).map((t: string) => (
+        <span key={t} style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 8, background: t === 'non-veg' ? '#F1E7E1' : '#EAF2DD', color: t === 'non-veg' ? '#15140F' : '#2C7A3D' }}>{KITCHEN_DIET_LABEL[t] || t}</span>
+      ))}
+    </span>
+  );
+};
+
 export default function KitchenOrders() {
   const [orders, setOrders] = useState<any[]>([]);
   const [scheduledOrders, setScheduledOrders] = useState<any[]>([]);
@@ -11,6 +29,7 @@ export default function KitchenOrders() {
   const [alertOrder, setAlertOrder] = useState<any>(null);
   const [confirming, setConfirming] = useState(false);
   const [activeTab, setActiveTab] = useState<'active' | 'upcoming'>('active');
+  const [dietMap, setDietMap] = useState<Record<string, string[]>>({});
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const prevOrderIdsRef = useRef<Set<string>>(new Set());
   const alertedOrdersRef = useRef<Set<string>>(new Set());
@@ -67,6 +86,15 @@ export default function KitchenOrders() {
       }
     } catch (e) { console.log('Audio not supported'); }
   }, [soundEnabled]);
+
+  // Map product_id -> diet tags so the cook can see veg/vegan/jain etc. (no order-schema change)
+  useEffect(() => {
+    api('/products').then((ps: any[]) => {
+      const m: Record<string, string[]> = {};
+      ps.forEach((p: any) => { m[p.id] = (p.diet_types && p.diet_types.length) ? p.diet_types : [p.diet_type].filter(Boolean); });
+      setDietMap(m);
+    }).catch(() => {});
+  }, []);
 
   const load = async () => {
     try {
@@ -279,7 +307,7 @@ export default function KitchenOrders() {
               <ul className="order-items">
                 {o.items?.map((item: any, i: number) => (
                   <li key={i}>
-                    <span style={{ fontWeight: 600 }}>{item.product_name}</span>
+                    <span style={{ fontWeight: 600 }}>{item.product_name}<DietTagRow item={item} map={dietMap} /></span>
                     <span>{item.product_type === 'ready_made' ? `x${item.quantity || 1}` : `${item.grams}g`}</span>
                   </li>
                 ))}
@@ -346,7 +374,7 @@ export default function KitchenOrders() {
                   <ul className="order-items">
                     {o.items?.map((item: any, i: number) => (
                       <li key={i}>
-                        <span style={{ fontWeight: 600 }}>{item.product_name}</span>
+                        <span style={{ fontWeight: 600 }}>{item.product_name}<DietTagRow item={item} map={dietMap} /></span>
                         <span>{item.product_type === 'ready_made' ? `x${item.quantity || 1}` : `${item.grams}g`}</span>
                       </li>
                     ))}

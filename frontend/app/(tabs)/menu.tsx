@@ -12,6 +12,7 @@ import { getStoredUser } from '../../utils/api';
 import { useRealtime } from '../../utils/realtime';
 import { FUEL, FONT } from '../../utils/theme';
 import { useCart } from '../../utils/CartContext';
+import { DIET_TAGS, DIET_LABEL, matchesDiet, matchesAnyDiet, toggleDietTag } from '../../utils/diet';
 import CartPill from '../components/CartPill';
 
 // BK Design System Colors
@@ -48,7 +49,7 @@ export default function MenuScreen() {
   const [search, setSearch] = useState('');
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [user, setUser] = useState<any>(null);
-  const [dietFilter, setDietFilter] = useState<'all' | 'veg' | 'non-veg'>('all');
+  const [dietFilter, setDietFilter] = useState<string[]>([]);
 
   // Handle URL params for category/diet filter (only on initial load)
   useEffect(() => {
@@ -98,9 +99,8 @@ export default function MenuScreen() {
       const searchMatch = !search || p.name.toLowerCase().includes(search.toLowerCase());
       if (!searchMatch) return false;
       
-      // Diet type filter (veg/non-veg toggle)
-      if (dietFilter === 'veg' && p.diet_type !== 'veg') return false;
-      if (dietFilter === 'non-veg' && p.diet_type !== 'non-veg') return false;
+      // Diet type filter (multi-select tags, AND semantics)
+      if (!matchesDiet(p, dietFilter)) return false;
       
       // Category filter
       if (!selectedCat) return true;
@@ -118,6 +118,12 @@ export default function MenuScreen() {
       return p.category === selectedCat;
     });
   }, [products, search, dietFilter, selectedCat]);
+
+  // Nearest options when a multi-tag AND combo returns nothing (e.g. Vegan+Keto)
+  const nearest = useMemo(() => {
+    if (dietFilter.length < 2) return [];
+    return products.filter(p => matchesAnyDiet(p, dietFilter)).slice(0, 6);
+  }, [products, dietFilter]);
 
   const goCustomize = () => {
     if (cartCount === 0) { Alert.alert('Empty Cart', 'Add items first'); return; }
@@ -291,32 +297,33 @@ export default function MenuScreen() {
         ) : null}
       </View>
 
-      {/* Veg / Non-Veg Toggle */}
+      {/* Diet filter — multi-select chips */}
       <View style={styles.dietToggleRow} testID="diet-toggle-row">
-        <TouchableOpacity
-          testID="diet-toggle-all"
-          style={[styles.dietToggleBtn, dietFilter === 'all' && styles.dietToggleBtnAllActive]}
-          onPress={() => setDietFilter('all')}
-        >
-          <Ionicons name="apps" size={14} color={dietFilter === 'all' ? '#FFF' : '#696969'} />
-          <Text style={[styles.dietToggleText, dietFilter === 'all' && styles.dietToggleTextActive]}>All</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          testID="diet-toggle-veg"
-          style={[styles.dietToggleBtn, dietFilter === 'veg' && styles.dietToggleBtnVegActive]}
-          onPress={() => setDietFilter('veg')}
-        >
-          <View style={[styles.dietToggleDot, { backgroundColor: GREEN, borderColor: GREEN }]} />
-          <Text style={[styles.dietToggleText, dietFilter === 'veg' && { color: GREEN, fontWeight: '800' }]}>Veg</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          testID="diet-toggle-nonveg"
-          style={[styles.dietToggleBtn, dietFilter === 'non-veg' && styles.dietToggleBtnNonvegActive]}
-          onPress={() => setDietFilter('non-veg')}
-        >
-          <View style={[styles.dietToggleDot, { backgroundColor: Z_RED, borderColor: Z_RED }]} />
-          <Text style={[styles.dietToggleText, dietFilter === 'non-veg' && { color: Z_RED, fontWeight: '800' }]}>Non-Veg</Text>
-        </TouchableOpacity>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingRight: 12 }}>
+          <TouchableOpacity
+            testID="diet-toggle-all"
+            style={[styles.dietToggleBtn, dietFilter.length === 0 && styles.dietToggleBtnAllActive]}
+            onPress={() => setDietFilter([])}
+          >
+            <Ionicons name="apps" size={14} color={dietFilter.length === 0 ? '#FFF' : '#696969'} />
+            <Text style={[styles.dietToggleText, dietFilter.length === 0 && styles.dietToggleTextActive]}>All</Text>
+          </TouchableOpacity>
+          {DIET_TAGS.map(tag => {
+            const on = dietFilter.includes(tag);
+            const accent = tag === 'non-veg' ? Z_RED : GREEN;
+            return (
+              <TouchableOpacity
+                key={tag}
+                testID={`diet-toggle-${tag}`}
+                style={[styles.dietToggleBtn, on && { backgroundColor: accent, borderColor: accent }]}
+                onPress={() => setDietFilter(prev => toggleDietTag(prev, tag))}
+              >
+                <View style={[styles.dietToggleDot, { backgroundColor: on ? '#FFF' : accent, borderColor: on ? '#FFF' : accent }]} />
+                <Text style={[styles.dietToggleText, on && { color: '#FFF', fontWeight: '800' }]}>{DIET_LABEL[tag]}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </View>
 
       {/* Main Content: Left Sidebar + Right Product List */}
@@ -348,8 +355,28 @@ export default function MenuScreen() {
             initialNumToRender={8}
             ListEmptyComponent={
               <View style={styles.emptyState}>
-                <Ionicons name="restaurant-outline" size={48} color="#D0D0D0" />
-                <Text style={styles.emptyText}>No items found</Text>
+                <Ionicons name="restaurant-outline" size={44} color="#D0D0D0" />
+                <Text style={styles.emptyText}>
+                  {dietFilter.length
+                    ? `No items match ${dietFilter.map(t => DIET_LABEL[t]).join(' + ')}`
+                    : 'No items found'}
+                </Text>
+                {dietFilter.length > 0 && (
+                  <>
+                    <Text style={styles.emptySub}>Try removing a filter. Closest picks:</Text>
+                    <View style={styles.nearestWrap}>
+                      {nearest.map(np => (
+                        <TouchableOpacity key={np.id} testID={`nearest-${np.id}`} style={styles.nearestChip} onPress={() => addItem(np)} activeOpacity={0.8}>
+                          <Text style={styles.nearestChipText} numberOfLines={1}>{np.name}</Text>
+                          <Ionicons name="add-circle" size={16} color={GREEN} />
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    <TouchableOpacity testID="clear-diet-filters" style={styles.clearFiltersBtn} onPress={() => setDietFilter([])} activeOpacity={0.8}>
+                      <Text style={styles.clearFiltersText}>Clear diet filters</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
               </View>
             }
           />
@@ -690,7 +717,15 @@ const styles = StyleSheet.create({
     color: BK_TEXT_LIGHT,
     marginTop: 12,
     fontWeight: '600',
+    textAlign: 'center',
+    paddingHorizontal: 20,
   },
+  emptySub: { fontSize: 12, color: BK_TEXT_LIGHT, marginTop: 10, marginBottom: 8 },
+  nearestWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center', paddingHorizontal: 16 },
+  nearestChip: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 20, paddingVertical: 7, paddingHorizontal: 12, maxWidth: 150 },
+  nearestChipText: { fontSize: 12, fontWeight: '700', color: BK_BROWN },
+  clearFiltersBtn: { marginTop: 16, backgroundColor: BK_BROWN, borderRadius: 22, paddingVertical: 10, paddingHorizontal: 22 },
+  clearFiltersText: { color: '#FFF', fontWeight: '800', fontSize: 13 },
   
   // Cart Bar (BK Red)
   cartBar: { 

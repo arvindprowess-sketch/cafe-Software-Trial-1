@@ -13,6 +13,7 @@ import SideDrawer from '../components/SideDrawer';
 import CartPill from '../components/CartPill';
 import { useCart } from '../../utils/CartContext';
 import { FUEL, FONT, GOALS as FUEL_GOALS } from '../../utils/theme';
+import { DIET_TAGS, DIET_LABEL, toggleDietTag } from '../../utils/diet';
 
 // BK Design System Colors
 const BK_RED = '#15140F';
@@ -66,7 +67,7 @@ export default function HomeScreen() {
 
   // AI Quick Meal Builder state
   const [showMealBuilder, setShowMealBuilder] = useState(false);
-  const [dietPref, setDietPref] = useState('both');
+  const [dietPref, setDietPref] = useState<string[]>([]);
   const [mealGoal, setMealGoal] = useState('');
   const [mealBudget, setMealBudget] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
@@ -267,7 +268,7 @@ export default function HomeScreen() {
     persistAddress(manualAddress.trim());
   };
 
-  const resetBuilder = () => { setAiMeal(null); setMealGoal(''); setMealBudget(''); setDietPref('both'); setShowMealBuilder(false); };
+  const resetBuilder = () => { setAiMeal(null); setMealGoal(''); setMealBudget(''); setDietPref([]); setShowMealBuilder(false); };
 
   const handleCategoryPress = (cat: any) => {
     if (cat.key === 'ai') {
@@ -542,23 +543,29 @@ export default function HomeScreen() {
 
             {/* Diet Preference */}
             <Text style={styles.builderLabel}>Diet Preference</Text>
-            <View style={styles.dietRow}>
-              {[
-                { key: 'veg', label: 'Veg', color: GREEN },
-                { key: 'non-veg', label: 'Non-Veg', color: Z_RED },
-                { key: 'both', label: 'Both', color: '#D69A35' },
-              ].map(d => (
-                <TouchableOpacity
-                  key={d.key} testID={`diet-${d.key}`}
-                  style={[styles.dietChip, dietPref === d.key && { backgroundColor: d.color, borderColor: d.color }]}
-                  onPress={() => setDietPref(d.key)}
-                >
-                  {d.key === 'veg' && <View style={[styles.vegIndicator, { borderColor: GREEN }]}><View style={[styles.vegDotInner, { backgroundColor: GREEN }]} /></View>}
-                  {d.key === 'non-veg' && <View style={[styles.vegIndicator, { borderColor: Z_RED }]}><View style={[styles.vegDotInner, { backgroundColor: Z_RED }]} /></View>}
-                  {d.key === 'both' && <Ionicons name="ellipse-outline" size={14} color={dietPref === d.key ? '#FFF' : '#D69A35'} />}
-                  <Text style={[styles.dietText, dietPref === d.key && { color: '#FFF' }]}>{d.label}</Text>
-                </TouchableOpacity>
-              ))}
+            <View style={[styles.dietRow, { flexWrap: 'wrap' }]}>
+              <TouchableOpacity
+                testID="diet-all"
+                style={[styles.dietChip, dietPref.length === 0 && { backgroundColor: '#D69A35', borderColor: '#D69A35' }]}
+                onPress={() => setDietPref([])}
+              >
+                <Ionicons name="apps" size={14} color={dietPref.length === 0 ? '#FFF' : '#D69A35'} />
+                <Text style={[styles.dietText, dietPref.length === 0 && { color: '#FFF' }]}>All</Text>
+              </TouchableOpacity>
+              {DIET_TAGS.map(tag => {
+                const on = dietPref.includes(tag);
+                const color = tag === 'non-veg' ? Z_RED : GREEN;
+                return (
+                  <TouchableOpacity
+                    key={tag} testID={`diet-${tag}`}
+                    style={[styles.dietChip, on && { backgroundColor: color, borderColor: color }]}
+                    onPress={() => setDietPref(prev => toggleDietTag(prev, tag))}
+                  >
+                    <View style={[styles.vegIndicator, { borderColor: on ? '#FFF' : color }]}><View style={[styles.vegDotInner, { backgroundColor: on ? '#FFF' : color }]} /></View>
+                    <Text style={[styles.dietText, on && { color: '#FFF' }]}>{DIET_LABEL[tag]}</Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
 
             {/* Fitness Goal — all 6 canonical goals from the shared source */}

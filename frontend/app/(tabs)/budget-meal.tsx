@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { FUEL, GOALS } from '../../utils/theme';
+import { DIET_TAGS, DIET_LABEL, toggleDietTag } from '../../utils/diet';
 
 const Z_RED = '#15140F';
 const GREEN = '#3FA34D';
@@ -25,7 +26,7 @@ export default function BudgetMealScreen() {
       Alert.alert('Set a budget', 'Enter a budget of at least ₹50 to use Smart Fill.');
       return;
     }
-    router.push({ pathname: '/smart-fill', params: { budget: String(budgetNum), dietPref, goal, orderType } });
+    router.push({ pathname: '/smart-fill', params: { budget: String(budgetNum), dietPref: dietPref.join(','), goal, orderType } });
   };
 
   return (
@@ -89,28 +90,32 @@ export default function BudgetMealScreen() {
           </View>
         </View>
 
-        {/* Diet Preference filter */}
+        {/* Diet Preference filter — multi-select */}
         <View style={styles.filterRow}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
-            {[
-              { key: 'both', label: 'All', icon: 'apps' },
-              { key: 'veg', label: 'Veg', color: GREEN },
-              { key: 'non-veg', label: 'Non-Veg', color: Z_RED },
-            ].map(d => (
-              <TouchableOpacity
-                key={d.key}
-                testID={`budget-diet-${d.key}`}
-                style={[styles.filterChip, dietPref === d.key && { backgroundColor: d.color || '#15140F', borderColor: d.color || '#15140F' }]}
-                onPress={() => setDietPref(d.key)}
-              >
-                {d.icon ? (
-                  <Ionicons name={d.icon as any} size={14} color={dietPref === d.key ? '#FFF' : '#6B6A5E'} />
-                ) : (
-                  <View style={[styles.vegDotSmall, { backgroundColor: d.color }]} />
-                )}
-                <Text style={[styles.filterText, dietPref === d.key && { color: '#FFF' }]}>{d.label}</Text>
-              </TouchableOpacity>
-            ))}
+            <TouchableOpacity
+              testID="budget-diet-all"
+              style={[styles.filterChip, dietPref.length === 0 && { backgroundColor: '#15140F', borderColor: '#15140F' }]}
+              onPress={() => setDietPref([])}
+            >
+              <Ionicons name="apps" size={14} color={dietPref.length === 0 ? '#FFF' : '#6B6A5E'} />
+              <Text style={[styles.filterText, dietPref.length === 0 && { color: '#FFF' }]}>All</Text>
+            </TouchableOpacity>
+            {DIET_TAGS.map(tag => {
+              const on = dietPref.includes(tag);
+              const color = tag === 'non-veg' ? Z_RED : GREEN;
+              return (
+                <TouchableOpacity
+                  key={tag}
+                  testID={`budget-diet-${tag}`}
+                  style={[styles.filterChip, on && { backgroundColor: color, borderColor: color }]}
+                  onPress={() => setDietPref(prev => toggleDietTag(prev, tag))}
+                >
+                  <View style={[styles.vegDotSmall, { backgroundColor: on ? '#FFF' : color }]} />
+                  <Text style={[styles.filterText, on && { color: '#FFF' }]}>{DIET_LABEL[tag]}</Text>
+                </TouchableOpacity>
+              );
+            })}
           </ScrollView>
         </View>
 
@@ -139,7 +144,7 @@ export default function BudgetMealScreen() {
         </TouchableOpacity>
         <Text style={styles.ctaHint}>
           We'll auto-pick dishes that fit your ₹{Math.round(budgetNum)} budget for your{' '}
-          {dietPref === 'both' ? 'any-diet' : dietPref} {goal.replace('_', ' ')} goal. You can swap or remove items on the next screen.
+          {dietPref.length ? dietPref.map(t => DIET_LABEL[t]).join(' + ') : 'any-diet'} {goal.replace('_', ' ')} goal. You can swap or remove items on the next screen.
         </Text>
       </ScrollView>
     </SafeAreaView>
