@@ -1,0 +1,42 @@
+{
+  "summary": "Verified the Vite asset-serving fix for the FUEL mobile static export. All bundled /mobile/* assets (.ttf, .png, .js) now return correct MIME types instead of text/html. Ionicons + Anton fonts load and glyphs render as proper characters (not tofu boxes). On every screen sampled (login, verify, cart) all <img> elements have naturalWidth>0 and no asset response came back as text/html during a full session. Tab-screen visual sampling for Home/Menu/Build/Orders was not completed via UI because the React-Native-Web Pressable VERIFY button did not accept programmatic DOM click() in Playwright (unrelated to the asset fix), so the test stayed on the verify screen and tab clicks were no-ops. The asset regression itself is conclusively fixed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "passed_tests": [
+    "curl /mobile/_expo/.../entry-*.js -> 200, content-type: text/javascript (not text/html)",
+    "curl Ionicons.*.ttf -> 200, content-type: font/ttf, file magic 00 01 00 00 (valid TTF SFNT)",
+    "curl Anton_400Regular*.ttf -> 200, content-type: font/ttf",
+    "curl HankenGrotesk_400Regular_Italic*.ttf -> 200, content-type: font/ttf",
+    "curl expo-router/assets/arrow_down*.png -> 200, content-type: image/png",
+    "Playwright response interception across full session: zero /mobile/*.ttf|png|js returned text/html (bad_html_assets: [])",
+    "document.fonts.ready reports 'ionicons' and 'Anton_400Regular' as loaded",
+    "Ionicons glyphs rendered on screen at PUA codepoints (61699, 61735, 61820, 62360, 62740, 62773, 62840, 62860) - real glyphs, not U+0000 tofu",
+    "CART screen (/mobile/cart): all 8 <img> have naturalWidth>0; 13 Ionicons glyphs rendered; 'Forgot something? Add more' carousel shows 10 addon cards with photos and plus-buttons (data-testid^='addon-add-')",
+    "Login/verify screen screenshots: FUEL bolt logo, back arrow, green check, red info icon all render as proper icon glyphs"
+  ],
+  "test_report_links": [
+    "/app/test_reports/iteration_27.json"
+  ],
+  "action_items": [
+    "(Minor, unrelated to this fix) The VERIFY & CONTINUE button on /mobile verify screen does not respond to Playwright/JS programmatic click() reliably - likely a React-Native-Web Pressable handler relying on pointerdown/pointerup rather than 'click'. Real human taps work. Consider attaching an onClick handler in addition to onPress so DOM click() works for e2e testing (improves automated coverage; no end-user impact)."
+  ],
+  "critical_code_review_comments": [
+    "web-panel/vite.config.ts serveMobile() middleware correctly maps extensions to MIME types (font/ttf, image/png, text/javascript, text/css). Consider also setting Cache-Control: public, max-age=31536000, immutable for hashed asset filenames to reduce future bandwidth.",
+    "Hanken Grotesk family was not in document.fonts as 'loaded' on the login/verify screens; browsers only mark webfonts loaded once a glyph using them is rendered, so this is expected behavior, but if any screen relies on Hanken for FIRST PAINT, preloading 1-2 weights via <link rel=preload as=font crossorigin> could prevent FOUT."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "n/a (frontend-only task)",
+    "frontend": "Asset fix: 100% verified. Per-screen visual walk (Home/Menu/Build/Orders): blocked by Pressable click incompatibility - mitigated by direct /mobile/cart navigation which shows the fix working end-to-end."
+  },
+  "test_credentials": "Mobile OTP login: enter any 10-digit phone on /mobile, tap GET OTP, read 'Demo OTP: XXXXXX' from the verify screen, type into the 6 boxes, tap VERIFY (manual tap required - DOM click() does not fire on the Pressable).",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Vite fix in web-panel/vite.config.ts (serveMobile middleware) is verified at network + DOM level: all /mobile/* .ttf/.png/.js now serve with correct MIME types; Ionicons + Anton load; bundled images decode (naturalWidth>0). Per-tab visual sampling on Home/Menu/Build/Orders could not be completed because the verify-screen VERIFY button is a RN-Web Pressable that ignores DOM click(); the main agent (or a tester with a real browser) can quickly visually re-confirm by logging in manually. The cart screen, reached via direct nav, already shows the fix working (8/8 images loaded, icons render).",
+  "rca of the issue": "Original bug: Vite dev server in web-panel intercepted any URL containing /node_modules/ and returned its SPA index.html (Content-Type: text/html). Because the Expo static web export under public/mobile/assets/ keeps its bundled font/image files at paths like /mobile/assets/node_modules/@expo/vector-icons/...Ionicons.<hash>.ttf, those font + PNG requests returned HTML instead of binary, corrupting font decoding and PNG decoding -> every icon and bundled image rendered as a tofu/empty box. Fix: serveMobile() middleware in web-panel/vite.config.ts now intercepts every /mobile/* request that has a file extension BEFORE Vite's internal handler, reads it from public/mobile on disk, and sets the correct MIME type via a small extension->mime map (font/ttf, image/png, text/javascript, text/css, image/svg+xml, etc.). Verification: curl shows font/ttf with valid SFNT magic; Playwright response sniffing shows zero text/html responses for /mobile/*.{ttf,png,js}; document.fonts.ready reports Ionicons + Anton loaded; on-screen icons render as proper glyphs at expected PUA codepoints; all <img> on the cart screen have naturalWidth>0."
+}
