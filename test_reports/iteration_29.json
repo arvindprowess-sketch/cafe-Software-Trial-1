@@ -1,0 +1,56 @@
+{
+  "summary": "Phase 2 (goal personalization) + Phase 3 (meal split + goal-fit) end-to-end regression: 24/24 backend pytest tests PASS and full mobile UI flow (login -> goal-setup -> result -> meal-plan -> profile -> menu -> home banner) verified working with all expected data-testids present. Scope rule confirmed: OrderCreate model and POST /api/orders response carry NO Phase2/3 personal body-stats or target fields. Phase 1 regressions (diet_types array + multi-tag AND filter) still green.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Profile screen GOALS list", "issue": "Profile shows 5 goal chips: Fat Loss, Muscle Gain, Maintain, Beginner Phase, Recovery Phase. The chip labelled 'Recovery Phase' does NOT match any backend fitness_goal value (backend accepts: fat_loss, muscle_gain, lean_bulk, recomposition, maintenance, beginner). If 'recovery' is sent, backend silently falls back to default protein/calorie factors (no error). Also Recomposition and Lean Bulk are exposed on Home chips but absent on Profile — inconsistent goal taxonomy across screens.", "selector": "Profile 'Fitness Goal (5 options)' chips", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/meal-plan after meal-count switch", "issues": ["Console emits Minified React error #418 (hydration/text content mismatch) when switching meal-count chips. Functionality still works (cards re-render 3->5->6), but should be cleaned up."]}
+    ]
+  },
+  "verification_evidence": {
+    "backend_pytest": "24 passed in 5.12s (test_goal_personalization_phase23.py)",
+    "compute_muscle_gain_180_80_28_male_moderate": "BMR=1790, TDEE=2774, daily_calories=3191, daily_protein=144 (matches Mifflin-StJeor + 1.15 cal factor + 1.8 g/kg protein)",
+    "guardrail_floor": "extreme (150cm/45kg/60y female sedentary fat_loss): floor_applied=true, daily_calories>=1200, safety note + 'not medical advice' disclaimer returned",
+    "guardrail_array_cases": "3 additional extreme fat_loss profiles all returned >=1200 kcal",
+    "meal_plan_counts": "3,4,5,6 all return matching meals[] length with calories+protein+carbs+fat + suggestions[]",
+    "remaining_suggestions": "Populated when remaining_calories provided, empty otherwise",
+    "goal_fit_products": "fat_loss query returns products sorted goal_fit=true first; muscle_gain query produces fit items too",
+    "auth_gating_401": "GET/POST /user/daily-target, POST /nutrition/meal-plan, GET /products/goal-fit all return 401/403 without token",
+    "phase1_regression": "/api/products carries diet_types arrays; ?diet=veg,high-protein AND-filters correctly",
+    "scope_no_leak_order_model": "Static check on OrderCreate confirmed no height_cm/weight_kg/age/gender/activity_level/bmr/tdee/daily_* fields; only pre-existing fitness_goal optional",
+    "scope_no_leak_order_response": "POST /api/orders response contains no personal-goal fields",
+    "ui_goal_setup_gs_testids": "gs-height, gs-weight, gs-age, gs-target-weight, gs-gender-male/female/other, gs-activity-sedentary/light/moderate/active/very_active, gs-consent, gs-save (all present)",
+    "ui_result_view": "gs-result-calories='2774', gs-result-protein='128g', medical-advice disclaimer present, gs-plan-meals + gs-done both clickable",
+    "ui_meal_plan": "mealplan-count-3/4/5/6 all present; mealplan-remaining (cal 2774, protein 128g) + 41 testids; switching count-3->5->6 renders 5 then 6 meal cards; 23 'Fits your goal' pills + 23 mealplan-add-<id> buttons",
+    "ui_profile": "profile-daily-target='2774 kcal · 128g protein' with BMR ~1790 · TDEE ~2774, profile-edit-stats + profile-plan-meals present, manual override fields editable below",
+    "ui_menu": "10 goal-fit-<id> badges visible (default maintenance goal)",
+    "ui_home_banner": "home-daily-target shows 'YOUR DAILY TARGET 2774 kcal · 128g protein PLAN MEALS' after setup; 6 goal chips on Home (Fat Loss, Muscle Gain, Maintenance, Beginner, Recomposition, Lean Bulk)"
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_goal_personalization_phase23.py",
+    "/app/test_reports/pytest/phase23_results.xml"
+  ],
+  "action_items": [
+    "FRONTEND: Align Profile fitness-goal chip taxonomy with Home/backend. Profile currently uses 'recovery' which is NOT a backend fitness_goal value (backend silently falls back to defaults). Use the same set as Home: fat_loss, muscle_gain, maintenance, beginner, recomposition, lean_bulk (or whichever 5-6 you want to expose) so the value sent matches GOAL_CAL_FACTOR / GOAL_PROTEIN_PER_KG keys.",
+    "FRONTEND: Investigate React minified error #418 on /meal-plan when changing meal-count (hydration / text content mismatch). Non-blocking but pollutes console."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 4444 lines — exceeds 700-line guideline. compute_daily_targets/split_targets_into_meals/goal_fit_for_product cluster (lines 406-561) is a clean unit and would be a good extraction into a goal_targets.py module.",
+    "compute_daily_targets() uses Python round() (banker's rounding) — e.g. 2774.5 -> 2774. Acceptable but worth noting if QA expects strict away-from-zero rounding.",
+    "GET /user/daily-target ALWAYS recomputes from stored stats (good — keeps targets fresh if stats change). Persisted daily_calories on user doc and recomputed value can drift if stats edit happens via another path; consider single source of truth.",
+    "goal_fit_for_product fallback when no goal-fitting items exist: meal-plan returns 'or fitting' (all products) — this is sensible but means a 'Fits your goal' pill could be shown for non-fitting items if the pill is rendered from suggestions array unconditionally. UI seems to gate the pill correctly (23 pills observed, matching only_fit set)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_goal_personalization_phase23.py (new)"
+  ],
+  "success_rate": { "backend": "100% (24/24)", "frontend": "100% of new Phase 2/3 testids present + flow works; 1 UI taxonomy bug + 1 console warn to address" },
+  "test_credentials": "Customer mobile: dev-OTP flow (random 10-digit phone, dev_otp returned by /auth/otp/send when MSG91 unset). Admin: admin@dietcafe.com / admin123.",
+  "seed_data_creation": "Created several throwaway customer users via OTP flow during testing (TEST_phase23 + random User<phone> names).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Phase 2/3 backend is solid. New regression file is /app/backend/tests/test_goal_personalization_phase23.py — run with pytest. BASE_URL defaults to the preview URL from frontend/.env (override via env BASE_URL). Mobile UI testing requires typing OTP via page.keyboard.type (not page.fill) because RN web TextInput needs onChangeText events; otherwise fills look correct but state stays empty and Verify silently no-ops. Frontend bug to confirm fix: profile GOALS array uses 'recovery' instead of 'recomposition' (frontend/app/(tabs)/profile.tsx).",
+  "rca of the issue": "Profile goal chip 'Recovery Phase' is a frontend-only label/value not recognized by backend. Backend's GOAL_CAL_FACTOR/GOAL_PROTEIN_PER_KG (server.py:417-432) keys are: fat_loss, muscle_gain, lean_bulk, recomposition, maintenance, beginner. When the mobile app POSTs fitness_goal='recovery' it hits the .get(...,1.0) and .get(...,1.6) defaults — calories computed as TDEE*1.0 and protein as 1.6 g/kg (i.e. equivalent to maintenance) without any error surfaced to the user. Fix: rename the chip value to 'recomposition' in frontend/app/(tabs)/profile.tsx GOALS array and align label set with home chips."
+}

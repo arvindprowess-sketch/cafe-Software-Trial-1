@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiCall, getStoredUser } from '../../utils/api';
@@ -73,6 +73,12 @@ export default function HomeScreen() {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiMeal, setAiMeal] = useState<any>(null);
 
+  // Phase 2/3: personalized daily target (from body stats)
+  const [dailyTarget, setDailyTarget] = useState<any>(null);
+  const loadTarget = useCallback(async () => {
+    try { setDailyTarget(await apiCall('/user/daily-target')); } catch {}
+  }, []);
+
   const loadData = useCallback(async () => {
     try {
       const [u, s, best, b] = await Promise.all([
@@ -82,10 +88,13 @@ export default function HomeScreen() {
         apiCall('/banners'),
       ]);
       setUser(u); setSummary(s); setProducts(best); setBanners(b);
+      loadTarget();
     } catch (e) {} finally { setLoading(false); }
-  }, []);
+  }, [loadTarget]);
 
   useEffect(() => { loadData(); }, []);
+  // Refresh the personalized target whenever Home regains focus (e.g. after goal-setup)
+  useFocusEffect(useCallback(() => { loadTarget(); }, [loadTarget]));
   useEffect(() => {
     AsyncStorage.getItem('delivery_address').then(a => { if (a) setDeliveryAddress(a); }).catch(() => {});
   }, []);
@@ -270,6 +279,16 @@ export default function HomeScreen() {
 
   const resetBuilder = () => { setAiMeal(null); setMealGoal(''); setMealBudget(''); setDietPref([]); setShowMealBuilder(false); };
 
+  // Phase 2: tapping a goal — if body stats are missing, open goal-setup; else open the meal builder.
+  const handleGoalTap = (key: string) => {
+    setMealGoal(key);
+    if (!dailyTarget?.has_body_stats) {
+      router.push({ pathname: '/goal-setup', params: { goal: key, next: 'builder' } });
+    } else {
+      setShowMealBuilder(true);
+    }
+  };
+
   const handleCategoryPress = (cat: any) => {
     if (cat.key === 'ai') {
       setShowMealBuilder(true);
@@ -349,7 +368,7 @@ export default function HomeScreen() {
                   key={g.key}
                   testID={`home-goal-${g.key}`}
                   style={[styles.goalSelectorChip, active && styles.goalSelectorChipActive]}
-                  onPress={() => { setMealGoal(g.key); setShowMealBuilder(true); }}
+                  onPress={() => handleGoalTap(g.key)}
                   activeOpacity={0.85}
                 >
                   <Ionicons name={g.icon as any} size={20} color={active ? FUEL.ink : FUEL.limeDeep} />
@@ -358,6 +377,27 @@ export default function HomeScreen() {
               );
             })}
           </View>
+
+          {/* Phase 2/3: personalized daily target + plan entry */}
+          {dailyTarget?.has_body_stats ? (
+            <TouchableOpacity testID="home-daily-target" style={styles.targetBanner} activeOpacity={0.9} onPress={() => router.push('/meal-plan')}>
+              <View style={styles.targetBannerLeft}>
+                <Text style={styles.targetBannerLabel}>YOUR DAILY TARGET</Text>
+                <Text style={styles.targetBannerValue}>
+                  {dailyTarget.daily_calories} kcal · <Text style={{ color: FUEL.protein }}>{dailyTarget.daily_protein}g protein</Text>
+                </Text>
+              </View>
+              <View style={styles.targetBannerCta}>
+                <Ionicons name="restaurant" size={14} color={FUEL.ink} />
+                <Text style={styles.targetBannerCtaText}>PLAN MEALS</Text>
+              </View>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity testID="home-setup-target" style={styles.targetSetup} activeOpacity={0.9} onPress={() => router.push({ pathname: '/goal-setup', params: { goal: mealGoal || 'maintenance', next: 'meal-plan' } })}>
+              <Ionicons name="sparkles" size={15} color={FUEL.limeDeep} />
+              <Text style={styles.targetSetupText}>Tap a goal to get a personalized daily target</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* ===== PROMOTIONAL BANNERS (ENHANCED) ===== */}
@@ -815,6 +855,16 @@ const styles = StyleSheet.create({
   goalSelectorChipActive: { backgroundColor: FUEL.lime, borderColor: FUEL.lime },
   goalSelectorLabel: { fontFamily: FONT.bodyExtrabold, fontSize: 13, fontWeight: '800', color: BK_TEXT_LIGHT, textTransform: 'uppercase', letterSpacing: 0.3 },
   goalSelectorLabelActive: { color: FUEL.ink },
+
+  // Phase 2/3: personalized daily target banner
+  targetBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: FUEL.ink, borderRadius: 16, paddingVertical: 13, paddingHorizontal: 16, marginTop: 12 },
+  targetBannerLeft: { flex: 1 },
+  targetBannerLabel: { fontSize: 10.5, color: FUEL.sand, opacity: 0.7, letterSpacing: 1, fontWeight: '700' },
+  targetBannerValue: { fontSize: 16, color: FUEL.lime, fontWeight: '800', marginTop: 3 },
+  targetBannerCta: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: FUEL.lime, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7 },
+  targetBannerCtaText: { fontSize: 11.5, fontWeight: '800', color: FUEL.ink, letterSpacing: 0.5 },
+  targetSetup: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: FUEL.limeTint, borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14, marginTop: 12 },
+  targetSetupText: { flex: 1, fontSize: 13, fontWeight: '600', color: '#4F5A2E' },
   
   // Header (BK Dark Brown)
   header: { 

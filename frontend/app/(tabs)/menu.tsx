@@ -13,6 +13,7 @@ import { useRealtime } from '../../utils/realtime';
 import { FUEL, FONT } from '../../utils/theme';
 import { useCart } from '../../utils/CartContext';
 import { DIET_TAGS, DIET_LABEL, matchesDiet, matchesAnyDiet, toggleDietTag } from '../../utils/diet';
+import { goalFitForProduct, sortByGoalFit } from '../../utils/goalFit';
 import CartPill from '../components/CartPill';
 
 // BK Design System Colors
@@ -50,6 +51,7 @@ export default function MenuScreen() {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [dietFilter, setDietFilter] = useState<string[]>([]);
+  const userGoal = user?.fitness_goal;
 
   // Handle URL params for category/diet filter (only on initial load)
   useEffect(() => {
@@ -94,7 +96,7 @@ export default function MenuScreen() {
 
   // Filter products (memoized for performance)
   const filtered = useMemo(() => {
-    return products.filter(p => {
+    const list = products.filter(p => {
       // Search filter
       const searchMatch = !search || p.name.toLowerCase().includes(search.toLowerCase());
       if (!searchMatch) return false;
@@ -117,7 +119,9 @@ export default function MenuScreen() {
       // Standard category matching
       return p.category === selectedCat;
     });
-  }, [products, search, dietFilter, selectedCat]);
+    // Phase 3: sort goal-fit dishes first (only when the user has a personalized goal)
+    return userGoal ? sortByGoalFit(list, userGoal) : list;
+  }, [products, search, dietFilter, selectedCat, userGoal]);
 
   // Nearest options when a multi-tag AND combo returns nothing (e.g. Vegan+Keto)
   const nearest = useMemo(() => {
@@ -176,6 +180,8 @@ export default function MenuScreen() {
     const isHighProtein = item.protein_per_100g >= 20;
     const isUnderBudget = item.cost_per_100g <= 50;
     const showSmartBadge = isHighProtein || isUnderBudget;
+    // Phase 3: goal-fit flag for the user's current goal
+    const goalFit = userGoal ? goalFitForProduct(item, userGoal) : null;
     
     return (
       <View style={styles.productCard} testID={`product-${item.id}`}>
@@ -236,6 +242,14 @@ export default function MenuScreen() {
               <Text style={[styles.macroChipText, { color: '#3E6E8A' }]}>F {Math.round(item.fat_per_100g || 0)}g</Text>
             </View>
           </View>
+
+          {/* Phase 3: "Fits your goal" badge */}
+          {goalFit?.fits && (
+            <View style={styles.goalFitBadge} testID={`goal-fit-${item.id}`}>
+              <Ionicons name="checkmark-circle" size={12} color="#4F5A2E" />
+              <Text style={styles.goalFitText}>Fits your goal · {goalFit.reason}</Text>
+            </View>
+          )}
 
           {/* Price and Add Button Row */}
           <View style={styles.productFooter}>
@@ -757,6 +771,8 @@ const styles = StyleSheet.create({
   macroChips: { flexDirection: 'row', gap: 6, marginTop: 8 },
   macroChip: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
   macroChipText: { fontFamily: FONT.bodyExtrabold, fontSize: 10, fontWeight: '800', letterSpacing: 0.2 },
+  goalFitBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8, alignSelf: 'flex-start', backgroundColor: FUEL.limeTint, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 9 },
+  goalFitText: { fontSize: 10, fontWeight: '800', color: '#4F5A2E' },
 
   // Ready-made vs Build-your-own tag
   typeTag: { position: 'absolute', bottom: 8, left: 8, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 20 },

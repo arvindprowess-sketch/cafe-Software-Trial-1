@@ -403,6 +403,165 @@ def product_matches_diet(p: dict, prefs) -> bool:
     tags = p.get("diet_types") or normalize_diet_types(None, p.get("diet_type"), p.get("name"))
     return all(pref in tags for pref in prefs)
 
+# ========== GOAL PERSONALIZATION — body stats → daily target (CUSTOMER APP ONLY) ==========
+# Phase 2/3: Mifflin-St Jeor BMR -> TDEE (x activity) -> goal-adjusted daily target,
+# split into per-meal slices, plus goal-fit dish ranking. Safety guardrails enforced.
+ACTIVITY_MULTIPLIERS = {
+    "sedentary": 1.2,     # little/no exercise
+    "light": 1.375,       # 1-3 days/week
+    "moderate": 1.55,     # 3-5 days/week
+    "active": 1.725,      # 6-7 days/week
+    "very_active": 1.9,   # hard daily / physical job
+}
+# Calorie factor vs TDEE per goal (deficits kept conservative & safe)
+GOAL_CAL_FACTOR = {
+    "fat_loss": 0.82,        # ~18% deficit (safe)
+    "muscle_gain": 1.15,     # ~15% surplus
+    "lean_bulk": 1.10,       # ~10% surplus
+    "recomposition": 1.0,    # maintenance + high protein
+    "maintenance": 1.0,
+    "beginner": 1.0,
+}
+GOAL_PROTEIN_PER_KG = {
+    "fat_loss": 2.0,
+    "muscle_gain": 1.8,
+    "lean_bulk": 1.8,
+    "recomposition": 2.2,
+    "maintenance": 1.6,
+    "beginner": 1.4,
+}
+CALORIE_FLOOR = 1200  # never output below this (safety guardrail)
+TARGET_DISCLAIMER = (
+    "These are approximate targets to help personalize your meals — not medical advice. "
+    "If you have any health conditions, please consult a doctor or registered dietitian."
+)
+
+def has_body_stats(u: dict) -> bool:
+    return bool(u and u.get("height_cm") and u.get("weight_kg") and u.get("age"))
+
+def compute_daily_targets(height_cm, weight_kg, age, gender, activity_level, fitness_goal, target_weight_kg=None):
+    """Mifflin-St Jeor BMR -> TDEE -> goal-adjusted daily calories + macros, with guardrails."""
+    notes: List[str] = []
+    try:
+        height_cm = float(height_cm); weight_kg = float(weight_kg); age = float(age)
+    except (TypeError, ValueError):
+        return None
+    g = (gender or "male").lower()
+    base = 10 * weight_kg + 6.25 * height_cm - 5 * age
+    if g == "female":
+        bmr = base - 161
+    elif g == "male":
+        bmr = base + 5
+    else:
+        bmr = base - 78  # gender-neutral: midpoint of male/female constants
+    activity = ACTIVITY_MULTIPLIERS.get(activity_level or "light", 1.375)
+    tdee = bmr * activity
+    factor = GOAL_CAL_FACTOR.get(fitness_goal, 1.0)
+    calories = tdee * factor
+    floor_applied = False
+    # Guardrail 1: block extreme deficit — for fat loss never go below BMR (or the floor)
+    if fitness_goal == "fat_loss":
+        min_safe = max(CALORIE_FLOOR, round(bmr))
+        if calories < min_safe:
+            calories = min_safe
+            floor_applied = True
+            notes.append("Adjusted so you never dip into an unsafe deficit — slow & steady is more sustainable.")
+    # Guardrail 2: absolute calorie floor
+    if calories < CALORIE_FLOOR:
+        calories = CALORIE_FLOOR
+        floor_applied = True
+        notes.append(f"We keep a minimum of {CALORIE_FLOOR} kcal/day so you stay energized and healthy.")
+    # Protein target (g/kg bodyweight), capped at 40% of calories
+    protein = GOAL_PROTEIN_PER_KG.get(fitness_goal, 1.6) * weight_kg
+    if protein * 4 > calories * 0.4:
+        protein = (calories * 0.4) / 4
+    # Fat ~25% of calories; carbs fill the remainder
+    fat = (calories * 0.25) / 9
+    carb_cal = calories - (protein * 4 + fat * 9)
+    carbs = max(0.0, carb_cal / 4)
+    notes.append("Targets are approximate and update as your stats change.")
+    return {
+        "bmr": int(round(bmr)),
+        "tdee": int(round(tdee)),
+        "daily_calories": int(round(calories)),
+        "daily_protein": int(round(protein)),
+        "daily_carbs": int(round(carbs)),
+        "daily_fat": int(round(fat)),
+        "fitness_goal": fitness_goal,
+        "activity_level": activity_level,
+        "floor_applied": floor_applied,
+        "notes": notes,
+        "disclaimer": TARGET_DISCLAIMER,
+    }
+
+def split_targets_into_meals(daily_calories, daily_protein, daily_carbs, daily_fat, meals: int):
+    """Split a daily target across N meals (3-6). Slightly larger lunch/dinner, lighter snacks."""
+    meals = max(3, min(6, int(meals or 3)))
+    # weight profiles per meal count (sum ~= 1.0); index 0..meals-1
+    profiles = {
+        3: [0.30, 0.40, 0.30],
+        4: [0.25, 0.35, 0.10, 0.30],
+        5: [0.22, 0.30, 0.10, 0.28, 0.10],
+        6: [0.20, 0.27, 0.08, 0.25, 0.10, 0.10],
+    }
+    labels = {
+        3: ["Breakfast", "Lunch", "Dinner"],
+        4: ["Breakfast", "Lunch", "Snack", "Dinner"],
+        5: ["Breakfast", "Lunch", "Snack", "Dinner", "Evening Snack"],
+        6: ["Breakfast", "Mid-Morning", "Lunch", "Snack", "Dinner", "Late Snack"],
+    }
+    w = profiles[meals]
+    lbl = labels[meals]
+    slices = []
+    for i in range(meals):
+        slices.append({
+            "index": i,
+            "label": lbl[i],
+            "calories": int(round(daily_calories * w[i])),
+            "protein": int(round(daily_protein * w[i])),
+            "carbs": int(round(daily_carbs * w[i])),
+            "fat": int(round(daily_fat * w[i])),
+        })
+    return slices
+
+def goal_fit_for_product(p: dict, goal: str):
+    """Return (fits: bool, score: float, reason: str) for how well a dish fits a goal.
+    Uses per-100g nutrition already on the product."""
+    cal = float(p.get("calories_per_100g") or 0)
+    pro = float(p.get("protein_per_100g") or 0)
+    carb = float(p.get("carbs_per_100g") or 0)
+    fat = float(p.get("fat_per_100g") or 0)
+    # protein density = grams of protein per 100 kcal
+    pd = (pro / cal * 100) if cal > 0 else 0
+    goal = goal or "maintenance"
+    if goal == "fat_loss":
+        fits = pd >= 8 and cal <= 220
+        score = pd * 3 - cal / 50
+        reason = "High protein, lower calorie"
+    elif goal in ("muscle_gain", "lean_bulk"):
+        fits = pro >= 12
+        score = pro * 2 + cal / 100
+        reason = "Protein-rich, energy-dense"
+    elif goal == "recomposition":
+        fits = pd >= 8
+        score = pd * 3
+        reason = "Very high protein density"
+    else:  # maintenance, beginner
+        fits = pd >= 5
+        score = pd + (pro / 10)
+        reason = "Balanced macros"
+    return fits, round(score, 2), reason
+
+async def fetch_active_products() -> List[dict]:
+    active_cats = await db.categories.find({"is_active": {"$ne": False}}, {"_id": 0, "name": 1}).to_list(100)
+    active_cat_names = {c["name"] for c in active_cats}
+    products = await db.products.find({"is_active": True}, {"_id": 0}).to_list(200)
+    if active_cat_names:
+        products = [p for p in products if p.get("category", "") in active_cat_names or not p.get("category")]
+    return [ensure_product_diet_types(p) for p in products]
+
+# ========== AUTH ROUTES ==========
+
 # ========== AUTH ROUTES ==========
 
 # OTP storage is durable in MongoDB (collection: otp_codes) with a TTL index on expires_at (A5).
@@ -668,7 +827,16 @@ async def get_me(user=Depends(get_current_user)):
         "daily_calories": user.get("daily_calories", 2000),
         "daily_protein": user.get("daily_protein", 100),
         "daily_carbs": user.get("daily_carbs", 250),
-        "daily_fat": user.get("daily_fat", 65)
+        "daily_fat": user.get("daily_fat", 65),
+        # Phase 2: body stats (customer app only) — may be absent for older users
+        "height_cm": user.get("height_cm"),
+        "weight_kg": user.get("weight_kg"),
+        "age": user.get("age"),
+        "gender": user.get("gender"),
+        "activity_level": user.get("activity_level"),
+        "target_weight_kg": user.get("target_weight_kg"),
+        "meals_per_day": user.get("meals_per_day", 3),
+        "has_body_stats": has_body_stats(user),
     }
 
 # ========== PRODUCT ROUTES ==========
@@ -2258,6 +2426,124 @@ async def update_profile(data: dict = Body(...), user=Depends(get_current_user))
         raise HTTPException(400, "No valid fields to update")
     await db.users.update_one({"id": user["id"]}, {"$set": allowed})
     return {"message": "Profile updated", **allowed}
+
+# ---------- Phase 2/3: Goal personalization (CUSTOMER APP ONLY) ----------
+class DailyTargetRequest(BaseModel):
+    height_cm: Optional[float] = None
+    weight_kg: Optional[float] = None
+    age: Optional[int] = None
+    gender: Optional[str] = None          # male, female, other
+    activity_level: Optional[str] = None  # sedentary, light, moderate, active, very_active
+    target_weight_kg: Optional[float] = None
+    fitness_goal: Optional[str] = None
+    meals_per_day: Optional[int] = None   # Phase 3 (3-6)
+
+class MealPlanRequest(BaseModel):
+    meals_count: int = 3
+    goal: Optional[str] = None
+    remaining_calories: Optional[float] = None
+    remaining_protein: Optional[float] = None
+
+def _product_card(p: dict, goal: str) -> dict:
+    fits, score, reason = goal_fit_for_product(p, goal)
+    return {
+        "id": p.get("id"), "name": p.get("name"), "image_url": p.get("image_url"),
+        "calories_per_100g": p.get("calories_per_100g"), "protein_per_100g": p.get("protein_per_100g"),
+        "carbs_per_100g": p.get("carbs_per_100g"), "fat_per_100g": p.get("fat_per_100g"),
+        "cost_per_100g": p.get("cost_per_100g"), "fixed_price": p.get("fixed_price"), "price": p.get("price"),
+        "product_type": p.get("product_type", "single"), "serving_grams": p.get("serving_grams"),
+        "category": p.get("category"), "diet_types": p.get("diet_types"), "diet_type": p.get("diet_type"),
+        "goal_fit": fits, "goal_fit_score": score, "goal_fit_reason": reason,
+    }
+
+@api_router.post("/user/daily-target")
+async def set_daily_target(data: DailyTargetRequest, user=Depends(get_current_user)):
+    """Phase 2: save body stats + compute the user's goal-adjusted daily target (kcal + macros)."""
+    goal = data.fitness_goal or user.get("fitness_goal", "maintenance")
+    h = data.height_cm if data.height_cm is not None else user.get("height_cm")
+    w = data.weight_kg if data.weight_kg is not None else user.get("weight_kg")
+    a = data.age if data.age is not None else user.get("age")
+    gender = data.gender or user.get("gender")
+    activity = data.activity_level or user.get("activity_level")
+    twk = data.target_weight_kg if data.target_weight_kg is not None else user.get("target_weight_kg")
+    if not (h and w and a):
+        raise HTTPException(status_code=400, detail="height_cm, weight_kg and age are required to compute your target")
+    target = compute_daily_targets(h, w, a, gender, activity, goal, twk)
+    if not target:
+        raise HTTPException(status_code=400, detail="Could not compute target — please check your inputs")
+    saved = {
+        "height_cm": float(h), "weight_kg": float(w), "age": int(a),
+        "gender": gender, "activity_level": activity,
+        "target_weight_kg": float(twk) if twk else None,
+        "fitness_goal": goal,
+        "meals_per_day": max(3, min(6, int(data.meals_per_day))) if data.meals_per_day else user.get("meals_per_day", 3),
+        "daily_calories": target["daily_calories"], "daily_protein": target["daily_protein"],
+        "daily_carbs": target["daily_carbs"], "daily_fat": target["daily_fat"],
+    }
+    await db.users.update_one({"id": user["id"]}, {"$set": saved})
+    return {"message": "Daily target computed", "has_body_stats": True, **saved, **target}
+
+@api_router.get("/user/daily-target")
+async def get_daily_target(user=Depends(get_current_user)):
+    """Phase 2: return stored body stats + recomputed daily target (if stats present)."""
+    body = {
+        "height_cm": user.get("height_cm"), "weight_kg": user.get("weight_kg"), "age": user.get("age"),
+        "gender": user.get("gender"), "activity_level": user.get("activity_level"),
+        "target_weight_kg": user.get("target_weight_kg"),
+        "fitness_goal": user.get("fitness_goal", "maintenance"),
+        "meals_per_day": user.get("meals_per_day", 3),
+    }
+    if not has_body_stats(user):
+        return {"has_body_stats": False, **body,
+                "daily_calories": user.get("daily_calories", 2000), "daily_protein": user.get("daily_protein", 100),
+                "daily_carbs": user.get("daily_carbs", 250), "daily_fat": user.get("daily_fat", 65)}
+    target = compute_daily_targets(body["height_cm"], body["weight_kg"], body["age"], body["gender"],
+                                   body["activity_level"], body["fitness_goal"], body["target_weight_kg"])
+    return {"has_body_stats": True, **body, **(target or {})}
+
+@api_router.get("/products/goal-fit")
+async def products_goal_fit(goal: Optional[str] = None, limit: int = 100, user=Depends(get_current_user)):
+    """Phase 3: products annotated with goal-fit + sorted best-first for the user's goal."""
+    g = goal or user.get("fitness_goal", "maintenance")
+    products = await fetch_active_products()
+    cards = [_product_card(p, g) for p in products]
+    cards.sort(key=lambda c: (not c["goal_fit"], -c["goal_fit_score"]))
+    return {"goal": g, "products": cards[:max(1, limit)]}
+
+@api_router.post("/nutrition/meal-plan")
+async def nutrition_meal_plan(data: MealPlanRequest, user=Depends(get_current_user)):
+    """Phase 3: split the daily target across N meals + goal-fit dish suggestions per meal."""
+    goal = data.goal or user.get("fitness_goal", "maintenance")
+    # daily target: recompute from body stats when available, else stored values
+    if has_body_stats(user):
+        t = compute_daily_targets(user.get("height_cm"), user.get("weight_kg"), user.get("age"),
+                                  user.get("gender"), user.get("activity_level"), goal,
+                                  user.get("target_weight_kg")) or {}
+        dc = t.get("daily_calories", 2000); dp = t.get("daily_protein", 100)
+        dca = t.get("daily_carbs", 250); df = t.get("daily_fat", 65)
+    else:
+        dc = user.get("daily_calories", 2000); dp = user.get("daily_protein", 100)
+        dca = user.get("daily_carbs", 250); df = user.get("daily_fat", 65)
+    slices = split_targets_into_meals(dc, dp, dca, df, data.meals_count)
+    # goal-fit dishes, sorted best-first
+    products = await fetch_active_products()
+    fitting = [c for c in (_product_card(p, goal) for p in products)]
+    fitting.sort(key=lambda c: (not c["goal_fit"], -c["goal_fit_score"]))
+    only_fit = [c for c in fitting if c["goal_fit"]] or fitting
+    # distribute suggestions across meals so each meal shows different dishes
+    n = len(only_fit)
+    for i, s in enumerate(slices):
+        s["suggestions"] = [only_fit[(i * 2 + k) % n] for k in range(min(3, n))] if n else []
+    remaining_suggestions = []
+    if data.remaining_calories is not None:
+        remaining_suggestions = only_fit[:5]
+    return {
+        "goal": goal, "meals_count": len(slices),
+        "daily_calories": dc, "daily_protein": dp, "daily_carbs": dca, "daily_fat": df,
+        "meals": slices, "remaining_suggestions": remaining_suggestions,
+        "disclaimer": TARGET_DISCLAIMER,
+    }
+
 
 
 @api_router.get("/user/nutrition-summary")

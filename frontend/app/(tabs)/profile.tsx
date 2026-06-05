@@ -24,6 +24,11 @@ export default function ProfileScreen() {
   const [carbs, setCarbs] = useState('250');
   const [fat, setFat] = useState('65');
   const [saving, setSaving] = useState(false);
+  const [target, setTarget] = useState<any>(null);
+
+  const loadTarget = async () => {
+    try { setTarget(await apiCall('/user/daily-target')); } catch {}
+  };
 
   // Log to verify goals array
   console.log('GOALS array length:', GOALS.length);
@@ -33,6 +38,7 @@ export default function ProfileScreen() {
     (async () => {
       const u = await getStoredUser();
       if (u) { setUser(u); setGoal(u.fitness_goal || 'maintenance'); setCalories(String(u.daily_calories || 2000)); setProtein(String(u.daily_protein || 100)); setCarbs(String(u.daily_carbs || 250)); setFat(String(u.daily_fat || 65)); }
+      loadTarget();
     })();
   }, []);
 
@@ -40,6 +46,7 @@ export default function ProfileScreen() {
     setSaving(true);
     try {
       await apiCall('/user/goals', { method: 'PUT', body: { fitness_goal: goal, daily_calories: parseInt(calories) || 2000, daily_protein: parseInt(protein) || 100, daily_carbs: parseInt(carbs) || 250, daily_fat: parseInt(fat) || 65 } });
+      await loadTarget();
       Alert.alert('Saved!', 'Your fitness goals have been updated');
     } catch (e: any) { Alert.alert('Error', e.message); }
     finally { setSaving(false); }
@@ -77,6 +84,33 @@ export default function ProfileScreen() {
           </View>
 
           <Text style={styles.section}>Daily Targets</Text>
+          {/* Phase 2: personalized target from body stats (auto-computed) */}
+          {target?.has_body_stats ? (
+            <View style={styles.targetHero} testID="profile-daily-target">
+              <View style={styles.targetHeroRow}>
+                <View>
+                  <Text style={styles.targetHeroLabel}>PERSONALIZED TARGET</Text>
+                  <Text style={styles.targetHeroValue} testID="profile-target-calories">{target.daily_calories} kcal · <Text style={{ color: '#E2603F' }} >{target.daily_protein}g protein</Text></Text>
+                  <Text style={styles.targetHeroSub}>BMR ~{target.bmr} · TDEE ~{target.tdee} · {target.weight_kg}kg</Text>
+                </View>
+                <TouchableOpacity testID="profile-edit-stats" style={styles.editStatsBtn} onPress={() => router.push({ pathname: '/goal-setup', params: { goal: goal, next: 'home' } })}>
+                  <Ionicons name="create-outline" size={16} color="#15140F" />
+                  <Text style={styles.editStatsText}>Edit</Text>
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity testID="profile-plan-meals" style={styles.planMealsBtn} onPress={() => router.push('/meal-plan')}>
+                <Ionicons name="restaurant" size={15} color="#15140F" />
+                <Text style={styles.planMealsText}>Plan my meals</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity testID="profile-setup-target" style={styles.setupTargetBtn} onPress={() => router.push({ pathname: '/goal-setup', params: { goal: goal, next: 'home' } })}>
+              <Ionicons name="sparkles" size={16} color="#A6D62E" />
+              <Text style={styles.setupTargetText}>Get a personalized target from your body stats</Text>
+              <Ionicons name="chevron-forward" size={16} color="#6B6A5E" />
+            </TouchableOpacity>
+          )}
+          <Text style={styles.subLabel}>You can fine-tune the numbers below anytime.</Text>
           <View style={styles.targetsGrid}>
             {[
               { label: 'Calories (kcal)', val: calories, set: setCalories, color: Z_RED },
@@ -111,6 +145,18 @@ const styles = StyleSheet.create({
   userEmail: { fontSize: 13, color: '#6B6A5E', marginTop: 2 },
   logoutBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F1E7E1', alignItems: 'center', justifyContent: 'center' },
   section: { fontSize: 17, fontWeight: '700', color: '#15140F', marginBottom: 10 },
+  subLabel: { fontSize: 12.5, color: '#6B6A5E', marginBottom: 12, marginTop: -4 },
+  targetHero: { backgroundColor: '#15140F', borderRadius: 16, padding: 16, marginBottom: 14 },
+  targetHeroRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
+  targetHeroLabel: { fontSize: 10.5, color: '#F4F1E9', opacity: 0.7, letterSpacing: 1, fontWeight: '700' },
+  targetHeroValue: { fontSize: 18, color: '#C7F24E', fontWeight: '800', marginTop: 4 },
+  targetHeroSub: { fontSize: 11.5, color: '#F4F1E9', opacity: 0.6, marginTop: 4 },
+  editStatsBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#C7F24E', borderRadius: 18, paddingHorizontal: 12, paddingVertical: 7 },
+  editStatsText: { fontSize: 12.5, fontWeight: '800', color: '#15140F' },
+  planMealsBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#C7F24E', borderRadius: 12, paddingVertical: 11, marginTop: 14 },
+  planMealsText: { fontSize: 14, fontWeight: '800', color: '#15140F' },
+  setupTargetBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#FFF', borderRadius: 14, padding: 14, borderWidth: 1.5, borderColor: '#E6E1D4', marginBottom: 14 },
+  setupTargetText: { flex: 1, fontSize: 13.5, fontWeight: '700', color: '#15140F' },
   goalsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20, justifyContent: 'flex-start' },
   goalCard: { width: '30.5%', alignItems: 'center', gap: 8, backgroundColor: '#FFF', borderRadius: 12, padding: 14, borderWidth: 1.5, borderColor: '#E6E1D4' },
   goalIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },

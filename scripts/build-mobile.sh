@@ -5,8 +5,8 @@
 set -e
 echo "==> Building Expo web export (baseUrl=/mobile)..."
 cd /app/frontend
-rm -rf dist
-npx expo export -p web --output-dir dist
+rm -rf dist .metro-cache node_modules/.cache
+npx expo export -p web --output-dir dist --clear
 echo "==> Publishing to web-panel/public/mobile ..."
 rm -rf /app/web-panel/public/mobile
 mkdir -p /app/web-panel/public
