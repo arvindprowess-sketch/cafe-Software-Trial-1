@@ -4,16 +4,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { apiCall, getStoredUser, logout } from '../../utils/api';
+import { GOALS as FUEL_GOALS } from '../../utils/theme';
 
-// UPDATED: 2026-02-09 22:45 - Added 5 goals
+// UPDATED: 2026-06-05 - Profile goals now use the canonical shared GOALS (theme.ts)
+// so the value sent to the backend matches GOAL_CAL_FACTOR / GOAL_PROTEIN_PER_KG keys.
 const Z_RED = '#15140F';
-const GOALS = [
-  { key: 'fat_loss', label: 'Fat Loss', icon: 'trending-down' as const, color: '#15140F' },
-  { key: 'muscle_gain', label: 'Muscle Gain', icon: 'trending-up' as const, color: '#3FA34D' },
-  { key: 'maintenance', label: 'Maintain', icon: 'swap-horizontal' as const, color: '#15140F' },
-  { key: 'beginner', label: 'Beginner Phase', icon: 'ribbon' as const, color: '#5E97B8' },
-  { key: 'recovery', label: 'Recovery Phase', icon: 'heart' as const, color: '#C77DA0' },
-];
+const GOALS = FUEL_GOALS;
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -76,7 +72,7 @@ export default function ProfileScreen() {
             {GOALS.map(g => (
               <TouchableOpacity key={g.key} testID={`goal-${g.key}`} style={[styles.goalCard, goal === g.key && { borderColor: g.color, backgroundColor: `${g.color}10` }]} onPress={() => setGoal(g.key)}>
                 <View style={[styles.goalIcon, { backgroundColor: goal === g.key ? g.color : '#F4F1E9' }]}>
-                  <Ionicons name={g.icon} size={20} color={goal === g.key ? '#FFF' : '#6B6A5E'} />
+                  <Ionicons name={g.icon as any} size={20} color={goal === g.key ? '#FFF' : '#6B6A5E'} />
                 </View>
                 <Text style={[styles.goalLabel, goal === g.key && { color: g.color, fontWeight: '700' }]}>{g.label}</Text>
               </TouchableOpacity>

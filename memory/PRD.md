@@ -229,3 +229,52 @@ Goal: give the user ONE preview URL to test BOTH the customer mobile app and the
 - NOTE: only 16 active products exist, so the grid currently shows 16 (fills toward 30 as products/sales grow).
 - VERIFIED: testing agent iteration_28 — 100% frontend pass: 5 rows x multi-column grid, 16 cards + 16 Add
   buttons, 15-16 photos load, 53 Ionicons glyphs render, Add+ -> cart pill, best-seller order correct. retest_needed=false.
+
+## 2026-06-05 — PHASES 2 & 3: Goal personalization + Meal split (customer app only)
+Resume note: recreated gitignored backend/.env + frontend/.env (preview URL now
+802e80a7-...preview.emergentagent.com), installed web-panel deps, re-seeded DB
+(16 products, 6 categories, 3 offers/packs, admin + kitchen 4321 + cashier 5678).
+Phase 1 (multi-tag diet types EVERYWHERE) was already DONE in the repo — verified, untouched.
+
+### PHASE 2 — Body stats → daily target (DONE, verified)
+- backend/server.py (~L406-561): compute_daily_targets() Mifflin-St Jeor BMR→TDEE(×activity)
+  →goal factor; split_targets_into_meals(); goal_fit_for_product(); fetch_active_products().
+  Activity x: sed1.2/light1.375/mod1.55/active1.725/vactive1.9. Cal factor: fat_loss0.82,
+  muscle_gain1.15, lean_bulk1.10, recomp/maint/beginner1.0. Protein g/kg: fat_loss2.0,
+  mg/lb1.8, recomp2.2, maint1.6, beginner1.4. Guardrails: CALORIE_FLOOR=1200, fat_loss never
+  below BMR, "not medical advice" disclaimer + encouraging notes. fat capped 25%, carbs remainder.
+- Endpoints: POST/GET /api/user/daily-target (compute+persist / fetch+recompute), get_me
+  extended with body stats + has_body_stats.
+- Mobile: app/goal-setup.tsx (height/weight/age/gender/activity/target-weight + consent line +
+  result view with kcal/protein/macros/BMR/TDEE + disclaimer). home.tsx handleGoalTap → goal-setup
+  when no stats, else builder; personalized target banner + "Plan meals". profile.tsx personalized
+  target card + Edit + Plan my meals (manual override kept). Profile goals aligned to canonical
+  6 GOALS from theme.ts (removed stale 'recovery' value that silently fell back to maintenance).
+
+### PHASE 3 — Meal split + goal-fit dishes (DONE, verified)
+- backend: POST /api/nutrition/meal-plan (splits daily target across 3-6 meals w/ profile weights,
+  attaches goal-fit dish suggestions per meal + remaining_suggestions); GET /api/products/goal-fit
+  (annotated + sorted). utils/goalFit.ts mirrors goal-fit client-side.
+- Mobile: app/meal-plan.tsx (remaining-macros tracker from nutrition-summary vs target, meal-count
+  selector 3/4/5/6, per-meal kcal/P/C/F + goal-fit dish cards with "Fits your goal" pills + add-to-cart,
+  fill-the-gap remainder list). menu.tsx: "Fits your goal" badge + sort goal-fit dishes first.
+
+### SCOPE RULE honored
+POS (CashierPOS.tsx) + Kitchen (KitchenOrders.tsx) carry ONLY shared product diet tags (Phase 1) —
+NO body stats / targets / meal plans. OrderCreate model + POST /orders response verified to contain
+NO personal-goal fields (testing agent static check). App and POS orders remain identical in structure.
+
+### Verification
+- Testing agent iteration_29: backend 24/24 pytest green (test_goal_personalization_phase23.py),
+  full mobile flow (login→goal-setup→result→meal-plan→profile→menu→home banner) all testids present.
+- Manual screenshots: goal-setup compute (muscle_gain 3462 kcal/135g), meal-plan 3 meals + goal-fit
+  suggestions, profile target card, menu goal-fit badges, profile 6-goal taxonomy.
+- BUILD CACHE FIX: scripts/build-mobile.sh now clears .metro-cache + node_modules/.cache + uses
+  --clear (a stale EXPO_PUBLIC_BACKEND_URL had been baked from metro cache → POST 404 'Not Found').
+  ALWAYS rebuild the mobile bundle after editing frontend/: bash /app/scripts/build-mobile.sh.
+
+### Known non-blocking
+- /meal-plan emits React #418 (hydration text mismatch) when switching meal-count — cosmetic console
+  warning only, functionality works; consistent with the static Expo-export hydration across screens.
+
+### PHASE 4 (deferred, optional): weight log + progress graph + full day-plan generator + coach nudge.
