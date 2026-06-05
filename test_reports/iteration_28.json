@@ -1,0 +1,41 @@
+{
+  "summary": "Frontend-only verification of the new Home 'Popular Items' multi-row horizontal grid (Swiggy/Zomato-style best-sellers) on /mobile/home. All acceptance criteria passed: 5-row × multi-column grid renders, 16 active products show, photos load, Ionicons render real glyphs, Add+ adds to cart with pill, best-seller ordering correct.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Home / Popular Items", "issues": ["One product (id 3e9029ec-480d-45d7-9f43-61c700e99561) has no image_url -> card shows empty/placeholder image area. This is a DATA gap, not a UI bug. Consider seeding an image_url for that product."]}
+    ]
+  },
+  "verification_evidence": {
+    "popular_cards_total": 16,
+    "unique_top_offsets_rows": [1423, 1601, 1779, 1957, 2135],
+    "row_count": 5,
+    "unique_left_offsets_cols": [12, 180, 348, 516],
+    "column_count": 4,
+    "add_buttons_count": 16,
+    "images_loaded_naturalWidth_gt_0": "15 of 16 (one product missing image_url)",
+    "ionicons_glyphs_found": 53,
+    "first_card_best_seller": "Paneer Tikka (rating 4.9) - matches rating-sorted fallback",
+    "cart_pill_after_add": "Cart · 1 item ₹35 View Cart (visible)",
+    "popular_badge_first_3": "Visible on Paneer Tikka, Greek Yogurt, Quinoa in screenshots"
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Optional: seed an image_url for product id 3e9029ec-480d-45d7-9f43-61c700e99561 so its popular card shows a real photo instead of placeholder.",
+    "Optional: with only 16 active products, the rightmost column has just 1 card -> visually a bit sparse; will self-fill as more products are added (up to 30)."
+  ],
+  "critical_code_review_comments": [
+    "home.tsx is 1182 lines - exceeds 700-line guideline. Recommend extracting PopularItems section and renderPopularCard into a separate component for maintainability.",
+    "popularColumns chunking logic is correct (chunks of POPULAR_ROWS=5). Good use of useMemo.",
+    "data-testid coverage is solid: popular-{id}, popular-add-{id}, popular-inc-{id}, popular-dec-{id}.",
+    "Image fallback works (placeholder rendered when image_url missing) - good defensive coding."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "n/a (skipped)", "frontend": "100%" },
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Popular Items grid on /mobile/home verified working. Uses GET /api/products/best-sellers (public, no auth). Grid lays out as columns of 5 stacked cards inside a horizontal ScrollView (popularGridScroll). Cards: data-testid='popular-{id}'; Add btn: 'popular-add-{id}'. Mobile viewport used: 420x880. One product missing image_url is a data-only gap, not a code bug."
+}

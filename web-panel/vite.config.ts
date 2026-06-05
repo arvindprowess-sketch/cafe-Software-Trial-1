@@ -41,12 +41,23 @@ const MIME: Record<string, string> = {
 
 function serveMobile() {
   const MOBILE_DIR = path.resolve(process.cwd(), 'public/mobile')
-  const sendIndex = (res: any) => {
-    const indexPath = path.join(MOBILE_DIR, 'index.html')
-    if (fs.existsSync(indexPath)) {
-      res.setHeader('Content-Type', 'text/html')
-      res.end(fs.readFileSync(indexPath))
-      return true
+  // Expo Router static export prerenders ONE html file per route
+  // (index.html, home.html, menu.html, cart.html, order-detail.html, ...).
+  // We must serve the route-specific html so client hydration matches the server
+  // markup; serving the generic index.html for every route causes a React #418
+  // hydration mismatch and the screen gets stuck on its loading spinner.
+  const sendHtml = (res: any, route: string) => {
+    const clean = route.replace(/^\/+|\/+$/g, '') // trim slashes
+    const candidates = clean === ''
+      ? ['index.html']
+      : [`${clean}.html`, `${clean}/index.html`, 'index.html']
+    for (const c of candidates) {
+      const p = path.join(MOBILE_DIR, c)
+      if (p.startsWith(MOBILE_DIR) && fs.existsSync(p) && fs.statSync(p).isFile()) {
+        res.setHeader('Content-Type', 'text/html')
+        res.end(fs.readFileSync(p))
+        return true
+      }
     }
     return false
   }
@@ -59,9 +70,10 @@ function serveMobile() {
 
         const ext = path.extname(urlPath).toLowerCase()
 
-        // 1) Routes (no file extension) -> Expo index.html for client-side routing
+        // 1) Routes (no file extension) -> matching prerendered Expo html
         if (urlPath === '/mobile' || !ext) {
-          if (sendIndex(res)) return
+          const route = urlPath.replace(/^\/mobile/, '')
+          if (sendHtml(res, route)) return
           return next()
         }
 

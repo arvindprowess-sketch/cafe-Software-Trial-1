@@ -1507,6 +1507,28 @@ async def get_popular_products(user=Depends(get_current_user)):
     
     return sorted_products[:12]  # Return top 12
 
+@api_router.get("/products/best-sellers")
+async def best_sellers(limit: int = 30):
+    """Top N best-selling products across ALL order history (rating fallback).
+    Public (no auth) so the home grid always loads."""
+    orders = await db.orders.find({}, {"_id": 0, "items": 1}).to_list(5000)
+    sales: dict = {}
+    for o in orders:
+        for it in o.get("items", []):
+            pid = it.get("product_id")
+            if pid:
+                sales[pid] = sales.get(pid, 0) + (it.get("quantity") or 1)
+    # Only active products in active categories
+    active_cats = await db.categories.find({"is_active": {"$ne": False}}, {"_id": 0, "name": 1}).to_list(100)
+    active_cat_names = {c["name"] for c in active_cats}
+    products = await db.products.find({"is_active": True}, {"_id": 0}).to_list(500)
+    if active_cat_names:
+        products = [p for p in products if p.get("category", "") in active_cat_names or not p.get("category")]
+    for p in products:
+        p["sales_count"] = sales.get(p["id"], 0)
+    products.sort(key=lambda p: (-p.get("sales_count", 0), -p.get("rating", 0)))
+    return products[:max(1, limit)]
+
 @api_router.get("/products/top-selling-by-category")
 async def top_selling_by_category(user=Depends(get_current_user)):
     """Top 5 highest-selling products from EACH active category.

@@ -74,14 +74,13 @@ export default function HomeScreen() {
 
   const loadData = useCallback(async () => {
     try {
-      const [u, s, p, b, pop] = await Promise.all([
+      const [u, s, best, b] = await Promise.all([
         getStoredUser(), 
         apiCall('/user/nutrition-summary').catch(() => null), 
-        apiCall('/products'), 
+        apiCall('/products/best-sellers').catch(() => apiCall('/products')).catch(() => []),
         apiCall('/banners'),
-        apiCall('/products/popular').catch(() => []),
       ]);
-      setUser(u); setSummary(s); setProducts(pop.length > 0 ? pop : p); setBanners(b);
+      setUser(u); setSummary(s); setProducts(best); setBanners(b);
     } catch (e) {} finally { setLoading(false); }
   }, []);
 
@@ -112,8 +111,79 @@ export default function HomeScreen() {
   const isCalorieOver = calPct > 100;
   const caloriesOverAmount = Math.round((consumed.calories || 0) - (goals.daily_calories || 2000));
 
-  // Memoize popular products to prevent re-computation (max 6)
-  const popularProducts = useMemo(() => products.slice(0, 6), [products]);
+  // Memoize popular products (best sellers, up to 30) arranged into a 5-row horizontal grid
+  const popularProducts = useMemo(() => products.slice(0, 30), [products]);
+  const POPULAR_ROWS = 5;
+  const popularColumns = useMemo(() => {
+    const cols: any[][] = [];
+    for (let i = 0; i < popularProducts.length; i += POPULAR_ROWS) {
+      cols.push(popularProducts.slice(i, i + POPULAR_ROWS));
+    }
+    return cols;
+  }, [popularProducts]);
+
+  const renderPopularCard = (item: any, idx: number) => {
+    const isHighProtein = item.protein_per_100g >= 20;
+    const isUnderBudget = item.cost_per_100g <= 50;
+    const isPopular = idx < 3;
+    const ci = cartCtx.getItem(item.id);
+    return (
+      <TouchableOpacity
+        key={item.id} testID={`popular-${item.id}`} style={styles.popularCard}
+        onPress={() => router.push('/(tabs)/menu')} activeOpacity={0.9}
+      >
+        {item.image_url ? (
+          <Image source={{ uri: item.image_url }} style={styles.popularImg} resizeMode="cover" />
+        ) : (
+          <View style={[styles.popularImg, styles.popularImgPlaceholder]}>
+            <Ionicons name="restaurant" size={28} color="#D0D0D0" />
+          </View>
+        )}
+        {isPopular && (
+          <View style={styles.popularBadge}>
+            <Ionicons name="flame" size={10} color="#FFF" />
+            <Text style={styles.popularBadgeText}>POPULAR</Text>
+          </View>
+        )}
+        {isHighProtein && !isPopular && (
+          <View style={[styles.popularBadge, { backgroundColor: BK_BROWN }]}>
+            <Ionicons name="barbell" size={10} color="#FFF" />
+            <Text style={styles.popularBadgeText}>HIGH PROTEIN</Text>
+          </View>
+        )}
+        {isUnderBudget && !isPopular && !isHighProtein && (
+          <View style={[styles.popularBadge, { backgroundColor: BK_GREEN }]}>
+            <Ionicons name="wallet" size={10} color="#FFF" />
+            <Text style={styles.popularBadgeText}>BUDGET</Text>
+          </View>
+        )}
+        <View style={styles.proteinBadge}>
+          <Text style={styles.proteinText}>{item.protein_per_100g}g</Text>
+          <Text style={styles.proteinLabel}>Protein</Text>
+        </View>
+        <View style={[styles.vegBadge, { borderColor: item.diet_type === 'non-veg' ? Z_RED : GREEN }]}>
+          <View style={[styles.vegBadgeDot, { backgroundColor: item.diet_type === 'non-veg' ? Z_RED : GREEN }]} />
+        </View>
+        <View style={styles.popularInfo}>
+          <Text style={styles.popularName} numberOfLines={1}>{item.name}</Text>
+          <View style={styles.popularBottom}>
+            <Text style={styles.popularPrice}>₹{item.cost_per_100g}<Text style={styles.per100}>/100g</Text></Text>
+            {ci ? (
+              <View style={styles.popQtyBox}>
+                <TouchableOpacity testID={`popular-dec-${item.id}`} style={styles.popQtyBtn} onPress={() => cartCtx.decItem(item.id)}><Ionicons name="remove" size={13} color="#FFF" /></TouchableOpacity>
+                <Text style={styles.popQtyText}>{ci.grams}g</Text>
+                <TouchableOpacity testID={`popular-inc-${item.id}`} style={styles.popQtyBtn} onPress={() => cartCtx.incItem(item.id)}><Ionicons name="add" size={13} color="#FFF" /></TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity testID={`popular-add-${item.id}`} style={styles.addBtn} onPress={() => cartCtx.addItem(item)}>
+                <Text style={styles.addBtnText}>Add +</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   // AI Quick Meal functions
   const buildMeal = async () => {
@@ -629,93 +699,22 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* ===== POPULAR ITEMS (ENHANCED) ===== */}
-        <Text style={styles.sectionTitle}>Popular Items</Text>
+        {/* ===== POPULAR ITEMS — best sellers, 5-row horizontal grid (Swiggy-style) ===== */}
+        <View style={styles.popularHeaderRow}>
+          <Text style={styles.sectionTitle}>Popular Items</Text>
+          <Text style={styles.popularHint}>Best sellers • swipe →</Text>
+        </View>
         <ScrollView 
           horizontal 
           showsHorizontalScrollIndicator={false} 
-          contentContainerStyle={styles.popularScroll}
+          contentContainerStyle={styles.popularGridScroll}
           removeClippedSubviews={true}
-          maxToRenderPerBatch={5}
         >
-          {popularProducts.map((item, idx) => {
-            const isHighProtein = item.protein_per_100g >= 20;
-            const isUnderBudget = item.cost_per_100g <= 50;
-            const isPopular = idx < 3;
-            
-            return (
-              <TouchableOpacity
-                key={item.id} testID={`popular-${item.id}`} style={styles.popularCard}
-                onPress={() => router.push('/(tabs)/menu')} activeOpacity={0.9}
-              >
-                {item.image_url ? (
-                  <Image 
-                    source={{ uri: item.image_url }} 
-                    style={styles.popularImg}
-                    resizeMode="cover"
-                    defaultSource={require('../../assets/images/icon.png')}
-                  />
-                ) : (
-                  <View style={[styles.popularImg, styles.popularImgPlaceholder]}>
-                    <Ionicons name="restaurant" size={32} color="#D0D0D0" />
-                  </View>
-                )}
-                
-                {/* Smart Badges */}
-                {isPopular && (
-                  <View style={styles.popularBadge}>
-                    <Ionicons name="flame" size={10} color="#FFF" />
-                    <Text style={styles.popularBadgeText}>POPULAR</Text>
-                  </View>
-                )}
-                {isHighProtein && !isPopular && (
-                  <View style={[styles.popularBadge, { backgroundColor: BK_BROWN }]}>
-                    <Ionicons name="barbell" size={10} color="#FFF" />
-                    <Text style={styles.popularBadgeText}>HIGH PROTEIN</Text>
-                  </View>
-                )}
-                {isUnderBudget && !isPopular && !isHighProtein && (
-                  <View style={[styles.popularBadge, { backgroundColor: BK_GREEN }]}>
-                    <Ionicons name="wallet" size={10} color="#FFF" />
-                    <Text style={styles.popularBadgeText}>BUDGET</Text>
-                  </View>
-                )}
-                
-                {/* Protein Badge */}
-                <View style={styles.proteinBadge}>
-                  <Text style={styles.proteinText}>{item.protein_per_100g}g</Text>
-                  <Text style={styles.proteinLabel}>Protein</Text>
-                </View>
-                
-                {/* Veg/Non-Veg indicator */}
-                <View style={[styles.vegBadge, { borderColor: item.diet_type === 'non-veg' ? Z_RED : GREEN }]}>
-                  <View style={[styles.vegBadgeDot, { backgroundColor: item.diet_type === 'non-veg' ? Z_RED : GREEN }]} />
-                </View>
-                
-                <View style={styles.popularInfo}>
-                  <Text style={styles.popularName} numberOfLines={1}>{item.name}</Text>
-                  <Text style={styles.popularDesc} numberOfLines={1}>{item.description || item.category}</Text>
-                  <View style={styles.popularBottom}>
-                    <Text style={styles.popularPrice}>₹{item.cost_per_100g}<Text style={styles.per100}>/100g</Text></Text>
-                    {(() => {
-                      const ci = cartCtx.getItem(item.id);
-                      return ci ? (
-                        <View style={styles.popQtyBox}>
-                          <TouchableOpacity testID={`popular-dec-${item.id}`} style={styles.popQtyBtn} onPress={() => cartCtx.decItem(item.id)}><Ionicons name="remove" size={13} color="#FFF" /></TouchableOpacity>
-                          <Text style={styles.popQtyText}>{ci.grams}g</Text>
-                          <TouchableOpacity testID={`popular-inc-${item.id}`} style={styles.popQtyBtn} onPress={() => cartCtx.incItem(item.id)}><Ionicons name="add" size={13} color="#FFF" /></TouchableOpacity>
-                        </View>
-                      ) : (
-                        <TouchableOpacity testID={`popular-add-${item.id}`} style={styles.addBtn} onPress={() => cartCtx.addItem(item)}>
-                          <Text style={styles.addBtnText}>Add +</Text>
-                        </TouchableOpacity>
-                      );
-                    })()}
-                  </View>
-                </View>
-              </TouchableOpacity>
-            );
-          })}
+          {popularColumns.map((col, ci) => (
+            <View key={ci} style={styles.popularColumn}>
+              {col.map((item, ri) => renderPopularCard(item, ci * POPULAR_ROWS + ri))}
+            </View>
+          ))}
         </ScrollView>
 
         <View style={{ height: 100 }} />
@@ -1087,6 +1086,10 @@ const styles = StyleSheet.create({
   
   // Popular Items (ENHANCED) — compact cards
   popularScroll: { paddingHorizontal: 12, gap: 12 },
+  popularHeaderRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', paddingRight: 16 },
+  popularHint: { fontSize: 11, fontWeight: '700', color: BK_TEXT_LIGHT, marginBottom: 16, textTransform: 'uppercase', letterSpacing: 0.3 },
+  popularGridScroll: { paddingHorizontal: 12, gap: 12, paddingBottom: 4 },
+  popularColumn: { gap: 12 },
   popularCard: { 
     width: 156, 
     backgroundColor: BK_WHITE, 
@@ -1100,7 +1103,7 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 4,
   },
-  popularImg: { width: '100%', height: 104, backgroundColor: BK_CREAM },
+  popularImg: { width: '100%', height: 90, backgroundColor: BK_CREAM },
   popularImgPlaceholder: { alignItems: 'center', justifyContent: 'center' },
   popularBadge: {
     position: 'absolute',
@@ -1129,7 +1132,7 @@ const styles = StyleSheet.create({
   proteinLabel: { fontSize: 8, color: 'rgba(245,235,220,0.8)', textTransform: 'uppercase' },
   vegBadge: { 
     position: 'absolute', 
-    top: 80, 
+    top: 66, 
     right: 8, 
     width: 18, 
     height: 18, 
@@ -1140,10 +1143,10 @@ const styles = StyleSheet.create({
     backgroundColor: BK_WHITE 
   },
   vegBadgeDot: { width: 9, height: 9, borderRadius: 5 },
-  popularInfo: { padding: 11 },
+  popularInfo: { padding: 9 },
   popularName: { fontSize: 14, fontWeight: '800', color: BK_BROWN },
   popularDesc: { fontSize: 11, color: BK_TEXT_LIGHT, marginTop: 3 },
-  popularBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 },
+  popularBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 },
   popularPrice: { fontSize: 15, fontWeight: '800', color: BK_BROWN },
   per100: { fontSize: 9, fontWeight: '400', color: BK_TEXT_LIGHT },
   popQtyBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: BK_RED, borderRadius: 20, paddingHorizontal: 3 },
