@@ -33,9 +33,10 @@ export default function App() {
 
   const getDefaultRoute = () => {
     if (!user) return '/login';
-    if (user.role === 'admin') return '/admin';
+    if (user.role === 'admin' || user.role === 'super_admin') return '/admin';
     if (user.role === 'kitchen') return '/kitchen';
-    if (user.role === 'cashier') return '/cashier';
+    // store_manager / area_manager operate over the store-scoped cashier views.
+    if (['cashier', 'store_manager', 'area_manager'].includes(user.role)) return '/cashier';
     return '/login';
   };
 
@@ -43,7 +44,7 @@ export default function App() {
     <Routes>
       <Route path="/login" element={user ? <Navigate to={getDefaultRoute()} /> : <Login />} />
 
-      <Route path="/admin" element={<ProtectedRoute roles={['admin']}><AdminLayout /></ProtectedRoute>}>
+      <Route path="/admin" element={<ProtectedRoute roles={['admin', 'super_admin']}><AdminLayout /></ProtectedRoute>}>
         <Route index element={<AdminDashboard />} />
         <Route path="products" element={<AdminProducts />} />
         <Route path="kitchen" element={<AdminKitchen />} />
@@ -58,7 +59,7 @@ export default function App() {
         <Route path="inventory" element={<KitchenInventory />} />
       </Route>
 
-      <Route path="/cashier" element={<ProtectedRoute roles={['cashier']}><CashierLayout /></ProtectedRoute>}>
+      <Route path="/cashier" element={<ProtectedRoute roles={['cashier', 'store_manager', 'area_manager']}><CashierLayout /></ProtectedRoute>}>
         <Route index element={<CashierPOS />} />
         <Route path="orders" element={<CashierOrders />} />
         <Route path="tables" element={<CashierTables />} />

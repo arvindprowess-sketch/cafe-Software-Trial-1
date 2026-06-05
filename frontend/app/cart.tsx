@@ -9,6 +9,7 @@ import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiCall, getStoredUser } from '../utils/api';
 import { useCart, itemPrice, CartItem } from '../utils/CartContext';
+import { useStore } from '../utils/StoreContext';
 import { FUEL, FONT } from '../utils/theme';
 
 const TIP_PRESETS = [10, 20, 30, 50];
@@ -38,6 +39,7 @@ export default function CartScreen() {
   const router = useRouter();
   const cart = useCart();
   const { items, orderType, setOrderType, incItem, decItem, removeItem, clear, addItem } = cart;
+  const { stores, selectedStoreId, selectStore } = useStore();
 
   const [user, setUser] = useState<any>(null);
   const [quote, setQuote] = useState<any>(null);
@@ -149,6 +151,7 @@ export default function CartScreen() {
 
       const orderBody: any = {
         order_type: orderType,
+        store_id: selectedStoreId || undefined,
         items: items.map(i => {
           const m = lineMacros(i);
           return {
@@ -254,6 +257,30 @@ export default function CartScreen() {
             <Macro label="Fat" value={macros.fat} color={'#3E6E8A'} tint={FUEL.fatTint} />
           </View>
         </View>
+
+        {/* STORE SELECTION — every order is tied to a store */}
+        {stores.length > 0 && (
+          <>
+            <Text style={styles.sectionTitle}>Store</Text>
+            {stores.length === 1 ? (
+              <View style={[styles.otBtn, styles.otBtnActive, { alignSelf: 'flex-start', paddingHorizontal: 16 }]}>
+                <Ionicons name="storefront" size={18} color={FUEL.ink} />
+                <Text style={[styles.otText, styles.otTextActive]}>{stores[0].name}</Text>
+              </View>
+            ) : (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
+                {stores.map(s => (
+                  <TouchableOpacity key={s.store_id} testID={`store-${s.store_id}`}
+                    style={[styles.otBtn, selectedStoreId === s.store_id && styles.otBtnActive]}
+                    onPress={() => selectStore(s.store_id)}>
+                    <Ionicons name="storefront" size={16} color={selectedStoreId === s.store_id ? FUEL.ink : FUEL.muted} />
+                    <Text style={[styles.otText, selectedStoreId === s.store_id && styles.otTextActive]}>{s.name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+          </>
+        )}
 
         {/* ORDER TYPE */}
         <Text style={styles.sectionTitle}>Order type</Text>
