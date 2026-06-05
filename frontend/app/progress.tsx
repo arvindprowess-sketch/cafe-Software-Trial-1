@@ -102,7 +102,7 @@ export default function ProgressScreen() {
         {/* Graph */}
         <Text style={styles.sectionTitle}>Weight over time</Text>
         {logs.length === 0 ? (
-          <View style={styles.emptyGraph}><Text style={styles.emptyText}>Log your weight to see your trend here.</Text></View>
+          <View style={styles.emptyGraph} testID="progress-graph-empty"><Text style={styles.emptyText}>Log your weight to see your trend here.</Text></View>
         ) : (
           <View style={styles.graphCard} testID="progress-graph">
             <View style={styles.bars}>

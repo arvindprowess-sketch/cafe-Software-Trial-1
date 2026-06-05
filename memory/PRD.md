@@ -278,3 +278,43 @@ NO personal-goal fields (testing agent static check). App and POS orders remain 
   warning only, functionality works; consistent with the static Expo-export hydration across screens.
 
 ### PHASE 4 (deferred, optional): weight log + progress graph + full day-plan generator + coach nudge.
+
+## 2026-06-05 — PHASE 4: full day plan + progress + coach nudge (customer app only)
+All customer-app only; POS/Kitchen untouched (scope rule verified by testing agent — no Phase 4
+fields in /auth/me or OrderCreate).
+
+### Backend (backend/server.py, ~L2547-2705)
+- POST /api/nutrition/day-plan {meals_count 3-6, diet_types?} — auto-builds a full day from
+  in-stock SCALABLE single dishes to hit the daily target: protein-anchor per meal sized to the
+  per-meal protein slice + calorie-dense low-protein filler to top up calories; returns meals[]
+  with cart-ready items[] (product_id,name,grams,calories,protein,price), totals, disclaimer.
+  Respects diet_types (AND); impossible diet -> friendly 400. _resolve_daily_target/_plan_item helpers.
+- POST/GET /api/user/weight-log — upsert by date in `weight_logs`; returns logs[], current_streak
+  (consecutive days ending at latest log), points (=logs*10), start/latest/change. POST also writes
+  latest weight back to user (target shifts with weight). Validates 25-400kg.
+- GET /api/user/coach-nudge — non-shaming nudge (type plan|protein|calories|over|ontrack) from
+  today's meal_history vs target; no medical advice; uses shared target (floor applied).
+
+### Mobile
+- app/meal-plan.tsx: coach-nudge banner, "Auto-build my whole day" (diet chips + Generate full day
+  plan) -> day-plan Modal (per-meal items + totals vs target + disclaimer) -> "Add full day to cart"
+  (cart.addMeal) -> /cart. "Track my progress" link.
+- app/progress.tsx (NEW): weight log input + Log, dependency-free bar graph, streak/points/change
+  cards, start/latest/target summary, empty-state testid progress-graph-empty.
+- app/(tabs)/home.tsx: compact home-coach-nudge banner (gated on has_body_stats).
+- app/(tabs)/profile.tsx: profile-progress-link -> /progress.
+
+### Verification
+- testing agent iteration_30: backend 28/28 pytest green (test_phase4_dayplan_progress_nudge.py).
+  Scope/auth/diet-400/weight-validation/streak/nudge-wording all asserted. Frontend testids present;
+  conditional banners verified via main-agent screenshots (muscle_gain day-plan 3520 vs 3462 target;
+  progress log streak 2->3 / points 20->30 / 3-bar graph).
+- Note: meal-plan/day-plan/coach-nudge UI are gated on has_body_stats (intentional — empty state
+  offers "Set up my target" CTA). Day-plan hits calories closely; protein runs generous on the small
+  protein-heavy seed menu (safe for the goals). Disclaimer "not medical advice" everywhere.
+
+### Known non-blocking
+- React #418 hydration console warning on dynamic mobile screens — pre-existing artifact of the
+  static Expo-export + hydrate architecture; functionality unaffected. Left as-is per request.
+
+### ALL PHASES 1-4 COMPLETE.
