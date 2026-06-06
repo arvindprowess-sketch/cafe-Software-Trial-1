@@ -1,10 +1,15 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
+import { StoreProvider } from './context/StoreContext';
 import Login from './pages/Login';
 import AdminLayout from './components/AdminLayout';
 import KitchenLayout from './components/KitchenLayout';
 import CashierLayout from './components/CashierLayout';
+import HqLayout, { HqIndex } from './components/HqLayout';
+import HqStores from './pages/HqStores';
+import HqCatalog from './pages/HqCatalog';
+import HqPush from './pages/HqPush';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminProducts from './pages/AdminProducts';
 import AdminKitchen from './pages/AdminKitchen';
@@ -35,14 +40,23 @@ export default function App() {
     if (!user) return '/login';
     if (user.role === 'admin' || user.role === 'super_admin') return '/admin';
     if (user.role === 'kitchen') return '/kitchen';
-    // store_manager / area_manager operate over the store-scoped cashier views.
-    if (['cashier', 'store_manager', 'area_manager'].includes(user.role)) return '/cashier';
+    // area_manager / store_manager land in the HQ portal (multi-store).
+    if (['store_manager', 'area_manager'].includes(user.role)) return '/hq';
+    if (user.role === 'cashier') return '/cashier';
     return '/login';
   };
 
   return (
+    <StoreProvider>
     <Routes>
       <Route path="/login" element={user ? <Navigate to={getDefaultRoute()} /> : <Login />} />
+
+      <Route path="/hq" element={<ProtectedRoute roles={['admin', 'super_admin', 'area_manager', 'store_manager']}><HqLayout /></ProtectedRoute>}>
+        <Route index element={<HqIndex />} />
+        <Route path="stores" element={<HqStores />} />
+        <Route path="catalog" element={<HqCatalog />} />
+        <Route path="push" element={<HqPush />} />
+      </Route>
 
       <Route path="/admin" element={<ProtectedRoute roles={['admin', 'super_admin']}><AdminLayout /></ProtectedRoute>}>
         <Route index element={<AdminDashboard />} />
@@ -67,5 +81,6 @@ export default function App() {
 
       <Route path="*" element={<Navigate to={getDefaultRoute()} />} />
     </Routes>
+    </StoreProvider>
   );
 }
