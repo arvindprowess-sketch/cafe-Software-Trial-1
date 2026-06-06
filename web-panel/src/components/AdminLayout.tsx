@@ -10,6 +10,10 @@ const NAV_ITEMS = [
   { path: '/admin/kitchen', label: 'Kitchen Monitor', icon: 'M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z' },
   { path: '/admin/offers', label: 'Offers', icon: 'M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z' },
   { path: '/admin/tables', label: 'Tables', icon: 'M4 6h16M4 10h16M4 14h16M4 18h16' },
+  // Multi-store HQ portal (Phase 1B)
+  { path: '/hq/stores', label: 'Stores & Clusters', icon: 'M3 21h18M5 21V7l8-4v18M19 21V11l-6-4M9 9v.01M9 12v.01M9 15v.01' },
+  { path: '/hq/catalog', label: 'Store Catalog', icon: 'M4 6h16M4 12h16M4 18h7' },
+  { path: '/hq/push', label: 'Catalog Push', icon: 'M5 12h14M12 5l7 7-7 7' },
 ];
 
 export default function AdminLayout() {
