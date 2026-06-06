@@ -995,7 +995,12 @@ async def create_product(data: ProductCreate, user=Depends(get_current_user)):
     return {k: v for k, v in product.items() if k != "_id"}
 
 @api_router.get("/products")
-async def list_products(diet: Optional[str] = None):
+async def list_products(diet: Optional[str] = None, store_id: Optional[str] = None):
+    # Multi-store: when a store_id is given, return that store's resolved menu
+    # (master catalog + per-store overrides). With no store_id the global menu is
+    # returned unchanged, so the existing customer app keeps working.
+    if store_id:
+        return await resolve_menu_for_store(store_id, diet)
     # Get active category names
     active_cats = await db.categories.find({"is_active": {"$ne": False}}, {"_id": 0, "name": 1}).to_list(100)
     active_cat_names = {c["name"] for c in active_cats}
@@ -1060,6 +1065,182 @@ async def delete_product(product_id: str, user=Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Product not found")
     await broadcast_event("menu_update", {"action": "deleted", "product_id": product_id})
     return {"message": "Product deleted"}
+
+# ==========================================================================
+# PHASE 1A — CENTRAL CATALOG + PER-STORE OVERRIDE + HQ PUSH + VERSION LOG
+# products = GLOBAL master catalog (unchanged). product_overrides hold per-store
+# selling_price / availability. The resolved menu = master with overrides applied.
+# ==========================================================================
+
+def _product_base_price(p: dict):
+    """The master 'base' price for a product (absolute where defined, else the
+    per-100g unit price for build-your-own singles)."""
+    if p.get("product_type") == "ready_made":
+        return p.get("fixed_price") if p.get("fixed_price") is not None else p.get("cost_per_100g")
+    if p.get("base_price") is not None:
+        return p.get("base_price")
+    return p.get("cost_per_100g")
+
+async def resolve_menu_for_store(store_id: str, diet: Optional[str] = None) -> List[dict]:
+    """Master catalog with this store's overrides applied:
+    override selling_price wins over base; products marked available=false are
+    hidden. Products with no override get base price + available=true."""
+    active_cats = await db.categories.find({"is_active": {"$ne": False}}, {"_id": 0, "name": 1}).to_list(100)
+    active_cat_names = {c["name"] for c in active_cats}
+    products = await db.products.find({"is_active": True}, {"_id": 0}).to_list(200)
+    if active_cat_names:
+        products = [p for p in products if p.get("category", "") in active_cat_names or not p.get("category")]
+    products = [ensure_product_diet_types(p) for p in products]
+    if diet:
+        prefs = [d.strip() for d in diet.split(",") if d.strip()]
+        if prefs:
+            products = [p for p in products if product_matches_diet(p, prefs)]
+
+    overrides = await db.product_overrides.find({"store_id": store_id}, {"_id": 0}).to_list(2000)
+    ov_by_pid = {o["product_id"]: o for o in overrides}
+
+    resolved = []
+    for p in products:
+        ov = ov_by_pid.get(p["id"])
+        available = ov.get("available", True) if ov else True
+        if not available:
+            continue  # hidden for this store
+        base = _product_base_price(p)
+        selling_price = ov["selling_price"] if (ov and ov.get("selling_price") is not None) else base
+        item = dict(p)
+        item["store_id"] = store_id
+        item["base_price"] = base
+        item["selling_price"] = selling_price
+        item["available"] = True
+        item["has_override"] = bool(ov)
+        resolved.append(item)
+    return resolved
+
+class ProductOverrideRequest(BaseModel):
+    selling_price: Optional[float] = None   # null clears the price override (back to base)
+    available: Optional[bool] = None
+
+class CatalogPushRequest(BaseModel):
+    product_ids: List[str]
+    fields: List[str]                        # subset of ["price", "availability"]
+    target: Union[str, List[str]]            # "all" OR a list of store_ids
+    selling_price: Optional[float] = None    # value for the price field (defaults to each product's base)
+    available: Optional[bool] = None         # value for the availability field (defaults to True)
+
+@api_router.get("/stores/{store_id}/menu")
+async def get_store_menu(store_id: str, diet: Optional[str] = None):
+    """Resolved menu (master + this store's overrides). Public, like /products."""
+    return await resolve_menu_for_store(store_id, diet)
+
+@api_router.put("/stores/{store_id}/products/{product_id}/override")
+async def set_product_override(store_id: str, product_id: str, data: ProductOverrideRequest,
+                               user=Depends(get_current_user)):
+    """Set per-store selling_price / availability for ONE product.
+    super_admin: any store · area_manager: own cluster · store_manager: own store ·
+    cashier/kitchen: 403."""
+    if not role_in(user, "super_admin", "area_manager", "store_manager"):
+        raise HTTPException(status_code=403, detail="Manager/HQ only")
+    assert_store_allowed(user, store_id)
+    store = await db.stores.find_one({"store_id": store_id}, {"_id": 0})
+    if not store:
+        raise HTTPException(status_code=404, detail="Store not found")
+    product = await db.products.find_one({"id": product_id}, {"_id": 0})
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    set_fields = {"store_id": store_id, "product_id": product_id,
+                  "updated_by": user["id"], "updated_at": datetime.now(timezone.utc).isoformat()}
+    if data.selling_price is not None:
+        set_fields["selling_price"] = data.selling_price
+    if data.available is not None:
+        set_fields["available"] = data.available
+    await db.product_overrides.update_one(
+        {"store_id": store_id, "product_id": product_id},
+        {"$set": set_fields, "$setOnInsert": {"id": str(uuid.uuid4())}},
+        upsert=True,
+    )
+    ov = await db.product_overrides.find_one({"store_id": store_id, "product_id": product_id}, {"_id": 0})
+    await broadcast_event("menu_update", {"action": "override", "product_id": product_id}, store_id=store_id)
+    return ov
+
+@api_router.get("/stores/{store_id}/overrides")
+async def list_store_overrides(store_id: str, user=Depends(get_current_user)):
+    """List a store's product overrides (scoped to the caller's stores)."""
+    if not role_in(user, "super_admin", "area_manager", "store_manager"):
+        raise HTTPException(status_code=403, detail="Manager/HQ only")
+    assert_store_allowed(user, store_id)
+    return await db.product_overrides.find({"store_id": store_id}, {"_id": 0}).to_list(2000)
+
+@api_router.post("/catalog/push")
+async def catalog_push(data: CatalogPushRequest, user=Depends(get_current_user)):
+    """HQ-only: push price and/or availability for product_ids to ALL stores or a
+    selected set. Writes/updates one override per (store, product) and appends a
+    single immutable entry to catalog_push_log."""
+    if not is_hq(user):
+        raise HTTPException(status_code=403, detail="HQ only")
+    if not data.product_ids:
+        raise HTTPException(status_code=400, detail="product_ids is required")
+    fields = [f for f in (data.fields or []) if f in ("price", "availability")]
+    if not fields:
+        raise HTTPException(status_code=400, detail="fields must include 'price' and/or 'availability'")
+
+    # Resolve targets
+    if data.target == "all":
+        stores = await db.stores.find({}, {"_id": 0, "store_id": 1}).to_list(1000)
+        target_store_ids = [s["store_id"] for s in stores]
+    elif isinstance(data.target, list) and data.target:
+        target_store_ids = data.target
+        for sid in target_store_ids:
+            if not await db.stores.find_one({"store_id": sid}, {"_id": 0}):
+                raise HTTPException(status_code=404, detail=f"Store not found: {sid}")
+    else:
+        raise HTTPException(status_code=400, detail="target must be 'all' or a non-empty list of store_ids")
+
+    # Cache product docs (for base-price fallback when no explicit price given)
+    products = await db.products.find({"id": {"$in": data.product_ids}}, {"_id": 0}).to_list(2000)
+    prod_by_id = {p["id"]: p for p in products}
+    now = datetime.now(timezone.utc).isoformat()
+    writes = 0
+    for sid in target_store_ids:
+        for pid in data.product_ids:
+            prod = prod_by_id.get(pid)
+            if not prod:
+                continue
+            set_fields = {"store_id": sid, "product_id": pid, "updated_by": user["id"], "updated_at": now}
+            if "price" in fields:
+                set_fields["selling_price"] = data.selling_price if data.selling_price is not None else _product_base_price(prod)
+            if "availability" in fields:
+                set_fields["available"] = data.available if data.available is not None else True
+            await db.product_overrides.update_one(
+                {"store_id": sid, "product_id": pid},
+                {"$set": set_fields, "$setOnInsert": {"id": str(uuid.uuid4())}},
+                upsert=True,
+            )
+            writes += 1
+            await broadcast_event("menu_update", {"action": "push", "product_id": pid}, store_id=sid)
+
+    # APPEND-ONLY version log (one entry per push). No update/delete route exists.
+    summary = f"Pushed {fields} for {len(data.product_ids)} product(s) to {len(target_store_ids)} store(s)"
+    log_entry = {
+        "id": str(uuid.uuid4()),
+        "pushed_by": user["id"],
+        "pushed_at": now,
+        "product_ids": data.product_ids,
+        "fields": fields,
+        "target": "all" if data.target == "all" else target_store_ids,
+        "store_ids": target_store_ids,
+        "writes": writes,
+        "summary": summary,
+    }
+    await db.catalog_push_log.insert_one(log_entry)
+    return {k: v for k, v in log_entry.items() if k != "_id"}
+
+@api_router.get("/catalog/push-log")
+async def get_catalog_push_log(user=Depends(get_current_user)):
+    """HQ-only: read the append-only catalog push history (newest first)."""
+    if not is_hq(user):
+        raise HTTPException(status_code=403, detail="HQ only")
+    return await db.catalog_push_log.find({}, {"_id": 0}).sort("pushed_at", -1).to_list(500)
 
 @api_router.post("/upload/image")
 async def upload_image(body: dict = Body(...), user=Depends(get_current_user)):
@@ -5091,6 +5272,12 @@ async def on_startup():
         logger.info("[startup] otp_codes TTL index ensured")
     except Exception as e:
         logger.error(f"[startup] index error: {e}")
+    # Phase 1A: one override per (store, product)
+    try:
+        await db.product_overrides.create_index([("store_id", 1), ("product_id", 1)], unique=True)
+        logger.info("[startup] product_overrides unique index ensured")
+    except Exception as e:
+        logger.error(f"[startup] override index error: {e}")
     # Multi-store foundation: ensure default store + migrate legacy data
     try:
         await run_store_migration()
