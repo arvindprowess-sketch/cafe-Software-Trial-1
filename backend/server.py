@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Body
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Body, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -4427,6 +4427,105 @@ async def delete_store(store_id: str, user=Depends(get_current_user)):
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Store not found")
     return {"message": "Store deactivated"}
+
+# ==========================================================================
+# PHASE 1C — SALES AGGREGATION (store-vs-store, scope-locked)
+# Sales/orders metrics ONLY (revenue = what the customer paid). This endpoint
+# never reads or returns purchase cost / COGS / margin / profit — that is Phase 4.
+# ==========================================================================
+def _resolve_report_store_ids(user, store_ids_param: Optional[str]):
+    """Decide which stores to report on, enforcing role scope.
+
+    super_admin: any/all. area_manager: own cluster only. store_manager: own
+    store only. Requesting a store outside scope -> 403.
+    """
+    scope = staff_store_scope(user)  # None => all stores (super_admin)
+    requested = None
+    if store_ids_param and store_ids_param.strip().lower() != "all":
+        requested = [s.strip() for s in store_ids_param.split(",") if s.strip()]
+    if requested is not None:
+        if scope is not None:
+            for sid in requested:
+                if sid not in scope:
+                    raise HTTPException(status_code=403, detail="Store outside your scope")
+        return requested, scope
+    return None, scope  # None => "all in scope"
+
+@api_router.get("/reports/sales-summary")
+async def sales_summary(
+    user=Depends(get_current_user),
+    date_from: Optional[str] = Query(None, alias="from"),
+    date_to: Optional[str] = Query(None, alias="to"),
+    store_ids: Optional[str] = None,
+):
+    """Per-store sales summary (order_count, gross_revenue, AOV, top products),
+    date-filtered and role-scoped. Aggregated server-side via Mongo pipelines.
+    NOTE: sales/orders metrics only — no cost/COGS/margin/profit."""
+    if not role_in(user, "super_admin", "area_manager", "store_manager"):
+        raise HTTPException(status_code=403, detail="Dashboard access denied")
+
+    requested, scope = _resolve_report_store_ids(user, store_ids)
+    if requested is not None:
+        target_ids = requested
+    elif scope is None:  # super_admin, all stores
+        all_stores = await db.stores.find({}, {"_id": 0, "store_id": 1}).to_list(1000)
+        target_ids = [s["store_id"] for s in all_stores]
+    else:
+        target_ids = list(scope)
+
+    stores = await db.stores.find({"store_id": {"$in": target_ids}}, {"_id": 0, "store_id": 1, "name": 1}).to_list(1000)
+    name_by_id = {s["store_id"]: s.get("name") for s in stores}
+
+    # created_at is an ISO string; lexicographic compare works for ISO timestamps.
+    match: Dict[str, Any] = {"store_id": {"$in": target_ids}, "status": {"$ne": "cancelled"}}
+    created: Dict[str, Any] = {}
+    if date_from:
+        created["$gte"] = date_from
+    if date_to:
+        created["$lte"] = date_to + "T23:59:59.999999+00:00"
+    if created:
+        match["created_at"] = created
+
+    # 1) Per-store order metrics
+    metrics = await db.orders.aggregate([
+        {"$match": match},
+        {"$group": {"_id": "$store_id", "order_count": {"$sum": 1}, "gross_revenue": {"$sum": "$total_price"}}},
+    ]).to_list(1000)
+    metrics_by_id = {m["_id"]: m for m in metrics}
+
+    # 2) Per-store top products (by qty sold) — aggregated, not pulled to app layer
+    top_rows = await db.orders.aggregate([
+        {"$match": match},
+        {"$unwind": "$items"},
+        {"$group": {
+            "_id": {"store_id": "$store_id", "product_id": "$items.product_id"},
+            "name": {"$first": "$items.product_name"},
+            "qty": {"$sum": "$items.quantity"},
+        }},
+        {"$sort": {"qty": -1}},
+    ]).to_list(10000)
+    top_by_store: Dict[str, list] = {}
+    for r in top_rows:
+        sid = r["_id"]["store_id"]
+        bucket = top_by_store.setdefault(sid, [])
+        if len(bucket) < 5:
+            bucket.append({"product_id": r["_id"]["product_id"], "name": r.get("name"), "qty": r.get("qty", 0)})
+
+    # Consistent shape: one object per target store (incl. zero-order stores)
+    result = []
+    for sid in target_ids:
+        m = metrics_by_id.get(sid, {})
+        oc = m.get("order_count", 0)
+        rev = round(m.get("gross_revenue", 0) or 0, 2)
+        result.append({
+            "store_id": sid,
+            "store_name": name_by_id.get(sid, sid),
+            "order_count": oc,
+            "gross_revenue": rev,
+            "avg_order_value": round(rev / oc, 2) if oc else 0,
+            "top_products": top_by_store.get(sid, []),
+        })
+    return result
 
 # ========== STAFF MANAGEMENT (PIN-based auth) ==========
 # Roles a staff member can be created with via this endpoint. super_admin is
