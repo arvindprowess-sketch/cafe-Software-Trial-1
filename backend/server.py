@@ -42,7 +42,21 @@ ALLOWED_ORIGINS = [o.strip() for o in _origins_env.split(",") if o.strip()] or [
 
 # ========== SOCKET.IO REAL-TIME SERVER (Part C) ==========
 sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")
+# Generic role rooms — used only for GLOBAL events (e.g. catalog/menu updates).
+# Store-scoped operational events go to per-store rooms instead (see store_event_rooms).
 STAFF_ROOMS = ["kitchen", "cashier", "admin"]
+
+def store_event_rooms(store_id: str, channels=("kitchen", "cashier", "manager")):
+    """Per-store rooms an operational event for `store_id` should reach.
+
+    A store's order events must only land in that store's staff rooms (kitchen /
+    cashier / store-manager), plus the HQ room. Area managers join the per-store
+    rooms for every store in their cluster, so they receive their stores' events
+    without any cross-store leakage.
+    """
+    rooms = [f"{c}:{store_id}" for c in channels]
+    rooms.append("hq")  # HQ super-admin dashboard sees every store
+    return rooms
 
 @sio.event
 async def connect(sid, environ):
@@ -54,20 +68,41 @@ async def disconnect(sid):
 
 @sio.event
 async def join_room(sid, data):
-    """Clients join role-based rooms: 'kitchen', 'cashier', 'admin', or 'user:<id>'."""
+    """Clients join rooms by name. Staff use store-scoped rooms such as
+    'kitchen:<store_id>' / 'cashier:<store_id>' / 'manager:<store_id>', HQ uses
+    'hq', and customers use 'user:<id>'. A single client may join several rooms
+    (e.g. an area manager joins each store in its cluster)."""
     room_id = (data or {}).get("room_id")
-    if not room_id:
+    rooms = (data or {}).get("rooms")
+    join_targets = []
+    if room_id:
+        join_targets.append(room_id)
+    if isinstance(rooms, list):
+        join_targets.extend([r for r in rooms if r])
+    if not join_targets:
         logger.warning(f"[WS] join_room without room_id from {sid}")
         return
-    await sio.enter_room(sid, room_id)
-    await sio.emit("joined", {"room_id": room_id}, to=sid)
-    logger.info(f"[WS] {sid} joined room {room_id}")
+    for r in join_targets:
+        await sio.enter_room(sid, r)
+    await sio.emit("joined", {"rooms": join_targets}, to=sid)
+    logger.info(f"[WS] {sid} joined rooms {join_targets}")
 
-async def broadcast_event(event_type: str, payload: dict, rooms=None):
-    """Broadcast a real-time event to the given rooms (defaults to staff; menu_update also hits customers)."""
+async def broadcast_event(event_type: str, payload: dict, rooms=None, store_id=None):
+    """Broadcast a real-time event.
+
+    - rooms set explicitly  -> those rooms.
+    - store_id set          -> ONLY that store's staff rooms (+ HQ); never leaks
+                               to other stores.
+    - menu_update (global)  -> all staff + customers (catalog is shared in Phase 0).
+    - otherwise             -> generic staff rooms.
+    """
     message = {"type": event_type, "data": payload}
     if rooms is not None:
         targets = rooms
+    elif store_id is not None:
+        targets = store_event_rooms(store_id)
+        if event_type == "menu_update":
+            targets = targets + ["customers"]
     elif event_type == "menu_update":
         targets = STAFF_ROOMS + ["customers"]
     else:
@@ -209,6 +244,7 @@ class OrderItem(BaseModel):
 
 class OrderCreate(BaseModel):
     order_type: str
+    store_id: Optional[str] = None  # store the customer is ordering from (POS uses staff's store)
     items: List[OrderItem]
     total_price: float
     total_calories: float
@@ -332,6 +368,89 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         raise HTTPException(status_code=401, detail="Token expired")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
+
+optional_security = HTTPBearer(auto_error=False)
+
+async def get_optional_user(credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_security)):
+    """Like get_current_user but returns None instead of raising when there is no
+    (or an invalid) token. Used by endpoints that serve both authenticated staff
+    and anonymous customers (e.g. QR table lookup)."""
+    if not credentials:
+        return None
+    try:
+        payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        return await db.users.find_one({"id": payload["user_id"]}, {"_id": 0})
+    except Exception:
+        return None
+
+# ========== MULTI-STORE TENANCY (Phase 0) ==========
+# A single company-owned chain. Catalog (products/categories/offers/packs) stays
+# global; operational data (orders/payments/tables/shifts/stock_logs/held_bills/
+# delivery_tracking/staff-notifications) is partitioned by store_id.
+DEFAULT_STORE_ID = "STORE-DEFAULT"
+
+# Canonical roles. Exactly ONE role per user. Legacy "admin" == HQ "super_admin".
+ROLES = {"super_admin", "area_manager", "store_manager", "cashier", "kitchen", "customer"}
+STAFF_ROLES = {"super_admin", "area_manager", "store_manager", "cashier", "kitchen"}
+STORE_BOUND_ROLES = {"store_manager", "cashier", "kitchen"}
+
+def normalize_role(user) -> str:
+    """Map the legacy 'admin' role to 'super_admin'; otherwise return role as-is."""
+    role = (user or {}).get("role")
+    return "super_admin" if role == "admin" else role
+
+def is_hq(user) -> bool:
+    """True for the HQ super-admin, which can see/act on every store."""
+    return normalize_role(user) == "super_admin"
+
+def role_in(user, *roles) -> bool:
+    return normalize_role(user) in roles
+
+def staff_store_scope(user):
+    """Store ids a staff user may touch. None => ALL stores (HQ). [] => none."""
+    role = normalize_role(user)
+    if role == "super_admin":
+        return None
+    if role == "area_manager":
+        return list(user.get("cluster_store_ids") or [])
+    if role in STORE_BOUND_ROLES:
+        sid = user.get("store_id")
+        return [sid] if sid else []
+    return []
+
+def store_filter(user, field: str = "store_id") -> dict:
+    """Mongo filter fragment limiting a query to the caller's allowed stores.
+
+    {} for HQ (all stores). For everyone else, restricts to their store(s).
+    """
+    scope = staff_store_scope(user)
+    if scope is None:
+        return {}
+    return {field: {"$in": scope}}
+
+def assert_store_allowed(user, store_id):
+    """Raise 403 if the caller may not act on `store_id`."""
+    scope = staff_store_scope(user)
+    if scope is None:
+        return
+    if not store_id or store_id not in scope:
+        raise HTTPException(status_code=403, detail="Store outside your scope")
+
+async def resolve_order_store_id(user, requested_store_id):
+    """Decide which store a new order belongs to, based on the caller's role.
+
+    Store-bound staff (POS) always order against their own store. Customers (and
+    HQ acting as a customer) must supply a valid, active store_id; for backward
+    compatibility a missing store_id falls back to the default store.
+    """
+    role = normalize_role(user)
+    if role in STORE_BOUND_ROLES:
+        return user.get("store_id") or DEFAULT_STORE_ID
+    sid = requested_store_id or DEFAULT_STORE_ID
+    store = await db.stores.find_one({"store_id": sid}, {"_id": 0})
+    if not store or store.get("status") == "inactive":
+        raise HTTPException(status_code=400, detail="Invalid or inactive store_id")
+    return sid
 
 def match_nutrition(product_name: str) -> Dict:
     name_lower = product_name.lower().strip()
@@ -775,13 +894,17 @@ async def register(data: UserRegister):
     existing = await db.users.find_one({"email": data.email}, {"_id": 0})
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
+    # Public self-registration ALWAYS creates a customer. Staff (store-bound
+    # roles, area_manager, super_admin) are provisioned by HQ via /staff or seed,
+    # never by self-registration — this prevents role self-escalation.
+    role = "customer"
     user_id = str(uuid.uuid4())
     user = {
         "id": user_id,
         "email": data.email,
         "password_hash": hash_password(data.password),
         "name": data.name,
-        "role": data.role,
+        "role": role,
         "fitness_goal": "maintenance",
         "daily_calories": 2000,
         "daily_protein": 100,
@@ -790,12 +913,12 @@ async def register(data: UserRegister):
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.users.insert_one(user)
-    token = create_token(user_id, data.role)
+    token = create_token(user_id, role)
     return {
         "token": token,
         "user": {
             "id": user_id, "email": data.email, "name": data.name,
-            "role": data.role, "fitness_goal": "maintenance",
+            "role": role, "fitness_goal": "maintenance",
             "daily_calories": 2000, "daily_protein": 100,
             "daily_carbs": 250, "daily_fat": 65
         }
@@ -812,6 +935,7 @@ async def login(data: UserLogin):
         "user": {
             "id": user["id"], "email": user["email"], "name": user["name"],
             "role": user["role"], "fitness_goal": user.get("fitness_goal", "maintenance"),
+            "store_id": user.get("store_id"), "cluster_store_ids": user.get("cluster_store_ids"),
             "daily_calories": user.get("daily_calories", 2000),
             "daily_protein": user.get("daily_protein", 100),
             "daily_carbs": user.get("daily_carbs", 250),
@@ -822,8 +946,9 @@ async def login(data: UserLogin):
 @api_router.get("/auth/me")
 async def get_me(user=Depends(get_current_user)):
     return {
-        "id": user["id"], "email": user["email"], "name": user["name"],
+        "id": user["id"], "email": user.get("email"), "name": user["name"],
         "role": user["role"], "fitness_goal": user.get("fitness_goal", "maintenance"),
+        "store_id": user.get("store_id"), "cluster_store_ids": user.get("cluster_store_ids"),
         "daily_calories": user.get("daily_calories", 2000),
         "daily_protein": user.get("daily_protein", 100),
         "daily_carbs": user.get("daily_carbs", 250),
@@ -842,8 +967,8 @@ async def get_me(user=Depends(get_current_user)):
 # ========== PRODUCT ROUTES ==========
 @api_router.post("/products")
 async def create_product(data: ProductCreate, user=Depends(get_current_user)):
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
+    if not is_hq(user):
+        raise HTTPException(status_code=403, detail="HQ only")
     nutrition = resolved_nutrition(data.name, data.calories_per_100g, data.protein_per_100g, data.carbs_per_100g, data.fat_per_100g)
     product_id = str(uuid.uuid4())
     import random
@@ -888,15 +1013,15 @@ async def list_products(diet: Optional[str] = None):
 
 @api_router.get("/products/all")
 async def list_all_products(user=Depends(get_current_user)):
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
+    if not is_hq(user):
+        raise HTTPException(status_code=403, detail="HQ only")
     products = await db.products.find({}, {"_id": 0}).to_list(200)
     return [ensure_product_diet_types(p) for p in products]
 
 @api_router.put("/products/{product_id}")
 async def update_product(product_id: str, data: ProductUpdate, user=Depends(get_current_user)):
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
+    if not is_hq(user):
+        raise HTTPException(status_code=403, detail="HQ only")
     update_data = {k: v for k, v in data.dict().items() if v is not None}
     # Diet tags (multi): normalize + keep legacy diet_type in sync
     if "diet_types" in update_data:
@@ -928,8 +1053,8 @@ async def update_product(product_id: str, data: ProductUpdate, user=Depends(get_
 
 @api_router.delete("/products/{product_id}")
 async def delete_product(product_id: str, user=Depends(get_current_user)):
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
+    if not is_hq(user):
+        raise HTTPException(status_code=403, detail="HQ only")
     result = await db.products.delete_one({"id": product_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Product not found")
@@ -939,8 +1064,8 @@ async def delete_product(product_id: str, user=Depends(get_current_user)):
 @api_router.post("/upload/image")
 async def upload_image(body: dict = Body(...), user=Depends(get_current_user)):
     """Upload base64 image and store it. Returns the data URI."""
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
+    if not is_hq(user):
+        raise HTTPException(status_code=403, detail="HQ only")
     image_data = body.get("image")
     if not image_data:
         raise HTTPException(status_code=400, detail="No image provided")
@@ -961,16 +1086,16 @@ async def get_categories():
 @api_router.get("/categories/all")
 async def get_all_categories(user=Depends(get_current_user)):
     """Admin: Get all categories including inactive"""
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
+    if not is_hq(user):
+        raise HTTPException(status_code=403, detail="HQ only")
     categories = await db.categories.find({}, {"_id": 0}).sort("sort_order", 1).to_list(100)
     return categories
 
 @api_router.post("/categories")
 async def create_category(category: CategoryCreate, user=Depends(get_current_user)):
     """Admin: Create a new category"""
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
+    if not is_hq(user):
+        raise HTTPException(status_code=403, detail="HQ only")
     
     # Generate key from name if not provided
     key = category.key or category.name.replace(" ", "_").upper()
@@ -998,8 +1123,8 @@ async def create_category(category: CategoryCreate, user=Depends(get_current_use
 @api_router.put("/categories/{category_id}")
 async def update_category(category_id: str, update: CategoryUpdate, user=Depends(get_current_user)):
     """Admin: Update a category"""
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
+    if not is_hq(user):
+        raise HTTPException(status_code=403, detail="HQ only")
     
     update_data = {k: v for k, v in update.dict().items() if v is not None}
     if not update_data:
@@ -1018,8 +1143,8 @@ async def update_category(category_id: str, update: CategoryUpdate, user=Depends
 @api_router.delete("/categories/{category_id}")
 async def delete_category(category_id: str, user=Depends(get_current_user)):
     """Admin: Delete a category (soft delete)"""
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
+    if not is_hq(user):
+        raise HTTPException(status_code=403, detail="HQ only")
     
     result = await db.categories.update_one(
         {"id": category_id}, 
@@ -1032,8 +1157,8 @@ async def delete_category(category_id: str, user=Depends(get_current_user)):
 @api_router.post("/categories/seed-defaults")
 async def seed_default_categories(user=Depends(get_current_user)):
     """Admin: Seed default categories if none exist"""
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
+    if not is_hq(user):
+        raise HTTPException(status_code=403, detail="HQ only")
     
     count = await db.categories.count_documents({})
     if count > 0:
@@ -1065,8 +1190,8 @@ async def seed_default_categories(user=Depends(get_current_user)):
 @api_router.get("/admin/dashboard-stats")
 async def admin_dashboard_stats(user=Depends(get_current_user)):
     """Admin dashboard: aggregated stats"""
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
+    if not is_hq(user):
+        raise HTTPException(status_code=403, detail="HQ only")
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     products_count = await db.products.count_documents({"is_active": True})
     categories_count = await db.categories.count_documents({"is_active": {"$ne": False}})
@@ -1086,16 +1211,16 @@ async def admin_dashboard_stats(user=Depends(get_current_user)):
 @api_router.get("/admin/staff-accounts")
 async def admin_staff_accounts(user=Depends(get_current_user)):
     """Admin: list kitchen & cashier accounts"""
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
+    if not is_hq(user):
+        raise HTTPException(status_code=403, detail="HQ only")
     staff = await db.users.find({"role": {"$in": ["kitchen", "cashier"]}}, {"_id": 0, "password": 0}).to_list(20)
     return staff
 
 @api_router.put("/admin/staff/{staff_id}/reset-pin")
 async def admin_reset_staff_pin(staff_id: str, body: dict = Body(...), user=Depends(get_current_user)):
     """Admin: reset a staff member's PIN"""
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
+    if not is_hq(user):
+        raise HTTPException(status_code=403, detail="HQ only")
     new_pin = body.get("pin")
     if not new_pin or len(new_pin) < 4:
         raise HTTPException(status_code=400, detail="PIN must be at least 4 digits")
@@ -1232,8 +1357,8 @@ async def ai_calculate_ready_made_nutrition(dish_name: str, ingredients: List[Di
 @api_router.post("/products/single")
 async def create_single_product(data: SingleProductCreate, user=Depends(get_current_user)):
     """Create single product with AI: auto cost-per-gram, AI-generated photo, nutrition, description"""
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
+    if not is_hq(user):
+        raise HTTPException(status_code=403, detail="HQ only")
     import random
     nutrition = resolved_nutrition(data.name, data.calories_per_100g, data.protein_per_100g, data.carbs_per_100g, data.fat_per_100g)
     cost_per_100g = round((data.price / data.grams) * 100, 2)
@@ -1281,8 +1406,8 @@ async def create_single_product(data: SingleProductCreate, user=Depends(get_curr
 @api_router.post("/products/ready-made")
 async def create_ready_made_meal(data: ReadyMadeMealCreate, user=Depends(get_current_user)):
     """Create ready-made meal with AI description, AI-generated image, and auto nutrition"""
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
+    if not is_hq(user):
+        raise HTTPException(status_code=403, detail="HQ only")
     import random
     
     # Convert ingredients to list format for nutrition calculation
@@ -1394,6 +1519,9 @@ async def check_product_stock(product_id: str, quantity: int = 1):
 @api_router.post("/orders")
 async def create_order(data: OrderCreate, user=Depends(get_current_user)):
     order_id = str(uuid.uuid4())[:8].upper()
+    # Multi-store: every order is tied to a store. POS/staff orders use the staff
+    # member's own store; customer orders carry the selected store_id.
+    store_id = await resolve_order_store_id(user, data.store_id)
     # Delivery/takeaway charge: trust client-provided delivery_fee when present
     # (it is computed & validated by /cart/quote), else fall back to defaults.
     if data.delivery_fee is not None:
@@ -1412,7 +1540,9 @@ async def create_order(data: OrderCreate, user=Depends(get_current_user)):
             return sorted([f"{i.get('product_id')}|{i.get('grams', 0)}|{i.get('quantity', 1)}" for i in items])
         new_sig = _sig([it.dict() for it in data.items])
         two_min_ago = (datetime.now(timezone.utc) - timedelta(minutes=2)).isoformat()
-        dup_query = {"created_at": {"$gte": two_min_ago}, "status": {"$nin": ["cancelled"]}}
+        # Scope the duplicate check to THIS store so identical table numbers at
+        # different stores never collide.
+        dup_query = {"created_at": {"$gte": two_min_ago}, "status": {"$nin": ["cancelled"]}, "store_id": store_id}
         if data.table_number is not None:
             dup_query["$or"] = [{"user_id": user["id"]}, {"table_number": data.table_number}]
         else:
@@ -1494,6 +1624,7 @@ async def create_order(data: OrderCreate, user=Depends(get_current_user)):
 
     order = {
         "id": order_id,
+        "store_id": store_id,
         "user_id": user["id"],
         "user_name": user["name"],
         "order_type": data.order_type,
@@ -1515,7 +1646,7 @@ async def create_order(data: OrderCreate, user=Depends(get_current_user)):
         "coupon_code": data.coupon_code,
         "discount": data.discount or 0,
         "customer_name": data.customer_name or user["name"],
-        "order_source": "walk_in" if user["role"] in ("cashier", "admin") else "app",
+        "order_source": "walk_in" if role_in(user, "cashier", "store_manager", "super_admin") else "app",
         "gst_percent": 5,
         "gst_amount": round((data.total_price + extra_charge) * 5 / 105, 2),
         "base_amount": round((data.total_price + extra_charge) * 100 / 105, 2),
@@ -1584,66 +1715,63 @@ async def create_order(data: OrderCreate, user=Depends(get_current_user)):
     # Notify kitchen about new order (skip for scheduled - kitchen gets alerted at alert time)
     if not is_scheduled:
         await db.notifications.insert_one({
-            "id": str(uuid.uuid4()), "user_id": "kitchen", "title": "New Order!",
+            "id": str(uuid.uuid4()), "user_id": "kitchen", "store_id": store_id, "title": "New Order!",
             "body": f"Order #{order_id} from {user['name']} ({data.order_type})",
             "type": "new_order", "order_id": order_id, "read": False,
             "created_at": datetime.now(timezone.utc).isoformat()
         })
     else:
         await db.notifications.insert_one({
-            "id": str(uuid.uuid4()), "user_id": "kitchen", "title": "Scheduled Order",
+            "id": str(uuid.uuid4()), "user_id": "kitchen", "store_id": store_id, "title": "Scheduled Order",
             "body": f"Order #{order_id} scheduled for {data.scheduled_ready_time} ({data.order_type})",
             "type": "scheduled_order", "order_id": order_id, "read": False,
             "created_at": datetime.now(timezone.utc).isoformat()
         })
-    # Real-time push (C1 + C5): notify all staff panels of the new order
+    # Real-time push (C1 + C5): notify ONLY this store's staff panels of the new order
     clean_order = {k: v for k, v in order.items() if k != "_id"}
-    await broadcast_event("new_order", clean_order)
+    await broadcast_event("new_order", clean_order, store_id=store_id)
     # Stock changed -> tell customer apps + POS to refresh menu (C3)
     await broadcast_event("menu_update", {"action": "stock_changed"})
     return clean_order
 
 @api_router.get("/orders")
 async def list_orders(user=Depends(get_current_user)):
-    """Customer: own orders. Cashier/Admin: all orders. Kitchen: active orders."""
-    if user["role"] in ("cashier", "admin"):
-        orders = await db.orders.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
-    elif user["role"] == "kitchen":
-        orders = await db.orders.find(
-            {"status": {"$in": ["pending", "accepted", "preparing", "ready"]}},
-            {"_id": 0}
-        ).sort("created_at", 1).to_list(100)
+    """Customer: own orders. Staff: orders within their store scope.
+    Kitchen: active orders in their store. Cashier/Manager/HQ/Area: all (in-scope) orders."""
+    if role_in(user, *STAFF_ROLES):
+        scope = store_filter(user)
+        if normalize_role(user) == "kitchen":
+            query = {**scope, "status": {"$in": ["pending", "accepted", "preparing", "ready"]}}
+            orders = await db.orders.find(query, {"_id": 0}).sort("created_at", 1).to_list(100)
+        else:
+            orders = await db.orders.find(scope, {"_id": 0}).sort("created_at", -1).to_list(100)
     else:
         orders = await db.orders.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(50)
     return orders
 
 @api_router.get("/orders/kitchen")
 async def kitchen_orders(user=Depends(get_current_user)):
-    """Kitchen/Admin: all active orders from both app and walk-in"""
-    if user["role"] not in ("admin", "kitchen"):
-        raise HTTPException(status_code=403, detail="Kitchen/Admin only")
-    orders = await db.orders.find(
-        {"status": {"$in": ["pending", "accepted", "preparing"]}},
-        {"_id": 0}
-    ).sort("created_at", 1).to_list(100)
+    """Kitchen/Manager/HQ: active orders for the caller's store(s)."""
+    if not role_in(user, "super_admin", "area_manager", "store_manager", "kitchen"):
+        raise HTTPException(status_code=403, detail="Kitchen staff only")
+    query = {**store_filter(user), "status": {"$in": ["pending", "accepted", "preparing"]}}
+    orders = await db.orders.find(query, {"_id": 0}).sort("created_at", 1).to_list(100)
     return orders
 
 @api_router.get("/orders/all")
 async def all_orders(user=Depends(get_current_user)):
-    if user["role"] not in ("admin", "cashier"):
-        raise HTTPException(status_code=403, detail="Admin/Cashier only")
-    orders = await db.orders.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    if not role_in(user, "super_admin", "area_manager", "store_manager", "cashier"):
+        raise HTTPException(status_code=403, detail="Cashier/Manager/HQ only")
+    orders = await db.orders.find(store_filter(user), {"_id": 0}).sort("created_at", -1).to_list(100)
     return orders
 
 @api_router.get("/orders/scheduled")
 async def get_scheduled_orders(user=Depends(get_current_user)):
-    """Kitchen/Admin: get all scheduled orders (upcoming + alert-ready)"""
-    if user["role"] not in ("admin", "kitchen"):
-        raise HTTPException(status_code=403, detail="Kitchen/Admin only")
-    orders = await db.orders.find(
-        {"is_scheduled": True, "status": "scheduled"},
-        {"_id": 0}
-    ).sort("scheduled_ready_time", 1).to_list(100)
+    """Kitchen/Manager/HQ: scheduled orders (upcoming + alert-ready) for their store(s)."""
+    if not role_in(user, "super_admin", "area_manager", "store_manager", "kitchen"):
+        raise HTTPException(status_code=403, detail="Kitchen staff only")
+    query = {**store_filter(user), "is_scheduled": True, "status": "scheduled"}
+    orders = await db.orders.find(query, {"_id": 0}).sort("scheduled_ready_time", 1).to_list(100)
     now = datetime.now(timezone.utc).isoformat()
     for o in orders:
         o["alert_triggered"] = o.get("kitchen_alert_time", "") <= now if o.get("kitchen_alert_time") else False
@@ -1652,11 +1780,12 @@ async def get_scheduled_orders(user=Depends(get_current_user)):
 @api_router.post("/orders/{order_id}/confirm-scheduled")
 async def confirm_scheduled_order(order_id: str, user=Depends(get_current_user)):
     """Kitchen confirms a scheduled order and moves it to preparing"""
-    if user["role"] not in ("admin", "kitchen"):
-        raise HTTPException(status_code=403, detail="Kitchen/Admin only")
+    if not role_in(user, "super_admin", "store_manager", "kitchen"):
+        raise HTTPException(status_code=403, detail="Kitchen staff only")
     order = await db.orders.find_one({"id": order_id}, {"_id": 0})
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+    assert_store_allowed(user, order.get("store_id"))
     if order.get("status") != "scheduled":
         raise HTTPException(status_code=400, detail="Order is not in scheduled status")
     await db.orders.update_one(
@@ -1668,29 +1797,31 @@ async def confirm_scheduled_order(order_id: str, user=Depends(get_current_user))
         await notify_order_status(order_id, "preparing")
     except Exception:
         pass
-    await broadcast_event("order_status", updated)
+    await broadcast_event("order_status", updated, store_id=updated.get("store_id"))
     if updated and updated.get("user_id"):
         await broadcast_event("order_status", updated, rooms=[f"user:{updated['user_id']}"])
     return updated
 
 @api_router.put("/orders/{order_id}/status")
 async def update_order_status(order_id: str, status: str, user=Depends(get_current_user)):
-    """Admin/Kitchen/Cashier: update order status"""
-    if user["role"] not in ("admin", "kitchen", "cashier"):
+    """Staff: update order status (only within their store scope)."""
+    if not role_in(user, "super_admin", "store_manager", "kitchen", "cashier"):
         raise HTTPException(status_code=403, detail="Staff only")
     if status not in ORDER_STATUSES:
         raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {ORDER_STATUSES}")
-    await db.orders.update_one({"id": order_id}, {"$set": {"status": status}})
     order = await db.orders.find_one({"id": order_id}, {"_id": 0})
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+    assert_store_allowed(user, order.get("store_id"))
+    await db.orders.update_one({"id": order_id}, {"$set": {"status": status}})
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
     # Auto push notification on status change
     try:
         await notify_order_status(order_id, status)
     except Exception:
         pass
-    # Real-time propagation to all staff panels + the customer's tracking screen (C1/C2)
-    await broadcast_event("order_status", order)
+    # Real-time propagation to this store's staff panels + the customer's tracking screen (C1/C2)
+    await broadcast_event("order_status", order, store_id=order.get("store_id"))
     if order.get("user_id"):
         await broadcast_event("order_status", order, rooms=[f"user:{order['user_id']}"])
     return order
@@ -2402,8 +2533,8 @@ async def migrate_diet_type():
 @api_router.post("/products/{product_id}/regenerate-image")
 async def regenerate_product_image(product_id: str, user=Depends(get_current_user)):
     """Regenerate AI image for a specific product"""
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
+    if not is_hq(user):
+        raise HTTPException(status_code=403, detail="HQ only")
     product = await db.products.find_one({"id": product_id}, {"_id": 0})
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
@@ -2783,7 +2914,7 @@ async def seed_data():
             "created_at": datetime.now(timezone.utc).isoformat()
         }
         await db.products.insert_one(product)
-    # Create default admin
+    # Create default HQ super-admin (legacy email/password login preserved)
     admin_exists = await db.users.find_one({"email": "admin@dietcafe.com"}, {"_id": 0})
     if not admin_exists:
         admin = {
@@ -2791,7 +2922,7 @@ async def seed_data():
             "email": "admin@dietcafe.com",
             "password_hash": hash_password("admin123"),
             "name": "Admin",
-            "role": "admin",
+            "role": "super_admin",  # HQ
             "fitness_goal": "maintenance",
             "daily_calories": 2000,
             "daily_protein": 100,
@@ -2800,6 +2931,8 @@ async def seed_data():
             "created_at": datetime.now(timezone.utc).isoformat()
         }
         await db.users.insert_one(admin)
+    # Ensure the multi-store foundation (default store + store_manager + backfill)
+    await run_store_migration()
     return {"message": "Seed data created", "products": len(seed_products)}
 
 @api_router.get("/banners")
@@ -2843,29 +2976,44 @@ class TableOrderRequest(BaseModel):
     items: List[Dict[str, Any]]
     special_instructions: Optional[str] = ""
 
+async def _ensure_store_tables(store_id: str):
+    """Seed default tables for a store the first time they're requested."""
+    existing = await db.tables.find_one({"store_id": store_id}, {"_id": 0})
+    if existing:
+        return
+    for i in range(1, 11):
+        await db.tables.insert_one({
+            "id": str(uuid.uuid4()),
+            "store_id": store_id,
+            "table_number": i,
+            "seats": 4 if i <= 6 else 2,
+            "status": "available",  # available, occupied, reserved
+            "current_order_id": None,
+            "qr_code": f"DIETCAFE-{store_id}-TABLE-{i}",
+        })
+
 @api_router.get("/tables")
-async def get_tables():
-    """Get all café tables with their status"""
-    tables = await db.tables.find({}, {"_id": 0}).to_list(50)
-    if not tables:
-        # Create default tables
-        for i in range(1, 11):
-            table = {
-                "id": str(uuid.uuid4()),
-                "table_number": i,
-                "seats": 4 if i <= 6 else 2,
-                "status": "available",  # available, occupied, reserved
-                "current_order_id": None,
-                "qr_code": f"DIETCAFE-TABLE-{i}",
-            }
-            await db.tables.insert_one(table)
-        tables = await db.tables.find({}, {"_id": 0}).to_list(50)
+async def get_tables(store_id: Optional[str] = None, user=Depends(get_optional_user)):
+    """Café tables for a store. Staff are restricted to their own store scope;
+    anonymous/customer callers must specify the store (defaults to the default store)."""
+    if user and role_in(user, *STAFF_ROLES):
+        scope = staff_store_scope(user)
+        if scope is None:  # HQ
+            target = store_id or DEFAULT_STORE_ID
+        else:
+            target = store_id or (scope[0] if scope else DEFAULT_STORE_ID)
+            assert_store_allowed(user, target)
+    else:
+        target = store_id or DEFAULT_STORE_ID
+    await _ensure_store_tables(target)
+    tables = await db.tables.find({"store_id": target}, {"_id": 0}).to_list(50)
     return tables
 
 @api_router.get("/tables/{table_number}")
-async def get_table(table_number: int):
-    """Get table info by scanning QR code"""
-    table = await db.tables.find_one({"table_number": table_number}, {"_id": 0})
+async def get_table(table_number: int, store_id: Optional[str] = None):
+    """Get table info by scanning QR code (within a store)."""
+    sid = store_id or DEFAULT_STORE_ID
+    table = await db.tables.find_one({"table_number": table_number, "store_id": sid}, {"_id": 0})
     if not table:
         raise HTTPException(status_code=404, detail="Table not found")
     # Get current order if any
@@ -2875,24 +3023,26 @@ async def get_table(table_number: int):
     return {**table, "current_order": current_order}
 
 @api_router.post("/tables/{table_number}/occupy")
-async def occupy_table(table_number: int, user=Depends(get_current_user)):
+async def occupy_table(table_number: int, store_id: Optional[str] = None, user=Depends(get_current_user)):
     """Mark table as occupied when customer scans QR"""
-    table = await db.tables.find_one({"table_number": table_number}, {"_id": 0})
+    sid = store_id or DEFAULT_STORE_ID
+    table = await db.tables.find_one({"table_number": table_number, "store_id": sid}, {"_id": 0})
     if not table:
         raise HTTPException(status_code=404, detail="Table not found")
     if table["status"] == "occupied" and table.get("occupied_by") != user["id"]:
         raise HTTPException(status_code=400, detail="Table already occupied by another customer")
     await db.tables.update_one(
-        {"table_number": table_number},
+        {"table_number": table_number, "store_id": sid},
         {"$set": {"status": "occupied", "occupied_by": user["id"], "occupied_at": datetime.now(timezone.utc).isoformat()}}
     )
     return {"message": f"Table {table_number} is now yours!", "table_number": table_number}
 
 @api_router.post("/tables/{table_number}/release")
-async def release_table(table_number: int, user=Depends(get_current_user)):
+async def release_table(table_number: int, store_id: Optional[str] = None, user=Depends(get_current_user)):
     """Release table after payment"""
+    sid = store_id or DEFAULT_STORE_ID
     await db.tables.update_one(
-        {"table_number": table_number},
+        {"table_number": table_number, "store_id": sid},
         {"$set": {"status": "available", "occupied_by": None, "current_order_id": None, "occupied_at": None}}
     )
     return {"message": f"Table {table_number} released"}
@@ -2916,7 +3066,7 @@ async def send_notification(title: str, body: str, user_id: str = None, user=Dep
     """Send push notification (admin only or to self)"""
     import httpx
     
-    if user["role"] != "admin" and user_id != user["id"]:
+    if not is_hq(user) and user_id != user["id"]:
         raise HTTPException(status_code=403, detail="Cannot send to other users")
     
     target_user = await db.users.find_one({"id": user_id or user["id"]}, {"_id": 0})
@@ -2954,19 +3104,28 @@ async def send_notification(title: str, body: str, user_id: str = None, user=Dep
 
 @api_router.get("/notifications")
 async def get_notifications(user=Depends(get_current_user)):
-    """Get user's notifications"""
-    notifications = await db.notifications.find(
-        {"user_id": user["id"]}, {"_id": 0}
-    ).sort("created_at", -1).to_list(50)
+    """Customers see their own notifications; staff see their store's staff
+    notifications (scoped by role — never another store's)."""
+    if normalize_role(user) == "customer":
+        query = {"user_id": user["id"]}
+    else:
+        query = store_filter(user)
+    notifications = await db.notifications.find(query, {"_id": 0}).sort("created_at", -1).to_list(50)
     return notifications
 
 @api_router.put("/notifications/{notification_id}/read")
 async def mark_notification_read(notification_id: str, user=Depends(get_current_user)):
-    """Mark notification as read"""
-    await db.notifications.update_one(
-        {"id": notification_id, "user_id": user["id"]},
-        {"$set": {"read": True}}
-    )
+    """Mark notification as read (own notification, or a staff notification
+    within the caller's store scope)."""
+    notif = await db.notifications.find_one({"id": notification_id}, {"_id": 0})
+    if not notif:
+        return {"message": "Marked as read"}
+    if normalize_role(user) == "customer":
+        if notif.get("user_id") != user["id"]:
+            raise HTTPException(status_code=403, detail="Access denied")
+    elif notif.get("store_id"):
+        assert_store_allowed(user, notif.get("store_id"))
+    await db.notifications.update_one({"id": notification_id}, {"$set": {"read": True}})
     return {"message": "Marked as read"}
 
 # ========== OFFERS & BANNERS SYSTEM (Admin-Managed) ==========
@@ -3009,16 +3168,16 @@ async def get_active_offers():
 @api_router.get("/offers/all")
 async def get_all_offers(user=Depends(get_current_user)):
     """Admin: Get all offers"""
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
+    if not is_hq(user):
+        raise HTTPException(status_code=403, detail="HQ only")
     offers = await db.offers.find({}, {"_id": 0}).sort("created_at", -1).to_list(50)
     return offers
 
 @api_router.post("/offers")
 async def create_offer(data: OfferCreate, user=Depends(get_current_user)):
     """Admin: Create a new offer"""
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
+    if not is_hq(user):
+        raise HTTPException(status_code=403, detail="HQ only")
     offer = {
         "id": str(uuid.uuid4()),
         **data.dict(),
@@ -3031,8 +3190,8 @@ async def create_offer(data: OfferCreate, user=Depends(get_current_user)):
 
 @api_router.put("/offers/{offer_id}")
 async def update_offer(offer_id: str, data: OfferUpdate, user=Depends(get_current_user)):
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
+    if not is_hq(user):
+        raise HTTPException(status_code=403, detail="HQ only")
     update_data = {k: v for k, v in data.dict().items() if v is not None}
     if update_data:
         await db.offers.update_one({"id": offer_id}, {"$set": update_data})
@@ -3043,8 +3202,8 @@ async def update_offer(offer_id: str, data: OfferUpdate, user=Depends(get_curren
 
 @api_router.delete("/offers/{offer_id}")
 async def delete_offer(offer_id: str, user=Depends(get_current_user)):
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
+    if not is_hq(user):
+        raise HTTPException(status_code=403, detail="HQ only")
     result = await db.offers.delete_one({"id": offer_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Offer not found")
@@ -3130,8 +3289,8 @@ async def get_active_packs():
 
 @api_router.get("/packs/all")
 async def get_all_packs(user=Depends(get_current_user)):
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
+    if not is_hq(user):
+        raise HTTPException(status_code=403, detail="HQ only")
     return await db.packs.find({}, {"_id": 0}).sort("created_at", -1).to_list(50)
 
 @api_router.get("/packs/{pack_id}")
@@ -3170,8 +3329,8 @@ async def get_pack_detail(pack_id: str):
 
 @api_router.post("/packs")
 async def create_pack(data: PackCreate, user=Depends(get_current_user)):
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
+    if not is_hq(user):
+        raise HTTPException(status_code=403, detail="HQ only")
     pack = {
         "id": str(uuid.uuid4()),
         **data.dict(),
@@ -3185,8 +3344,8 @@ async def create_pack(data: PackCreate, user=Depends(get_current_user)):
 
 @api_router.put("/packs/{pack_id}")
 async def update_pack(pack_id: str, data: PackUpdate, user=Depends(get_current_user)):
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
+    if not is_hq(user):
+        raise HTTPException(status_code=403, detail="HQ only")
     update_data = {}
     for k, v in data.dict().items():
         if v is not None:
@@ -3203,8 +3362,8 @@ async def update_pack(pack_id: str, data: PackUpdate, user=Depends(get_current_u
 
 @api_router.delete("/packs/{pack_id}")
 async def delete_pack(pack_id: str, user=Depends(get_current_user)):
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
+    if not is_hq(user):
+        raise HTTPException(status_code=403, detail="HQ only")
     result = await db.packs.delete_one({"id": pack_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Pack not found")
@@ -3222,9 +3381,12 @@ async def get_delivery_tracking(order_id: str, user=Depends(get_current_user)):
     order = await db.orders.find_one({"id": order_id}, {"_id": 0})
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
-    if order["user_id"] != user["id"] and user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Not authorized")
-    
+    if order["user_id"] != user["id"]:
+        # Non-owner: must be staff with access to this order's store.
+        if not role_in(user, *STAFF_ROLES):
+            raise HTTPException(status_code=403, detail="Not authorized")
+        assert_store_allowed(user, order.get("store_id"))
+
     tracking = await db.delivery_tracking.find_one({"order_id": order_id}, {"_id": 0})
     
     # Default café location (can be configured)
@@ -3244,38 +3406,47 @@ async def get_delivery_tracking(order_id: str, user=Depends(get_current_user)):
 
 @api_router.post("/orders/{order_id}/tracking/update")
 async def update_delivery_location(order_id: str, data: DeliveryLocationUpdate, user=Depends(get_current_user)):
-    """Update delivery driver location (driver/admin only)"""
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin/Driver only")
-    
+    """Update delivery driver location (store staff / HQ for the order's store)."""
+    if not role_in(user, "super_admin", "area_manager", "store_manager", "cashier"):
+        raise HTTPException(status_code=403, detail="Staff only")
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    assert_store_allowed(user, order.get("store_id"))
+
     update = {
         "latitude": data.latitude,
         "longitude": data.longitude,
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
-    
+
     await db.delivery_tracking.update_one(
         {"order_id": order_id},
         {
-            "$set": {"current_location": update, "updated_at": datetime.now(timezone.utc).isoformat()},
+            "$set": {"current_location": update, "store_id": order.get("store_id"), "updated_at": datetime.now(timezone.utc).isoformat()},
             "$push": {"updates": update}
         },
         upsert=True
     )
-    
+
     return {"message": "Location updated"}
 
 @api_router.post("/orders/{order_id}/assign-driver")
 async def assign_driver(order_id: str, driver_name: str, user=Depends(get_current_user)):
-    """Assign driver to delivery order (admin only)"""
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
-    
+    """Assign driver to delivery order (store staff / HQ for the order's store)."""
+    if not role_in(user, "super_admin", "area_manager", "store_manager", "cashier"):
+        raise HTTPException(status_code=403, detail="Staff only")
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    assert_store_allowed(user, order.get("store_id"))
+
     await db.delivery_tracking.update_one(
         {"order_id": order_id},
         {
             "$set": {
                 "order_id": order_id,
+                "store_id": order.get("store_id"),
                 "driver_name": driver_name,
                 "assigned_at": datetime.now(timezone.utc).isoformat(),
                 "eta": "25-35 mins"
@@ -3293,8 +3464,8 @@ async def assign_driver(order_id: str, driver_name: str, user=Depends(get_curren
 @api_router.get("/admin/analytics")
 async def get_admin_analytics(user=Depends(get_current_user)):
     """Get comprehensive business analytics for admin"""
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
+    if not is_hq(user):
+        raise HTTPException(status_code=403, detail="HQ only")
     
     # Get date ranges
     today = datetime.now(timezone.utc)
@@ -3377,8 +3548,8 @@ async def get_admin_analytics(user=Depends(get_current_user)):
 @api_router.post("/admin/ai-insights")
 async def get_ai_business_insights(user=Depends(get_current_user)):
     """Get AI-powered business insights and recommendations"""
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
+    if not is_hq(user):
+        raise HTTPException(status_code=403, detail="HQ only")
     
     try:
         from emergentintegrations.llm.chat import LlmChat, UserMessage
@@ -3453,8 +3624,8 @@ Be specific with numbers and percentages. Keep it concise and actionable."""
 @api_router.get("/admin/profit-calculator")
 async def get_profit_margins(user=Depends(get_current_user)):
     """Calculate profit margins for all products"""
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
+    if not is_hq(user):
+        raise HTTPException(status_code=403, detail="HQ only")
     
     # Estimated cost prices (admin can customize later)
     COST_ESTIMATES = {
@@ -3514,7 +3685,16 @@ class PaymentVerifyRequest(BaseModel):
 @api_router.post("/payments/create-order")
 async def create_payment_order(data: PaymentCreateRequest, user=Depends(get_current_user)):
     """Create a Razorpay order for payment"""
-    import razorpay
+    # Resolve & authorize the order; payments inherit the order's store_id.
+    order = await db.orders.find_one({"id": data.order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if normalize_role(user) == "customer":
+        if order.get("user_id") != user["id"]:
+            raise HTTPException(status_code=403, detail="Access denied")
+    else:
+        assert_store_allowed(user, order.get("store_id"))
+    order_store_id = order.get("store_id") or DEFAULT_STORE_ID
     key_id = os.environ.get("RAZORPAY_KEY_ID", "")
     key_secret = os.environ.get("RAZORPAY_KEY_SECRET", "")
     if not key_id or not key_secret:
@@ -3523,6 +3703,7 @@ async def create_payment_order(data: PaymentCreateRequest, user=Depends(get_curr
         await db.payments.insert_one({
             "id": str(uuid.uuid4()),
             "order_id": data.order_id,
+            "store_id": order_store_id,
             "user_id": user["id"],
             "razorpay_order_id": mock_order_id,
             "amount": data.amount,
@@ -3539,6 +3720,7 @@ async def create_payment_order(data: PaymentCreateRequest, user=Depends(get_curr
             "mock": True,
         }
     try:
+        import razorpay
         client_rp = razorpay.Client(auth=(key_id, key_secret))
         rp_order = client_rp.order.create({
             "amount": int(data.amount * 100),
@@ -3549,6 +3731,7 @@ async def create_payment_order(data: PaymentCreateRequest, user=Depends(get_curr
         await db.payments.insert_one({
             "id": str(uuid.uuid4()),
             "order_id": data.order_id,
+            "store_id": order_store_id,
             "user_id": user["id"],
             "razorpay_order_id": rp_order["id"],
             "amount": data.amount,
@@ -3939,60 +4122,248 @@ async def seed_offers_and_packs():
         seeded["packs"] = len(default_packs)
     return {"message": "Seeded", **seeded}
 
+# ========== STORES (HQ-managed multi-store foundation, Phase 0) ==========
+class StoreCreate(BaseModel):
+    name: str
+    code: str
+    address: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    phone: Optional[str] = None
+    gst_no: Optional[str] = None
+    fssai_license: Optional[str] = None
+    open_hours: Optional[str] = None
+    tax_settings: Optional[Dict[str, Any]] = None
+    area_manager_id: Optional[str] = None
+    status: str = "active"  # active | inactive
+
+class StoreUpdate(BaseModel):
+    name: Optional[str] = None
+    code: Optional[str] = None
+    address: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    phone: Optional[str] = None
+    gst_no: Optional[str] = None
+    fssai_license: Optional[str] = None
+    open_hours: Optional[str] = None
+    tax_settings: Optional[Dict[str, Any]] = None
+    area_manager_id: Optional[str] = None
+    status: Optional[str] = None
+
+def _clean_store(s: dict) -> dict:
+    return {k: v for k, v in s.items() if k != "_id"}
+
+@api_router.get("/stores/public")
+async def list_public_stores():
+    """Public list of active stores for customer store selection (no auth)."""
+    stores = await db.stores.find({"status": "active"}, {"_id": 0}).sort("name", 1).to_list(200)
+    return [
+        {
+            "store_id": s["store_id"], "name": s.get("name"), "code": s.get("code"),
+            "address": s.get("address"), "lat": s.get("lat"), "lng": s.get("lng"),
+            "phone": s.get("phone"), "open_hours": s.get("open_hours"),
+        }
+        for s in stores
+    ]
+
+@api_router.post("/stores")
+async def create_store(data: StoreCreate, user=Depends(get_current_user)):
+    """HQ: create a store."""
+    if not is_hq(user):
+        raise HTTPException(status_code=403, detail="HQ only")
+    existing = await db.stores.find_one({"code": data.code}, {"_id": 0})
+    if existing:
+        raise HTTPException(status_code=400, detail="Store code already in use")
+    store_id = f"STORE-{uuid.uuid4().hex[:8].upper()}"
+    store = {
+        "store_id": store_id,
+        "name": data.name,
+        "code": data.code,
+        "address": data.address,
+        "geo": {"lat": data.lat, "lng": data.lng},
+        "lat": data.lat,
+        "lng": data.lng,
+        "phone": data.phone,
+        "gst_no": data.gst_no,
+        "fssai_license": data.fssai_license,
+        "open_hours": data.open_hours,
+        "tax_settings": data.tax_settings or {"gst_percent": 5},
+        "area_manager_id": data.area_manager_id,
+        "status": data.status if data.status in ("active", "inactive") else "active",
+        "created_by": user["id"],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.stores.insert_one(store)
+    return _clean_store(store)
+
+@api_router.get("/stores")
+async def list_stores(user=Depends(get_current_user)):
+    """List stores within the caller's scope (HQ: all, area_manager: cluster,
+    store-bound staff: own store)."""
+    if not role_in(user, *STAFF_ROLES):
+        raise HTTPException(status_code=403, detail="Staff only")
+    query = store_filter(user, field="store_id")
+    stores = await db.stores.find(query, {"_id": 0}).sort("name", 1).to_list(200)
+    return stores
+
+@api_router.get("/stores/{store_id}")
+async def get_store(store_id: str, user=Depends(get_current_user)):
+    if not role_in(user, *STAFF_ROLES):
+        raise HTTPException(status_code=403, detail="Staff only")
+    assert_store_allowed(user, store_id)
+    store = await db.stores.find_one({"store_id": store_id}, {"_id": 0})
+    if not store:
+        raise HTTPException(status_code=404, detail="Store not found")
+    return store
+
+@api_router.put("/stores/{store_id}")
+async def update_store(store_id: str, data: StoreUpdate, user=Depends(get_current_user)):
+    """HQ: update a store."""
+    if not is_hq(user):
+        raise HTTPException(status_code=403, detail="HQ only")
+    updates = {k: v for k, v in data.dict().items() if v is not None}
+    if "lat" in updates or "lng" in updates:
+        existing = await db.stores.find_one({"store_id": store_id}, {"_id": 0}) or {}
+        geo = existing.get("geo") or {}
+        updates["geo"] = {"lat": updates.get("lat", geo.get("lat")), "lng": updates.get("lng", geo.get("lng"))}
+    if not updates:
+        raise HTTPException(status_code=400, detail="No updates provided")
+    result = await db.stores.update_one({"store_id": store_id}, {"$set": updates})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Store not found")
+    store = await db.stores.find_one({"store_id": store_id}, {"_id": 0})
+    return store
+
+@api_router.delete("/stores/{store_id}")
+async def delete_store(store_id: str, user=Depends(get_current_user)):
+    """HQ: deactivate a store (soft delete to preserve historical data)."""
+    if not is_hq(user):
+        raise HTTPException(status_code=403, detail="HQ only")
+    if store_id == DEFAULT_STORE_ID:
+        raise HTTPException(status_code=400, detail="Cannot delete the default store")
+    result = await db.stores.update_one({"store_id": store_id}, {"$set": {"status": "inactive"}})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Store not found")
+    return {"message": "Store deactivated"}
+
 # ========== STAFF MANAGEMENT (PIN-based auth) ==========
+# Roles a staff member can be created with via this endpoint. super_admin is
+# bootstrapped by migration/seed; customers register via /auth/register.
+STAFF_CREATE_ROLES = {"area_manager", "store_manager", "cashier", "kitchen"}
+
 class StaffCreate(BaseModel):
     name: str
-    role: str  # "kitchen" or "cashier"
+    role: str  # area_manager | store_manager | cashier | kitchen
     pin: str  # 4-6 digit PIN
+    store_id: Optional[str] = None  # required for store_manager/cashier/kitchen
+    cluster_store_ids: Optional[List[str]] = None  # required for area_manager
 
 class StaffUpdate(BaseModel):
     name: Optional[str] = None
     pin: Optional[str] = None
     is_active: Optional[bool] = None
+    store_id: Optional[str] = None
+    cluster_store_ids: Optional[List[str]] = None
 
 class PinLogin(BaseModel):
     pin: str
 
 @api_router.post("/staff")
 async def create_staff(data: StaffCreate, user=Depends(get_current_user)):
-    """Admin creates kitchen/cashier staff with PIN"""
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
-    if data.role not in ("kitchen", "cashier"):
-        raise HTTPException(status_code=400, detail="Role must be 'kitchen' or 'cashier'")
+    """Create a staff member with a PIN and EXACTLY ONE role.
+
+    HQ can create any staff role; a store_manager may only create cashier/kitchen
+    for their own store. Store-bound roles require a store_id; area_manager
+    requires a cluster (list of store_ids)."""
+    creator_role = normalize_role(user)
+    if creator_role not in ("super_admin", "store_manager"):
+        raise HTTPException(status_code=403, detail="HQ/Store-Manager only")
+    if data.role not in STAFF_CREATE_ROLES:
+        raise HTTPException(status_code=400, detail=f"Role must be one of {sorted(STAFF_CREATE_ROLES)}")
+    if creator_role == "store_manager" and data.role not in ("cashier", "kitchen"):
+        raise HTTPException(status_code=403, detail="Store managers can only create cashier/kitchen staff")
     if not data.pin.isdigit() or len(data.pin) < 4 or len(data.pin) > 6:
         raise HTTPException(status_code=400, detail="PIN must be 4-6 digits")
-    # Check PIN uniqueness
-    existing = await db.users.find_one({"pin_hash": {"$exists": True}, "pin_plain": data.pin}, {"_id": 0})
-    if existing:
-        raise HTTPException(status_code=400, detail="This PIN is already in use")
-    staff_id = str(uuid.uuid4())
-    staff = {
-        "id": staff_id,
+
+    staff_doc = {
+        "id": str(uuid.uuid4()),
         "name": data.name,
         "role": data.role,
         "pin_hash": hash_password(data.pin),
         "pin_plain": data.pin,  # For admin display (in production, remove this)
         "is_active": True,
+        "store_id": None,
+        "cluster_store_ids": None,
         "created_by": user["id"],
-        "created_at": datetime.now(timezone.utc).isoformat()
+        "created_at": datetime.now(timezone.utc).isoformat(),
     }
-    await db.users.insert_one(staff)
-    return {"id": staff_id, "name": data.name, "role": data.role, "pin": data.pin, "is_active": True}
+
+    # Resolve & validate store assignment based on the (single) role.
+    if data.role == "area_manager":
+        cluster = data.cluster_store_ids or []
+        if not cluster:
+            raise HTTPException(status_code=400, detail="area_manager requires cluster_store_ids")
+        staff_doc["cluster_store_ids"] = cluster
+    else:  # store_manager / cashier / kitchen
+        store_id = data.store_id if creator_role == "super_admin" else (user.get("store_id") or DEFAULT_STORE_ID)
+        if not store_id:
+            raise HTTPException(status_code=400, detail=f"{data.role} requires a store_id")
+        assert_store_allowed(user, store_id)
+        store = await db.stores.find_one({"store_id": store_id}, {"_id": 0})
+        if not store:
+            raise HTTPException(status_code=400, detail="Invalid store_id")
+        staff_doc["store_id"] = store_id
+
+    # PIN uniqueness
+    existing = await db.users.find_one({"pin_plain": data.pin, "pin_hash": {"$exists": True}}, {"_id": 0})
+    if existing:
+        raise HTTPException(status_code=400, detail="This PIN is already in use")
+
+    await db.users.insert_one(staff_doc)
+    return {
+        "id": staff_doc["id"], "name": data.name, "role": data.role, "pin": data.pin,
+        "store_id": staff_doc["store_id"], "cluster_store_ids": staff_doc["cluster_store_ids"],
+        "is_active": True,
+    }
 
 @api_router.get("/staff")
 async def list_staff(user=Depends(get_current_user)):
-    """Admin lists all staff"""
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
-    staff = await db.users.find({"role": {"$in": ["kitchen", "cashier"]}}, {"_id": 0}).to_list(100)
-    return [{"id": s["id"], "name": s["name"], "role": s["role"], "pin": s.get("pin_plain", "****"), "is_active": s.get("is_active", True), "created_at": s.get("created_at")} for s in staff]
+    """List staff. HQ sees all; a store_manager/area_manager sees staff within
+    their store scope."""
+    role = normalize_role(user)
+    if role not in ("super_admin", "area_manager", "store_manager"):
+        raise HTTPException(status_code=403, detail="HQ/Manager only")
+    base = {"role": {"$in": ["store_manager", "cashier", "kitchen", "area_manager"]}}
+    scope = staff_store_scope(user)
+    if scope is not None:
+        base["$or"] = [
+            {"store_id": {"$in": scope}},
+            {"cluster_store_ids": {"$in": scope}},
+        ]
+    staff = await db.users.find(base, {"_id": 0}).to_list(200)
+    return [
+        {
+            "id": s["id"], "name": s["name"], "role": s["role"], "pin": s.get("pin_plain", "****"),
+            "store_id": s.get("store_id"), "cluster_store_ids": s.get("cluster_store_ids"),
+            "is_active": s.get("is_active", True), "created_at": s.get("created_at"),
+        }
+        for s in staff
+    ]
 
 @api_router.put("/staff/{staff_id}")
 async def update_staff(staff_id: str, data: StaffUpdate, user=Depends(get_current_user)):
-    """Admin updates staff"""
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
+    """Update staff. HQ for anyone; store_manager only within their store scope."""
+    role = normalize_role(user)
+    if role not in ("super_admin", "store_manager"):
+        raise HTTPException(status_code=403, detail="HQ/Store-Manager only")
+    target = await db.users.find_one(
+        {"id": staff_id, "role": {"$in": ["store_manager", "cashier", "kitchen", "area_manager"]}}, {"_id": 0}
+    )
+    if not target:
+        raise HTTPException(status_code=404, detail="Staff not found")
+    if target.get("store_id"):
+        assert_store_allowed(user, target.get("store_id"))
     update_data = {}
     if data.name is not None:
         update_data["name"] = data.name
@@ -4003,30 +4374,40 @@ async def update_staff(staff_id: str, data: StaffUpdate, user=Depends(get_curren
         update_data["pin_plain"] = data.pin
     if data.is_active is not None:
         update_data["is_active"] = data.is_active
+    if data.store_id is not None and role == "super_admin":
+        update_data["store_id"] = data.store_id
+    if data.cluster_store_ids is not None and role == "super_admin":
+        update_data["cluster_store_ids"] = data.cluster_store_ids
     if not update_data:
         raise HTTPException(status_code=400, detail="No updates provided")
-    result = await db.users.update_one({"id": staff_id, "role": {"$in": ["kitchen", "cashier"]}}, {"$set": update_data})
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Staff not found")
+    await db.users.update_one({"id": staff_id}, {"$set": update_data})
     return {"message": "Staff updated"}
 
 @api_router.delete("/staff/{staff_id}")
 async def delete_staff(staff_id: str, user=Depends(get_current_user)):
-    """Admin deletes staff"""
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
-    result = await db.users.delete_one({"id": staff_id, "role": {"$in": ["kitchen", "cashier"]}})
-    if result.deleted_count == 0:
+    """Delete staff. HQ for anyone; store_manager only within their store scope."""
+    role = normalize_role(user)
+    if role not in ("super_admin", "store_manager"):
+        raise HTTPException(status_code=403, detail="HQ/Store-Manager only")
+    target = await db.users.find_one(
+        {"id": staff_id, "role": {"$in": ["store_manager", "cashier", "kitchen", "area_manager"]}}, {"_id": 0}
+    )
+    if not target:
         raise HTTPException(status_code=404, detail="Staff not found")
+    if target.get("store_id"):
+        assert_store_allowed(user, target.get("store_id"))
+    await db.users.delete_one({"id": staff_id})
     return {"message": "Staff deleted"}
 
 @api_router.post("/auth/pin-login")
 async def pin_login(data: PinLogin):
-    """PIN-based login for kitchen/cashier staff"""
+    """PIN-based login for store staff (store_manager/cashier/kitchen/area_manager)."""
     if not data.pin.isdigit() or len(data.pin) < 4 or len(data.pin) > 6:
         raise HTTPException(status_code=400, detail="Invalid PIN format")
     # Find staff by PIN
-    staff_list = await db.users.find({"role": {"$in": ["kitchen", "cashier"]}, "is_active": True}, {"_id": 0}).to_list(100)
+    staff_list = await db.users.find(
+        {"role": {"$in": ["store_manager", "kitchen", "cashier", "area_manager"]}, "is_active": True}, {"_id": 0}
+    ).to_list(500)
     matched_staff = None
     for s in staff_list:
         if s.get("pin_hash") and verify_password(data.pin, s["pin_hash"]):
@@ -4040,21 +4421,25 @@ async def pin_login(data: PinLogin):
         "user": {
             "id": matched_staff["id"],
             "name": matched_staff["name"],
-            "role": matched_staff["role"]
+            "role": matched_staff["role"],
+            "store_id": matched_staff.get("store_id"),
+            "cluster_store_ids": matched_staff.get("cluster_store_ids"),
         }
     }
 
 # ========== ORDER PRIORITY ==========
 @api_router.put("/orders/{order_id}/priority")
 async def set_order_priority(order_id: str, priority: str = Body(..., embed=True), user=Depends(get_current_user)):
-    """Set priority flag on order (kitchen/admin)"""
-    if user["role"] not in ("admin", "kitchen"):
-        raise HTTPException(status_code=403, detail="Kitchen/Admin only")
+    """Set priority flag on order (kitchen/manager/HQ, within their store)."""
+    if not role_in(user, "super_admin", "store_manager", "kitchen"):
+        raise HTTPException(status_code=403, detail="Kitchen staff only")
     if priority not in ("normal", "high", "urgent"):
         raise HTTPException(status_code=400, detail="Priority must be: normal, high, urgent")
-    result = await db.orders.update_one({"id": order_id}, {"$set": {"priority": priority}})
-    if result.matched_count == 0:
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+    assert_store_allowed(user, order.get("store_id"))
+    await db.orders.update_one({"id": order_id}, {"$set": {"priority": priority}})
     return {"message": f"Priority set to {priority}"}
 
 # ========== HOLD BILLS (Cashier) ==========
@@ -4067,12 +4452,14 @@ class HoldBillCreate(BaseModel):
 
 @api_router.post("/held-bills")
 async def hold_bill(data: HoldBillCreate, user=Depends(get_current_user)):
-    """Cashier: Save cart as a held bill"""
-    if user["role"] not in ("cashier", "admin"):
-        raise HTTPException(status_code=403, detail="Cashier/Admin only")
+    """Cashier/Manager: Save cart as a held bill (tied to the staff member's store)."""
+    if not role_in(user, "super_admin", "store_manager", "cashier"):
+        raise HTTPException(status_code=403, detail="Cashier/Manager only")
+    store_id = user.get("store_id") or DEFAULT_STORE_ID
     bill_id = str(uuid.uuid4())
     bill = {
         "id": bill_id,
+        "store_id": store_id,
         "cashier_id": user["id"],
         "cashier_name": user["name"],
         "customer_name": data.customer_name or "Walk-in",
@@ -4088,28 +4475,31 @@ async def hold_bill(data: HoldBillCreate, user=Depends(get_current_user)):
 
 @api_router.get("/held-bills")
 async def list_held_bills(user=Depends(get_current_user)):
-    """Cashier: List all held bills"""
-    if user["role"] not in ("cashier", "admin"):
-        raise HTTPException(status_code=403, detail="Cashier/Admin only")
-    bills = await db.held_bills.find({"status": "held"}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    """Cashier/Manager: List held bills within the caller's store scope."""
+    if not role_in(user, "super_admin", "area_manager", "store_manager", "cashier"):
+        raise HTTPException(status_code=403, detail="Cashier/Manager only")
+    query = {**store_filter(user), "status": "held"}
+    bills = await db.held_bills.find(query, {"_id": 0}).sort("created_at", -1).to_list(50)
     return bills
 
 @api_router.delete("/held-bills/{bill_id}")
 async def delete_held_bill(bill_id: str, user=Depends(get_current_user)):
-    """Cashier: Remove a held bill (after resuming or discarding)"""
-    if user["role"] not in ("cashier", "admin"):
-        raise HTTPException(status_code=403, detail="Cashier/Admin only")
-    result = await db.held_bills.delete_one({"id": bill_id})
-    if result.deleted_count == 0:
+    """Cashier/Manager: Remove a held bill (only within the caller's store scope)."""
+    if not role_in(user, "super_admin", "store_manager", "cashier"):
+        raise HTTPException(status_code=403, detail="Cashier/Manager only")
+    bill = await db.held_bills.find_one({"id": bill_id}, {"_id": 0})
+    if not bill:
         raise HTTPException(status_code=404, detail="Held bill not found")
+    assert_store_allowed(user, bill.get("store_id"))
+    await db.held_bills.delete_one({"id": bill_id})
     return {"message": "Held bill removed"}
 
 # ========== INVENTORY FOR KITCHEN ==========
 @api_router.get("/inventory")
 async def get_inventory(user=Depends(get_current_user)):
-    """Kitchen/Admin: Get stock levels for all products"""
-    if user["role"] not in ("admin", "kitchen"):
-        raise HTTPException(status_code=403, detail="Kitchen/Admin only")
+    """Kitchen/Manager/HQ: Get stock levels for all products (catalog is global in Phase 0)."""
+    if not role_in(user, "super_admin", "area_manager", "store_manager", "kitchen"):
+        raise HTTPException(status_code=403, detail="Kitchen staff only")
     products = await db.products.find({}, {"_id": 0}).to_list(200)
     inventory = []
     for p in products:
@@ -4131,9 +4521,9 @@ class StockUpdateRequest(BaseModel):
 
 @api_router.post("/inventory/update-stock")
 async def update_stock(data: StockUpdateRequest, user=Depends(get_current_user)):
-    """Admin/Kitchen: Add or remove stock for a product"""
-    if user["role"] not in ("admin", "kitchen"):
-        raise HTTPException(status_code=403, detail="Kitchen/Admin only")
+    """Kitchen/Manager/HQ: Add or remove stock for a product (logged per store)."""
+    if not role_in(user, "super_admin", "store_manager", "kitchen"):
+        raise HTTPException(status_code=403, detail="Kitchen staff only")
     product = await db.products.find_one({"id": data.product_id}, {"_id": 0})
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
@@ -4146,9 +4536,10 @@ async def update_stock(data: StockUpdateRequest, user=Depends(get_current_user))
         await db.products.update_one({"id": data.product_id}, {"$set": {"is_active": True}})
     # C3: tell all surfaces the menu/stock changed (auto-hide / re-show in customer app + POS)
     await broadcast_event("menu_update", {"action": "stock_changed", "product_id": data.product_id})
-    # Log stock change
+    # Log stock change (scoped to the staff member's store)
     await db.stock_logs.insert_one({
         "id": str(uuid.uuid4()),
+        "store_id": user.get("store_id") or DEFAULT_STORE_ID,
         "product_id": data.product_id,
         "product_name": product["name"],
         "change_grams": data.quantity_grams,
@@ -4162,33 +4553,44 @@ async def update_stock(data: StockUpdateRequest, user=Depends(get_current_user))
 
 @api_router.get("/inventory/stock-logs")
 async def get_stock_logs(user=Depends(get_current_user)):
-    """Admin: Get stock change history"""
-    if user["role"] not in ("admin", "kitchen"):
-        raise HTTPException(status_code=403, detail="Kitchen/Admin only")
-    logs = await db.stock_logs.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    """Kitchen/Manager/HQ: Get stock change history within the caller's store scope."""
+    if not role_in(user, "super_admin", "area_manager", "store_manager", "kitchen"):
+        raise HTTPException(status_code=403, detail="Kitchen staff only")
+    logs = await db.stock_logs.find(store_filter(user), {"_id": 0}).sort("created_at", -1).to_list(100)
     return logs
 
 # ========== P1: NOTIFICATIONS ==========
 @api_router.get("/notifications")
 async def get_notifications(user=Depends(get_current_user)):
-    """Get user notifications"""
-    query = {}
-    if user["role"] == "customer":
-        query["user_id"] = user["id"]
-    # Admin/kitchen/cashier see all notifications
+    """Get notifications. Customers see their own; staff see their store's staff
+    notifications (scoped by role)."""
+    if normalize_role(user) == "customer":
+        query = {"user_id": user["id"]}
+    else:
+        # Staff-facing notifications carry a store_id; scope to the caller's store(s).
+        query = store_filter(user)
     notifications = await db.notifications.find(query, {"_id": 0}).sort("created_at", -1).to_list(50)
     return notifications
 
 @api_router.put("/notifications/{notif_id}/read")
 async def mark_notification_read(notif_id: str, user=Depends(get_current_user)):
+    notif = await db.notifications.find_one({"id": notif_id}, {"_id": 0})
+    if not notif:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    if normalize_role(user) == "customer":
+        if notif.get("user_id") != user["id"]:
+            raise HTTPException(status_code=403, detail="Access denied")
+    elif notif.get("store_id"):
+        assert_store_allowed(user, notif.get("store_id"))
     await db.notifications.update_one({"id": notif_id}, {"$set": {"read": True}})
     return {"message": "Marked as read"}
 
 @api_router.put("/notifications/read-all")
 async def mark_all_notifications_read(user=Depends(get_current_user)):
-    query = {"read": False}
-    if user["role"] == "customer":
-        query["user_id"] = user["id"]
+    if normalize_role(user) == "customer":
+        query = {"read": False, "user_id": user["id"]}
+    else:
+        query = {"read": False, **store_filter(user)}
     await db.notifications.update_many(query, {"$set": {"read": True}})
     return {"message": "All marked as read"}
 
@@ -4199,9 +4601,12 @@ async def get_order_receipt(order_id: str, user=Depends(get_current_user)):
     order = await db.orders.find_one({"id": order_id}, {"_id": 0})
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
-    # Only allow owner or admin/cashier to view receipt
-    if user["role"] == "customer" and order.get("user_id") != user["id"]:
-        raise HTTPException(status_code=403, detail="Access denied")
+    # Owner customer, or staff with access to the order's store, may view the receipt.
+    if normalize_role(user) == "customer":
+        if order.get("user_id") != user["id"]:
+            raise HTTPException(status_code=403, detail="Access denied")
+    else:
+        assert_store_allowed(user, order.get("store_id"))
     payment = await db.payments.find_one({"order_id": order_id}, {"_id": 0})
     total = order.get("total_price", 0)
     gst_amount = order.get("gst_amount", round(total * 5 / 105, 2))
@@ -4249,13 +4654,11 @@ async def get_order_receipt(order_id: str, user=Depends(get_current_user)):
 # ========== P1: KITCHEN ORDERS FOR KITCHEN/CASHIER ROLES ==========
 @api_router.get("/orders/active")
 async def active_orders(user=Depends(get_current_user)):
-    """Kitchen/Cashier/Admin: Get all active orders"""
-    if user["role"] not in ("admin", "kitchen", "cashier"):
+    """Staff: Get active orders within the caller's store scope."""
+    if not role_in(user, *STAFF_ROLES):
         raise HTTPException(status_code=403, detail="Staff only")
-    orders = await db.orders.find(
-        {"status": {"$in": ["pending", "accepted", "preparing", "ready"]}},
-        {"_id": 0}
-    ).sort("created_at", 1).to_list(100)
+    query = {**store_filter(user), "status": {"$in": ["pending", "accepted", "preparing", "ready"]}}
+    orders = await db.orders.find(query, {"_id": 0}).sort("created_at", 1).to_list(100)
     return orders
 
 # ========== P2: SHIFT MANAGEMENT ==========
@@ -4274,15 +4677,20 @@ class ShiftUpdate(BaseModel):
 
 @api_router.post("/shifts")
 async def create_shift(data: ShiftCreate, user=Depends(get_current_user)):
-    """Admin: Create a shift for staff"""
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
-    staff = await db.users.find_one({"id": data.staff_id, "role": {"$in": ["kitchen", "cashier"]}}, {"_id": 0})
+    """HQ/Store-Manager: Create a shift for store-bound staff (scoped to their store)."""
+    if not role_in(user, "super_admin", "store_manager"):
+        raise HTTPException(status_code=403, detail="HQ/Store-Manager only")
+    staff = await db.users.find_one(
+        {"id": data.staff_id, "role": {"$in": ["store_manager", "kitchen", "cashier"]}}, {"_id": 0}
+    )
     if not staff:
         raise HTTPException(status_code=404, detail="Staff not found")
+    store_id = staff.get("store_id") or DEFAULT_STORE_ID
+    assert_store_allowed(user, store_id)
     shift_id = str(uuid.uuid4())
     shift = {
         "id": shift_id,
+        "store_id": store_id,
         "staff_id": data.staff_id,
         "staff_name": staff["name"],
         "staff_role": staff["role"],
@@ -4299,40 +4707,44 @@ async def create_shift(data: ShiftCreate, user=Depends(get_current_user)):
 
 @api_router.get("/shifts")
 async def list_shifts(date: Optional[str] = None, user=Depends(get_current_user)):
-    """Admin/Staff: List shifts"""
-    if user["role"] not in ("admin", "kitchen", "cashier"):
+    """Staff: List shifts. Managers/HQ see their store(s); line staff see their own."""
+    if not role_in(user, *STAFF_ROLES):
         raise HTTPException(status_code=403, detail="Staff only")
-    query: Dict[str, Any] = {}
+    query: Dict[str, Any] = dict(store_filter(user))
     if date:
         query["date"] = date
-    if user["role"] != "admin":
+    if normalize_role(user) in ("kitchen", "cashier"):
         query["staff_id"] = user["id"]
     shifts = await db.shifts.find(query, {"_id": 0}).sort("date", -1).to_list(100)
     return shifts
 
 @api_router.put("/shifts/{shift_id}")
 async def update_shift(shift_id: str, data: ShiftUpdate, user=Depends(get_current_user)):
-    """Admin: Update shift"""
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
+    """HQ/Store-Manager: Update shift (within their store scope)."""
+    if not role_in(user, "super_admin", "store_manager"):
+        raise HTTPException(status_code=403, detail="HQ/Store-Manager only")
+    shift = await db.shifts.find_one({"id": shift_id}, {"_id": 0})
+    if not shift:
+        raise HTTPException(status_code=404, detail="Shift not found")
+    assert_store_allowed(user, shift.get("store_id"))
     update_data = {k: v for k, v in data.dict().items() if v is not None}
     if not update_data:
         raise HTTPException(status_code=400, detail="No updates")
     update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
-    result = await db.shifts.update_one({"id": shift_id}, {"$set": update_data})
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Shift not found")
+    await db.shifts.update_one({"id": shift_id}, {"$set": update_data})
     shift = await db.shifts.find_one({"id": shift_id}, {"_id": 0})
     return shift
 
 @api_router.delete("/shifts/{shift_id}")
 async def delete_shift(shift_id: str, user=Depends(get_current_user)):
-    """Admin: Delete shift"""
-    if user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
-    result = await db.shifts.delete_one({"id": shift_id})
-    if result.deleted_count == 0:
+    """HQ/Store-Manager: Delete shift (within their store scope)."""
+    if not role_in(user, "super_admin", "store_manager"):
+        raise HTTPException(status_code=403, detail="HQ/Store-Manager only")
+    shift = await db.shifts.find_one({"id": shift_id}, {"_id": 0})
+    if not shift:
         raise HTTPException(status_code=404, detail="Shift not found")
+    assert_store_allowed(user, shift.get("store_id"))
+    await db.shifts.delete_one({"id": shift_id})
     return {"message": "Shift deleted"}
 
 # ========== P2: LOYALTY / REWARDS ==========
@@ -4531,12 +4943,13 @@ async def update_streak(user=Depends(get_current_user)):
 # ========== P2: KITCHEN TICKET (Print-friendly data) ==========
 @api_router.get("/orders/{order_id}/kitchen-ticket")
 async def get_kitchen_ticket(order_id: str, user=Depends(get_current_user)):
-    """Get print-friendly kitchen ticket data"""
-    if user["role"] not in ("admin", "kitchen", "cashier"):
+    """Get print-friendly kitchen ticket data (staff, within their store scope)."""
+    if not role_in(user, *STAFF_ROLES):
         raise HTTPException(status_code=403, detail="Staff only")
     order = await db.orders.find_one({"id": order_id}, {"_id": 0})
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+    assert_store_allowed(user, order.get("store_id"))
     ticket = {
         "order_id": order["id"],
         "order_type": order.get("order_type", "dine-in"),
@@ -4583,6 +4996,93 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ========== MULTI-STORE MIGRATION (idempotent, backward-compatible) ==========
+STORE_SCOPED_COLLECTIONS = [
+    "orders", "payments", "held_bills", "tables", "shifts", "stock_logs", "delivery_tracking",
+]
+
+async def ensure_default_store():
+    existing = await db.stores.find_one({"store_id": DEFAULT_STORE_ID}, {"_id": 0})
+    if existing:
+        return existing
+    store = {
+        "store_id": DEFAULT_STORE_ID,
+        "name": "FUEL Main Store",
+        "code": "MAIN",
+        "address": None,
+        "geo": {"lat": 28.6139, "lng": 77.2090},
+        "lat": 28.6139, "lng": 77.2090,
+        "phone": None, "gst_no": None, "fssai_license": None,
+        "open_hours": None,
+        "tax_settings": {"gst_percent": 5},
+        "area_manager_id": None,
+        "status": "active",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.stores.insert_one(store)
+    return store
+
+async def run_store_migration():
+    """Create the default store and assign all existing single-store data to it.
+    Maps the legacy 'admin' role to 'super_admin' and ensures a default
+    store_manager exists. Safe to run repeatedly."""
+    await ensure_default_store()
+
+    # Legacy HQ admin -> super_admin
+    await db.users.update_many({"role": "admin"}, {"$set": {"role": "super_admin"}})
+
+    # Store-bound staff missing a store_id -> default store
+    await db.users.update_many(
+        {"role": {"$in": ["store_manager", "cashier", "kitchen"]}, "store_id": {"$exists": False}},
+        {"$set": {"store_id": DEFAULT_STORE_ID}},
+    )
+    await db.users.update_many(
+        {"role": {"$in": ["store_manager", "cashier", "kitchen"]}, "store_id": None},
+        {"$set": {"store_id": DEFAULT_STORE_ID}},
+    )
+
+    # Backfill store_id on store-scoped operational collections
+    for coll in STORE_SCOPED_COLLECTIONS:
+        await db[coll].update_many(
+            {"store_id": {"$exists": False}}, {"$set": {"store_id": DEFAULT_STORE_ID}}
+        )
+
+    # Staff-facing notifications (the 'kitchen' sentinel) -> default store
+    await db.notifications.update_many(
+        {"store_id": {"$exists": False}, "user_id": "kitchen"},
+        {"$set": {"store_id": DEFAULT_STORE_ID}},
+    )
+
+    # Ensure a store_manager exists for the default store
+    sm = await db.users.find_one({"role": "store_manager", "store_id": DEFAULT_STORE_ID}, {"_id": 0})
+    if not sm:
+        pin = None
+        for candidate in ["550001", "550002", "550003", "550004", "550005"]:
+            if not await db.users.find_one({"pin_plain": candidate}, {"_id": 0}):
+                pin = candidate
+                break
+        if pin:
+            await db.users.insert_one({
+                "id": str(uuid.uuid4()),
+                "name": "Default Store Manager",
+                "role": "store_manager",
+                "store_id": DEFAULT_STORE_ID,
+                "pin_hash": hash_password(pin),
+                "pin_plain": pin,
+                "is_active": True,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            })
+            logger.info(f"[migration] created default store_manager (PIN {pin})")
+    logger.info("[migration] multi-store migration complete")
+
+@api_router.post("/admin/migrate-multistore")
+async def admin_migrate_multistore(user=Depends(get_current_user)):
+    """HQ: (re-)run the multi-store migration."""
+    if not is_hq(user):
+        raise HTTPException(status_code=403, detail="HQ only")
+    await run_store_migration()
+    return {"message": "Migration complete", "default_store_id": DEFAULT_STORE_ID}
+
 @app.on_event("startup")
 async def on_startup():
     # A5: TTL index so OTP documents auto-expire and survive restarts
@@ -4591,6 +5091,11 @@ async def on_startup():
         logger.info("[startup] otp_codes TTL index ensured")
     except Exception as e:
         logger.error(f"[startup] index error: {e}")
+    # Multi-store foundation: ensure default store + migrate legacy data
+    try:
+        await run_store_migration()
+    except Exception as e:
+        logger.error(f"[startup] store migration error: {e}")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

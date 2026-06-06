@@ -12,6 +12,7 @@ import {
 } from '@expo-google-fonts/hanken-grotesk';
 import { FUEL } from '../utils/theme';
 import { CartProvider } from '../utils/CartContext';
+import { StoreProvider } from '../utils/StoreContext';
 
 export default function RootLayout() {
   // FUEL typography: Anton (display) + Hanken Grotesk (body).
@@ -29,20 +30,22 @@ export default function RootLayout() {
   return (
     <View style={styles.container}>
       <StatusBar style="dark" />
-      <CartProvider>
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            animation: 'slide_from_right',
-            contentStyle: { backgroundColor: FUEL.sand },
-          }}
-        >
-          <Stack.Screen name="index" />
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="cart" />
-          <Stack.Screen name="customize" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
-        </Stack>
-      </CartProvider>
+      <StoreProvider>
+        <CartProvider>
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              animation: 'slide_from_right',
+              contentStyle: { backgroundColor: FUEL.sand },
+            }}
+          >
+            <Stack.Screen name="index" />
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="cart" />
+            <Stack.Screen name="customize" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+          </Stack>
+        </CartProvider>
+      </StoreProvider>
     </View>
   );
 }

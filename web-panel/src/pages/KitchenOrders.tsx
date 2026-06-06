@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../utils/api';
 import { useRealtime } from '../utils/realtime';
+import { useAuth } from '../context/AuthContext';
+import { roomsForUser } from '../utils/rooms';
 
 const KITCHEN_DIET_LABEL: Record<string, string> = { 'veg': 'Veg', 'non-veg': 'Non-Veg', 'vegan': 'Vegan', 'eggetarian': 'Egg', 'jain': 'Jain', 'keto': 'Keto', 'high-protein': 'High-Pro' };
 const itemDietTags = (item: any, map: Record<string, string[]>): string[] => {
@@ -21,6 +23,7 @@ const DietTagRow = ({ item, map }: { item: any; map: Record<string, string[]> })
 };
 
 export default function KitchenOrders() {
+  const { user } = useAuth();
   const [orders, setOrders] = useState<any[]>([]);
   const [scheduledOrders, setScheduledOrders] = useState<any[]>([]);
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -139,8 +142,9 @@ export default function KitchenOrders() {
     return () => clearInterval(iv);
   }, []);
 
-  // Real-time: refresh instantly when orders arrive or change (C1/C5)
-  const { connected } = useRealtime(['kitchen'], (msg) => {
+  // Real-time: refresh instantly when orders arrive or change (C1/C5),
+  // scoped to this staff member's store rooms only.
+  const { connected } = useRealtime(roomsForUser(user, 'kitchen'), (msg) => {
     if (['new_order', 'order_status', 'menu_update', 'scheduled_order'].includes(msg.type)) {
       load();
     }

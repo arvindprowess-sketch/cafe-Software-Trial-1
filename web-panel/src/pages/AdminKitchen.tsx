@@ -7,7 +7,8 @@ export default function AdminKitchen() {
   const load = async () => { try { setOrders(await api('/orders/kitchen')); } catch {} };
   useEffect(() => { load(); const iv = setInterval(load, 30000); return () => clearInterval(iv); }, []);
 
-  const { connected } = useRealtime(['admin'], (msg) => {
+  // HQ admin joins the global 'hq' room and receives every store's events.
+  const { connected } = useRealtime(['hq'], (msg) => {
     if (['new_order', 'order_status', 'menu_update', 'scheduled_order'].includes(msg.type)) load();
   });
 

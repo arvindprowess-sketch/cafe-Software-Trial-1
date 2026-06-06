@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../utils/api';
 import { useRealtime } from '../utils/realtime';
+import { useAuth } from '../context/AuthContext';
+import { roomsForUser } from '../utils/rooms';
 
 const STATUS_COLORS: Record<string, string> = { pending: 'badge-orange', accepted: 'badge-blue', preparing: 'badge-purple', ready: 'badge-green', completed: 'badge-gray', cancelled: 'badge-red' };
 const PAYMENT_COLORS: Record<string, string> = { paid: '#3FA34D', unpaid: '#15140F', pending: '#D69A35' };
 
 export default function CashierOrders() {
+  const { user } = useAuth();
   const [orders, setOrders] = useState<any[]>([]);
   const [heldBills, setHeldBills] = useState<any[]>([]);
   const [showReceipt, setShowReceipt] = useState<any>(null);
@@ -21,8 +24,8 @@ export default function CashierOrders() {
   };
   useEffect(() => { load(); const iv = setInterval(load, 30000); return () => clearInterval(iv); }, []);
 
-  // Real-time updates from kitchen/customer orders (C1/C2)
-  useRealtime(['cashier'], (msg) => {
+  // Real-time updates from kitchen/customer orders (C1/C2), store-scoped.
+  useRealtime(roomsForUser(user, 'cashier'), (msg) => {
     if (['new_order', 'order_status', 'menu_update'].includes(msg.type)) load();
   });
 
