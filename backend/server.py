@@ -6034,6 +6034,344 @@ async def inventory_reorder(store_id: str, user=Depends(get_current_user)):
             })
     return {"store_id": store_id, "items": rows}
 
+# ==========================================================================
+# PHASE 4A — Costing + P&L + report endpoints (READ-ONLY analytics)
+# COGS comes from movement_log 'sale' (unit_cost_at_time), falling back to a
+# live explode_to_raw at current avg_cost. Cost is HQ/area/store-manager only;
+# never cashier/kitchen, never cross-scope. Consolidated is super_admin only.
+# ==========================================================================
+def _created_range(date_from: Optional[str], date_to: Optional[str]) -> dict:
+    rng = {}
+    if date_from:
+        rng["$gte"] = date_from
+    if date_to:
+        rng["$lte"] = date_to + "T23:59:59.999999+00:00"
+    return rng
+
+async def _report_targets(user, store_ids_param: Optional[str]):
+    """Resolve + authorize the store set for a report. cashier/kitchen -> 403."""
+    if not role_in(user, "super_admin", "area_manager", "store_manager"):
+        raise HTTPException(status_code=403, detail="Reports access denied")
+    requested, scope = _resolve_report_store_ids(user, store_ids_param)
+    if requested is not None:
+        return requested
+    if scope is None:
+        rows = await db.stores.find({}, {"_id": 0, "store_id": 1}).to_list(1000)
+        return [s["store_id"] for s in rows]
+    return list(scope)
+
+def order_revenue(o: dict) -> float:
+    return float(o.get("item_subtotal") if o.get("item_subtotal") is not None else o.get("total_price", 0) or 0)
+
+def order_discount(o: dict) -> float:
+    return float(o.get("discount", 0) or 0)
+
+async def order_cogs(order: dict) -> float:
+    """COGS for an order. Authoritative = sum of movement_log 'sale' (abs
+    qty_delta * unit_cost_at_time) for ref_id == order id. Fallback (untracked)
+    = explode each line at current avg_cost."""
+    oid = order["id"]
+    rows = await db.movement_log.find({"ref_id": oid, "type": "sale"}, {"_id": 0}).to_list(5000)
+    if rows:
+        return round(sum(abs(r.get("qty_delta", 0) or 0) * float(r.get("unit_cost_at_time", 0) or 0) for r in rows), 2)
+    sid = order.get("store_id") or DEFAULT_STORE_ID
+    total = 0.0
+    for it in order.get("items", []):
+        pid = it.get("product_id")
+        if not pid:
+            continue
+        if it.get("product_type") == "ready_made":
+            exploded = await explode_to_raw("meal", pid, int(it.get("quantity", 1) or 1), sid)
+        else:
+            exploded = await explode_to_raw("raw", pid, float(it.get("grams", 0) or 0), sid)
+        total += sum(e["grams"] * e["unit_cost"] for e in exploded)
+    return round(total, 2)
+
+def order_profit(order: dict, cogs: float) -> float:
+    return round(order_revenue(order) - order_discount(order) - cogs, 2)
+
+def _blank_bucket():
+    return {"revenue": 0.0, "discounts": 0.0, "cogs": 0.0, "order_count": 0, "wastage": 0.0}
+
+def _finalize_bucket(b: dict) -> dict:
+    revenue = round(b["revenue"], 2)
+    discounts = round(b["discounts"], 2)
+    cogs = round(b["cogs"], 2)
+    gross_profit = round(revenue - discounts - cogs, 2)
+    wastage = round(b.get("wastage", 0.0), 2)
+    return {
+        "revenue": revenue, "discounts": discounts, "cogs": cogs,
+        "gross_profit": gross_profit,
+        "margin_pct": round(gross_profit / revenue * 100, 2) if revenue else 0,
+        "order_count": b["order_count"],
+        "avg_order_value": round(revenue / b["order_count"], 2) if b["order_count"] else 0,
+        "wastage": wastage,
+        "net_contribution": round(gross_profit - wastage, 2),
+    }
+
+async def _compute_pnl(target_ids, date_from, date_to, granularity="total"):
+    """Per-store P&L (optionally monthly). Returns {store_id: {...store totals,
+    'store_name', optional 'months': [...]}}."""
+    name_rows = await db.stores.find({"store_id": {"$in": target_ids}}, {"_id": 0, "store_id": 1, "name": 1}).to_list(1000)
+    name_by_id = {s["store_id"]: s.get("name") for s in name_rows}
+
+    omatch = {"store_id": {"$in": target_ids}, "status": {"$ne": "cancelled"}}
+    rng = _created_range(date_from, date_to)
+    if rng:
+        omatch["created_at"] = rng
+    orders = await db.orders.find(omatch, {"_id": 0}).to_list(100000)
+
+    # Authoritative COGS from movement_log 'sale'
+    oids = [o["id"] for o in orders]
+    cogs_by_oid = {}
+    if oids:
+        sale_rows = await db.movement_log.find({"type": "sale", "ref_id": {"$in": oids}}, {"_id": 0}).to_list(200000)
+        for r in sale_rows:
+            cogs_by_oid[r["ref_id"]] = cogs_by_oid.get(r["ref_id"], 0.0) + abs(r.get("qty_delta", 0) or 0) * float(r.get("unit_cost_at_time", 0) or 0)
+
+    # Approved-discard wastage in range (by decided_at)
+    dmatch = {"store_id": {"$in": target_ids}, "status": "approved"}
+    drng = _created_range(date_from, date_to)
+    if drng:
+        dmatch["decided_at"] = drng
+    discards = await db.discards.find(dmatch, {"_id": 0}).to_list(100000)
+
+    per_store = {sid: {"total": _blank_bucket(), "months": {}} for sid in target_ids}
+    for o in orders:
+        sid = o.get("store_id")
+        if sid not in per_store:
+            continue
+        cogs = cogs_by_oid.get(o["id"])
+        if cogs is None:
+            cogs = await order_cogs(o)  # fallback
+        rev = order_revenue(o)
+        disc = order_discount(o)
+        for tgt in (per_store[sid]["total"], per_store[sid]["months"].setdefault((o.get("created_at") or "")[:7], _blank_bucket())):
+            tgt["revenue"] += rev
+            tgt["discounts"] += disc
+            tgt["cogs"] += cogs
+            tgt["order_count"] += 1
+    for d in discards:
+        sid = d.get("store_id")
+        if sid not in per_store:
+            continue
+        per_store[sid]["total"]["wastage"] += float(d.get("value", 0) or 0)
+        per_store[sid]["months"].setdefault((d.get("decided_at") or "")[:7], _blank_bucket())["wastage"] += float(d.get("value", 0) or 0)
+
+    out = {}
+    for sid in target_ids:
+        store_obj = {"store_id": sid, "store_name": name_by_id.get(sid, sid), **_finalize_bucket(per_store[sid]["total"])}
+        if granularity == "monthly":
+            store_obj["months"] = [
+                {"month": m, **_finalize_bucket(b)} for m, b in sorted(per_store[sid]["months"].items())
+            ]
+        out[sid] = store_obj
+    return out
+
+@api_router.get("/reports/pnl")
+async def reports_pnl(
+    user=Depends(get_current_user),
+    date_from: Optional[str] = Query(None, alias="from"),
+    date_to: Optional[str] = Query(None, alias="to"),
+    store_ids: Optional[str] = None,
+    granularity: str = "total",
+):
+    """Per-store P&L: revenue, discounts, COGS, gross_profit, margin%, wastage,
+    net_contribution (= gross_profit - wastage). granularity 'monthly' buckets by
+    calendar month. Scope-guarded; cashier/kitchen 403."""
+    target_ids = await _report_targets(user, store_ids)
+    pnl = await _compute_pnl(target_ids, date_from, date_to, "monthly" if granularity == "monthly" else "total")
+    return [pnl[sid] for sid in target_ids]
+
+@api_router.get("/reports/pnl/consolidated")
+async def reports_pnl_consolidated(
+    user=Depends(get_current_user),
+    date_from: Optional[str] = Query(None, alias="from"),
+    date_to: Optional[str] = Query(None, alias="to"),
+):
+    """Company-wide P&L + per-store rollup. super_admin ONLY."""
+    if not is_hq(user):
+        raise HTTPException(status_code=403, detail="Consolidated P&L is HQ only")
+    rows = await db.stores.find({}, {"_id": 0, "store_id": 1}).to_list(1000)
+    target_ids = [s["store_id"] for s in rows]
+    pnl = await _compute_pnl(target_ids, date_from, date_to, "total")
+    stores = [pnl[sid] for sid in target_ids]
+    company = {"revenue": 0.0, "discounts": 0.0, "cogs": 0.0, "wastage": 0.0, "order_count": 0}
+    for s in stores:
+        company["revenue"] += s["revenue"]; company["discounts"] += s["discounts"]
+        company["cogs"] += s["cogs"]; company["wastage"] += s["wastage"]; company["order_count"] += s["order_count"]
+    gp = company["revenue"] - company["discounts"] - company["cogs"]
+    company["gross_profit"] = round(gp, 2)
+    company["margin_pct"] = round(gp / company["revenue"] * 100, 2) if company["revenue"] else 0
+    company["net_contribution"] = round(gp - company["wastage"], 2)
+    for k in ("revenue", "discounts", "cogs", "wastage"):
+        company[k] = round(company[k], 2)
+    return {"company": company, "stores": stores}
+
+@api_router.get("/reports/ranking")
+async def reports_ranking(
+    user=Depends(get_current_user),
+    date_from: Optional[str] = Query(None, alias="from"),
+    date_to: Optional[str] = Query(None, alias="to"),
+    store_ids: Optional[str] = None,
+):
+    """Store-vs-store ranking by gross_profit and by revenue. super_admin/area
+    only (store_manager has a single store -> 403)."""
+    if normalize_role(user) == "store_manager":
+        raise HTTPException(status_code=403, detail="Ranking needs multiple stores")
+    target_ids = await _report_targets(user, store_ids)
+    pnl = await _compute_pnl(target_ids, date_from, date_to, "total")
+    stores = [pnl[sid] for sid in target_ids]
+    by_profit = sorted(stores, key=lambda s: s["gross_profit"], reverse=True)
+    by_revenue = sorted(stores, key=lambda s: s["revenue"], reverse=True)
+    return {
+        "by_gross_profit": by_profit,
+        "by_revenue": by_revenue,
+        "top_by_profit": by_profit[0] if by_profit else None,
+        "bottom_by_profit": by_profit[-1] if by_profit else None,
+    }
+
+@api_router.get("/reports/items")
+async def reports_items(
+    user=Depends(get_current_user),
+    date_from: Optional[str] = Query(None, alias="from"),
+    date_to: Optional[str] = Query(None, alias="to"),
+    store_ids: Optional[str] = None,
+):
+    """Item-wise qty + revenue + COGS + profit, plus top sellers per category.
+    COGS per sold product via explode_to_raw at current avg_cost. Scope-guarded."""
+    target_ids = await _report_targets(user, store_ids)
+    omatch = {"store_id": {"$in": target_ids}, "status": {"$ne": "cancelled"}}
+    rng = _created_range(date_from, date_to)
+    if rng:
+        omatch["created_at"] = rng
+    orders = await db.orders.find(omatch, {"_id": 0}).to_list(100000)
+
+    prods = await db.products.find({}, {"_id": 0, "id": 1, "category": 1}).to_list(5000)
+    cat_by_id = {p["id"]: p.get("category") for p in prods}
+
+    agg = {}  # product_id -> {name, qty, revenue, cogs}
+    cogs_cache = {}  # (store_id, product_id, type, unit) per-unit cost cache
+    for o in orders:
+        sid = o.get("store_id")
+        for it in o.get("items", []):
+            pid = it.get("product_id")
+            if not pid:
+                continue
+            row = agg.setdefault(pid, {"product_id": pid, "name": it.get("product_name"), "qty": 0.0, "revenue": 0.0, "cogs": 0.0, "category": cat_by_id.get(pid)})
+            is_meal = it.get("product_type") == "ready_made"
+            units = int(it.get("quantity", 1) or 1) if is_meal else 1
+            qty = units if is_meal else float(it.get("grams", 0) or 0)
+            row["qty"] += qty
+            row["revenue"] += float(it.get("price", 0) or 0)
+            # per-unit COGS for this product at this store (cache to avoid repeat explode)
+            key = (sid, pid, is_meal)
+            if key not in cogs_cache:
+                exploded = await explode_to_raw("meal" if is_meal else "raw", pid, 1 if is_meal else 1, sid)
+                cogs_cache[key] = sum(e["grams"] * e["unit_cost"] for e in exploded)  # cost per unit (meal) or per gram (raw)
+            row["cogs"] += cogs_cache[key] * (units if is_meal else float(it.get("grams", 0) or 0))
+
+    items = []
+    for r in agg.values():
+        r["qty"] = round(r["qty"], 2); r["revenue"] = round(r["revenue"], 2)
+        r["cogs"] = round(r["cogs"], 2); r["profit"] = round(r["revenue"] - r["cogs"], 2)
+        items.append(r)
+    items.sort(key=lambda x: x["revenue"], reverse=True)
+    top_by_category = {}
+    for r in items:
+        cat = r.get("category") or "Uncategorized"
+        top_by_category.setdefault(cat, [])
+        if len(top_by_category[cat]) < 5:
+            top_by_category[cat].append({"product_id": r["product_id"], "name": r["name"], "qty": r["qty"], "revenue": r["revenue"]})
+    return {"items": items, "top_by_category": top_by_category}
+
+@api_router.get("/reports/inventory")
+async def reports_inventory(
+    store_id: str,
+    user=Depends(get_current_user),
+    date_from: Optional[str] = Query(None, alias="from"),
+    date_to: Optional[str] = Query(None, alias="to"),
+):
+    """Per-store inventory report: valuation, wastage, consumption, purchases.
+    Cost-restricted (cashier/kitchen 403)."""
+    require_inventory_manager(user)
+    assert_store_allowed(user, store_id)
+    items = await db.inventory_items.find({"store_id": store_id}, {"_id": 0}).to_list(5000)
+    valuation = round(sum(float(i.get("qty_on_hand", 0) or 0) * float(i.get("avg_cost", 0) or 0) for i in items), 2)
+
+    drng = _created_range(date_from, date_to)
+    dmatch = {"store_id": store_id, "status": "approved"}
+    if drng:
+        dmatch["decided_at"] = drng
+    discards = await db.discards.find(dmatch, {"_id": 0}).to_list(100000)
+    wastage = round(sum(float(d.get("value", 0) or 0) for d in discards), 2)
+
+    mrng = _created_range(date_from, date_to)
+    base = {"store_id": store_id}
+    if mrng:
+        base["created_at"] = mrng
+    sale_moves = await db.movement_log.find({**base, "type": "sale"}, {"_id": 0}).to_list(200000)
+    consumption = round(sum(abs(m.get("qty_delta", 0) or 0) * float(m.get("unit_cost_at_time", 0) or 0) for m in sale_moves), 2)
+
+    inward_moves = await db.movement_log.find({**base, "type": "inward"}, {"_id": 0}).to_list(200000)
+    purchases_by_item = {}
+    purchase_total = 0.0
+    for m in inward_moves:
+        v = (m.get("qty_delta", 0) or 0) * float(m.get("unit_cost_at_time", 0) or 0)
+        purchase_total += v
+        b = purchases_by_item.setdefault(m.get("item_id"), {"item_id": m.get("item_id"), "product_id": m.get("product_id"), "qty": 0.0, "value": 0.0})
+        b["qty"] += (m.get("qty_delta", 0) or 0); b["value"] += v
+    for b in purchases_by_item.values():
+        b["qty"] = round(b["qty"], 2); b["value"] = round(b["value"], 2)
+    return {
+        "store_id": store_id,
+        "valuation": valuation,
+        "wastage": wastage,
+        "consumption": consumption,
+        "purchases": {"total": round(purchase_total, 2), "by_item": list(purchases_by_item.values())},
+    }
+
+@api_router.get("/reports/audit-log")
+async def reports_audit_log(
+    store_id: str,
+    user=Depends(get_current_user),
+    date_from: Optional[str] = Query(None, alias="from"),
+    date_to: Optional[str] = Query(None, alias="to"),
+    types: Optional[str] = None,
+):
+    """Read-only merged audit trail (movement_log + discards + transfers) for a
+    store. Append-only sources; no mutation. Scope-guarded; cashier/kitchen 403."""
+    if not role_in(user, "super_admin", "area_manager", "store_manager"):
+        raise HTTPException(status_code=403, detail="Audit log access denied")
+    assert_store_allowed(user, store_id)
+    rng = _created_range(date_from, date_to)
+    mq = {"store_id": store_id}
+    if rng:
+        mq["created_at"] = rng
+    if types:
+        wanted = [t.strip() for t in types.split(",") if t.strip()]
+        if wanted:
+            mq["type"] = {"$in": wanted}
+    movements = await db.movement_log.find(mq, {"_id": 0}).sort("created_at", -1).to_list(5000)
+    entries = [{"source": "movement_log", "at": m.get("created_at"), "type": m.get("type"),
+                "user_id": m.get("user_id"), "ref_id": m.get("ref_id"), "item_id": m.get("item_id"),
+                "qty_delta": m.get("qty_delta"), "reason": m.get("reason")} for m in movements]
+    # Include discards/transfers (decision audit) for the store/range
+    dq = {"store_id": store_id}
+    if rng:
+        dq["raised_at"] = rng
+    for d in await db.discards.find(dq, {"_id": 0}).to_list(5000):
+        entries.append({"source": "discards", "at": d.get("decided_at") or d.get("raised_at"), "type": "discard",
+                        "user_id": d.get("approved_by") or d.get("raised_by"), "ref_id": d.get("id"),
+                        "status": d.get("status"), "value": d.get("value")})
+    tq = {"$or": [{"from_store_id": store_id}, {"to_store_id": store_id}]}
+    for t in await db.transfers.find(tq, {"_id": 0}).to_list(5000):
+        entries.append({"source": "transfers", "at": t.get("decided_at") or t.get("requested_at"), "type": "transfer",
+                        "user_id": t.get("approved_by") or t.get("requested_by"), "ref_id": t.get("id"),
+                        "status": t.get("status")})
+    entries.sort(key=lambda e: e.get("at") or "", reverse=True)
+    return {"store_id": store_id, "entries": entries}
+
 app.include_router(api_router)
 
 app.add_middleware(
