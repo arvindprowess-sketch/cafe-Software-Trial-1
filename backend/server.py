@@ -5645,6 +5645,330 @@ async def admin_migrate_inventory(user=Depends(get_current_user)):
     created = await run_inventory_migration()
     return {"message": "Inventory migration complete", "created": created}
 
+# ==========================================================================
+# PHASE 3B — Discard (meal-explode + raw-direct), store-to-store transfer,
+# manual adjust. Reuses 3A inventory_items + log_movement. Sale path untouched.
+# ==========================================================================
+HQ_VALUE_THRESHOLD = 2000.0  # >= needs HQ/area escalation
+
+async def explode_to_raw(target_type: str, ref_id: str, qty: float, store_id: str):
+    """Expand a target into the raw inventory_items it consumes from THIS store.
+
+    Returns [{item, grams, unit_cost}]. Shared by discard (3B) and sale (3C).
+    - target_type 'meal': ready_made product.ingredients[] -> each raw via
+      ingredient.raw_item_id OR ingredient.product_id; grams = grams_per_serving*qty.
+    - target_type 'raw': a single raw item -> [{that item, qty}].
+    Missing raw rows are skipped gracefully (never crash, never block)."""
+    out = []
+    if target_type == "meal":
+        product = await db.products.find_one({"id": ref_id}, {"_id": 0})
+        if not product:
+            return out
+        for ing in product.get("ingredients", []):
+            item = None
+            if ing.get("raw_item_id"):
+                item = await db.inventory_items.find_one({"store_id": store_id, "id": ing["raw_item_id"]}, {"_id": 0})
+            if not item and ing.get("product_id"):
+                item = await db.inventory_items.find_one({"store_id": store_id, "product_id": ing["product_id"]}, {"_id": 0})
+            if not item:
+                continue  # graceful skip — tracking not set up for this raw
+            grams = float(ing.get("grams_per_serving", 0) or 0) * qty
+            out.append({"item": item, "grams": grams, "unit_cost": float(item.get("avg_cost", 0) or 0)})
+    else:  # raw
+        item = await db.inventory_items.find_one({"store_id": store_id, "id": ref_id}, {"_id": 0})
+        if not item:
+            item = await db.inventory_items.find_one({"store_id": store_id, "product_id": ref_id}, {"_id": 0})
+        if item:
+            out.append({"item": item, "grams": float(qty), "unit_cost": float(item.get("avg_cost", 0) or 0)})
+    return out
+
+def _explode_value(exploded: list) -> float:
+    return round(sum(e["grams"] * e["unit_cost"] for e in exploded), 2)
+
+async def _apply_stock_deltas(exploded: list, store_id: str, mtype: str, reason: str, user_id: str, ref_id: str):
+    """Deduct each exploded raw from stock and append one movement per raw."""
+    for e in exploded:
+        item = e["item"]
+        new_qty = float(item.get("qty_on_hand", 0) or 0) - e["grams"]
+        await db.inventory_items.update_one(
+            {"id": item["id"], "store_id": store_id},
+            {"$set": {"qty_on_hand": new_qty, "updated_at": datetime.now(timezone.utc).isoformat()}},
+        )
+        await log_movement(store_id=store_id, item_id=item["id"], product_id=item.get("product_id"),
+                           mtype=mtype, qty_delta=-e["grams"], qty_after=new_qty, reason=reason,
+                           user_id=user_id, ref_id=ref_id, unit_cost_at_time=e["unit_cost"])
+
+# ---------- Discards ----------
+class DiscardCreate(BaseModel):
+    store_id: str
+    target_type: str            # "meal" | "raw"
+    product_id: Optional[str] = None   # for meal
+    item_id: Optional[str] = None      # for raw
+    qty: float
+    reason: str
+    photo_url: Optional[str] = None
+
+class DecisionRequest(BaseModel):
+    action: str                 # "approve" | "reject"
+    note: Optional[str] = None
+
+@api_router.post("/discards")
+async def raise_discard(data: DiscardCreate, user=Depends(get_current_user)):
+    """Raise a discard (store_manager or kitchen, own store). Stock NOT deducted;
+    value computed now; routed to area (and HQ if value >= threshold)."""
+    if normalize_role(user) not in ("store_manager", "kitchen"):
+        raise HTTPException(status_code=403, detail="Only store managers or kitchen may raise discards")
+    assert_store_allowed(user, data.store_id)
+    if data.target_type not in ("meal", "raw"):
+        raise HTTPException(status_code=400, detail="target_type must be 'meal' or 'raw'")
+    if data.qty is None or data.qty <= 0:
+        raise HTTPException(status_code=400, detail="qty must be > 0")
+    ref = data.product_id if data.target_type == "meal" else data.item_id
+    if not ref:
+        raise HTTPException(status_code=400, detail="product_id (meal) or item_id (raw) is required")
+    exploded = await explode_to_raw(data.target_type, ref, data.qty, data.store_id)
+    value = _explode_value(exploded)
+    now = datetime.now(timezone.utc).isoformat()
+    discard = {
+        "id": str(uuid.uuid4()),
+        "store_id": data.store_id,
+        "target_type": data.target_type,
+        "product_id": data.product_id,
+        "item_id": data.item_id,
+        "qty": data.qty,
+        "reason": data.reason,
+        "photo_url": data.photo_url,
+        "value": value,
+        "status": "pending",
+        "hq_required": value >= HQ_VALUE_THRESHOLD,
+        "raised_by": user["id"],
+        "raised_at": now,
+        "approved_by": None,
+        "decided_at": None,
+        "hq_approved_by": None,
+        "hq_decided_at": None,
+    }
+    await db.discards.insert_one(discard)
+    return {k: v for k, v in discard.items() if k != "_id"}
+
+@api_router.get("/discards/{store_id}")
+async def list_discards(store_id: str, user=Depends(get_current_user)):
+    """List discards for a store (managers; scope-checked)."""
+    require_inventory_manager(user)
+    assert_store_allowed(user, store_id)
+    return await db.discards.find({"store_id": store_id}, {"_id": 0}).sort("raised_at", -1).to_list(1000)
+
+@api_router.put("/discards/{discard_id}/decide")
+async def decide_discard(discard_id: str, data: DecisionRequest, user=Depends(get_current_user)):
+    """Approve/reject a discard. area_manager (own cluster) decides; high-value
+    (>= threshold) needs super_admin to finalize after area approval. The raiser
+    can never self-approve. On final approve, recipe/raw is exploded & deducted."""
+    role = normalize_role(user)
+    if role not in ("area_manager", "super_admin"):
+        raise HTTPException(status_code=403, detail="Only area managers or HQ may decide discards")
+    discard = await db.discards.find_one({"id": discard_id}, {"_id": 0})
+    if not discard:
+        raise HTTPException(status_code=404, detail="Discard not found")
+    if discard["status"] in ("approved", "rejected"):
+        raise HTTPException(status_code=400, detail="Discard already decided")
+    assert_store_allowed(user, discard["store_id"])
+    if user["id"] == discard.get("raised_by"):
+        raise HTTPException(status_code=403, detail="Raiser cannot decide their own discard")
+    now = datetime.now(timezone.utc).isoformat()
+
+    if data.action == "reject":
+        await db.discards.update_one({"id": discard_id}, {"$set": {
+            "status": "rejected", "approved_by": user["id"], "decided_at": now, "decision_note": data.note}})
+        return await db.discards.find_one({"id": discard_id}, {"_id": 0})
+    if data.action != "approve":
+        raise HTTPException(status_code=400, detail="action must be 'approve' or 'reject'")
+
+    # High-value: area approval only escalates to pending_hq; HQ finalizes.
+    if discard.get("hq_required"):
+        if role == "area_manager":
+            if discard["status"] != "pending":
+                raise HTTPException(status_code=400, detail="Awaiting HQ approval")
+            await db.discards.update_one({"id": discard_id}, {"$set": {
+                "status": "pending_hq", "approved_by": user["id"], "decided_at": now}})
+            return await db.discards.find_one({"id": discard_id}, {"_id": 0})
+        # super_admin finalizes (from pending or pending_hq)
+
+    # Finalize: explode & deduct
+    ref = discard.get("product_id") if discard["target_type"] == "meal" else discard.get("item_id")
+    exploded = await explode_to_raw(discard["target_type"], ref, discard["qty"], discard["store_id"])
+    await _apply_stock_deltas(exploded, discard["store_id"], "discard",
+                              f"discard:{discard['reason']} (raised_by {discard['raised_by']})",
+                              user["id"], discard["id"])
+    finalize = {"status": "approved", "decided_at": now}
+    if discard.get("hq_required") and role == "super_admin":
+        finalize["hq_approved_by"] = user["id"]
+        finalize["hq_decided_at"] = now
+        if not discard.get("approved_by"):
+            finalize["approved_by"] = user["id"]
+    else:
+        finalize["approved_by"] = user["id"]
+    await db.discards.update_one({"id": discard_id}, {"$set": finalize})
+    return await db.discards.find_one({"id": discard_id}, {"_id": 0})
+
+# ---------- Store-to-store transfer (raw only) ----------
+class TransferCreate(BaseModel):
+    from_store_id: str
+    to_store_id: str
+    item_id: Optional[str] = None
+    product_id: Optional[str] = None
+    qty: float
+
+@api_router.post("/transfers")
+async def request_transfer(data: TransferCreate, user=Depends(get_current_user)):
+    """Request a raw transfer (store_manager of the SOURCE store, or HQ)."""
+    role = normalize_role(user)
+    if role not in ("store_manager", "super_admin"):
+        raise HTTPException(status_code=403, detail="Only the source store manager or HQ may request transfers")
+    assert_store_allowed(user, data.from_store_id)
+    if data.from_store_id == data.to_store_id:
+        raise HTTPException(status_code=400, detail="from and to stores must differ")
+    if data.qty is None or data.qty <= 0:
+        raise HTTPException(status_code=400, detail="qty must be > 0")
+    query = {"store_id": data.from_store_id}
+    if data.item_id:
+        query["id"] = data.item_id
+    elif data.product_id:
+        query["product_id"] = data.product_id
+    else:
+        raise HTTPException(status_code=400, detail="item_id or product_id is required")
+    src = await db.inventory_items.find_one(query, {"_id": 0})
+    if not src:
+        raise HTTPException(status_code=404, detail="Source inventory item not found")
+    now = datetime.now(timezone.utc).isoformat()
+    transfer = {
+        "id": str(uuid.uuid4()),
+        "from_store_id": data.from_store_id,
+        "to_store_id": data.to_store_id,
+        "item_id": src["id"],
+        "product_id": src.get("product_id"),
+        "qty": data.qty,
+        "status": "requested",
+        "requested_by": user["id"],
+        "requested_at": now,
+        "approved_by": None,
+        "decided_at": None,
+    }
+    await db.transfers.insert_one(transfer)
+    return {k: v for k, v in transfer.items() if k != "_id"}
+
+@api_router.put("/transfers/{transfer_id}/decide")
+async def decide_transfer(transfer_id: str, data: DecisionRequest, user=Depends(get_current_user)):
+    """Approve/reject a transfer. Same-cluster -> area_manager (cluster covers
+    BOTH stores); cross-cluster -> super_admin only. On approve: source down,
+    dest up, dest avg_cost re-weighted; both legs logged."""
+    role = normalize_role(user)
+    if role not in ("area_manager", "super_admin"):
+        raise HTTPException(status_code=403, detail="Only area managers or HQ may decide transfers")
+    t = await db.transfers.find_one({"id": transfer_id}, {"_id": 0})
+    if not t:
+        raise HTTPException(status_code=404, detail="Transfer not found")
+    if t["status"] in ("approved", "rejected", "completed"):
+        raise HTTPException(status_code=400, detail="Transfer already decided")
+    # Cross-cluster check: area_manager must own BOTH stores; else HQ-only.
+    if role == "area_manager":
+        scope = set(staff_store_scope(user) or [])
+        if not ({t["from_store_id"], t["to_store_id"]} <= scope):
+            raise HTTPException(status_code=403, detail="Cross-cluster transfer requires HQ")
+    now = datetime.now(timezone.utc).isoformat()
+    if data.action == "reject":
+        await db.transfers.update_one({"id": transfer_id}, {"$set": {
+            "status": "rejected", "approved_by": user["id"], "decided_at": now}})
+        return await db.transfers.find_one({"id": transfer_id}, {"_id": 0})
+    if data.action != "approve":
+        raise HTTPException(status_code=400, detail="action must be 'approve' or 'reject'")
+
+    src = await db.inventory_items.find_one({"id": t["item_id"], "store_id": t["from_store_id"]}, {"_id": 0})
+    if not src:
+        raise HTTPException(status_code=404, detail="Source item no longer exists")
+    qty = t["qty"]
+    src_avg = float(src.get("avg_cost", 0) or 0)
+    # Source leg
+    src_new = float(src.get("qty_on_hand", 0) or 0) - qty
+    await db.inventory_items.update_one({"id": src["id"], "store_id": t["from_store_id"]},
+                                        {"$set": {"qty_on_hand": src_new, "updated_at": now}})
+    await log_movement(store_id=t["from_store_id"], item_id=src["id"], product_id=src.get("product_id"),
+                       mtype="transfer_out", qty_delta=-qty, qty_after=src_new,
+                       reason=f"transfer to {t['to_store_id']}", user_id=user["id"], ref_id=t["id"],
+                       unit_cost_at_time=src_avg)
+    # Destination leg (find or create the dest raw row)
+    dest = None
+    if src.get("product_id"):
+        dest = await db.inventory_items.find_one({"store_id": t["to_store_id"], "product_id": src["product_id"]}, {"_id": 0})
+    if not dest:
+        dest = await db.inventory_items.find_one({"store_id": t["to_store_id"], "name": src["name"]}, {"_id": 0})
+    if not dest:
+        dest = {
+            "id": str(uuid.uuid4()), "store_id": t["to_store_id"], "product_id": src.get("product_id"),
+            "name": src["name"], "unit": src.get("unit", "g"), "category": src.get("category"),
+            "qty_on_hand": 0.0, "avg_cost": 0.0, "reorder_level": 0.0, "shelf_life_days": None,
+            "suppliers": [], "is_active": True,
+            "created_at": now, "updated_at": now,
+        }
+        await db.inventory_items.insert_one(dict(dest))
+    dest_old_qty = float(dest.get("qty_on_hand", 0) or 0)
+    dest_old_avg = float(dest.get("avg_cost", 0) or 0)
+    dest_new_qty = dest_old_qty + qty
+    dest_new_avg = ((dest_old_qty * dest_old_avg) + (qty * src_avg)) / dest_new_qty if dest_new_qty > 0 else 0
+    await db.inventory_items.update_one({"id": dest["id"], "store_id": t["to_store_id"]},
+                                        {"$set": {"qty_on_hand": dest_new_qty, "avg_cost": round(dest_new_avg, 4), "updated_at": now}})
+    await log_movement(store_id=t["to_store_id"], item_id=dest["id"], product_id=dest.get("product_id"),
+                       mtype="transfer_in", qty_delta=qty, qty_after=dest_new_qty,
+                       reason=f"transfer from {t['from_store_id']}", user_id=user["id"], ref_id=t["id"],
+                       unit_cost_at_time=src_avg)
+    await db.transfers.update_one({"id": transfer_id}, {"$set": {
+        "status": "completed", "approved_by": user["id"], "decided_at": now}})
+    return await db.transfers.find_one({"id": transfer_id}, {"_id": 0})
+
+# ---------- Manual adjustment ----------
+class AdjustRequest(BaseModel):
+    item_id: Optional[str] = None
+    product_id: Optional[str] = None
+    new_qty: float
+    reason: str
+
+@api_router.put("/inventory/{store_id}/adjust")
+async def adjust_inventory(store_id: str, data: AdjustRequest, user=Depends(get_current_user)):
+    """Manual stock correction (reason REQUIRED). Small variance (< threshold):
+    store_manager/area/HQ apply directly and the entry is flagged for review.
+    Large variance (>= threshold): only area_manager/HQ may apply."""
+    require_inventory_manager(user)
+    assert_store_allowed(user, store_id)
+    if not (data.reason and data.reason.strip()):
+        raise HTTPException(status_code=400, detail="reason is required for an adjustment")
+    query = {"store_id": store_id}
+    if data.item_id:
+        query["id"] = data.item_id
+    elif data.product_id:
+        query["product_id"] = data.product_id
+    else:
+        raise HTTPException(status_code=400, detail="item_id or product_id is required")
+    item = await db.inventory_items.find_one(query, {"_id": 0})
+    if not item:
+        raise HTTPException(status_code=404, detail="Inventory item not found")
+    old_qty = float(item.get("qty_on_hand", 0) or 0)
+    variance = float(data.new_qty) - old_qty
+    variance_value = abs(variance) * float(item.get("avg_cost", 0) or 0)
+    large = variance_value >= HQ_VALUE_THRESHOLD
+    if large and normalize_role(user) == "store_manager":
+        raise HTTPException(status_code=403, detail="Large adjustment requires area manager approval")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.inventory_items.update_one({"id": item["id"], "store_id": store_id},
+                                        {"$set": {"qty_on_hand": float(data.new_qty), "updated_at": now}})
+    mv = await log_movement(store_id=store_id, item_id=item["id"], product_id=item.get("product_id"),
+                            mtype="adjust", qty_delta=variance, qty_after=float(data.new_qty),
+                            reason=f"adjust:{data.reason}", user_id=user["id"],
+                            unit_cost_at_time=float(item.get("avg_cost", 0) or 0))
+    # Flag small (directly-applied) adjustments for area/HQ review.
+    await db.movement_log.update_one({"id": mv["id"]}, {"$set": {"flagged_for_review": (not large)}})
+    updated = await db.inventory_items.find_one({"id": item["id"], "store_id": store_id}, {"_id": 0})
+    return {"item": _public_item(updated, user), "variance": round(variance, 4),
+            "variance_value": round(variance_value, 2), "flagged_for_review": (not large)}
+
 app.include_router(api_router)
 
 app.add_middleware(
