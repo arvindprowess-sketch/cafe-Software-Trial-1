@@ -10,6 +10,7 @@ import HqLayout, { HqIndex } from './components/HqLayout';
 import HqStores from './pages/HqStores';
 import HqCatalog from './pages/HqCatalog';
 import HqPush from './pages/HqPush';
+import HqOffers from './pages/HqOffers';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminProducts from './pages/AdminProducts';
 import AdminKitchen from './pages/AdminKitchen';
@@ -56,6 +57,7 @@ export default function App() {
         <Route path="stores" element={<HqStores />} />
         <Route path="catalog" element={<HqCatalog />} />
         <Route path="push" element={<HqPush />} />
+        <Route path="offers" element={<HqOffers />} />
       </Route>
 
       <Route path="/admin" element={<ProtectedRoute roles={['admin', 'super_admin']}><AdminLayout /></ProtectedRoute>}>
