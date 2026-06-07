@@ -12,9 +12,10 @@ function navForRole(role?: string) {
   const stores = { path: '/hq/stores', label: 'Stores & Clusters' };
   const catalog = { path: '/hq/catalog', label: 'Store Catalog' };
   const push = { path: '/hq/push', label: 'Catalog Push' };
-  if (role === 'super_admin' || role === 'admin') return [stores, catalog, push];
-  if (role === 'area_manager') return [stores, catalog];
-  if (role === 'store_manager') return [catalog];
+  const offers = { path: '/hq/offers', label: 'Offers & Coupons' };
+  if (role === 'super_admin' || role === 'admin') return [stores, catalog, push, offers];
+  if (role === 'area_manager') return [stores, catalog, offers];
+  if (role === 'store_manager') return [catalog, offers];
   return [];
 }
 
