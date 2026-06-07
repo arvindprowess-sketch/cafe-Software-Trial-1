@@ -1752,10 +1752,9 @@ async def create_order(data: OrderCreate, user=Depends(get_current_user)):
             if product:
                 quantity = item.quantity or 1
                 
-                # Check ingredient stock before creating order
-                stock_check = await check_ready_made_stock(item.product_id, quantity)
-                if not stock_check.get("available", False):
-                    raise HTTPException(status_code=400, detail=f"Insufficient stock for {item.product_name}: {stock_check.get('reason')}")
+                # Phase 3C: availability from THIS store's raw inventory (graceful)
+                if not await raw_meal_available(store_id, item.product_id, quantity):
+                    raise HTTPException(status_code=400, detail=f"Insufficient stock for {item.product_name}")
                 
                 # Build ingredient breakdown for kitchen view
                 ingredients_breakdown = []
@@ -1843,6 +1842,13 @@ async def create_order(data: OrderCreate, user=Depends(get_current_user)):
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.orders.insert_one(order)
+
+    # Phase 3C: decrement THIS store's raw inventory via recipe explosion
+    # (idempotent per order_id, graceful if a raw row is missing — never blocks).
+    try:
+        await decrement_stock_for_order(order, user["id"])
+    except Exception as e:
+        logger.error(f"[3C] stock decrement error for order {order_id}: {e}")
 
     # Phase 2A: record ONE coupon redemption per PLACED order (append-only).
     # Quote / apply-coupon never write here — only successful placement does.
@@ -4180,18 +4186,19 @@ async def cart_quote(
         if not product or product.get("is_active") is False:
             out_of_stock.append({"product_id": pid, "name": it.get("name", "Item"), "reason": "no_longer_available"})
             continue
+        _sid = store_id or DEFAULT_STORE_ID  # Phase 3C: availability from this store's raw stock
         if ptype == "ready_made":
             qty = int(it.get("quantity", 1) or 1)
             serving = product.get("serving_grams", 300)
             unit_price = product.get("fixed_price") or round(product["cost_per_100g"] * serving / 100, 2)
             line_price = round(unit_price * qty, 2)
-            stock_ok = (await check_ready_made_stock(pid, qty)).get("available", True)
+            stock_ok = await raw_meal_available(_sid, pid, qty)
             line_grams = serving * qty
             factor = (serving / 100) * qty
         else:
             grams = float(it.get("grams", 100) or 100)
             qty = 1
-            stock_ok = product.get("available_qty_grams", 0) >= grams
+            stock_ok = await raw_single_available(_sid, pid, grams)
             unit_price = product["cost_per_100g"]
             line_price = round(grams / 100 * unit_price, 2)
             line_grams = grams
@@ -5968,6 +5975,112 @@ async def adjust_inventory(store_id: str, data: AdjustRequest, user=Depends(get_
     updated = await db.inventory_items.find_one({"id": item["id"], "store_id": store_id}, {"_id": 0})
     return {"item": _public_item(updated, user), "variance": round(variance, 4),
             "variance_value": round(variance_value, 2), "flagged_for_review": (not large)}
+
+# ==========================================================================
+# PHASE 3C — Auto-decrement on sale via recipe + availability-from-raw +
+# physical count + reorder. Reuses 3A inventory_items/log_movement and 3B
+# explode_to_raw. This is the ONLY block that touches the live order path.
+# ==========================================================================
+async def raw_meal_available(store_id: str, product_id: str, units: float) -> bool:
+    """Can `units` of a ready_made meal be made from THIS store's raw stock?
+    Graceful: ingredients with no tracked raw row don't block the sale."""
+    exploded = await explode_to_raw("meal", product_id, units, store_id)
+    for e in exploded:
+        if float(e["item"].get("qty_on_hand", 0) or 0) < e["grams"]:
+            return False
+    return True
+
+async def raw_single_available(store_id: str, product_id: str, grams: float) -> bool:
+    """Loose/single availability from THIS store's raw stock. Untracked = allowed."""
+    item = await db.inventory_items.find_one({"store_id": store_id, "product_id": product_id}, {"_id": 0})
+    if not item:
+        return True  # graceful: tracking not set up -> don't block
+    return float(item.get("qty_on_hand", 0) or 0) >= grams
+
+async def decrement_stock_for_order(order: dict, user_id: str):
+    """Decrement raw inventory for a placed order, scoped to order.store_id, via
+    explode_to_raw. Idempotent per order_id; graceful when a raw row is missing."""
+    oid = order["id"]
+    sid = order.get("store_id") or DEFAULT_STORE_ID
+    # Idempotency: never decrement the same order twice (dup/reorder safe)
+    if await db.movement_log.count_documents({"ref_id": oid, "type": "sale"}) > 0:
+        return
+    for it in order.get("items", []):
+        pid = it.get("product_id")
+        if not pid:
+            continue
+        if it.get("product_type") == "ready_made":
+            units = int(it.get("quantity", 1) or 1)
+            exploded = await explode_to_raw("meal", pid, units, sid)
+        else:
+            grams = float(it.get("grams", 0) or 0)
+            exploded = await explode_to_raw("raw", pid, grams, sid)
+        if exploded:
+            await _apply_stock_deltas(exploded, sid, "sale", f"sale:{oid}", user_id, oid)
+
+# ---------- Physical count / reconciliation ----------
+class CountLine(BaseModel):
+    item_id: Optional[str] = None
+    product_id: Optional[str] = None
+    counted_qty: float
+
+class CountRequest(BaseModel):
+    counts: List[CountLine]
+
+@api_router.post("/inventory/{store_id}/count")
+async def physical_count(store_id: str, data: CountRequest, user=Depends(get_current_user)):
+    """Reconcile counted vs system qty per raw -> adjustment (movement 'adjust',
+    reason 'physical_count'); large variance (>= threshold) flagged for area/HQ."""
+    require_inventory_manager(user)
+    assert_store_allowed(user, store_id)
+    now = datetime.now(timezone.utc).isoformat()
+    results = []
+    for line in data.counts:
+        q = {"store_id": store_id}
+        if line.item_id:
+            q["id"] = line.item_id
+        elif line.product_id:
+            q["product_id"] = line.product_id
+        else:
+            continue
+        item = await db.inventory_items.find_one(q, {"_id": 0})
+        if not item:
+            results.append({"item_id": line.item_id, "product_id": line.product_id, "status": "not_found"})
+            continue
+        system_qty = float(item.get("qty_on_hand", 0) or 0)
+        variance = float(line.counted_qty) - system_qty
+        variance_value = abs(variance) * float(item.get("avg_cost", 0) or 0)
+        flagged = variance_value >= HQ_VALUE_THRESHOLD
+        await db.inventory_items.update_one({"id": item["id"], "store_id": store_id},
+                                            {"$set": {"qty_on_hand": float(line.counted_qty), "updated_at": now}})
+        mv = await log_movement(store_id=store_id, item_id=item["id"], product_id=item.get("product_id"),
+                                mtype="adjust", qty_delta=variance, qty_after=float(line.counted_qty),
+                                reason="physical_count", user_id=user["id"],
+                                unit_cost_at_time=float(item.get("avg_cost", 0) or 0))
+        await db.movement_log.update_one({"id": mv["id"]}, {"$set": {"flagged_for_review": flagged, "source": "physical_count"}})
+        results.append({"item_id": item["id"], "variance": round(variance, 4),
+                        "variance_value": round(variance_value, 2), "flagged_for_review": flagged})
+    return {"store_id": store_id, "results": results}
+
+@api_router.get("/inventory/{store_id}/reorder")
+async def inventory_reorder(store_id: str, user=Depends(get_current_user)):
+    """Raws at/below reorder level with a simple par-stock suggested qty.
+    Cost-restricted (cashier/kitchen 403)."""
+    require_inventory_manager(user)
+    assert_store_allowed(user, store_id)
+    items = await db.inventory_items.find({"store_id": store_id}, {"_id": 0}).to_list(2000)
+    rows = []
+    for i in items:
+        qty = float(i.get("qty_on_hand", 0) or 0)
+        rl = float(i.get("reorder_level", 0) or 0)
+        if rl > 0 and qty <= rl:
+            rows.append({
+                "item_id": i["id"], "name": i["name"], "unit": i.get("unit", "g"),
+                "qty_on_hand": qty, "reorder_level": rl,
+                "suggested_qty": round(max(rl * 2 - qty, 0), 2),  # par-stock to 2x reorder
+                "avg_cost": i.get("avg_cost", 0),
+            })
+    return {"store_id": store_id, "items": rows}
 
 app.include_router(api_router)
 
