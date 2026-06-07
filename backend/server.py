@@ -1668,34 +1668,21 @@ async def create_ready_made_meal(data: ReadyMadeMealCreate, user=Depends(get_cur
     return {k: v for k, v in product.items() if k != "_id"}
 
 # ========== STOCK CHECK FOR READY-MADE DISHES ==========
-async def check_ready_made_stock(product_id: str, quantity: int = 1) -> Dict:
-    """Check if all ingredients have sufficient stock for the requested quantity"""
+async def check_ready_made_stock(product_id: str, quantity: int = 1, store_id: Optional[str] = None) -> Dict:
+    """Ready-made availability — SINGLE path, delegates to raw_meal_available over
+    THIS store's raw inventory_items. (Phase 3D: no longer reads the legacy
+    global available_qty_grams.)"""
     product = await db.products.find_one({"id": product_id, "product_type": "ready_made"}, {"_id": 0})
     if not product:
         return {"available": False, "reason": "Product not found"}
-    
-    insufficient = []
-    for ing in product.get("ingredients", []):
-        if ing.get("product_id"):
-            single_product = await db.products.find_one({"id": ing["product_id"]}, {"_id": 0})
-            if single_product:
-                required_grams = ing["grams_per_serving"] * quantity
-                available = single_product.get("available_qty_grams", 0)
-                if available < required_grams:
-                    insufficient.append({
-                        "name": ing["name"],
-                        "required": required_grams,
-                        "available": available
-                    })
-    
-    if insufficient:
-        return {"available": False, "reason": "Insufficient stock", "items": insufficient}
-    return {"available": True}
+    sid = store_id or DEFAULT_STORE_ID
+    ok = await raw_meal_available(sid, product_id, quantity)
+    return {"available": ok} if ok else {"available": False, "reason": "Insufficient stock"}
 
 @api_router.get("/products/{product_id}/check-stock")
-async def check_product_stock(product_id: str, quantity: int = 1):
-    """Check stock availability for a ready-made dish"""
-    return await check_ready_made_stock(product_id, quantity)
+async def check_product_stock(product_id: str, quantity: int = 1, store_id: Optional[str] = None):
+    """Check stock availability for a ready-made dish (from a store's raw inventory)."""
+    return await check_ready_made_stock(product_id, quantity, store_id)
 
 # ========== ORDER ROUTES ==========
 @api_router.post("/orders")
@@ -1767,22 +1754,9 @@ async def create_order(data: OrderCreate, user=Depends(get_current_user)):
                         "product_id": ing.get("product_id")
                     })
                 item_data["ingredients_breakdown"] = ingredients_breakdown
-                
-                # Deduct from linked single product stocks
-                for ing in product.get("ingredients", []):
-                    if ing.get("product_id"):
-                        deduct_grams = ing["grams_per_serving"] * quantity
-                        await db.products.update_one(
-                            {"id": ing["product_id"]},
-                            {"$inc": {"available_qty_grams": -deduct_grams}}
-                        )
-        else:
-            # Single product - deduct directly
-            await db.products.update_one(
-                {"id": item.product_id},
-                {"$inc": {"available_qty_grams": -item.grams}}
-            )
-        
+        # Phase 3D: stock is decremented ONLY from per-store inventory_items
+        # (decrement_stock_for_order, after the order is saved). The legacy global
+        # product.available_qty_grams is no longer touched on sale.
         processed_items.append(item_data)
     
     # Determine status based on scheduled or immediate
@@ -1864,22 +1838,6 @@ async def create_order(data: OrderCreate, user=Depends(get_current_user)):
             "redeemed_at": datetime.now(timezone.utc).isoformat(),
         })
 
-    # Auto-hide low stock single products
-    await db.products.update_many(
-        {"product_type": "single", "available_qty_grams": {"$lte": 0}},
-        {"$set": {"is_active": False}}
-    )
-    
-    # Auto-hide ready-made dishes that can't be made anymore
-    ready_made_products = await db.products.find({"product_type": "ready_made", "is_active": True}, {"_id": 0}).to_list(100)
-    for rm in ready_made_products:
-        for ing in rm.get("ingredients", []):
-            if ing.get("product_id"):
-                single_product = await db.products.find_one({"id": ing["product_id"]}, {"_id": 0})
-                if single_product and single_product.get("available_qty_grams", 0) < ing["grams_per_serving"]:
-                    await db.products.update_one({"id": rm["id"]}, {"$set": {"is_active": False}})
-                    break
-    
     # Save to meal history
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     await db.meal_history.update_one(
@@ -2130,7 +2088,7 @@ async def top_selling_by_category(user=Depends(get_current_user)):
 async def ai_suggest(data: AISuggestRequest, user=Depends(get_current_user)):
     try:
         from emergentintegrations.llm.chat import LlmChat, UserMessage
-        products = await db.products.find({"is_active": True, "available_qty_grams": {"$gt": 50}}, {"_id": 0}).to_list(100)
+        products = await db.products.find({"is_active": True}, {"_id": 0}).to_list(100)
         available_items_str = "\n".join([
             f"- {p['name']}: ₹{p['cost_per_100g']}/100g | {p['calories_per_100g']}cal, {p['protein_per_100g']}g protein, {p['carbs_per_100g']}g carbs, {p['fat_per_100g']}g fat per 100g | Stock: {p['available_qty_grams']}g"
             for p in products
@@ -2271,7 +2229,7 @@ async def ai_quick_meal(data: QuickMealRequest, user=Depends(get_current_user)):
 
         # Step 0: Fetch available products with real stock (multi diet-tag match)
         _prefs = diet_prefs_to_list(data.diet_preference)
-        products = await db.products.find({"is_active": True, "available_qty_grams": {"$gt": 50}}, {"_id": 0}).to_list(100)
+        products = await db.products.find({"is_active": True}, {"_id": 0}).to_list(100)
         products = [ensure_product_diet_types(p) for p in products]
         if _prefs:
             products = [p for p in products if product_matches_diet(p, _prefs)]
@@ -2548,7 +2506,7 @@ async def ai_chat(data: AIChatRequest, user=Depends(get_current_user)):
         
         # Get available products (multi diet-tag match)
         _prefs = diet_prefs_to_list(data.diet_preference)
-        products = await db.products.find({"is_active": True, "available_qty_grams": {"$gt": 50}}, {"_id": 0}).to_list(100)
+        products = await db.products.find({"is_active": True}, {"_id": 0}).to_list(100)
         products = [ensure_product_diet_types(p) for p in products]
         if _prefs:
             products = [p for p in products if product_matches_diet(p, _prefs)]
@@ -2928,7 +2886,6 @@ async def nutrition_day_plan(data: DayPlanRequest, user=Depends(get_current_user
     # scalable single dishes that are in stock and (optionally) match the chosen diet tags
     pool = [p for p in products
             if p.get("product_type", "single") != "ready_made"
-            and (p.get("available_qty_grams") or 0) > 0
             and float(p.get("calories_per_100g") or 0) > 0
             and (not prefs or product_matches_diet(p, prefs))]
     if not pool:
@@ -4204,7 +4161,7 @@ async def cart_quote(
             line_grams = grams
             factor = grams / 100
         if not stock_ok:
-            out_of_stock.append({"product_id": pid, "name": product["name"], "reason": "out_of_stock", "available_qty_grams": product.get("available_qty_grams", 0)})
+            out_of_stock.append({"product_id": pid, "name": product["name"], "reason": "out_of_stock"})
             continue
         old_unit = it.get("cost_per_100g")
         if old_unit is not None and ptype == "single" and abs(float(old_unit) - product["cost_per_100g"]) > 0.01:
@@ -4932,43 +4889,38 @@ async def get_inventory(user=Depends(get_current_user)):
         })
     return inventory
 
-# ========== P0: STOCK MANAGEMENT ==========
+# ========== STOCK MANAGEMENT (Phase 3D: writes per-store inventory_items) ==========
 class StockUpdateRequest(BaseModel):
     product_id: str
     quantity_grams: float  # positive to add, negative to remove
     reason: Optional[str] = ""
+    store_id: Optional[str] = None  # required (falls back to the caller's own store)
 
 @api_router.post("/inventory/update-stock")
 async def update_stock(data: StockUpdateRequest, user=Depends(get_current_user)):
-    """Kitchen/Manager/HQ: Add or remove stock for a product (logged per store)."""
-    if not role_in(user, "super_admin", "store_manager", "kitchen"):
-        raise HTTPException(status_code=403, detail="Kitchen staff only")
-    product = await db.products.find_one({"id": data.product_id}, {"_id": 0})
-    if not product:
-        raise HTTPException(status_code=404, detail="Product not found")
-    new_qty = product.get("available_qty_grams", 0) + data.quantity_grams
+    """Manager/HQ: adjust a product's stock for a STORE in inventory_items (the
+    single source of truth). cashier/kitchen 403. Logged via movement_log 'adjust'."""
+    require_inventory_manager(user)  # super_admin / area_manager / store_manager
+    store_id = data.store_id or user.get("store_id")
+    if not store_id:
+        raise HTTPException(status_code=400, detail="store_id is required")
+    assert_store_allowed(user, store_id)
+    item = await db.inventory_items.find_one({"store_id": store_id, "product_id": data.product_id}, {"_id": 0})
+    if not item:
+        raise HTTPException(status_code=404, detail="Inventory item not found for this product in this store")
+    new_qty = float(item.get("qty_on_hand", 0) or 0) + data.quantity_grams
     if new_qty < 0:
         raise HTTPException(status_code=400, detail="Cannot reduce stock below 0")
-    await db.products.update_one({"id": data.product_id}, {"$set": {"available_qty_grams": new_qty}})
-    # Re-activate product if stock was added and was inactive
-    if new_qty > 0 and not product.get("is_active", True):
-        await db.products.update_one({"id": data.product_id}, {"$set": {"is_active": True}})
-    # C3: tell all surfaces the menu/stock changed (auto-hide / re-show in customer app + POS)
-    await broadcast_event("menu_update", {"action": "stock_changed", "product_id": data.product_id})
-    # Log stock change (scoped to the staff member's store)
-    await db.stock_logs.insert_one({
-        "id": str(uuid.uuid4()),
-        "store_id": user.get("store_id") or DEFAULT_STORE_ID,
-        "product_id": data.product_id,
-        "product_name": product["name"],
-        "change_grams": data.quantity_grams,
-        "new_total": new_qty,
-        "reason": data.reason or ("Stock added" if data.quantity_grams > 0 else "Stock removed"),
-        "user_id": user["id"],
-        "user_name": user["name"],
-        "created_at": datetime.now(timezone.utc).isoformat()
-    })
-    return {"product_id": data.product_id, "new_qty_grams": new_qty, "status": "in_stock" if new_qty > 500 else "low" if new_qty > 0 else "out_of_stock"}
+    now = datetime.now(timezone.utc).isoformat()
+    await db.inventory_items.update_one({"id": item["id"], "store_id": store_id},
+                                        {"$set": {"qty_on_hand": new_qty, "updated_at": now}})
+    await log_movement(store_id=store_id, item_id=item["id"], product_id=data.product_id, mtype="adjust",
+                       qty_delta=data.quantity_grams, qty_after=new_qty,
+                       reason=data.reason or ("restock" if data.quantity_grams > 0 else "stock removed"),
+                       user_id=user["id"], unit_cost_at_time=float(item.get("avg_cost", 0) or 0))
+    await broadcast_event("menu_update", {"action": "stock_changed", "product_id": data.product_id}, store_id=store_id)
+    return {"product_id": data.product_id, "store_id": store_id, "new_qty_grams": new_qty,
+            "status": "in_stock" if new_qty > 500 else "low" if new_qty > 0 else "out_of_stock"}
 
 @api_router.get("/inventory/stock-logs")
 async def get_stock_logs(user=Depends(get_current_user)):
@@ -5265,7 +5217,7 @@ async def ai_generate_meal_plan(
     """AI generates a weekly meal plan"""
     try:
         from emergentintegrations.llm.chat import LlmChat, UserMessage
-        products = await db.products.find({"is_active": True, "available_qty_grams": {"$gt": 50}}, {"_id": 0}).to_list(100)
+        products = await db.products.find({"is_active": True}, {"_id": 0}).to_list(100)
         products = [ensure_product_diet_types(p) for p in products]
         _prefs = diet_prefs_to_list(diet_preference)
         filtered_products = [p for p in products if not _prefs or product_matches_diet(p, _prefs)]
