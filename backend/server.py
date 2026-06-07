@@ -1,8 +1,10 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Body, Query
+from fastapi.responses import Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
+import io
 import os
 import re
 import logging
@@ -6371,6 +6373,152 @@ async def reports_audit_log(
                         "status": t.get("status")})
     entries.sort(key=lambda e: e.get("at") or "", reverse=True)
     return {"store_id": store_id, "entries": entries}
+
+# ==========================================================================
+# PHASE 4B — Report exports (Excel + PDF). Reuse the SAME 4A builders so the
+# numbers can never diverge, and inherit their cost/scope guards (the 4A
+# functions raise 403 themselves). READ-ONLY.
+# ==========================================================================
+async def _fetch_report(report: str, user, date_from, date_to, store_ids, granularity):
+    """Call the matching 4A endpoint function directly (same data + same guards)."""
+    if report == "pnl":
+        return await reports_pnl(user=user, date_from=date_from, date_to=date_to, store_ids=store_ids, granularity=granularity)
+    if report == "consolidated":
+        return await reports_pnl_consolidated(user=user, date_from=date_from, date_to=date_to)
+    if report == "ranking":
+        return await reports_ranking(user=user, date_from=date_from, date_to=date_to, store_ids=store_ids)
+    if report == "items":
+        return await reports_items(user=user, date_from=date_from, date_to=date_to, store_ids=store_ids)
+    if report == "inventory":
+        if not store_ids:
+            raise HTTPException(status_code=400, detail="store_ids (a single store_id) is required for the inventory report")
+        return await reports_inventory(store_id=store_ids, user=user, date_from=date_from, date_to=date_to)
+    if report == "audit-log":
+        if not store_ids:
+            raise HTTPException(status_code=400, detail="store_ids (a single store_id) is required for the audit-log report")
+        return await reports_audit_log(store_id=store_ids, user=user, date_from=date_from, date_to=date_to)
+    raise HTTPException(status_code=404, detail="Unknown report")
+
+def _report_to_sheets(report: str, data):
+    """Normalize a report payload into [(sheet_title, [row_dict,...])]."""
+    if report == "pnl":
+        stores = data or []
+        main = [{k: v for k, v in s.items() if k != "months"} for s in stores]
+        sheets = [("P&L", main)]
+        monthly = []
+        for s in stores:
+            for m in (s.get("months") or []):
+                monthly.append({"store_id": s["store_id"], "store_name": s["store_name"], **m})
+        if monthly:
+            sheets.append(("Monthly", monthly))
+        return sheets
+    if report == "consolidated":
+        return [("Company", [data["company"]]), ("Stores", data["stores"])]
+    if report == "ranking":
+        return [("By Gross Profit", data["by_gross_profit"]), ("By Revenue", data["by_revenue"])]
+    if report == "items":
+        return [("Items", data["items"])]
+    if report == "inventory":
+        summary = [{"valuation": data["valuation"], "wastage": data["wastage"],
+                    "consumption": data["consumption"], "purchase_total": data["purchases"]["total"]}]
+        return [("Summary", summary), ("Purchases", data["purchases"]["by_item"])]
+    if report == "audit-log":
+        return [("Audit", data["entries"])]
+    return [("Report", data if isinstance(data, list) else [data])]
+
+def _cell(v):
+    if isinstance(v, (dict, list)):
+        return json.dumps(v, default=str)
+    return v
+
+def _build_xlsx(sheets) -> bytes:
+    import openpyxl
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+    for title, rows in sheets:
+        ws = wb.create_sheet((title or "Sheet")[:31])
+        if rows:
+            headers = list(rows[0].keys())
+            for r in rows:
+                for k in r.keys():
+                    if k not in headers:
+                        headers.append(k)
+            ws.append(headers)
+            for r in rows:
+                ws.append([_cell(r.get(h)) for h in headers])
+        else:
+            ws.append(["(no data)"])
+    bio = io.BytesIO()
+    wb.save(bio)
+    return bio.getvalue()
+
+def _build_pdf(title: str, meta: str, sheets) -> bytes:
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=landscape(A4))
+    styles = getSampleStyleSheet()
+    elems = [Paragraph(title, styles["Title"]), Paragraph(meta, styles["Normal"]), Spacer(1, 12)]
+    for stitle, rows in sheets:
+        elems.append(Paragraph(stitle, styles["Heading2"]))
+        if rows:
+            headers = list(rows[0].keys())
+            table_data = [headers] + [[str(_cell(r.get(h, ""))) for h in headers] for r in rows]
+            t = Table(table_data)
+            t.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#15140F")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTSIZE", (0, 0), (-1, -1), 7),
+                ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
+            ]))
+            elems.append(t)
+        else:
+            elems.append(Paragraph("(no data)", styles["Normal"]))
+        elems.append(Spacer(1, 12))
+    doc.build(elems)
+    return buf.getvalue()
+
+def _scope_meta(report, date_from, date_to, store_ids):
+    return f"Range: {date_from or 'all'} to {date_to or 'now'} | Scope: {store_ids or 'in-scope stores'}"
+
+@api_router.get("/reports/{report}/export.xlsx")
+async def export_report_xlsx(
+    report: str,
+    user=Depends(get_current_user),
+    date_from: Optional[str] = Query(None, alias="from"),
+    date_to: Optional[str] = Query(None, alias="to"),
+    store_ids: Optional[str] = None,
+    granularity: str = "total",
+):
+    """Excel export of a 4A report (same builder, same scope guards)."""
+    data = await _fetch_report(report, user, date_from, date_to, store_ids, granularity)
+    content = _build_xlsx(_report_to_sheets(report, data))
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{report}.xlsx"'},
+    )
+
+@api_router.get("/reports/{report}/export.pdf")
+async def export_report_pdf(
+    report: str,
+    user=Depends(get_current_user),
+    date_from: Optional[str] = Query(None, alias="from"),
+    date_to: Optional[str] = Query(None, alias="to"),
+    store_ids: Optional[str] = None,
+    granularity: str = "total",
+):
+    """PDF export of a 4A report (same builder, same scope guards)."""
+    data = await _fetch_report(report, user, date_from, date_to, store_ids, granularity)
+    content = _build_pdf(f"FUEL — {report} report", _scope_meta(report, date_from, date_to, store_ids),
+                         _report_to_sheets(report, data))
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{report}.pdf"'},
+    )
 
 app.include_router(api_router)
 
