@@ -299,6 +299,7 @@ class IngredientItem(BaseModel):
     name: str
     grams_per_serving: float
     product_id: Optional[str] = None
+    raw_item_id: Optional[str] = None  # Phase 3A: optional link to a pure-raw inventory_item
 
 class ReadyMadeMealCreate(BaseModel):
     name: str
@@ -5397,6 +5398,253 @@ async def get_kitchen_ticket(order_id: str, user=Depends(get_current_user)):
     ticket["total_preparation_time_minutes"] = max_prep  # B5: longest item prep drives the ticket ETA
     return ticket
 
+# ==========================================================================
+# PHASE 3A — RAW INVENTORY: item master + inward/GRN + append-only movement log
+# Raw materials only, per store. Ready-made meals are recipes (not stocked).
+# Cost (avg_cost / purchase_price / valuation) is NEVER returned to cashier or
+# kitchen, and never crosses cluster scope. This phase is ADDITIVE: the live
+# sale path (orders / cart_quote / check_ready_made_stock) is untouched.
+# ==========================================================================
+INVENTORY_UNITS = {"g", "kg", "ml", "l", "pcs"}
+MOVEMENT_TYPES = {"inward", "sale", "discard", "transfer_in", "transfer_out", "adjust"}
+INVENTORY_MANAGER_ROLES = ("super_admin", "area_manager", "store_manager")
+
+def can_see_cost(user) -> bool:
+    """Only managers/HQ may see purchase cost & valuation — never cashier/kitchen."""
+    return normalize_role(user) in INVENTORY_MANAGER_ROLES
+
+def _public_item(item: dict, user) -> dict:
+    """Strip cost fields for roles that may not see them (cashier/kitchen)."""
+    out = {k: v for k, v in item.items() if k != "_id"}
+    if not can_see_cost(user):
+        out.pop("avg_cost", None)
+    return out
+
+def require_inventory_manager(user):
+    if normalize_role(user) not in INVENTORY_MANAGER_ROLES:
+        raise HTTPException(status_code=403, detail="Inventory managers only")
+
+async def log_movement(*, store_id, item_id, product_id, mtype, qty_delta, qty_after,
+                       reason, user_id, ref_id=None, unit_cost_at_time=None):
+    """The single append-only movement_log writer. Reused by every movement type
+    (3A inward; 3B discard/transfer; 3C sale)."""
+    entry = {
+        "id": str(uuid.uuid4()),
+        "store_id": store_id, "item_id": item_id, "product_id": product_id,
+        "type": mtype, "qty_delta": qty_delta, "qty_after": qty_after,
+        "reason": reason, "ref_id": ref_id, "unit_cost_at_time": unit_cost_at_time,
+        "user_id": user_id, "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.movement_log.insert_one(entry)
+    return {k: v for k, v in entry.items() if k != "_id"}
+
+class InventoryItemCreate(BaseModel):
+    name: str
+    unit: str = "g"
+    category: Optional[str] = None
+    product_id: Optional[str] = None   # null for pure raw (oil/spice)
+    qty_on_hand: float = 0
+    avg_cost: float = 0
+    reorder_level: float = 0
+    shelf_life_days: Optional[int] = None
+    suppliers: Optional[List[str]] = []
+    is_active: bool = True
+
+class InventoryItemUpdate(BaseModel):
+    name: Optional[str] = None
+    unit: Optional[str] = None
+    category: Optional[str] = None
+    reorder_level: Optional[float] = None
+    shelf_life_days: Optional[int] = None
+    suppliers: Optional[List[str]] = None
+    is_active: Optional[bool] = None
+    # qty_on_hand / avg_cost are NOT edited here — use inward (or adjust in 3B).
+
+class InwardRequest(BaseModel):
+    item_id: Optional[str] = None
+    product_id: Optional[str] = None
+    qty: float
+    purchase_price: float   # PER UNIT cost
+    supplier: Optional[str] = None
+    invoice_no: Optional[str] = None
+    note: Optional[str] = None
+
+@api_router.post("/inventory/{store_id}/items")
+async def create_inventory_item(store_id: str, data: InventoryItemCreate, user=Depends(get_current_user)):
+    """Create a raw inventory item for a store (managers; scope-checked)."""
+    require_inventory_manager(user)
+    assert_store_allowed(user, store_id)
+    if data.unit not in INVENTORY_UNITS:
+        raise HTTPException(status_code=400, detail=f"unit must be one of {sorted(INVENTORY_UNITS)}")
+    if data.product_id:
+        product = await db.products.find_one({"id": data.product_id}, {"_id": 0})
+        if not product:
+            raise HTTPException(status_code=404, detail="Product not found")
+        if product.get("product_type") == "ready_made":
+            raise HTTPException(status_code=400, detail="Ready-made meals are recipes, not stocked items")
+        dup = await db.inventory_items.find_one({"store_id": store_id, "product_id": data.product_id}, {"_id": 0})
+        if dup:
+            raise HTTPException(status_code=400, detail="Inventory item for this product already exists in this store")
+    now = datetime.now(timezone.utc).isoformat()
+    item = {
+        "id": str(uuid.uuid4()),
+        "store_id": store_id,
+        "product_id": data.product_id,
+        "name": data.name,
+        "unit": data.unit,
+        "category": data.category,
+        "qty_on_hand": float(data.qty_on_hand or 0),
+        "avg_cost": float(data.avg_cost or 0),
+        "reorder_level": float(data.reorder_level or 0),
+        "shelf_life_days": data.shelf_life_days,
+        "suppliers": data.suppliers or [],
+        "is_active": data.is_active,
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.inventory_items.insert_one(item)
+    return _public_item(item, user)
+
+@api_router.put("/inventory/{store_id}/items/{item_id}")
+async def update_inventory_item(store_id: str, item_id: str, data: InventoryItemUpdate, user=Depends(get_current_user)):
+    """Update raw item metadata (managers; scope-checked). Qty/cost change only via inward."""
+    require_inventory_manager(user)
+    assert_store_allowed(user, store_id)
+    item = await db.inventory_items.find_one({"id": item_id, "store_id": store_id}, {"_id": 0})
+    if not item:
+        raise HTTPException(status_code=404, detail="Inventory item not found")
+    updates = {k: v for k, v in data.dict().items() if v is not None}
+    if "unit" in updates and updates["unit"] not in INVENTORY_UNITS:
+        raise HTTPException(status_code=400, detail="Invalid unit")
+    if updates:
+        updates["updated_at"] = datetime.now(timezone.utc).isoformat()
+        await db.inventory_items.update_one({"id": item_id, "store_id": store_id}, {"$set": updates})
+    item = await db.inventory_items.find_one({"id": item_id, "store_id": store_id}, {"_id": 0})
+    return _public_item(item, user)
+
+@api_router.get("/inventory/{store_id}/items")
+async def list_inventory_items(store_id: str, user=Depends(get_current_user)):
+    """List a store's raw items. Managers see cost; cashier/kitchen see qty only."""
+    if not role_in(user, *STAFF_ROLES):
+        raise HTTPException(status_code=403, detail="Staff only")
+    assert_store_allowed(user, store_id)
+    items = await db.inventory_items.find({"store_id": store_id}, {"_id": 0}).sort("name", 1).to_list(2000)
+    return [_public_item(i, user) for i in items]
+
+@api_router.post("/inventory/{store_id}/inward")
+async def inventory_inward(store_id: str, data: InwardRequest, user=Depends(get_current_user)):
+    """Stock inward / GRN. Weighted-average cost; appends a movement_log 'inward'."""
+    require_inventory_manager(user)
+    assert_store_allowed(user, store_id)
+    if data.qty is None or data.qty <= 0:
+        raise HTTPException(status_code=400, detail="qty must be > 0")
+    if data.purchase_price is None or data.purchase_price < 0:
+        raise HTTPException(status_code=400, detail="purchase_price must be >= 0")
+    query = {"store_id": store_id}
+    if data.item_id:
+        query["id"] = data.item_id
+    elif data.product_id:
+        query["product_id"] = data.product_id
+    else:
+        raise HTTPException(status_code=400, detail="item_id or product_id is required")
+    item = await db.inventory_items.find_one(query, {"_id": 0})
+    if not item:
+        raise HTTPException(status_code=404, detail="Inventory item not found in this store")
+
+    old_qty = float(item.get("qty_on_hand", 0) or 0)
+    old_avg = float(item.get("avg_cost", 0) or 0)
+    new_qty = old_qty + data.qty
+    new_avg = ((old_qty * old_avg) + (data.qty * data.purchase_price)) / new_qty if new_qty > 0 else 0
+    now = datetime.now(timezone.utc).isoformat()
+    await db.inventory_items.update_one(
+        {"id": item["id"], "store_id": store_id},
+        {"$set": {"qty_on_hand": new_qty, "avg_cost": round(new_avg, 4),
+                  "last_inward_at": now, "last_inward_by": user["id"], "updated_at": now}},
+    )
+    await log_movement(
+        store_id=store_id, item_id=item["id"], product_id=item.get("product_id"),
+        mtype="inward", qty_delta=data.qty, qty_after=new_qty,
+        reason=data.note or f"GRN {data.invoice_no or ''}".strip() or "Stock inward",
+        user_id=user["id"], ref_id=data.invoice_no, unit_cost_at_time=data.purchase_price,
+    )
+    updated = await db.inventory_items.find_one({"id": item["id"], "store_id": store_id}, {"_id": 0})
+    return _public_item(updated, user)
+
+@api_router.get("/inventory/{store_id}/movements")
+async def list_movement_log(store_id: str, user=Depends(get_current_user)):
+    """Read-only movement log for a store (managers; scope-checked)."""
+    require_inventory_manager(user)
+    assert_store_allowed(user, store_id)
+    logs = await db.movement_log.find({"store_id": store_id}, {"_id": 0}).sort("created_at", -1).to_list(2000)
+    if not can_see_cost(user):  # defensive; managers only reach here anyway
+        for l in logs:
+            l.pop("unit_cost_at_time", None)
+    return logs
+
+@api_router.get("/inventory/{store_id}/valuation")
+async def inventory_valuation(store_id: str, user=Depends(get_current_user)):
+    """Stock valuation (qty * avg_cost) per item + store total. Cost-restricted."""
+    require_inventory_manager(user)  # cashier/kitchen -> 403
+    assert_store_allowed(user, store_id)
+    items = await db.inventory_items.find({"store_id": store_id}, {"_id": 0}).to_list(2000)
+    rows = []
+    total = 0.0
+    for i in items:
+        val = round(float(i.get("qty_on_hand", 0) or 0) * float(i.get("avg_cost", 0) or 0), 2)
+        total += val
+        rows.append({"item_id": i["id"], "name": i["name"], "qty_on_hand": i.get("qty_on_hand", 0),
+                     "avg_cost": i.get("avg_cost", 0), "value": val})
+    return {"store_id": store_id, "items": rows, "total_valuation": round(total, 2)}
+
+@api_router.get("/inventory/{store_id}/low-stock")
+async def inventory_low_stock(store_id: str, user=Depends(get_current_user)):
+    """Items at or below reorder level (staff; cost stripped for cashier/kitchen)."""
+    if not role_in(user, *STAFF_ROLES):
+        raise HTTPException(status_code=403, detail="Staff only")
+    assert_store_allowed(user, store_id)
+    items = await db.inventory_items.find({"store_id": store_id}, {"_id": 0}).to_list(2000)
+    low = [i for i in items if float(i.get("qty_on_hand", 0) or 0) <= float(i.get("reorder_level", 0) or 0)]
+    return [_public_item(i, user) for i in low]
+
+async def run_inventory_migration():
+    """Idempotent: for each active store x active SINGLE product, seed an
+    inventory_items row (qty from available_qty_grams, unit 'g', avg_cost 0).
+    Ready-made products are recipes and get NO stock row. Does not alter
+    product.available_qty_grams."""
+    stores = await db.stores.find({"status": {"$ne": "inactive"}}, {"_id": 0, "store_id": 1}).to_list(1000)
+    products = await db.products.find(
+        {"$or": [{"product_type": {"$ne": "ready_made"}}, {"product_type": {"$exists": False}}]},
+        {"_id": 0, "id": 1, "name": 1, "category": 1, "available_qty_grams": 1, "is_active": 1},
+    ).to_list(5000)
+    created = 0
+    for s in stores:
+        sid = s["store_id"]
+        for p in products:
+            if not p.get("is_active", True):
+                continue
+            exists = await db.inventory_items.find_one({"store_id": sid, "product_id": p["id"]}, {"_id": 0})
+            if exists:
+                continue
+            now = datetime.now(timezone.utc).isoformat()
+            await db.inventory_items.insert_one({
+                "id": str(uuid.uuid4()), "store_id": sid, "product_id": p["id"],
+                "name": p.get("name", ""), "unit": "g", "category": p.get("category"),
+                "qty_on_hand": float(p.get("available_qty_grams", 0) or 0), "avg_cost": 0.0,
+                "reorder_level": 0.0, "shelf_life_days": None, "suppliers": [],
+                "is_active": True, "created_at": now, "updated_at": now,
+            })
+            created += 1
+    logger.info(f"[migration] inventory seed complete (+{created} items)")
+    return created
+
+@api_router.post("/admin/migrate-inventory")
+async def admin_migrate_inventory(user=Depends(get_current_user)):
+    """HQ: (re-)run the raw-inventory seed migration (idempotent)."""
+    if not is_hq(user):
+        raise HTTPException(status_code=403, detail="HQ only")
+    created = await run_inventory_migration()
+    return {"message": "Inventory migration complete", "created": created}
+
 app.include_router(api_router)
 
 app.add_middleware(
@@ -5515,11 +5763,26 @@ async def on_startup():
         logger.info("[startup] coupon_redemptions indexes ensured")
     except Exception as e:
         logger.error(f"[startup] coupon_redemptions index error: {e}")
+    # Phase 3A: one inventory row per (store, product) for sold raws
+    try:
+        await db.inventory_items.create_index(
+            [("store_id", 1), ("product_id", 1)], unique=True,
+            partialFilterExpression={"product_id": {"$type": "string"}},
+        )
+        await db.movement_log.create_index([("store_id", 1), ("created_at", -1)])
+        logger.info("[startup] inventory indexes ensured")
+    except Exception as e:
+        logger.error(f"[startup] inventory index error: {e}")
     # Multi-store foundation: ensure default store + migrate legacy data
     try:
         await run_store_migration()
     except Exception as e:
         logger.error(f"[startup] store migration error: {e}")
+    # Phase 3A: seed raw inventory rows from existing single products
+    try:
+        await run_inventory_migration()
+    except Exception as e:
+        logger.error(f"[startup] inventory migration error: {e}")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
