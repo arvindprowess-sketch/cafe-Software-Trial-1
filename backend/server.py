@@ -1843,7 +1843,21 @@ async def create_order(data: OrderCreate, user=Depends(get_current_user)):
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.orders.insert_one(order)
-    
+
+    # Phase 2A: record ONE coupon redemption per PLACED order (append-only).
+    # Quote / apply-coupon never write here — only successful placement does.
+    if data.coupon_code:
+        off = await db.offers.find_one({"coupon_code": data.coupon_code}, {"_id": 0})
+        await db.coupon_redemptions.insert_one({
+            "id": str(uuid.uuid4()),
+            "offer_id": off["id"] if off else None,
+            "coupon_code": data.coupon_code,
+            "user_id": user["id"],
+            "store_id": store_id,
+            "order_id": order_id,
+            "redeemed_at": datetime.now(timezone.utc).isoformat(),
+        })
+
     # Auto-hide low stock single products
     await db.products.update_many(
         {"product_type": "single", "available_qty_grams": {"$lte": 0}},
@@ -3326,6 +3340,13 @@ class OfferCreate(BaseModel):
     start_date: Optional[str] = None
     end_date: Optional[str] = None
     is_active: bool = True
+    # Phase 2A — scope + usage controls (all optional, backward compatible)
+    scope: str = "all"                          # "all" | "cluster" | "stores"
+    store_ids: List[str] = []                    # used when scope == "stores"
+    cluster_owner_id: Optional[str] = None       # area_manager whose cluster defines a "cluster" offer (set server-side)
+    usage_limit_total: Optional[int] = None      # null = unlimited
+    usage_limit_per_user: Optional[int] = None   # null = unlimited
+    first_order_only: bool = False               # valid only on a user's first order
 
 class OfferUpdate(BaseModel):
     title: Optional[str] = None
@@ -3340,6 +3361,110 @@ class OfferUpdate(BaseModel):
     min_order_value: Optional[float] = None
     max_discount: Optional[float] = None
     is_active: Optional[bool] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    # Phase 2A
+    scope: Optional[str] = None
+    store_ids: Optional[List[str]] = None
+    cluster_owner_id: Optional[str] = None
+    usage_limit_total: Optional[int] = None
+    usage_limit_per_user: Optional[int] = None
+    first_order_only: Optional[bool] = None
+
+# ========== PHASE 2A — shared offer/coupon validation (scope + date + usage) ==========
+def compute_offer_discount(offer: dict, subtotal: float, line_items: list) -> float:
+    """Discount math shared by apply-coupon, cart_quote and order placement."""
+    dtype = offer.get("discount_type")
+    if dtype == "bogo":
+        prices = sorted([float(li.get("price", 0)) for li in (line_items or [])])
+        d = prices[0] if len(prices) >= 2 else 0.0
+    elif dtype == "percentage":
+        d = subtotal * offer.get("discount_value", 0) / 100
+        if offer.get("max_discount"):
+            d = min(d, offer["max_discount"])
+    else:  # flat
+        d = offer.get("discount_value", 0)
+        if offer.get("max_discount"):
+            d = min(d, offer["max_discount"])
+    return round(min(d, subtotal), 2)
+
+async def offer_cluster_store_ids(offer: dict) -> list:
+    """Stores in the cluster that owns a scope=='cluster' offer."""
+    owner_id = offer.get("cluster_owner_id")
+    if not owner_id:
+        return []
+    owner = await db.users.find_one({"id": owner_id}, {"_id": 0})
+    return (owner or {}).get("cluster_store_ids") or []
+
+async def validate_offer_for_order(offer: dict, store_id: Optional[str], user: dict,
+                                   subtotal: float, line_items: list):
+    """THE single coupon validator. Returns (ok: bool, discount: float, error: str|None).
+    Used identically by /orders/apply-coupon, /cart/quote and order placement so
+    scope/date/usage rules can never diverge. Offers with no scope field are
+    treated as scope 'all' (backward compatible)."""
+    now = datetime.now(timezone.utc).isoformat()
+    if not offer.get("is_active", True):
+        return (False, 0.0, "This coupon is not active")
+    # Date window (null dates = always valid)
+    if offer.get("start_date") and now < offer["start_date"]:
+        return (False, 0.0, "This coupon is not active yet")
+    if offer.get("end_date") and now > offer["end_date"]:
+        return (False, 0.0, "This coupon has expired")
+    # Scope
+    scope = offer.get("scope", "all")
+    sid = store_id or DEFAULT_STORE_ID
+    if scope == "stores":
+        if sid not in (offer.get("store_ids") or []):
+            return (False, 0.0, "This coupon is not valid at this store")
+    elif scope == "cluster":
+        if sid not in await offer_cluster_store_ids(offer):
+            return (False, 0.0, "This coupon is not valid at this store")
+    # Minimum order value
+    min_ov = offer.get("min_order_value", 0) or 0
+    if subtotal < min_ov:
+        return (False, 0.0, f"Add ₹{round(min_ov - subtotal)} more to use {offer.get('coupon_code') or 'this coupon'}")
+    # First-order-only
+    if offer.get("first_order_only"):
+        prior = await db.orders.count_documents({"user_id": user["id"], "status": {"$ne": "cancelled"}})
+        if prior >= 1:
+            return (False, 0.0, "This coupon is valid on your first order only")
+    # Usage limits (read from append-only coupon_redemptions)
+    code = offer.get("coupon_code")
+    if code:
+        if offer.get("usage_limit_total") is not None:
+            total_used = await db.coupon_redemptions.count_documents({"coupon_code": code})
+            if total_used >= offer["usage_limit_total"]:
+                return (False, 0.0, "This coupon's usage limit has been reached")
+        if offer.get("usage_limit_per_user") is not None:
+            mine = await db.coupon_redemptions.count_documents({"coupon_code": code, "user_id": user["id"]})
+            if mine >= offer["usage_limit_per_user"]:
+                return (False, 0.0, "You have already used this coupon")
+    return (True, compute_offer_discount(offer, subtotal, line_items), None)
+
+def assert_offer_manage_allowed(user: dict, scope: str, store_ids: list, cluster_owner_id: Optional[str]):
+    """Authorize creating/updating an offer of the given scope for this user.
+    super_admin: any. area_manager: cluster (own) or stores within own cluster.
+    store_manager: stores within own store only. cashier/kitchen: 403."""
+    role = normalize_role(user)
+    if role not in ("super_admin", "area_manager", "store_manager"):
+        raise HTTPException(status_code=403, detail="Not allowed to manage offers")
+    if role == "super_admin":
+        return
+    if scope == "all":
+        raise HTTPException(status_code=403, detail="Only HQ can create chain-wide offers")
+    if scope == "cluster":
+        if role != "area_manager":
+            raise HTTPException(status_code=403, detail="Only area managers can create cluster offers")
+        if cluster_owner_id and cluster_owner_id != user["id"]:
+            raise HTTPException(status_code=403, detail="Cannot create offers for another cluster")
+        return
+    if scope == "stores":
+        if not store_ids:
+            raise HTTPException(status_code=400, detail="scope 'stores' requires store_ids")
+        for sid in store_ids:
+            assert_store_allowed(user, sid)   # area=own cluster, store_manager=own store
+        return
+    raise HTTPException(status_code=400, detail="Invalid scope")
 
 @api_router.get("/offers")
 async def get_active_offers():
@@ -3349,46 +3474,76 @@ async def get_active_offers():
 
 @api_router.get("/offers/all")
 async def get_all_offers(user=Depends(get_current_user)):
-    """Admin: Get all offers"""
-    if not is_hq(user):
-        raise HTTPException(status_code=403, detail="HQ only")
-    offers = await db.offers.find({}, {"_id": 0}).sort("created_at", -1).to_list(50)
-    return offers
+    """List offers the caller may manage. super_admin: all. area_manager: own
+    cluster offers (cluster owner == self, or store-scoped within own cluster).
+    store_manager: store-scoped offers covering own store. cashier/kitchen: 403."""
+    role = normalize_role(user)
+    if role not in ("super_admin", "area_manager", "store_manager"):
+        raise HTTPException(status_code=403, detail="Not allowed")
+    offers = await db.offers.find({}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    if role == "super_admin":
+        return offers
+    scope_ids = set(staff_store_scope(user) or [])
+    visible = []
+    for o in offers:
+        osc = o.get("scope", "all")
+        if role == "area_manager" and osc == "cluster" and o.get("cluster_owner_id") == user["id"]:
+            visible.append(o)
+        elif osc == "stores" and (set(o.get("store_ids") or []) & scope_ids):
+            visible.append(o)
+    return visible
 
 @api_router.post("/offers")
 async def create_offer(data: OfferCreate, user=Depends(get_current_user)):
-    """Admin: Create a new offer"""
-    if not is_hq(user):
-        raise HTTPException(status_code=403, detail="HQ only")
+    """Create an offer. super_admin: any scope. area_manager: cluster (own) or
+    own-cluster stores. store_manager: own store only. cashier/kitchen: 403."""
+    scope = data.scope or "all"
+    cluster_owner_id = data.cluster_owner_id
+    if normalize_role(user) == "area_manager" and scope == "cluster":
+        cluster_owner_id = user["id"]  # force cluster ownership to the creator
+    if normalize_role(user) == "super_admin" and scope == "cluster" and not cluster_owner_id:
+        raise HTTPException(status_code=400, detail="Cluster offers require a cluster_owner_id (area manager)")
+    assert_offer_manage_allowed(user, scope, data.store_ids or [], cluster_owner_id)
     offer = {
         "id": str(uuid.uuid4()),
         **data.dict(),
+        "scope": scope,
+        "cluster_owner_id": cluster_owner_id,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "created_by": user["id"],
     }
     await db.offers.insert_one(offer)
-    del offer["_id"]
-    return offer
+    return {k: v for k, v in offer.items() if k != "_id"}
 
 @api_router.put("/offers/{offer_id}")
 async def update_offer(offer_id: str, data: OfferUpdate, user=Depends(get_current_user)):
-    if not is_hq(user):
-        raise HTTPException(status_code=403, detail="HQ only")
-    update_data = {k: v for k, v in data.dict().items() if v is not None}
-    if update_data:
-        await db.offers.update_one({"id": offer_id}, {"$set": update_data})
     offer = await db.offers.find_one({"id": offer_id}, {"_id": 0})
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
+    # Caller must be allowed to manage the offer's CURRENT scope...
+    assert_offer_manage_allowed(user, offer.get("scope", "all"), offer.get("store_ids") or [], offer.get("cluster_owner_id"))
+    update_data = {k: v for k, v in data.dict().items() if v is not None}
+    # ...and, if the scope/stores change, to manage the NEW scope too.
+    new_scope = update_data.get("scope", offer.get("scope", "all"))
+    new_stores = update_data.get("store_ids", offer.get("store_ids") or [])
+    new_owner = update_data.get("cluster_owner_id", offer.get("cluster_owner_id"))
+    if normalize_role(user) == "area_manager" and new_scope == "cluster":
+        new_owner = user["id"]
+        update_data["cluster_owner_id"] = new_owner
+    if "scope" in update_data or "store_ids" in update_data:
+        assert_offer_manage_allowed(user, new_scope, new_stores, new_owner)
+    if update_data:
+        await db.offers.update_one({"id": offer_id}, {"$set": update_data})
+    offer = await db.offers.find_one({"id": offer_id}, {"_id": 0})
     return offer
 
 @api_router.delete("/offers/{offer_id}")
 async def delete_offer(offer_id: str, user=Depends(get_current_user)):
-    if not is_hq(user):
-        raise HTTPException(status_code=403, detail="HQ only")
-    result = await db.offers.delete_one({"id": offer_id})
-    if result.deleted_count == 0:
+    offer = await db.offers.find_one({"id": offer_id}, {"_id": 0})
+    if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
+    assert_offer_manage_allowed(user, offer.get("scope", "all"), offer.get("store_ids") or [], offer.get("cluster_owner_id"))
+    await db.offers.delete_one({"id": offer_id})
     return {"message": "Offer deleted"}
 
 @api_router.get("/offers/{offer_id}/products")
@@ -3971,44 +4126,30 @@ async def apply_coupon(
     coupon_code: str = Body(..., embed=True),
     cart_items: Optional[List[Dict[str, Any]]] = Body(None, embed=True),
     cart_total: Optional[float] = Body(None, embed=True),
+    store_id: Optional[str] = Body(None, embed=True),
     user=Depends(get_current_user),
 ):
-    """Apply coupon code and return discount details (supports percentage, flat, bogo)."""
-    offer = await db.offers.find_one({"coupon_code": coupon_code, "is_active": True}, {"_id": 0})
+    """Validate a coupon and return discount details (percentage/flat/bogo).
+    Uses the shared validate_offer_for_order so scope/date/usage match cart_quote.
+    This is a PREVIEW only — it never records a redemption."""
+    offer = await db.offers.find_one({"coupon_code": coupon_code}, {"_id": 0})
     if not offer:
         raise HTTPException(status_code=404, detail="Invalid or expired coupon code")
-
-    if cart_total is not None and cart_total < offer.get("min_order_value", 0):
-        raise HTTPException(status_code=400, detail=f"Minimum order ₹{offer.get('min_order_value', 0)} required for this coupon")
-
-    computed_discount = 0.0
-    dtype = offer["discount_type"]
     items = cart_items or []
-
-    if dtype == "bogo":
-        # B6: cheapest applicable item is free (buy one, get one). Needs >=2 units.
-        prices = sorted([float(i.get("price", 0)) for i in items])
-        if len(prices) >= 2:
-            computed_discount = prices[0]
-    elif dtype == "percentage" and cart_total is not None:
-        computed_discount = cart_total * (offer["discount_value"] / 100)
-        if offer.get("max_discount"):
-            computed_discount = min(computed_discount, offer["max_discount"])
-    elif dtype == "flat":
-        computed_discount = offer["discount_value"]
-        if offer.get("max_discount"):
-            computed_discount = min(computed_discount, offer["max_discount"])
-
+    subtotal = cart_total if cart_total is not None else round(sum(float(i.get("price", 0)) for i in items), 2)
+    ok, discount, error = await validate_offer_for_order(offer, store_id, user, subtotal, items)
+    if not ok:
+        raise HTTPException(status_code=400, detail=error)
     return {
         "offer_id": offer["id"],
         "title": offer["title"],
-        "discount_type": dtype,
+        "discount_type": offer["discount_type"],
         "discount_value": offer["discount_value"],
         "max_discount": offer.get("max_discount"),
         "min_order_value": offer.get("min_order_value", 0),
         "applicable_to": offer["applicable_to"],
         "applicable_category": offer.get("applicable_category"),
-        "computed_discount": round(computed_discount, 2),
+        "computed_discount": round(discount, 2),
     }
 
 FREE_DELIVERY_THRESHOLD = 300
@@ -4019,6 +4160,7 @@ async def cart_quote(
     order_type: str = Body("dine-in"),
     coupon_code: Optional[str] = Body(None),
     tip: float = Body(0),
+    store_id: Optional[str] = Body(None),
     user=Depends(get_current_user),
 ):
     """Authoritative, server-side cart bill. Recomputes every price from the CURRENT
@@ -4075,32 +4217,21 @@ async def cart_quote(
         })
     subtotal = round(subtotal, 2)
 
-    # Coupon / offer
+    # Coupon / offer — single shared validator (scope/date/usage enforced identically)
     discount = 0.0
     coupon_info = None
     coupon_error = None
     if coupon_code:
-        offer = await db.offers.find_one({"coupon_code": coupon_code, "is_active": True}, {"_id": 0})
+        offer = await db.offers.find_one({"coupon_code": coupon_code}, {"_id": 0})
         if not offer:
             coupon_error = "Invalid or expired coupon code"
-        elif subtotal < offer.get("min_order_value", 0):
-            coupon_error = f"Add ₹{round(offer['min_order_value'] - subtotal)} more to use {coupon_code}"
         else:
-            dtype = offer["discount_type"]
-            if dtype == "bogo":
-                prices = sorted([li["price"] for li in line_items])
-                if len(prices) >= 2:
-                    discount = prices[0]
-            elif dtype == "percentage":
-                discount = subtotal * offer["discount_value"] / 100
-                if offer.get("max_discount"):
-                    discount = min(discount, offer["max_discount"])
+            ok, disc, error = await validate_offer_for_order(offer, store_id, user, subtotal, line_items)
+            if not ok:
+                coupon_error = error
             else:
-                discount = offer["discount_value"]
-                if offer.get("max_discount"):
-                    discount = min(discount, offer["max_discount"])
-            discount = round(min(discount, subtotal), 2)
-            coupon_info = {"code": coupon_code, "title": offer["title"], "discount_type": dtype}
+                discount = disc
+                coupon_info = {"code": coupon_code, "title": offer["title"], "discount_type": offer["discount_type"]}
 
     # Delivery fee (free over threshold) + tip
     free_delivery = subtotal >= FREE_DELIVERY_THRESHOLD
@@ -5625,6 +5756,13 @@ async def on_startup():
         logger.info("[startup] product_overrides unique index ensured")
     except Exception as e:
         logger.error(f"[startup] override index error: {e}")
+    # Phase 2A: coupon redemption counters
+    try:
+        await db.coupon_redemptions.create_index("coupon_code")
+        await db.coupon_redemptions.create_index([("coupon_code", 1), ("user_id", 1)])
+        logger.info("[startup] coupon_redemptions indexes ensured")
+    except Exception as e:
+        logger.error(f"[startup] coupon_redemptions index error: {e}")
     # Phase 3A: one inventory row per (store, product) for sold raws
     try:
         await db.inventory_items.create_index(
