@@ -6521,6 +6521,147 @@ async def export_report_pdf(
     )
 
 # ==========================================================================
+# PHASE 5A — Day open/close + cash reconciliation + stock snapshots +
+# per-cashier/shift sales. Reuses inventory_items + orders. A closed day is
+# immutable. Cost/store scope enforced; kitchen has no access.
+# ==========================================================================
+class DayOpenRequest(BaseModel):
+    opening_cash_float: float = 0
+    business_date: Optional[str] = None
+    notes: Optional[str] = None
+
+class DayCloseRequest(BaseModel):
+    closing_cash_counted: float
+    payouts: float = 0
+    notes: Optional[str] = None
+
+async def _inventory_snapshot(store_id: str):
+    items = await db.inventory_items.find({"store_id": store_id}, {"_id": 0, "id": 1, "qty_on_hand": 1}).to_list(5000)
+    return [{"item_id": i["id"], "qty_on_hand": float(i.get("qty_on_hand", 0) or 0)} for i in items]
+
+async def _cash_sales_in_window(store_id: str, start_iso: str, end_iso: str) -> float:
+    q = {"store_id": store_id, "payment_mode": "cash", "status": {"$ne": "cancelled"},
+         "created_at": {"$gte": start_iso, "$lte": end_iso}}
+    orders = await db.orders.find(q, {"_id": 0, "total_price": 1}).to_list(100000)
+    return round(sum(float(o.get("total_price", 0) or 0) for o in orders), 2)
+
+@api_router.post("/stores/{store_id}/day/open")
+async def open_business_day(store_id: str, data: DayOpenRequest, user=Depends(get_current_user)):
+    """Open the business day (store_manager or cashier, own store). Captures the
+    opening cash float + a snapshot of current inventory. One open day per store."""
+    if normalize_role(user) not in ("store_manager", "cashier"):
+        raise HTTPException(status_code=403, detail="Store manager or cashier only")
+    assert_store_allowed(user, store_id)
+    existing = await db.business_days.find_one({"store_id": store_id, "status": "open"}, {"_id": 0})
+    if existing:
+        raise HTTPException(status_code=409, detail="A business day is already open for this store")
+    now = datetime.now(timezone.utc).isoformat()
+    day = {
+        "id": str(uuid.uuid4()),
+        "store_id": store_id,
+        "business_date": data.business_date or now[:10],
+        "status": "open",
+        "opened_by": user["id"],
+        "opened_at": now,
+        "opening_cash_float": float(data.opening_cash_float or 0),
+        "opening_stock_snapshot": await _inventory_snapshot(store_id),
+        "closed_by": None, "closed_at": None,
+        "closing_cash_counted": None, "closing_stock_snapshot": None,
+        "expected_cash": None, "cash_variance": None,
+        "payouts": 0, "notes": data.notes,
+    }
+    await db.business_days.insert_one(day)
+    return {k: v for k, v in day.items() if k != "_id"}
+
+@api_router.post("/stores/{store_id}/day/close")
+async def close_business_day(store_id: str, data: DayCloseRequest, user=Depends(get_current_user)):
+    """Close the open business day (store_manager only). Computes expected cash =
+    opening float + cash sales in window - payouts, and the variance vs counted."""
+    if normalize_role(user) != "store_manager":
+        raise HTTPException(status_code=403, detail="Only the store manager may close the day")
+    assert_store_allowed(user, store_id)
+    day = await db.business_days.find_one({"store_id": store_id, "status": "open"}, {"_id": 0})
+    if not day:
+        raise HTTPException(status_code=400, detail="No open business day for this store")
+    now = datetime.now(timezone.utc).isoformat()
+    cash_sales = await _cash_sales_in_window(store_id, day["opened_at"], now)
+    payouts = float(data.payouts or 0)
+    expected_cash = round(float(day.get("opening_cash_float", 0) or 0) + cash_sales - payouts, 2)
+    cash_variance = round(float(data.closing_cash_counted) - expected_cash, 2)
+    await db.business_days.update_one({"id": day["id"]}, {"$set": {
+        "status": "closed", "closed_by": user["id"], "closed_at": now,
+        "closing_cash_counted": float(data.closing_cash_counted),
+        "closing_stock_snapshot": await _inventory_snapshot(store_id),
+        "cash_sales": cash_sales, "payouts": payouts,
+        "expected_cash": expected_cash, "cash_variance": cash_variance,
+        "close_notes": data.notes,
+    }})
+    return await db.business_days.find_one({"id": day["id"]}, {"_id": 0})
+
+def _strip_day_for_cashier(day: dict) -> dict:
+    """Cashier sees own-shift cash, not the store reconciliation / P&L."""
+    hidden = ("expected_cash", "cash_variance", "opening_stock_snapshot", "closing_stock_snapshot")
+    return {k: v for k, v in day.items() if k not in hidden}
+
+@api_router.get("/stores/{store_id}/day/{business_date}")
+async def get_business_day(store_id: str, business_date: str, user=Depends(get_current_user)):
+    """Read a day's record + reconciliation. store_mgr/area/HQ see variance;
+    cashier sees own-shift cash only. kitchen 403."""
+    role = normalize_role(user)
+    if role not in ("super_admin", "area_manager", "store_manager", "cashier"):
+        raise HTTPException(status_code=403, detail="No access")
+    assert_store_allowed(user, store_id)
+    day = await db.business_days.find_one({"store_id": store_id, "business_date": business_date}, {"_id": 0})
+    if not day:
+        raise HTTPException(status_code=404, detail="No business day for that date")
+    return _strip_day_for_cashier(day) if role == "cashier" else day
+
+@api_router.get("/stores/{store_id}/shifts/summary")
+async def shift_sales_summary(
+    store_id: str,
+    user=Depends(get_current_user),
+    date_from: Optional[str] = Query(None, alias="from"),
+    date_to: Optional[str] = Query(None, alias="to"),
+):
+    """Per-cashier walk-in sales (order_count, revenue, by payment_mode).
+    store_mgr/area/HQ see all cashiers; a cashier sees only their own totals;
+    kitchen 403."""
+    role = normalize_role(user)
+    if role not in ("super_admin", "area_manager", "store_manager", "cashier"):
+        raise HTTPException(status_code=403, detail="No access")
+    assert_store_allowed(user, store_id)
+    match = {"store_id": store_id, "order_source": "walk_in", "status": {"$ne": "cancelled"}}
+    rng = {}
+    if date_from:
+        rng["$gte"] = date_from
+    if date_to:
+        rng["$lte"] = date_to + "T23:59:59.999999+00:00"
+    if rng:
+        match["created_at"] = rng
+    if role == "cashier":
+        match["user_id"] = user["id"]  # own totals only
+    orders = await db.orders.find(match, {"_id": 0, "user_id": 1, "total_price": 1, "payment_mode": 1}).to_list(100000)
+    by_user = {}
+    for o in orders:
+        uid = o.get("user_id")
+        b = by_user.setdefault(uid, {"cashier_id": uid, "order_count": 0, "revenue": 0.0, "by_payment_mode": {}})
+        b["order_count"] += 1
+        b["revenue"] += float(o.get("total_price", 0) or 0)
+        pm = o.get("payment_mode", "cash")
+        b["by_payment_mode"][pm] = round(b["by_payment_mode"].get(pm, 0.0) + float(o.get("total_price", 0) or 0), 2)
+    # attach names
+    uids = [u for u in by_user.keys() if u]
+    users = await db.users.find({"id": {"$in": uids}}, {"_id": 0, "id": 1, "name": 1}).to_list(1000)
+    name_by_id = {u["id"]: u.get("name") for u in users}
+    rows = []
+    for uid, b in by_user.items():
+        b["cashier_name"] = name_by_id.get(uid)
+        b["revenue"] = round(b["revenue"], 2)
+        rows.append(b)
+    rows.sort(key=lambda r: r["revenue"], reverse=True)
+    return {"store_id": store_id, "cashiers": rows}
+
+# ==========================================================================
 # PHASE 5B — Refund / void (reason + audit + stock reversal) + GST invoice.
 # Reuses explode_to_raw + log_movement + inventory_items. Mirrors the discard
 # raise/finalize pattern. Cost is never exposed to cashier/kitchen; the invoice
