@@ -42,6 +42,26 @@ JWT_ALGORITHM = "HS256"
 _origins_env = os.environ.get("ALLOWED_ORIGINS", "").strip()
 ALLOWED_ORIGINS = [o.strip() for o in _origins_env.split(",") if o.strip()] or ["*"]
 
+# ========== ENV GUARD ==========
+def assert_prod_secrets(env: str, jwt_secret: str, origins: list) -> None:
+    """Raise RuntimeError if production env is missing required secrets."""
+    is_prod = env.lower() in ("prod", "production")
+    if not is_prod:
+        return
+    if not jwt_secret:
+        raise RuntimeError("JWT_SECRET must be set in production")
+    if origins == ["*"]:
+        raise RuntimeError("ALLOWED_ORIGINS must be set in production")
+
+_APP_ENV = os.environ.get("APP_ENV", "development")
+_jwt_secret_raw = os.environ.get("JWT_SECRET", "")
+assert_prod_secrets(_APP_ENV, _jwt_secret_raw, ALLOWED_ORIGINS)
+
+if not _jwt_secret_raw:
+    logger.warning("JWT_SECRET is not set; using a random secret (tokens will not survive restarts)")
+if ALLOWED_ORIGINS == ["*"]:
+    logger.warning("ALLOWED_ORIGINS is not set; defaulting to ['*'] (insecure for credentialed requests)")
+
 # ========== SOCKET.IO REAL-TIME SERVER (Part C) ==========
 sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")
 # Generic role rooms — used only for GLOBAL events (e.g. catalog/menu updates).
