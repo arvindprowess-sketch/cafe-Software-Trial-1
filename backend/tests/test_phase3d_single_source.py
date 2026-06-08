@@ -45,7 +45,9 @@ def loose_order(store_id, product_id, name, grams=100, price=50):
         "order_type": "dine-in", "store_id": store_id,
         "items": [{"product_id": product_id, "product_name": name, "grams": grams, "price": price,
                    "quantity": 1, "calories": 1, "protein": 1, "carbs": 1, "fat": 1, "product_type": "single"}],
-        "total_price": price, "total_calories": 1, "total_protein": 1, "total_carbs": 1, "total_fat": 1,
+        # total_price is now server-authoritative; send high so the anti-tamper
+        # underpayment guard never fires (these tests assert on stock, not price).
+        "total_price": 1000000, "total_calories": 1, "total_protein": 1, "total_carbs": 1, "total_fat": 1,
         "confirm_duplicate": True,
     }
 

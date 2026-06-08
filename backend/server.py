@@ -1693,17 +1693,24 @@ async def create_order(data: OrderCreate, user=Depends(get_current_user)):
     # Multi-store: every order is tied to a store. POS/staff orders use the staff
     # member's own store; customer orders carry the selected store_id.
     store_id = await resolve_order_store_id(user, data.store_id)
-    # Delivery/takeaway charge: trust client-provided delivery_fee when present
-    # (it is computed & validated by /cart/quote), else fall back to defaults.
-    if data.delivery_fee is not None:
-        extra_charge = data.delivery_fee
-    elif data.order_type == "takeaway":
-        extra_charge = 10
-    elif data.order_type == "delivery":
-        extra_charge = 30
-    else:
-        extra_charge = 0
-    tip_amount = (data.tip or 0) if data.order_type == "delivery" else 0
+    # FIX 1 — server-authoritative bill (anti-tamper). Prices, discount, delivery
+    # fee, GST and totals are recomputed here from the store's resolved menu +
+    # validate_offer_for_order; client-sent money fields are NOT trusted.
+    bill = await compute_authoritative_bill(
+        [it.dict() for it in data.items], data.order_type, data.coupon_code,
+        (data.tip or 0), store_id, user)
+    # A coupon the client asked for that the server rejects -> 400 (no silent discount).
+    if data.coupon_code and not bill["coupon_applied"]:
+        raise HTTPException(status_code=400, detail={"error": "coupon_rejected",
+                            "reason": bill.get("coupon_error") or "Coupon not valid for this order"})
+    # Anti-tamper: reject if the client tries to pay LESS than the server bill
+    # (net food). Client money fields are ignored either way; the saved order uses
+    # the server numbers below.
+    if data.total_price is not None and float(data.total_price) < bill["net_food"] - 1.00:
+        raise HTTPException(status_code=400, detail={"error": "price_mismatch",
+                            "server_total": bill["net_food"], "client_total": float(data.total_price)})
+    extra_charge = bill["delivery_fee"]
+    tip_amount = bill["tip"]
 
     # B3: Duplicate-order guard. Flag identical order from same user/table within 2 minutes.
     if not data.confirm_duplicate:
@@ -1786,27 +1793,27 @@ async def create_order(data: OrderCreate, user=Depends(get_current_user)):
         "user_name": user["name"],
         "order_type": data.order_type,
         "items": processed_items,
-        "total_price": round(data.total_price + extra_charge + tip_amount, 2),
+        "total_price": bill["total"],                       # server-authoritative grand total
         "extra_charge": extra_charge,
-        "delivery_fee": extra_charge if data.order_type == "delivery" else 0,
+        "delivery_fee": bill["delivery_fee"] if data.order_type == "delivery" else (extra_charge if data.order_type == "takeaway" else 0),
         "tip": tip_amount,
         "delivery_time": data.delivery_time if data.order_type == "delivery" else None,
         "gstin": data.gstin,
         "business_name": data.business_name,
-        "item_subtotal": data.item_subtotal if data.item_subtotal is not None else data.total_price,
+        "item_subtotal": bill["item_subtotal"],             # server-authoritative
         "total_calories": data.total_calories,
         "total_protein": data.total_protein,
         "total_carbs": data.total_carbs,
         "total_fat": data.total_fat,
         "fitness_goal": data.fitness_goal,
         "payment_mode": getattr(data, 'payment_mode', None) or "cash",
-        "coupon_code": data.coupon_code,
-        "discount": data.discount or 0,
+        "coupon_code": data.coupon_code if bill["coupon_applied"] else None,
+        "discount": bill["discount"],                       # ONLY from validate_offer_for_order
         "customer_name": data.customer_name or user["name"],
         "order_source": "walk_in" if role_in(user, "cashier", "store_manager", "super_admin") else "app",
         "gst_percent": 5,
-        "gst_amount": round((data.total_price + extra_charge) * 5 / 105, 2),
-        "base_amount": round((data.total_price + extra_charge) * 100 / 105, 2),
+        "gst_amount": bill["gst_amount"],                   # server-authoritative
+        "base_amount": bill["base_amount"],                 # server-authoritative
         "status": order_status,
         "payment_status": "paid" if getattr(data, 'payment_mode', None) in ("cash", "upi", "card", "other") else "unpaid",
         "is_scheduled": bool(is_scheduled),
@@ -1827,8 +1834,9 @@ async def create_order(data: OrderCreate, user=Depends(get_current_user)):
         logger.error(f"[3C] stock decrement error for order {order_id}: {e}")
 
     # Phase 2A: record ONE coupon redemption per PLACED order (append-only).
-    # Quote / apply-coupon never write here — only successful placement does.
-    if data.coupon_code:
+    # Quote / apply-coupon never write here — only successful placement does, and
+    # only if the SERVER actually applied the coupon (FIX 1).
+    if data.coupon_code and bill["coupon_applied"]:
         off = await db.offers.find_one({"coupon_code": data.coupon_code}, {"_id": 0})
         await db.coupon_redemptions.insert_one({
             "id": str(uuid.uuid4()),
@@ -4119,19 +4127,15 @@ async def apply_coupon(
 
 FREE_DELIVERY_THRESHOLD = 300
 
-@api_router.post("/cart/quote")
-async def cart_quote(
-    items: List[Dict[str, Any]] = Body(...),
-    order_type: str = Body("dine-in"),
-    coupon_code: Optional[str] = Body(None),
-    tip: float = Body(0),
-    store_id: Optional[str] = Body(None),
-    user=Depends(get_current_user),
-):
-    """Authoritative, server-side cart bill. Recomputes every price from the CURRENT
-    product records (anti-tamper), validates live stock, applies coupon/offer, and
-    computes delivery fee / GST / tip / savings. Used both for the live bill and the
-    pre-payment stock recheck."""
+async def compute_authoritative_bill(items, order_type, coupon_code, tip, store_id, user):
+    """THE single server-side bill. Every price comes from the store's resolved
+    menu (resolve_menu_for_store / product master) — never from the client; the
+    discount comes ONLY from validate_offer_for_order. Used by /cart/quote AND
+    by order placement so money can never be tampered with."""
+    _sid = store_id or DEFAULT_STORE_ID
+    resolved = await resolve_menu_for_store(_sid)
+    price_map = {r["id"]: r for r in resolved}
+
     line_items = []
     out_of_stock = []
     price_changes = []
@@ -4145,11 +4149,12 @@ async def cart_quote(
         if not product or product.get("is_active") is False:
             out_of_stock.append({"product_id": pid, "name": it.get("name", "Item"), "reason": "no_longer_available"})
             continue
-        _sid = store_id or DEFAULT_STORE_ID  # Phase 3C: availability from this store's raw stock
+        resolved_item = price_map.get(pid)
         if ptype == "ready_made":
             qty = int(it.get("quantity", 1) or 1)
             serving = product.get("serving_grams", 300)
-            unit_price = product.get("fixed_price") or round(product["cost_per_100g"] * serving / 100, 2)
+            base_unit = product.get("fixed_price") or round(product["cost_per_100g"] * serving / 100, 2)
+            unit_price = resolved_item["selling_price"] if resolved_item else base_unit  # per-store price
             line_price = round(unit_price * qty, 2)
             stock_ok = await raw_meal_available(_sid, pid, qty)
             line_grams = serving * qty
@@ -4158,7 +4163,7 @@ async def cart_quote(
             grams = float(it.get("grams", 100) or 100)
             qty = 1
             stock_ok = await raw_single_available(_sid, pid, grams)
-            unit_price = product["cost_per_100g"]
+            unit_price = resolved_item["selling_price"] if resolved_item else product["cost_per_100g"]  # per-100g
             line_price = round(grams / 100 * unit_price, 2)
             line_grams = grams
             factor = grams / 100
@@ -4166,13 +4171,13 @@ async def cart_quote(
             out_of_stock.append({"product_id": pid, "name": product["name"], "reason": "out_of_stock"})
             continue
         old_unit = it.get("cost_per_100g")
-        if old_unit is not None and ptype == "single" and abs(float(old_unit) - product["cost_per_100g"]) > 0.01:
-            price_changes.append({"product_id": pid, "name": product["name"], "old": float(old_unit), "new": product["cost_per_100g"]})
+        if old_unit is not None and ptype == "single" and abs(float(old_unit) - unit_price) > 0.01:
+            price_changes.append({"product_id": pid, "name": product["name"], "old": float(old_unit), "new": unit_price})
         subtotal += line_price
-        cal += product["calories_per_100g"] * factor
-        prot += product["protein_per_100g"] * factor
-        carbs += product.get("carbs_per_100g", 0) * factor
-        fat += product.get("fat_per_100g", 0) * factor
+        cal += (product.get("calories_per_100g") or 0) * factor
+        prot += (product.get("protein_per_100g") or 0) * factor
+        carbs += (product.get("carbs_per_100g") or 0) * factor
+        fat += (product.get("fat_per_100g") or 0) * factor
         if product.get("preparation_time_minutes"):
             prep_times.append(product["preparation_time_minutes"])
         line_items.append({
@@ -4214,6 +4219,7 @@ async def cart_quote(
 
     net_food = round(max(0, subtotal - discount), 2)
     gst_amount = round(net_food * 5 / 105, 2)
+    base_amount = round(net_food - gst_amount, 2)
     grand_total = round(net_food + delivery_fee + tip_amount, 2)
     free_delivery_savings = round(base_delivery - delivery_fee, 2) if order_type == "delivery" else 0
     total_savings = round(discount + free_delivery_savings, 2)
@@ -4231,16 +4237,20 @@ async def cart_quote(
     return {
         "line_items": line_items,
         "subtotal": subtotal,
+        "item_subtotal": subtotal,         # alias used by order placement
         "discount": discount,
         "coupon": coupon_info,
+        "coupon_applied": bool(coupon_info),
         "coupon_error": coupon_error,
         "delivery_fee": delivery_fee,
         "free_delivery": free_delivery,
         "tip": tip_amount,
         "gst_amount": gst_amount,
         "gst_percent": 5,
+        "base_amount": base_amount,
         "net_food": net_food,
         "grand_total": grand_total,
+        "total": grand_total,              # alias used by order placement
         "total_savings": total_savings,
         "macros": {"calories": round(cal), "protein": round(prot), "carbs": round(carbs), "fat": round(fat)},
         "max_prep_minutes": max(prep_times) if prep_times else 10,
@@ -4250,6 +4260,19 @@ async def cart_quote(
         "next_tier": next_tier,
         "free_delivery_threshold": FREE_DELIVERY_THRESHOLD,
     }
+
+@api_router.post("/cart/quote")
+async def cart_quote(
+    items: List[Dict[str, Any]] = Body(...),
+    order_type: str = Body("dine-in"),
+    coupon_code: Optional[str] = Body(None),
+    tip: float = Body(0),
+    store_id: Optional[str] = Body(None),
+    user=Depends(get_current_user),
+):
+    """Authoritative, server-side cart bill — thin wrapper over
+    compute_authoritative_bill (the same math used at order placement)."""
+    return await compute_authoritative_bill(items, order_type, coupon_code, tip, store_id, user)
 
 # ========== SMART PORTION ADJUSTER ==========
 @api_router.post("/ai/adjust-portions")
