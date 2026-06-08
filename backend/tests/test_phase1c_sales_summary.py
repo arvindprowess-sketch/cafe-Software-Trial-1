@@ -29,13 +29,14 @@ def auth(token):
 
 
 def order_payload(store_id, product, price, created_at=None, qty_grams=100):
-    # dine-in => no takeaway/delivery surcharge, so total_price == price exactly.
+    # Server-authoritative pricing: line = grams/100 * cost_per_100g. The test
+    # product is priced at ₹100/100g, so grams == price makes the server line == price.
     p = {
         "order_type": "dine-in",
         "store_id": store_id,
         "items": [{
             "product_id": product["id"], "product_name": product["name"],
-            "grams": qty_grams, "price": price, "quantity": 1,
+            "grams": price, "price": price, "quantity": 1,
             "calories": 100, "protein": 10, "carbs": 5, "fat": 2, "product_type": "single",
         }],
         "total_price": price,
@@ -84,8 +85,13 @@ def ctx():
         c.cashier_a = await mk_staff("cashier", store_id=c.store_a, pin="3333")
         c.kitchen_a = await mk_staff("kitchen", store_id=c.store_a, pin="4444")
 
-        prods = (await client.get("/api/products")).json()
-        c.product = prods[0]
+        # Dedicated product at ₹100/100g so the server line price == the test's price.
+        import uuid as _uuid
+        c.product = {"id": str(_uuid.uuid4()), "name": "Test Item", "cost_per_100g": 100}
+        await server.db.products.insert_one({
+            "id": c.product["id"], "name": "Test Item", "product_type": "single",
+            "cost_per_100g": 100, "available_qty_grams": 0, "is_active": True,
+            "calories_per_100g": 100, "protein_per_100g": 10, "carbs_per_100g": 5, "fat_per_100g": 2})
         cust = (await client.post("/api/auth/register", json={
             "email": "c1@test.com", "password": "p", "name": "c1", "role": "customer"})).json()["token"]
 

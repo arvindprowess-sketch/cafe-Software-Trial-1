@@ -29,10 +29,11 @@ def auth(t):
 
 
 def pos_order(store_id, prod, price, payment_mode):
-    # dine-in => no takeaway/delivery surcharge, so total_price == price.
+    # Server-authoritative pricing: product is ₹100/100g, so grams == price makes
+    # the server line price == price (dine-in, no surcharge).
     return {
         "order_type": "dine-in", "store_id": store_id,
-        "items": [{"product_id": prod["id"], "product_name": prod["name"], "grams": 100, "price": price,
+        "items": [{"product_id": prod["id"], "product_name": prod["name"], "grams": price, "price": price,
                    "quantity": 1, "calories": 1, "protein": 1, "carbs": 1, "fat": 1, "product_type": "single"}],
         "total_price": price, "item_subtotal": price, "payment_mode": payment_mode,
         "total_calories": 1, "total_protein": 1, "total_carbs": 1, "total_fat": 1, "confirm_duplicate": True,
@@ -77,7 +78,13 @@ def ctx():
         c.area_ab_id, c.area_ab = await mk_staff("area_manager", cluster=[c.store_a, c.store_b], pin="4444")
 
         await client.post("/api/admin/migrate-inventory", headers=auth(c.hq))
-        c.prod = (await client.get("/api/products")).json()[0]
+        # Dedicated product at ₹100/100g so server line price == the test price.
+        import uuid as _uuid
+        c.prod = {"id": str(_uuid.uuid4()), "name": "Test Item"}
+        await server.db.products.insert_one({
+            "id": c.prod["id"], "name": "Test Item", "product_type": "single",
+            "cost_per_100g": 100, "available_qty_grams": 0, "is_active": True,
+            "calories_per_100g": 1, "protein_per_100g": 1, "carbs_per_100g": 1, "fat_per_100g": 1})
         return c
 
     c = run(build())

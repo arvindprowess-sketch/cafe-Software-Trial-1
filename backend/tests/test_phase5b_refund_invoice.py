@@ -148,7 +148,8 @@ def test_partial_refund_reverses_only_that_qty(ctx):
 
 def test_cashier_raises_high_value_manager_finalizes(ctx):
     async def go():
-        o = await _place(ctx, grams=300, price=2500)   # >= 2000 -> high value
+        # product is ₹100/100g, so grams 2500 -> server total ₹2500 (>= 2000 high value)
+        o = await _place(ctx, grams=2500, price=2500)
         # cashier raises -> pending, NO stock reversal yet
         qty_after_sale = await _item_qty(ctx)
         raised = await ctx.client.post(f"/api/orders/{o['id']}/refund", headers=auth(ctx.cashier), json={"reason": "wrong order"})
@@ -162,7 +163,7 @@ def test_cashier_raises_high_value_manager_finalizes(ctx):
         # store manager finalizes -> reversed
         ok = await ctx.client.post(f"/api/refunds/{rid}/finalize", headers=auth(ctx.mgr))
         assert ok.status_code == 200 and ok.json()["status"] == "refunded"
-        assert await _item_qty(ctx) == qty_after_sale + 300
+        assert await _item_qty(ctx) == qty_after_sale + 2500
         # finalize again -> 400
         assert (await ctx.client.post(f"/api/refunds/{rid}/finalize", headers=auth(ctx.mgr))).status_code == 400
     run(go())
