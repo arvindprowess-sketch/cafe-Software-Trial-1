@@ -4470,6 +4470,7 @@ async def create_store(data: StoreCreate, user=Depends(get_current_user)):
         "tax_settings": data.tax_settings or {"gst_percent": 5},
         "area_manager_id": data.area_manager_id,
         "status": data.status if data.status in ("active", "inactive") else "active",
+        "onboarding_status": "created",  # Phase 5C: onboarding workflow start
         "created_by": user["id"],
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -6849,6 +6850,100 @@ async def order_invoice(order_id: str, user=Depends(get_current_user)):
         "total": total,
         "status": order.get("status"),
     }
+
+# PHASE 5C — Store onboarding workflow + go-live gating (HQ-driven).
+# Ordered steps: created -> catalog_priced -> staff_assigned -> compliance_done
+# -> live. Compliance (GST + FSSAI) is a HARD gate for go-live.
+# ==========================================================================
+ONBOARDING_ORDER = ["created", "catalog_priced", "staff_assigned", "compliance_done", "live"]
+
+class OnboardingAdvanceRequest(BaseModel):
+    accept_master_prices: bool = False  # when advancing to catalog_priced without per-store overrides
+
+async def _onboarding_checklist(store: dict):
+    sid = store["store_id"]
+    override_count = await db.product_overrides.count_documents({"store_id": sid})
+    catalog_priced = override_count > 0 or bool(store.get("accept_master_prices"))
+    sm_count = await db.users.count_documents({"role": "store_manager", "store_id": sid})
+    staff_assigned = bool(store.get("area_manager_id")) and sm_count >= 1
+    compliance_done = bool((store.get("gst_no") or "").strip()) and bool((store.get("fssai_license") or "").strip())
+    return {
+        "created": {"step": "created", "done": True, "detail": None},
+        "catalog_priced": {"step": "catalog_priced", "done": catalog_priced,
+                           "detail": f"{override_count} per-store price(s)" if catalog_priced else "Set per-store prices or accept master prices"},
+        "staff_assigned": {"step": "staff_assigned", "done": staff_assigned,
+                           "detail": None if staff_assigned else "Assign an area manager + at least one store manager"},
+        "compliance_done": {"step": "compliance_done", "done": compliance_done,
+                            "detail": None if compliance_done else "GST number and FSSAI license are required"},
+        "live": {"step": "live", "done": store.get("onboarding_status") == "live", "detail": None},
+    }
+
+@api_router.get("/stores/onboarding/pending")
+async def onboarding_pending(user=Depends(get_current_user)):
+    """HQ: stores not yet live (onboarding pending)."""
+    if not is_hq(user):
+        raise HTTPException(status_code=403, detail="HQ only")
+    stores = await db.stores.find({"onboarding_status": {"$ne": "live"}}, {"_id": 0}).to_list(1000)
+    return [{"store_id": s["store_id"], "name": s.get("name"), "code": s.get("code"),
+             "onboarding_status": s.get("onboarding_status", "created")} for s in stores]
+
+@api_router.get("/stores/{store_id}/onboarding")
+async def get_onboarding(store_id: str, user=Depends(get_current_user)):
+    """Onboarding status + checklist. super_admin any; area_manager/store_manager
+    read within their scope; cashier/kitchen 403."""
+    if normalize_role(user) not in ("super_admin", "area_manager", "store_manager"):
+        raise HTTPException(status_code=403, detail="No access")
+    assert_store_allowed(user, store_id)
+    store = await db.stores.find_one({"store_id": store_id}, {"_id": 0})
+    if not store:
+        raise HTTPException(status_code=404, detail="Store not found")
+    checklist = await _onboarding_checklist(store)
+    return {
+        "store_id": store_id,
+        "onboarding_status": store.get("onboarding_status", "created"),
+        "checklist": [checklist[s] for s in ONBOARDING_ORDER],
+    }
+
+@api_router.post("/stores/{store_id}/onboarding/advance")
+async def advance_onboarding(store_id: str, data: OnboardingAdvanceRequest, user=Depends(get_current_user)):
+    """HQ only: advance the store to the next onboarding step if its gate passes.
+    (Going live uses /go-live.)"""
+    if not is_hq(user):
+        raise HTTPException(status_code=403, detail="HQ only — onboarding transitions are super_admin")
+    store = await db.stores.find_one({"store_id": store_id}, {"_id": 0})
+    if not store:
+        raise HTTPException(status_code=404, detail="Store not found")
+    cur = store.get("onboarding_status", "created")
+    idx = ONBOARDING_ORDER.index(cur)
+    if cur == "live":
+        raise HTTPException(status_code=400, detail="Store is already live")
+    nxt = ONBOARDING_ORDER[idx + 1]
+    if nxt == "live":
+        raise HTTPException(status_code=400, detail="Use POST /stores/{id}/go-live to take the store live")
+    if nxt == "catalog_priced" and data.accept_master_prices:
+        await db.stores.update_one({"store_id": store_id}, {"$set": {"accept_master_prices": True}})
+        store["accept_master_prices"] = True
+    checklist = await _onboarding_checklist(store)
+    gate = checklist[nxt]
+    if not gate["done"]:
+        raise HTTPException(status_code=400, detail=f"Cannot advance to {nxt}: {gate['detail']}")
+    await db.stores.update_one({"store_id": store_id}, {"$set": {"onboarding_status": nxt}})
+    store = await db.stores.find_one({"store_id": store_id}, {"_id": 0})
+    return {"store_id": store_id, "onboarding_status": store.get("onboarding_status")}
+
+@api_router.post("/stores/{store_id}/go-live")
+async def go_live(store_id: str, user=Depends(get_current_user)):
+    """HQ only: take a store live. HARD GATE — GST number AND FSSAI license must
+    be present, else 400."""
+    if not is_hq(user):
+        raise HTTPException(status_code=403, detail="HQ only — go-live is super_admin")
+    store = await db.stores.find_one({"store_id": store_id}, {"_id": 0})
+    if not store:
+        raise HTTPException(status_code=404, detail="Store not found")
+    if not ((store.get("gst_no") or "").strip() and (store.get("fssai_license") or "").strip()):
+        raise HTTPException(status_code=400, detail="Compliance incomplete: GST number and FSSAI license are required to go live")
+    await db.stores.update_one({"store_id": store_id}, {"$set": {"onboarding_status": "live"}})
+    return {"store_id": store_id, "onboarding_status": "live"}
 
 app.include_router(api_router)
 
