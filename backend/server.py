@@ -4898,22 +4898,36 @@ async def delete_held_bill(bill_id: str, user=Depends(get_current_user)):
 
 # ========== INVENTORY FOR KITCHEN ==========
 @api_router.get("/inventory")
-async def get_inventory(user=Depends(get_current_user)):
-    """Kitchen/Manager/HQ: Get stock levels for all products (catalog is global in Phase 0)."""
-    if not role_in(user, "super_admin", "area_manager", "store_manager", "kitchen"):
-        raise HTTPException(status_code=403, detail="Kitchen staff only")
-    products = await db.products.find({}, {"_id": 0}).to_list(200)
-    inventory = []
-    for p in products:
-        stock = p.get("available_qty_grams", 0)
-        status = "in_stock" if stock > 500 else "low" if stock > 0 else "out_of_stock"
-        inventory.append({
-            "id": p["id"], "name": p["name"], "category": p.get("category", ""),
-            "diet_type": p.get("diet_type", "veg"), "available_qty_grams": stock,
-            "product_type": p.get("product_type", "single"), "is_active": p.get("is_active", True),
-            "status": status
-        })
-    return inventory
+async def get_inventory(store_id: Optional[str] = None, user=Depends(get_current_user)):
+    """Staff: per-store stock from inventory_items (the single source of truth —
+    Fix 2; no longer products.available_qty_grams). Store-bound roles see their
+    own store; area/HQ may pass ?store_id= (scoped) or get all in scope.
+    cashier/kitchen never see avg_cost (stripped by _public_item)."""
+    if not role_in(user, *STAFF_ROLES):
+        raise HTTPException(status_code=403, detail="Staff only")
+    if store_id:
+        assert_store_allowed(user, store_id)
+        query = {"store_id": store_id}
+    else:
+        query = store_filter(user)  # {} for HQ, else limited to the caller's store(s)
+    items = await db.inventory_items.find(query, {"_id": 0}).sort("name", 1).to_list(5000)
+    rows = []
+    for it in items:
+        qty = float(it.get("qty_on_hand", 0) or 0)
+        rl = float(it.get("reorder_level", 0) or 0)
+        if rl > 0:
+            status = "in_stock" if qty > rl else "low" if qty > 0 else "out_of_stock"
+        else:
+            status = "in_stock" if qty > 500 else "low" if qty > 0 else "out_of_stock"
+        row = {
+            "id": it["id"], "product_id": it.get("product_id"), "store_id": it.get("store_id"),
+            "name": it.get("name"), "category": it.get("category"), "unit": it.get("unit", "g"),
+            "qty_on_hand": qty, "available_qty_grams": qty,  # legacy alias for existing UI
+            "reorder_level": rl, "avg_cost": it.get("avg_cost", 0),
+            "is_active": it.get("is_active", True), "status": status,
+        }
+        rows.append(_public_item(row, user))  # strips avg_cost for cashier/kitchen
+    return rows
 
 # ========== STOCK MANAGEMENT (Phase 3D: writes per-store inventory_items) ==========
 class StockUpdateRequest(BaseModel):
@@ -4949,11 +4963,21 @@ async def update_stock(data: StockUpdateRequest, user=Depends(get_current_user))
             "status": "in_stock" if new_qty > 500 else "low" if new_qty > 0 else "out_of_stock"}
 
 @api_router.get("/inventory/stock-logs")
-async def get_stock_logs(user=Depends(get_current_user)):
-    """Kitchen/Manager/HQ: Get stock change history within the caller's store scope."""
-    if not role_in(user, "super_admin", "area_manager", "store_manager", "kitchen"):
-        raise HTTPException(status_code=403, detail="Kitchen staff only")
-    logs = await db.stock_logs.find(store_filter(user), {"_id": 0}).sort("created_at", -1).to_list(100)
+async def get_stock_logs(store_id: Optional[str] = None, user=Depends(get_current_user)):
+    """Staff: stock movement history from movement_log (Fix 2 — the real ledger;
+    no longer the legacy stock_logs collection), newest-first, store-scoped.
+    cashier/kitchen never see unit_cost_at_time."""
+    if not role_in(user, *STAFF_ROLES):
+        raise HTTPException(status_code=403, detail="Staff only")
+    if store_id:
+        assert_store_allowed(user, store_id)
+        query = {"store_id": store_id}
+    else:
+        query = store_filter(user)
+    logs = await db.movement_log.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    if not can_see_cost(user):
+        for l in logs:
+            l.pop("unit_cost_at_time", None)
     return logs
 
 # ========== P1: NOTIFICATIONS ==========
