@@ -6663,6 +6663,194 @@ async def shift_sales_summary(
     return {"store_id": store_id, "cashiers": rows}
 
 # ==========================================================================
+# PHASE 5B — Refund / void (reason + audit + stock reversal) + GST invoice.
+# Reuses explode_to_raw + log_movement + inventory_items. Mirrors the discard
+# raise/finalize pattern. Cost is never exposed to cashier/kitchen; the invoice
+# shows selling + tax only (never purchase cost).
+# ==========================================================================
+class RefundRequest(BaseModel):
+    reason: str
+    amount: Optional[float] = None                    # partial; default = full order total
+    lines: Optional[List[Dict[str, Any]]] = None      # partial: [{product_id, grams?|units?}]
+
+class VoidRequest(BaseModel):
+    reason: str
+
+def _reversal_lines(order: dict, provided: Optional[list]) -> list:
+    """Lines (with qty) to re-add to stock: provided partial lines, else all items."""
+    out = []
+    if provided:
+        for l in provided:
+            pid = l.get("product_id")
+            it = next((i for i in order.get("items", []) if i.get("product_id") == pid), None)
+            ptype = (it or {}).get("product_type", "single")
+            if ptype == "ready_made":
+                out.append({"product_id": pid, "product_type": "ready_made", "units": int(l.get("units", 1) or 1)})
+            else:
+                out.append({"product_id": pid, "product_type": "single", "grams": float(l.get("grams", 0) or 0)})
+        return out
+    for it in order.get("items", []):
+        pid = it.get("product_id")
+        if not pid:
+            continue
+        if it.get("product_type") == "ready_made":
+            out.append({"product_id": pid, "product_type": "ready_made", "units": int(it.get("quantity", 1) or 1)})
+        else:
+            out.append({"product_id": pid, "product_type": "single", "grams": float(it.get("grams", 0) or 0)})
+    return out
+
+async def _readd_stock_for_order(order: dict, lines: list, user_id: str) -> bool:
+    """Re-add raw stock for refunded lines via explode_to_raw; log 'refund'
+    (positive). Idempotent: if any 'refund' movement exists for this order, skip."""
+    if await db.movement_log.count_documents({"ref_id": order["id"], "type": "refund"}) > 0:
+        return False
+    sid = order.get("store_id") or DEFAULT_STORE_ID
+    now = datetime.now(timezone.utc).isoformat()
+    reversed_any = False
+    for line in lines:
+        if line["product_type"] == "ready_made":
+            exploded = await explode_to_raw("meal", line["product_id"], line["units"], sid)
+        else:
+            exploded = await explode_to_raw("raw", line["product_id"], line["grams"], sid)
+        for e in exploded:
+            new_qty = float(e["item"].get("qty_on_hand", 0) or 0) + e["grams"]
+            await db.inventory_items.update_one({"id": e["item"]["id"], "store_id": sid},
+                                                {"$set": {"qty_on_hand": new_qty, "updated_at": now}})
+            await log_movement(store_id=sid, item_id=e["item"]["id"], product_id=e["item"].get("product_id"),
+                               mtype="refund", qty_delta=e["grams"], qty_after=new_qty,
+                               reason=f"refund:{order['id']}", user_id=user_id, ref_id=order["id"],
+                               unit_cost_at_time=e["unit_cost"])
+            reversed_any = True
+    return reversed_any
+
+async def _execute_reversal(order, kind, amount, reason, lines, user, existing_rec=None):
+    """Reverse stock once + set order status + write/complete the audit record."""
+    reversed_ok = await _readd_stock_for_order(order, _reversal_lines(order, lines), user["id"])
+    new_status = "voided" if kind == "void" else "refunded"
+    now = datetime.now(timezone.utc).isoformat()
+    await db.orders.update_one({"id": order["id"]}, {"$set": {
+        "status": new_status, "refunded_amount": amount, "refund_reason": reason,
+        "refunded_by": user["id"], "refunded_at": now}})
+    if existing_rec:
+        await db.refunds.update_one({"id": existing_rec["id"]}, {"$set": {
+            "status": "completed", "finalized_by": user["id"], "finalized_at": now, "stock_reversed": reversed_ok}})
+        rec = await db.refunds.find_one({"id": existing_rec["id"]}, {"_id": 0})
+    else:
+        rec = {
+            "id": str(uuid.uuid4()), "order_id": order["id"], "store_id": order.get("store_id"),
+            "kind": kind, "amount": amount, "reason": reason, "lines": lines,
+            "status": "completed", "flagged": amount >= HQ_VALUE_THRESHOLD,
+            "raised_by": user["id"], "raised_at": now, "finalized_by": user["id"], "finalized_at": now,
+            "stock_reversed": reversed_ok,
+        }
+        await db.refunds.insert_one(rec)
+        rec = {k: v for k, v in rec.items() if k != "_id"}
+    return {"order_id": order["id"], "status": new_status, "stock_reversed": reversed_ok, "refund": rec}
+
+async def _raise_or_execute(order, kind, amount, reason, lines, user):
+    """cashier -> raise a pending record (store_manager finalizes); manager/HQ -> execute now."""
+    role = normalize_role(user)
+    if role == "cashier":
+        now = datetime.now(timezone.utc).isoformat()
+        rec = {
+            "id": str(uuid.uuid4()), "order_id": order["id"], "store_id": order.get("store_id"),
+            "kind": kind, "amount": amount, "reason": reason, "lines": lines,
+            "status": "pending", "flagged": amount >= HQ_VALUE_THRESHOLD,
+            "raised_by": user["id"], "raised_at": now, "finalized_by": None, "finalized_at": None,
+            "stock_reversed": False,
+        }
+        await db.refunds.insert_one(rec)
+        return {"order_id": order["id"], "status": "pending", "refund": {k: v for k, v in rec.items() if k != "_id"}}
+    return await _execute_reversal(order, kind, amount, reason, lines, user)
+
+@api_router.post("/orders/{order_id}/refund")
+async def refund_order(order_id: str, data: RefundRequest, user=Depends(get_current_user)):
+    """Refund (full or partial). Reason REQUIRED. store_manager/HQ execute (reverse
+    stock once); cashier raises a pending record for the store_manager to finalize."""
+    if normalize_role(user) not in ("cashier", "store_manager", "super_admin"):
+        raise HTTPException(status_code=403, detail="Cashier/Store-Manager/HQ only")
+    if not (data.reason and data.reason.strip()):
+        raise HTTPException(status_code=400, detail="reason is required")
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    assert_store_allowed(user, order.get("store_id"))
+    if order.get("status") in ("refunded", "voided"):
+        raise HTTPException(status_code=400, detail="Order already refunded/voided")
+    amount = data.amount if data.amount is not None else float(order.get("total_price", 0) or 0)
+    return await _raise_or_execute(order, "refund", amount, data.reason, data.lines, user)
+
+@api_router.post("/orders/{order_id}/void")
+async def void_order(order_id: str, data: VoidRequest, user=Depends(get_current_user)):
+    """Void an unfulfilled order. Reason REQUIRED. Same role pattern as refund."""
+    if normalize_role(user) not in ("cashier", "store_manager", "super_admin"):
+        raise HTTPException(status_code=403, detail="Cashier/Store-Manager/HQ only")
+    if not (data.reason and data.reason.strip()):
+        raise HTTPException(status_code=400, detail="reason is required")
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    assert_store_allowed(user, order.get("store_id"))
+    if order.get("status") in ("refunded", "voided"):
+        raise HTTPException(status_code=400, detail="Order already refunded/voided")
+    amount = float(order.get("total_price", 0) or 0)
+    return await _raise_or_execute(order, "void", amount, data.reason, data.lines if hasattr(data, "lines") else None, user)
+
+@api_router.post("/refunds/{refund_id}/finalize")
+async def finalize_refund(refund_id: str, user=Depends(get_current_user)):
+    """Finalize a pending refund/void. store_manager/HQ only — cashier 403."""
+    if normalize_role(user) not in ("store_manager", "super_admin"):
+        raise HTTPException(status_code=403, detail="Only the store manager or HQ may finalize")
+    rec = await db.refunds.find_one({"id": refund_id}, {"_id": 0})
+    if not rec:
+        raise HTTPException(status_code=404, detail="Refund not found")
+    if rec.get("status") == "completed":
+        raise HTTPException(status_code=400, detail="Already finalized")
+    assert_store_allowed(user, rec.get("store_id"))
+    order = await db.orders.find_one({"id": rec["order_id"]}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    return await _execute_reversal(order, rec.get("kind", "refund"), rec.get("amount"), rec.get("reason"),
+                                   rec.get("lines"), user, existing_rec=rec)
+
+@api_router.get("/orders/{order_id}/invoice")
+async def order_invoice(order_id: str, user=Depends(get_current_user)):
+    """GST invoice (read-only). Customer owns their order; staff within store
+    scope (cashier ok). Selling + tax only — never purchase cost."""
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if normalize_role(user) == "customer":
+        if order.get("user_id") != user["id"]:
+            raise HTTPException(status_code=403, detail="Access denied")
+    else:
+        assert_store_allowed(user, order.get("store_id"))
+    store = await db.stores.find_one({"store_id": order.get("store_id")}, {"_id": 0}) or {}
+    total = float(order.get("total_price", 0) or 0)
+    gst_amount = order.get("gst_amount", round(total * 5 / 105, 2))
+    base_amount = order.get("base_amount", round(total * 100 / 105, 2))
+    cgst = round(gst_amount / 2, 2)
+    sgst = round(gst_amount - cgst, 2)  # intra-state 50/50
+    items = [{
+        "name": i.get("product_name"),
+        "qty": (f"x{i.get('quantity', 1)}" if i.get("product_type") == "ready_made" else f"{i.get('grams', 0)}g"),
+        "amount": i.get("price", 0),
+    } for i in order.get("items", [])]
+    return {
+        "invoice_no": f"INV-{order['id']}",
+        "date": order.get("created_at"),
+        "store": {"name": store.get("name"), "gst_no": store.get("gst_no"),
+                  "fssai_license": store.get("fssai_license"), "address": store.get("address")},
+        "customer": {"name": order.get("customer_name") or order.get("user_name"),
+                     "gstin": order.get("gstin"), "business_name": order.get("business_name")},
+        "items": items,
+        "taxable_value": base_amount,
+        "gst_percent": order.get("gst_percent", 5),
+        "cgst": cgst, "sgst": sgst, "gst_amount": gst_amount,
+        "total": total,
+        "status": order.get("status"),
+    }
+
 # PHASE 5C — Store onboarding workflow + go-live gating (HQ-driven).
 # Ordered steps: created -> catalog_priced -> staff_assigned -> compliance_done
 # -> live. Compliance (GST + FSSAI) is a HARD gate for go-live.
