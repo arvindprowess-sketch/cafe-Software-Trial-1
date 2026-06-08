@@ -155,3 +155,56 @@ def test_stock_logs_manager_has_cost_and_scoped(ctx):
         z = await ctx.client.get(f"/api/inventory/stock-logs?store_id={ctx.store_z}", headers=auth(ctx.area_ab))
         assert z.status_code == 403
     run(go())
+
+
+# ---------- low-stock alerts repointed to inventory_items (Fix 2b) ----------
+
+async def _mk_low_item(ctx, store, token, name, qty):
+    """Create a raw item and inward `qty` so it is below the 500g default threshold."""
+    iid = (await ctx.client.post(f"/api/inventory/{store}/items", headers=auth(token),
+                                 json={"name": name, "unit": "g", "qty_on_hand": 0, "avg_cost": 0})).json()["id"]
+    await ctx.client.post(f"/api/inventory/{store}/inward", headers=auth(token),
+                          json={"item_id": iid, "qty": qty, "purchase_price": 7})
+    return iid
+
+
+def test_dashboard_low_stock_from_inventory_items(ctx):
+    async def go():
+        await _mk_low_item(ctx, ctx.store_a, ctx.mgr_a, "LowMilk", 42)   # 42g < 500 -> low
+        r = await ctx.client.get("/api/admin/dashboard-stats", headers=auth(ctx.hq))
+        assert r.status_code == 200, r.text
+        alerts = r.json()["low_stock_alerts"]
+        by_name = {a["name"]: a for a in alerts}
+        assert "LowMilk" in by_name                          # low item surfaces
+        assert by_name["LowMilk"]["available_qty_grams"] == 42  # value from inventory_items
+        assert "Chicken" not in by_name                      # 4321g in stock -> not low
+    run(go())
+
+
+def test_insights_analytics_low_stock_shape_and_source(ctx):
+    # get_admin_analytics powers /admin/ai-insights; assert its low_stock_alerts keep
+    # the {name, stock} shape AND come from inventory_items, store-scoped.
+    async def go():
+        hq_user = await server.db.users.find_one({"email": "admin@dietcafe.com"}, {"_id": 0})
+        analytics = await server.get_admin_analytics(hq_user)
+        alerts = analytics["low_stock_alerts"]
+        assert all(set(a.keys()) == {"name", "stock"} for a in alerts)   # shape unchanged
+        names = {a["name"]: a["stock"] for a in alerts}
+        assert names.get("Paneer") == 99                                  # store_b, from inventory_items
+        assert "Chicken" not in names                                     # 4321 in stock
+    run(go())
+
+
+def test_low_stock_helper_scoped_and_strips_cost(ctx):
+    async def go():
+        # store-A low item so a store-bound role has something to see
+        await _mk_low_item(ctx, ctx.store_a, ctx.mgr_a, "LowOil", 30)
+        kitchen_user = await server.db.users.find_one({"id": ctx.kitchen_a_id}, {"_id": 0})
+        mgr_user = await server.db.users.find_one({"id": ctx.mgr_a_id}, {"_id": 0})
+        k_rows = await server.low_stock_alerts(kitchen_user)
+        m_rows = await server.low_stock_alerts(mgr_user)
+        assert all(r["store_id"] == ctx.store_a for r in k_rows)   # store-scoped
+        assert all("avg_cost" not in r for r in k_rows)            # kitchen: no cost
+        assert any("avg_cost" in r for r in m_rows)                # manager: cost visible
+        assert any(r["name"] == "LowOil" for r in k_rows)          # low item present
+    run(go())
