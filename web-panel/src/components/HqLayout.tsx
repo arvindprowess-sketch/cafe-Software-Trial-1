@@ -2,21 +2,22 @@ import React from 'react';
 import { NavLink, Outlet, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import StoreSwitcher from './StoreSwitcher';
+import { HQ_SUB_ROUTE_ROLES, ADMIN_HOME_ROUTE } from '../auth/permissions';
 
 // Role-gated HQ portal navigation (Phase 1B).
-// - super_admin: Stores & Clusters, Store Catalog, Push.
-// - area_manager: Stores (read-only), Store Catalog (own cluster).
-// - store_manager: Store Catalog (own store).
+// Single source of truth: HQ_SUB_ROUTE_ROLES in auth/permissions.ts.
+// - super_admin: Stores & Clusters, Store Catalog, Push, Offers.
+// - area_manager: Stores (read-only), Store Catalog (own cluster), Offers.
+// - store_manager: Store Catalog (own store), Offers.
 // cashier/kitchen never reach here (route + default-route gating).
+const HQ_NAV = [
+  { path: '/hq/stores', label: 'Stores & Clusters' },
+  { path: '/hq/catalog', label: 'Store Catalog' },
+  { path: '/hq/push', label: 'Catalog Push' },
+  { path: '/hq/offers', label: 'Offers & Coupons' },
+];
 function navForRole(role?: string) {
-  const stores = { path: '/hq/stores', label: 'Stores & Clusters' };
-  const catalog = { path: '/hq/catalog', label: 'Store Catalog' };
-  const push = { path: '/hq/push', label: 'Catalog Push' };
-  const offers = { path: '/hq/offers', label: 'Offers & Coupons' };
-  if (role === 'super_admin' || role === 'admin') return [stores, catalog, push, offers];
-  if (role === 'area_manager') return [stores, catalog, offers];
-  if (role === 'store_manager') return [catalog, offers];
-  return [];
+  return HQ_NAV.filter(item => (HQ_SUB_ROUTE_ROLES[item.path] ?? []).includes(role ?? ''));
 }
 
 export function hqHomeFor(role?: string) {
@@ -51,8 +52,8 @@ export default function HqLayout() {
               {item.label}
             </NavLink>
           ))}
-          {(user?.role === 'super_admin' || user?.role === 'admin') && (
-            <NavLink to="/admin" className="sidebar-link" data-testid="hqnav-admin">
+          {ADMIN_HOME_ROUTE[user?.role ?? ''] && (
+            <NavLink to={ADMIN_HOME_ROUTE[user!.role]} className="sidebar-link" data-testid="hqnav-admin">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h12a1 1 0 001-1V10"/></svg>
               ← Admin Panel
             </NavLink>
