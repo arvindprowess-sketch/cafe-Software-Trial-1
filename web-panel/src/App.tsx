@@ -2,6 +2,12 @@ import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import { StoreProvider } from './context/StoreContext';
+import {
+  ROLE_DEFAULT_ROUTE,
+  ADMIN_PORTAL_ROLES,
+  ADMIN_RESTRICTED_PATHS,
+  HQ_SUB_ROUTE_ROLES,
+} from './auth/permissions';
 import Login from './pages/Login';
 import AdminLayout from './components/AdminLayout';
 import KitchenLayout from './components/KitchenLayout';
@@ -24,11 +30,30 @@ import CashierPOS from './pages/CashierPOS';
 import CashierOrders from './pages/CashierOrders';
 import CashierTables from './pages/CashierTables';
 
+/** Default landing route for the logged-in role (also used as the redirect
+ *  target when a user types a URL they are not allowed to view). */
+export function defaultRouteFor(role?: string): string {
+  if (!role) return '/login';
+  return ROLE_DEFAULT_ROUTE[role] ?? '/login';
+}
+
+/** Portal-level guard: must be logged in and in `roles`, else bounced to that
+ *  user's own default landing (or /login if not authenticated). */
 function ProtectedRoute({ children, roles }: { children: React.ReactNode; roles: string[] }) {
   const { user, loading } = useAuth();
   if (loading) return <div className="loading-screen">Loading...</div>;
   if (!user) return <Navigate to="/login" />;
-  if (!roles.includes(user.role)) return <Navigate to="/login" />;
+  if (!roles.includes(user.role)) return <Navigate to={defaultRouteFor(user.role)} replace />;
+  return <>{children}</>;
+}
+
+/** Per-route guard for individual pages inside an allowed portal. A user who can
+ *  enter the portal but not this specific page is redirected to their default
+ *  landing instead of rendering the page. Backend still 403s as defense-in-depth. */
+function RoleRoute({ children, allowed }: { children: React.ReactNode; allowed: string[] }) {
+  const { user } = useAuth();
+  if (!user) return <Navigate to="/login" />;
+  if (!allowed.includes(user.role)) return <Navigate to={defaultRouteFor(user.role)} replace />;
   return <>{children}</>;
 }
 
@@ -37,34 +62,26 @@ export default function App() {
 
   if (loading) return <div className="loading-screen">Loading...</div>;
 
-  const getDefaultRoute = () => {
-    if (!user) return '/login';
-    if (user.role === 'admin' || user.role === 'super_admin') return '/admin';
-    if (user.role === 'kitchen') return '/kitchen';
-    // area_manager / store_manager land in the HQ portal (multi-store).
-    if (['store_manager', 'area_manager'].includes(user.role)) return '/hq';
-    if (user.role === 'cashier') return '/cashier';
-    return '/login';
-  };
+  const getDefaultRoute = () => defaultRouteFor(user?.role);
 
   return (
     <StoreProvider>
     <Routes>
       <Route path="/login" element={user ? <Navigate to={getDefaultRoute()} /> : <Login />} />
 
-      <Route path="/hq" element={<ProtectedRoute roles={['admin', 'super_admin', 'area_manager', 'store_manager']}><HqLayout /></ProtectedRoute>}>
+      <Route path="/hq" element={<ProtectedRoute roles={ADMIN_PORTAL_ROLES}><HqLayout /></ProtectedRoute>}>
         <Route index element={<HqIndex />} />
-        <Route path="stores" element={<HqStores />} />
-        <Route path="catalog" element={<HqCatalog />} />
-        <Route path="push" element={<HqPush />} />
-        <Route path="offers" element={<HqOffers />} />
+        <Route path="stores" element={<RoleRoute allowed={HQ_SUB_ROUTE_ROLES['/hq/stores']}><HqStores /></RoleRoute>} />
+        <Route path="catalog" element={<RoleRoute allowed={HQ_SUB_ROUTE_ROLES['/hq/catalog']}><HqCatalog /></RoleRoute>} />
+        <Route path="push" element={<RoleRoute allowed={HQ_SUB_ROUTE_ROLES['/hq/push']}><HqPush /></RoleRoute>} />
+        <Route path="offers" element={<RoleRoute allowed={HQ_SUB_ROUTE_ROLES['/hq/offers']}><HqOffers /></RoleRoute>} />
       </Route>
 
-      <Route path="/admin" element={<ProtectedRoute roles={['admin', 'super_admin']}><AdminLayout /></ProtectedRoute>}>
+      <Route path="/admin" element={<ProtectedRoute roles={ADMIN_PORTAL_ROLES}><AdminLayout /></ProtectedRoute>}>
         <Route index element={<AdminDashboard />} />
-        <Route path="products" element={<AdminProducts />} />
+        <Route path="products" element={<RoleRoute allowed={ADMIN_RESTRICTED_PATHS['/admin/products']}><AdminProducts /></RoleRoute>} />
         <Route path="kitchen" element={<AdminKitchen />} />
-        <Route path="categories" element={<AdminCategories />} />
+        <Route path="categories" element={<RoleRoute allowed={ADMIN_RESTRICTED_PATHS['/admin/categories']}><AdminCategories /></RoleRoute>} />
         <Route path="orders" element={<AdminAnalytics />} />
         <Route path="tables" element={<AdminTables />} />
         <Route path="offers" element={<AdminOffers />} />
