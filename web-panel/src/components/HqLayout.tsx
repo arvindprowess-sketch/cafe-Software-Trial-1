@@ -2,7 +2,7 @@ import React from 'react';
 import { NavLink, Outlet, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import StoreSwitcher from './StoreSwitcher';
-import { HQ_SUB_ROUTE_ROLES, ADMIN_PORTAL_ROLES } from '../auth/permissions';
+import { HQ_SUB_ROUTE_ROLES, ADMIN_HOME_ROUTE } from '../auth/permissions';
 
 // Role-gated HQ portal navigation (Phase 1B).
 // Single source of truth: HQ_SUB_ROUTE_ROLES in auth/permissions.ts.
@@ -52,8 +52,8 @@ export default function HqLayout() {
               {item.label}
             </NavLink>
           ))}
-          {ADMIN_PORTAL_ROLES.includes(user?.role ?? '') && (
-            <NavLink to="/admin" className="sidebar-link" data-testid="hqnav-admin">
+          {ADMIN_HOME_ROUTE[user?.role ?? ''] && (
+            <NavLink to={ADMIN_HOME_ROUTE[user!.role]} className="sidebar-link" data-testid="hqnav-admin">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h12a1 1 0 001-1V10"/></svg>
               ← Admin Panel
             </NavLink>

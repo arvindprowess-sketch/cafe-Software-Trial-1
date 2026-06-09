@@ -33,8 +33,7 @@ export const ADMIN_NAV_KEYS: Record<string, string[]> = {
   area_manager: [
     // Dashboard/Orders(Analytics) are super_admin-only & global -> excluded.
     // Kitchen/Tables are single-store ops -> excluded for cluster role.
-    'offers',
-    // HQ: own cluster stores + catalog read + offers. Push — no.
+    // Area never enters /admin; lives in /hq (hq-offers = "Offers & Coupons").
     'hq-stores', 'hq-catalog', 'hq-offers',
   ],
   store_manager: [
@@ -59,6 +58,18 @@ export const HQ_SUB_ROUTE_ROLES: Record<string, string[]> = {
 
 /** Roles that are allowed into /admin/* at all. */
 export const ADMIN_PORTAL_ROLES = ['admin', 'super_admin', 'area_manager', 'store_manager'];
+
+/**
+ * The first /admin page each role may actually open (used for the HqLayout
+ * "Admin Panel" cross-link target). Roles omitted here have no operational
+ * /admin page and the cross-link is hidden for them.
+ */
+export const ADMIN_HOME_ROUTE: Record<string, string> = {
+  super_admin:   '/admin',          // Dashboard
+  admin:         '/admin',
+  store_manager: '/admin/kitchen',  // first operational page they're allowed
+  // area_manager: omitted — no /admin operational page; they live in /hq.
+};
 
 /**
  * Paths (exact) inside /admin that require full super_admin/admin access.
