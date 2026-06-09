@@ -32,8 +32,8 @@ export default function ScanTableScreen() {
     if (scanned) return;
     setScanned(true);
     
-    // Parse QR code - expected format: DIETCAFE-TABLE-{number}
-    const match = data.match(/DIETCAFE-TABLE-(\d+)/i);
+    // Parse QR code - expected format: BORAROC-TABLE-{number}
+    const match = data.match(/BORAROC-TABLE-(\d+)/i);
     if (match) {
       await handleTableNumber(parseInt(match[1]));
     } else {

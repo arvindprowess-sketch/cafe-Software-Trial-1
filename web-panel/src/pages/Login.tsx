@@ -43,7 +43,7 @@ export default function Login() {
       <div className="login-card">
         <div className="login-logo">
           <div className="icon-bg">⚡</div>
-          <h1>FUEL</h1>
+          <h1>BORAROC</h1>
           <p>Management Panel</p>
         </div>
 

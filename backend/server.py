@@ -721,7 +721,7 @@ async def send_otp_sms(phone: str, otp: str) -> bool:
     import httpx
     MSG91_AUTH_KEY = os.environ.get("MSG91_AUTH_KEY", "").strip()
     MSG91_TEMPLATE_ID = os.environ.get("MSG91_TEMPLATE_ID", "").strip()
-    MSG91_SENDER_ID = os.environ.get("MSG91_SENDER_ID", "FUELCF").strip()
+    MSG91_SENDER_ID = os.environ.get("MSG91_SENDER_ID", "BORROC").strip()
 
     if MSG91_AUTH_KEY and MSG91_TEMPLATE_ID:
         try:
@@ -3134,7 +3134,7 @@ async def get_banners():
     # Fallback if no offers/packs yet
     if not banners:
         banners = [
-            {"id": "default-1", "type": "info", "title": "Welcome to FUEL", "subtitle": "Eat for your goal", "color": "#15140F"},
+            {"id": "default-1", "type": "info", "title": "Welcome to BORAROC", "subtitle": "Eat for your goal", "color": "#15140F"},
             {"id": "default-2", "type": "info", "title": "AI Meal Planner", "subtitle": "Get personalized diet suggestions", "color": "#5B5FE0"},
         ]
     return banners
@@ -3158,7 +3158,7 @@ async def _ensure_store_tables(store_id: str):
             "seats": 4 if i <= 6 else 2,
             "status": "available",  # available, occupied, reserved
             "current_order_id": None,
-            "qr_code": f"DIETCAFE-{store_id}-TABLE-{i}",
+            "qr_code": f"BORAROC-{store_id}-TABLE-{i}",
         })
 
 @api_router.get("/tables")
@@ -4036,7 +4036,7 @@ async def create_payment_order(data: PaymentCreateRequest, user=Depends(get_curr
             "amount": int(data.amount * 100),
             "currency": "INR",
             "payment_capture": 1,
-            "notes": {"diet_cafe_order": data.order_id, "user_id": user["id"]},
+            "notes": {"boraroc_order": data.order_id, "user_id": user["id"]},
         })
         await db.payments.insert_one({
             "id": str(uuid.uuid4()),
@@ -5033,8 +5033,8 @@ async def get_order_receipt(order_id: str, user=Depends(get_current_user)):
     gst_amount = order.get("gst_amount", round(total * 5 / 105, 2))
     base_amount = order.get("base_amount", round(total * 100 / 105, 2))
     receipt = {
-        "cafe_name": "Diet Cafe",
-        "cafe_tagline": "Healthy Eating, Happy Living",
+        "cafe_name": "BORAROC",
+        "cafe_tagline": "Fit your budget. Fuel your goal.",
         "order_id": order["id"],
         "order_type": order.get("order_type", "dine-in"),
         "customer_name": order.get("customer_name", order.get("user_name", "Walk-in")),
@@ -6560,7 +6560,7 @@ async def export_report_pdf(
 ):
     """PDF export of a 4A report (same builder, same scope guards)."""
     data = await _fetch_report(report, user, date_from, date_to, store_ids, granularity)
-    content = _build_pdf(f"FUEL — {report} report", _scope_meta(report, date_from, date_to, store_ids),
+    content = _build_pdf(f"BORAROC — {report} report", _scope_meta(report, date_from, date_to, store_ids),
                          _report_to_sheets(report, data))
     return Response(
         content=content,
@@ -7013,7 +7013,7 @@ async def ensure_default_store():
         return existing
     store = {
         "store_id": DEFAULT_STORE_ID,
-        "name": "FUEL Main Store",
+        "name": "BORAROC Main Store",
         "code": "MAIN",
         "address": None,
         "geo": {"lat": 28.6139, "lng": 77.2090},
