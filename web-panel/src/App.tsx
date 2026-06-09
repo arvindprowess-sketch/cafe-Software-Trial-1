@@ -78,11 +78,11 @@ export default function App() {
       </Route>
 
       <Route path="/admin" element={<ProtectedRoute roles={ADMIN_PORTAL_ROLES}><AdminLayout /></ProtectedRoute>}>
-        <Route index element={<AdminDashboard />} />
+        <Route index element={<RoleRoute allowed={ADMIN_RESTRICTED_PATHS['/admin']}><AdminDashboard /></RoleRoute>} />
         <Route path="products" element={<RoleRoute allowed={ADMIN_RESTRICTED_PATHS['/admin/products']}><AdminProducts /></RoleRoute>} />
         <Route path="kitchen" element={<AdminKitchen />} />
         <Route path="categories" element={<RoleRoute allowed={ADMIN_RESTRICTED_PATHS['/admin/categories']}><AdminCategories /></RoleRoute>} />
-        <Route path="orders" element={<AdminAnalytics />} />
+        <Route path="orders" element={<RoleRoute allowed={ADMIN_RESTRICTED_PATHS['/admin/orders']}><AdminAnalytics /></RoleRoute>} />
         <Route path="tables" element={<AdminTables />} />
         <Route path="offers" element={<AdminOffers />} />
       </Route>

@@ -5,8 +5,10 @@
 export const ROLE_DEFAULT_ROUTE: Record<string, string> = {
   super_admin:   '/admin',
   admin:         '/admin',
-  area_manager:  '/admin',
-  store_manager: '/admin',
+  // /hq HqIndex redirects area_manager -> /hq/stores, store_manager -> /hq/catalog.
+  // (/admin Dashboard/Analytics/Staff are super_admin-only & global -> 403 for these roles.)
+  area_manager:  '/hq',
+  store_manager: '/hq',
   cashier:       '/cashier',
   kitchen:       '/kitchen',
 };
@@ -29,14 +31,15 @@ export const ADMIN_NAV_KEYS: Record<string, string[]> = {
     'hq-stores', 'hq-catalog', 'hq-push', 'hq-offers',
   ],
   area_manager: [
-    // Dashboard, order & ops views — yes. Master catalog edit — no.
-    'dashboard', 'orders', 'kitchen', 'offers', 'tables',
+    // Dashboard/Orders(Analytics) are super_admin-only & global -> excluded.
+    // Kitchen/Tables are single-store ops -> excluded for cluster role.
+    'offers',
     // HQ: own cluster stores + catalog read + offers. Push — no.
     'hq-stores', 'hq-catalog', 'hq-offers',
   ],
   store_manager: [
-    // Dashboard, order & ops views — yes. Master catalog edit — no.
-    'dashboard', 'orders', 'kitchen', 'offers', 'tables',
+    // Dashboard/Orders(Analytics) are super_admin-only & global -> excluded.
+    'kitchen', 'offers', 'tables',
     // HQ: own store catalog overrides + offers. Stores & Clusters / Push — no.
     'hq-catalog', 'hq-offers',
   ],
@@ -60,8 +63,11 @@ export const ADMIN_PORTAL_ROLES = ['admin', 'super_admin', 'area_manager', 'stor
 /**
  * Paths (exact) inside /admin that require full super_admin/admin access.
  * area_manager and store_manager are redirected away from these.
+ * Dashboard (index) + Orders(Analytics) are HQ-only & global -> guarded too.
  */
 export const ADMIN_RESTRICTED_PATHS: Record<string, string[]> = {
+  '/admin':            ['admin', 'super_admin'],  // Dashboard (index)
+  '/admin/orders':     ['admin', 'super_admin'],  // Analytics
   '/admin/categories': ['admin', 'super_admin'],
   '/admin/products':   ['admin', 'super_admin'],
 };
