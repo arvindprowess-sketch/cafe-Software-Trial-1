@@ -466,7 +466,7 @@ export default function KitchenOrders() {
           <div className="modal" style={{ maxWidth: 400 }}>
             <h2>Kitchen Ticket</h2>
             <div id="kitchen-ticket-print" style={{ fontFamily: 'monospace', fontSize: 14 }}>
-              <h2 style={{ textAlign: 'center', margin: '0 0 4px' }}>DIET CAFE</h2>
+              <h2 style={{ textAlign: 'center', margin: '0 0 4px' }}>BORAROC</h2>
               <p style={{ textAlign: 'center', fontSize: 12, margin: 0, color: '#9C9C9C' }}>Kitchen Order Ticket</p>
               <div style={{ borderTop: '1px dashed #ccc', margin: '8px 0' }} />
               <p><strong>Order:</strong> #{showTicket.order_id}</p>

@@ -700,7 +700,7 @@ export default function CashierPOS() {
               <p style={{ fontSize: 13, color: '#9C9C9C' }}>Order sent to kitchen</p>
             </div>
             <div id="receipt-print" style={{ fontFamily: 'monospace', fontSize: 13 }}>
-              <div style={{ textAlign: 'center', marginBottom: 8 }}><h2 style={{ margin: 0, fontSize: 18 }}>DIET CAFE</h2><p style={{ margin: 0, fontSize: 11, color: '#9C9C9C' }}>{showReceipt.cafe_tagline}</p></div>
+              <div style={{ textAlign: 'center', marginBottom: 8 }}><h2 style={{ margin: 0, fontSize: 18 }}>BORAROC</h2><p style={{ margin: 0, fontSize: 11, color: '#9C9C9C' }}>{showReceipt.cafe_tagline}</p></div>
               <div style={{ borderTop: '1px dashed #ccc', margin: '8px 0' }} />
               <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Order #</span><strong>{showReceipt.order_id}</strong></div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Type</span><span>{showReceipt.order_type}</span></div>
@@ -718,7 +718,7 @@ export default function CashierPOS() {
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#9C9C9C' }}><span>SGST 2.5%</span><span>₹{Math.round((showReceipt.gst_amount || 0) / 2 * 100) / 100}</span></div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: 16, borderTop: '1px dashed #000', paddingTop: 6, marginTop: 6 }}><span>TOTAL</span><span>₹{Math.round(showReceipt.total)}</span></div>
               <div style={{ borderTop: '1px dashed #ccc', margin: '8px 0' }} />
-              <p style={{ textAlign: 'center', fontSize: 11, color: '#9C9C9C' }}>Thank you for choosing Diet Cafe!</p>
+              <p style={{ textAlign: 'center', fontSize: 11, color: '#9C9C9C' }}>Thank you for choosing BORAROC!</p>
             </div>
             <div className="modal-actions">
               <button className="btn btn-secondary" onClick={() => setShowReceipt(null)} data-testid="close-receipt-btn">Done</button>

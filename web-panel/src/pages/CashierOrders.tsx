@@ -195,7 +195,7 @@ export default function CashierOrders() {
           <div className="modal" style={{ maxWidth: 380 }}>
             <h2>Receipt</h2>
             <div id="receipt-content" style={{ fontFamily: 'monospace', fontSize: 13 }}>
-              <div style={{ textAlign: 'center', marginBottom: 8 }}><h2 style={{ margin: 0, fontSize: 18 }}>DIET CAFE</h2></div>
+              <div style={{ textAlign: 'center', marginBottom: 8 }}><h2 style={{ margin: 0, fontSize: 18 }}>BORAROC</h2></div>
               <div style={{ borderTop: '1px dashed #ccc', margin: '8px 0' }} />
               <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Order #</span><strong>{showReceipt.order_id}</strong></div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Customer</span><span>{showReceipt.customer_name}</span></div>

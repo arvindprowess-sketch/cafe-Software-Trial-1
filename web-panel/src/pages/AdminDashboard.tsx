@@ -31,7 +31,7 @@ export default function AdminDashboard() {
   return (
     <div>
       <div className="page-header">
-        <div><h1>Dashboard</h1><p>Diet Cafe Control Center</p></div>
+        <div><h1>Dashboard</h1><p>BORAROC Control Center</p></div>
       </div>
 
       <div className="stats-grid" data-testid="stats-grid">

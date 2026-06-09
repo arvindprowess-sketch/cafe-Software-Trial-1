@@ -269,7 +269,7 @@ export default function SideDrawer({ visible, onClose, user }: SideDrawerProps) 
             </TouchableOpacity>
           </ScrollView>
 
-          <Text style={styles.version}>Diet Cafe v1.3</Text>
+          <Text style={styles.version}>BORAROC v1.3</Text>
         </Animated.View>
       </View>
     </Modal>

@@ -336,7 +336,7 @@ export default function AuthScreen() {
             <View style={styles.logoBg}>
               <Ionicons name="restaurant" size={32} color={FUEL.ink} />
             </View>
-            <Text style={styles.brand}>FUEL</Text>
+            <Text style={styles.brand}>BORAROC</Text>
           </View>
 
           <View style={styles.formCard}>

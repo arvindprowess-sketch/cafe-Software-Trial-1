@@ -348,7 +348,7 @@ export default function HomeScreen() {
             <Ionicons name="restaurant" size={18} color={Z_RED} />
             <Text style={styles.locationText}>DINE-IN AT:</Text>
             <View style={styles.locationValue}>
-              <Text style={styles.locationName}>Diet Cafe • Scan Table</Text>
+              <Text style={styles.locationName}>BORAROC • Scan Table</Text>
               <Ionicons name="chevron-down" size={16} color="#9C9C9C" />
             </View>
           </TouchableOpacity>

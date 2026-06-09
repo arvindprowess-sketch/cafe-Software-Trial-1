@@ -1,16 +1,16 @@
 {
   "expo": {
-    "name": "Diet Cafe",
-    "slug": "diet-cafe",
+    "name": "BORAROC",
+    "slug": "boraroc",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "dietcafe",
+    "scheme": "boraroc",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.dietcafe.app",
+      "bundleIdentifier": "com.boraroc.app",
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Upload dish photos to your café menu",
         "NSCameraUsageDescription": "Take photos of dishes for the menu"
@@ -19,9 +19,9 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#E23744"
+        "backgroundColor": "#0F1C30"
       },
-      "package": "com.dietcafe.app",
+      "package": "com.boraroc.app",
       "edgeToEdgeEnabled": true,
       "permissions": [
         "READ_EXTERNAL_STORAGE",
@@ -50,13 +50,13 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#E23744"
+          "backgroundColor": "#0F1C30"
         }
       ],
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "FUEL uses your location to detect your delivery address."
+          "locationWhenInUsePermission": "BORAROC uses your location to detect your delivery address."
         }
       ]
     ],
