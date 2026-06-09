@@ -6992,6 +6992,74 @@ async def go_live(store_id: str, user=Depends(get_current_user)):
     await db.stores.update_one({"store_id": store_id}, {"$set": {"onboarding_status": "live"}})
     return {"store_id": store_id, "onboarding_status": "live"}
 
+# Demo staff PINs, one per staff role, for role-separation testing.
+# NOTE: pin_plain storage + fixed demo PINs are a pre-launch security concern
+# (see PR note). Demo PINs must be removed/rotated before real launch.
+_DEMO_STAFF = [
+    {"role": "area_manager",  "name": "Demo Area Manager",  "pin": "550010"},
+    {"role": "cashier",       "name": "Demo Cashier",       "pin": "550020"},
+    {"role": "kitchen",       "name": "Demo Kitchen",       "pin": "550030"},
+]
+
+async def _free_pin(preferred: str) -> Optional[str]:
+    """Return `preferred` if unused, else the next free PIN in its +0..+5 range
+    (mirrors the 550001..550005 loop in run_store_migration)."""
+    base = int(preferred)
+    for candidate in [str(base + i) for i in range(0, 6)]:
+        if not await db.users.find_one({"pin_plain": candidate}, {"_id": 0}):
+            return candidate
+    return None
+
+@api_router.post("/admin/seed-demo-staff")
+async def admin_seed_demo_staff(user=Depends(get_current_user)):
+    """HQ only: idempotently ensure one demo login per staff role for the default
+    store (area_manager / cashier / kitchen). The store_manager (PIN 550001) is
+    created by run_store_migration and is left untouched. Returns demo creds so
+    the owner can log in as each role. Does not auto-run on boot."""
+    if not is_hq(user):
+        raise HTTPException(status_code=403, detail="HQ only")
+
+    creds = []
+    for spec in _DEMO_STAFF:
+        role = spec["role"]
+        # Idempotent: one demo user per role for the default store.
+        if role == "area_manager":
+            existing = await db.users.find_one(
+                {"role": "area_manager", "cluster_store_ids": DEFAULT_STORE_ID}, {"_id": 0})
+        else:
+            existing = await db.users.find_one(
+                {"role": role, "store_id": DEFAULT_STORE_ID}, {"_id": 0})
+        if existing:
+            creds.append({"role": role, "pin": existing.get("pin_plain", "****"),
+                          "store_id": existing.get("store_id"),
+                          "cluster_store_ids": existing.get("cluster_store_ids")})
+            continue
+
+        pin = await _free_pin(spec["pin"])
+        if not pin:
+            continue  # no free PIN in range; skip rather than collide
+        doc = {
+            "id": str(uuid.uuid4()),
+            "name": spec["name"],
+            "role": role,
+            "pin_hash": hash_password(pin),
+            "pin_plain": pin,
+            "is_active": True,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        if role == "area_manager":
+            doc["cluster_store_ids"] = [DEFAULT_STORE_ID]
+        else:
+            doc["store_id"] = DEFAULT_STORE_ID
+        await db.users.insert_one(doc)
+        logger.info(f"[demo] created {role} (PIN {pin})")
+        creds.append({"role": role, "pin": pin,
+                      "store_id": doc.get("store_id"),
+                      "cluster_store_ids": doc.get("cluster_store_ids")})
+
+    return {"message": "Demo staff ensured", "default_store_id": DEFAULT_STORE_ID,
+            "demo_staff": creds}
+
 app.include_router(api_router)
 
 app.add_middleware(
