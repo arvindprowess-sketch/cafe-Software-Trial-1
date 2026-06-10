@@ -60,6 +60,7 @@ export const HQ_SUB_ROUTE_ROLES: Record<string, string[]> = {
   '/hq/inventory/health':    ['admin', 'super_admin', 'area_manager', 'store_manager'],
   '/hq/inventory/movements': ['admin', 'super_admin', 'area_manager', 'store_manager'],
   '/hq/reports': ['admin', 'super_admin', 'area_manager', 'store_manager'],
+  '/hq/onboarding': ['admin', 'super_admin'],
   '/hq/daybook': ['admin', 'super_admin', 'area_manager'],
 };
 
