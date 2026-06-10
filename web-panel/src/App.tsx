@@ -24,6 +24,8 @@ import AdminCategories from './pages/AdminCategories';
 import AdminAnalytics from './pages/AdminAnalytics';
 import AdminTables from './pages/AdminTables';
 import AdminOffers from './pages/AdminOffers';
+import AdminStaff from './pages/AdminStaff';
+import AdminShifts from './pages/AdminShifts';
 import KitchenOrders from './pages/KitchenOrders';
 import KitchenInventory from './pages/KitchenInventory';
 import CashierPOS from './pages/CashierPOS';
@@ -85,6 +87,8 @@ export default function App() {
         <Route path="orders" element={<RoleRoute allowed={ADMIN_RESTRICTED_PATHS['/admin/orders']}><AdminAnalytics /></RoleRoute>} />
         <Route path="tables" element={<AdminTables />} />
         <Route path="offers" element={<AdminOffers />} />
+        <Route path="staff" element={<RoleRoute allowed={ADMIN_RESTRICTED_PATHS['/admin/staff']}><AdminStaff /></RoleRoute>} />
+        <Route path="shifts" element={<RoleRoute allowed={ADMIN_RESTRICTED_PATHS['/admin/shifts']}><AdminShifts /></RoleRoute>} />
       </Route>
 
       <Route path="/kitchen" element={<ProtectedRoute roles={['kitchen']}><KitchenLayout /></ProtectedRoute>}>
