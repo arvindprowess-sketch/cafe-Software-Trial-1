@@ -201,6 +201,45 @@ def test_invoice_payload_ties_and_no_cost(ctx):
     run(go())
 
 
+# ---------- refunds list (read-only, UI-0) ----------
+
+def test_list_refunds_cashier_own_store_no_cost(ctx):
+    async def go():
+        o = await _place(ctx, grams=100, price=300)
+        raised = await ctx.client.post(f"/api/orders/{o['id']}/refund", headers=auth(ctx.cashier), json={"reason": "list test"})
+        assert raised.status_code == 200, raised.text
+        lst = await ctx.client.get("/api/refunds", headers=auth(ctx.cashier))
+        assert lst.status_code == 200, lst.text
+        rows = lst.json()
+        assert len(rows) >= 1
+        for r in rows:
+            assert r["store_id"] == ctx.store_a            # own store only
+            assert "avg_cost" not in r and "cost" not in r  # no purchase cost
+    run(go())
+
+
+def test_list_refunds_kitchen_forbidden(ctx):
+    async def go():
+        r = await ctx.client.get("/api/refunds", headers=auth(ctx.kitchen))
+        assert r.status_code == 403
+    run(go())
+
+
+def test_list_refunds_flagged_filter(ctx):
+    async def go():
+        # high-value (>= 2000) raise -> flagged; low-value -> not flagged
+        hi = await _place(ctx, grams=2500, price=2500)
+        await ctx.client.post(f"/api/orders/{hi['id']}/refund", headers=auth(ctx.cashier), json={"reason": "hi"})
+        lo = await _place(ctx, grams=100, price=200)
+        await ctx.client.post(f"/api/orders/{lo['id']}/refund", headers=auth(ctx.cashier), json={"reason": "lo"})
+        r = await ctx.client.get("/api/refunds?flagged=true", headers=auth(ctx.mgr))
+        assert r.status_code == 200, r.text
+        rows = r.json()
+        assert len(rows) >= 1
+        assert all(rec["flagged"] is True for rec in rows)
+    run(go())
+
+
 # ---------- immutability ----------
 
 def test_no_edit_delete_route_for_refunds(ctx):
