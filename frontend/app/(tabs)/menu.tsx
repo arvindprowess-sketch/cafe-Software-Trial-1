@@ -123,6 +123,26 @@ export default function MenuScreen() {
     return userGoal ? sortByGoalFit(list, userGoal) : list;
   }, [products, search, dietFilter, selectedCat, userGoal]);
 
+  // PR-1: group the visible list by subcategory in canonical order (display only).
+  // Headers are injected as sentinel rows; products without a known subcategory
+  // fall under "Other" shown last. Skipped while searching to keep results flat.
+  const sectioned = useMemo(() => {
+    const SUBCAT_ORDER = ['Base', 'Protein', 'Veggies', 'Sauce', 'Toppings'];
+    const anySub = filtered.some(p => p.subcategory && String(p.subcategory).trim());
+    if (search || !anySub) return filtered; // flat
+    const groups: Record<string, any[]> = {};
+    for (const p of filtered) {
+      const key = (p.subcategory && String(p.subcategory).trim()) ? String(p.subcategory).trim() : 'Other';
+      (groups[key] ||= []).push(p);
+    }
+    const order = [...SUBCAT_ORDER.filter(l => groups[l]),
+                   ...Object.keys(groups).filter(l => !SUBCAT_ORDER.includes(l) && l !== 'Other').sort(),
+                   ...(groups['Other'] ? ['Other'] : [])];
+    const out: any[] = [];
+    for (const label of order) { out.push({ __header: true, id: `__h_${label}`, label }); out.push(...groups[label]); }
+    return out;
+  }, [filtered, search]);
+
   // Nearest options when a multi-tag AND combo returns nothing (e.g. Vegan+Keto)
   const nearest = useMemo(() => {
     if (dietFilter.length < 2) return [];
@@ -165,6 +185,17 @@ export default function MenuScreen() {
         {isActive && <View style={[styles.sidebarActiveBar, { backgroundColor: catColor }]} />}
       </TouchableOpacity>
     );
+  };
+
+  // PR-1: render a subcategory section header, else delegate to the product card.
+  const renderRow = ({ item }: { item: any }) => {
+    if (item.__header) {
+      return (
+        <Text testID={`menu-subcat-${String(item.label).toLowerCase().replace(/[^a-z]+/g, '-')}`}
+          style={styles.subcatHeader}>{item.label}</Text>
+      );
+    }
+    return renderProduct({ item });
   };
 
   // Render product card (ENHANCED)
@@ -355,9 +386,9 @@ export default function MenuScreen() {
         {/* Right Product List - Takes remaining space */}
         <View style={styles.productListContainer}>
           <FlatList
-            data={filtered}
+            data={sectioned}
             keyExtractor={i => i.id}
-            renderItem={renderProduct}
+            renderItem={renderRow}
             contentContainerStyle={styles.productListContent}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Z_RED} />}
             showsVerticalScrollIndicator={false}
@@ -582,11 +613,21 @@ const styles = StyleSheet.create({
     flex: 1,
     zIndex: 1,
   },
-  productListContent: { 
+  productListContent: {
     padding: 8,
     paddingBottom: 120,
   },
-  
+  subcatHeader: {  // PR-1
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#9C9C9C',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 10,
+    marginBottom: 4,
+    marginLeft: 4,
+  },
+
   // Product Card (ENHANCED)
   productCard: { 
     backgroundColor: BK_WHITE, 

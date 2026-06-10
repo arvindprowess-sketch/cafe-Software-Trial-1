@@ -27,6 +27,9 @@ export default function HqCatalog() {
   const [search, setSearch] = useState('');
   const [savingId, setSavingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Record<string, string>>({}); // pid -> price input
+  // PR-1: recipe-coverage (ghost-stock) report for this store
+  const [coverage, setCoverage] = useState<any[] | null>(null);
+  const [coverageLoading, setCoverageLoading] = useState(false);
 
   const loadProducts = async () => {
     try { setProducts(await api('/products')); } catch {}
@@ -62,6 +65,16 @@ export default function HqCatalog() {
     } catch (e: any) { alert(e.message); } finally { setSavingId(null); }
   };
 
+  const loadCoverage = async () => {
+    if (!selectedStoreId) return;
+    setCoverageLoading(true);
+    try { setCoverage(await api(`/catalog/recipe-coverage?store_id=${selectedStoreId}`)); }
+    catch (e: any) { alert(e.message); setCoverage([]); }
+    finally { setCoverageLoading(false); }
+  };
+  // reset the report when the store changes
+  useEffect(() => { setCoverage(null); }, [selectedStoreId]);
+
   const filtered = products.filter((p) => !search.trim() || p.name?.toLowerCase().includes(search.toLowerCase()));
 
   return (
@@ -71,8 +84,30 @@ export default function HqCatalog() {
           <h1>Store Catalog — {selectedStore?.name}</h1>
           <p>Override selling price &amp; availability for this store. No override = master base price.</p>
         </div>
-        {isHQ && <Link className="btn btn-secondary" to="/admin/products" data-testid="manage-master-link">Manage master catalog →</Link>}
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-secondary" onClick={loadCoverage} disabled={coverageLoading} data-testid="recipe-coverage-btn">
+            {coverageLoading ? 'Checking…' : '⚠ Recipe coverage'}
+          </button>
+          {isHQ && <Link className="btn btn-secondary" to="/admin/products" data-testid="manage-master-link">Manage master catalog →</Link>}
+        </div>
       </div>
+
+      {coverage !== null && (
+        <div className="card" data-testid="recipe-coverage-panel" style={{ marginBottom: 14, padding: 14, background: coverage.length ? '#FFF8E6' : '#EAF7EC', border: `1px solid ${coverage.length ? '#F2D98C' : '#BFE3C6'}` }}>
+          {coverage.length === 0 ? (
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#2C7A3D' }}>✓ Every sellable product deducts stock in {selectedStore?.name}. No ghost-stock items.</div>
+          ) : (
+            <>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#7A5A00', marginBottom: 8 }}>⚠ {coverage.length} product(s) would sell WITHOUT deducting stock:</div>
+              <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: '#7A5A00' }}>
+                {coverage.map((c: any) => (
+                  <li key={c.product_id} data-testid={`coverage-${c.product_id}`}><strong>{c.name}</strong> <span style={{ opacity: 0.7 }}>({c.product_type})</span> — {c.reason}</li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      )}
 
       <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search products…" data-testid="catalog-search"
         style={{ width: '100%', maxWidth: 320, padding: '10px 14px', borderRadius: 10, border: '2px solid #E8E8E8', fontSize: 14, marginBottom: 14 }} />
@@ -90,7 +125,7 @@ export default function HqCatalog() {
               <tr key={p.id} data-testid={`catalog-row-${p.id}`}>
                 <td>
                   <div style={{ fontWeight: 700, fontSize: 14 }}>{p.name}</div>
-                  <div style={{ fontSize: 11, color: '#9C9C9C' }}>{p.category || '—'} · {p.product_type === 'ready_made' ? 'Meal' : 'Single'}{ov ? ' · overridden' : ''}</div>
+                  <div style={{ fontSize: 11, color: '#9C9C9C' }}>{p.category || '—'}{p.subcategory ? ` · ${p.subcategory}` : ''} · {p.product_type === 'ready_made' ? 'Meal' : 'Single'}{ov ? ' · overridden' : ''}</div>
                 </td>
                 <td style={{ fontSize: 13, color: '#696969' }}>₹{base}{priceLabel(p)}</td>
                 <td>
