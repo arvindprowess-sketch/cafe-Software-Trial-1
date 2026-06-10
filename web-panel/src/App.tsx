@@ -23,6 +23,7 @@ import HqItemMaster from './pages/HqItemMaster';
 import HqMovementLog from './pages/HqMovementLog';
 import HqInventoryDashboard from './pages/HqInventoryDashboard';
 import HqReports from './pages/HqReports';
+import HqAuditLog from './pages/HqAuditLog';
 import HqOnboarding from './pages/HqOnboarding';
 import StoreDayBook from './pages/StoreDayBook';
 import CashierRefunds from './pages/CashierRefunds';
@@ -91,6 +92,7 @@ export default function App() {
         <Route path="inventory/health" element={<RoleRoute allowed={HQ_SUB_ROUTE_ROLES['/hq/inventory/health']}><HqInventoryDashboard /></RoleRoute>} />
         <Route path="inventory/movements" element={<RoleRoute allowed={HQ_SUB_ROUTE_ROLES['/hq/inventory/movements']}><HqMovementLog /></RoleRoute>} />
         <Route path="reports" element={<RoleRoute allowed={HQ_SUB_ROUTE_ROLES['/hq/reports']}><HqReports /></RoleRoute>} />
+        <Route path="audit-log" element={<RoleRoute allowed={HQ_SUB_ROUTE_ROLES['/hq/audit-log']}><HqAuditLog /></RoleRoute>} />
         <Route path="onboarding" element={<RoleRoute allowed={HQ_SUB_ROUTE_ROLES['/hq/onboarding']}><HqOnboarding /></RoleRoute>} />
         <Route path="daybook" element={<RoleRoute allowed={HQ_SUB_ROUTE_ROLES['/hq/daybook']}><StoreDayBook readOnly /></RoleRoute>} />
       </Route>

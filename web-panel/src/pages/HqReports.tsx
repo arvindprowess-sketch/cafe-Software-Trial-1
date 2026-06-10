@@ -53,8 +53,8 @@ type ItemRow = { product_id: string; name: string; qty: number; revenue: number;
 type ItemsResp = { items: ItemRow[]; top_by_category: Record<string, { product_id: string; name: string; qty: number; revenue: number }[]> };
 type PurchaseRow = { item_id: string; product_id?: string | null; qty: number; value: number };
 type InventoryResp = { store_id: string; valuation: number; wastage: number; consumption: number; purchases: { total: number; by_item: PurchaseRow[] } };
-type AuditEntry = { source: string; at?: string | null; type?: string; user_id?: string | null; ref_id?: string | null; item_id?: string | null; qty_delta?: number | null; reason?: string | null; status?: string | null; value?: number | null };
-type AuditResp = { store_id: string; entries: AuditEntry[] };
+export type AuditEntry = { source: string; at?: string | null; type?: string; user_id?: string | null; ref_id?: string | null; item_id?: string | null; qty_delta?: number | null; reason?: string | null; status?: string | null; value?: number | null };
+export type AuditResp = { store_id: string; entries: AuditEntry[] };
 
 type TabDef = { key: TabKey; label: string; roles: string[]; needsStore?: boolean };
 const TABS: TabDef[] = [
@@ -63,7 +63,7 @@ const TABS: TabDef[] = [
   { key: 'ranking', label: 'Ranking', roles: ['super_admin', 'admin', 'area_manager'] },
   { key: 'items', label: 'Item Sales', roles: ['super_admin', 'admin', 'area_manager', 'store_manager'] },
   { key: 'inventory', label: 'Inventory', roles: ['super_admin', 'admin', 'area_manager', 'store_manager'], needsStore: true },
-  { key: 'audit-log', label: 'Audit Log', roles: ['super_admin', 'admin', 'area_manager', 'store_manager'], needsStore: true },
+  // PR-3: 'audit-log' promoted to its own top-level /hq/audit-log page.
 ];
 
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : 'Something went wrong');
@@ -111,7 +111,6 @@ export default function HqReports() {
   const [ranking, setRanking] = useState<RankingResp | null>(null);
   const [items, setItems] = useState<ItemsResp | null>(null);
   const [inventory, setInventory] = useState<InventoryResp | null>(null);
-  const [audit, setAudit] = useState<AuditResp | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -153,7 +152,6 @@ export default function HqReports() {
       else if (tab === 'ranking') setRanking(await api(`/reports/ranking?${qs}`));
       else if (tab === 'items') setItems(await api(`/reports/items?${qs}`));
       else if (tab === 'inventory') setInventory(await api(`/reports/inventory?${qs}`));
-      else if (tab === 'audit-log') setAudit(await api(`/reports/audit-log?${qs}`));
     } catch (e) {
       setError(errMsg(e)); // inline 403 (out-of-scope / cost-restricted role)
     } finally {
@@ -223,19 +221,21 @@ export default function HqReports() {
           {tab === 'ranking' && <RankingView data={ranking} />}
           {tab === 'items' && <ItemsTable data={items} />}
           {tab === 'inventory' && <InventoryView data={inventory} />}
-          {tab === 'audit-log' && <AuditTable data={audit} />}
         </>
       )}
     </div>
   );
 }
 
-function Empty({ id }: { id: string }) {
-  return <div style={{ textAlign: 'center', padding: 40, color: '#9C9C9C' }} data-testid={id}>No data for this range.</div>;
+function Empty({ id, msg = 'No data for this range.' }: { id: string; msg?: string }) {
+  return <div style={{ textAlign: 'center', padding: 40, color: '#9C9C9C' }} data-testid={id}>{msg}</div>;
 }
 
+// PR-3: friendly zero-data message for the revenue-bearing tabs.
+const NO_REVENUE = 'No revenue in this period.';
+
 function PnlTable({ rows }: { rows: PnlRow[] }) {
-  if (!rows.length) return <Empty id="pnl-empty" />;
+  if (!rows.length) return <Empty id="pnl-empty" msg={NO_REVENUE} />;
   return (
     <table className="data-table" data-testid="pnl-table">
       <thead><tr><th>Store</th><th>Revenue</th><th>Discounts</th><th>COGS</th><th>Gross Profit</th><th>Margin %</th><th>Wastage</th><th>Net Contribution</th><th>Orders</th><th>AOV</th></tr></thead>
@@ -260,7 +260,7 @@ function PnlTable({ rows }: { rows: PnlRow[] }) {
 }
 
 function ConsolidatedView({ data }: { data: ConsolidatedResp | null }) {
-  if (!data) return <Empty id="consolidated-empty" />;
+  if (!data || (!data.company.revenue && !data.stores.length)) return <Empty id="consolidated-empty" msg={NO_REVENUE} />;
   const c = data.company;
   return (
     <div data-testid="consolidated-view">
@@ -286,7 +286,7 @@ function ConsolidatedView({ data }: { data: ConsolidatedResp | null }) {
 }
 
 function RankingView({ data }: { data: RankingResp | null }) {
-  if (!data || (!data.by_gross_profit.length && !data.by_revenue.length)) return <Empty id="ranking-empty" />;
+  if (!data || (!data.by_gross_profit.length && !data.by_revenue.length)) return <Empty id="ranking-empty" msg={NO_REVENUE} />;
   const rankTable = (rows: PnlRow[], metric: 'gross_profit' | 'revenue', testid: string) => (
     <table className="data-table" data-testid={testid}>
       <thead><tr><th>#</th><th>Store</th><th>{metric === 'gross_profit' ? 'Gross Profit' : 'Revenue'}</th><th>Margin %</th></tr></thead>
@@ -319,7 +319,7 @@ function RankingView({ data }: { data: RankingResp | null }) {
 }
 
 function ItemsTable({ data }: { data: ItemsResp | null }) {
-  if (!data || !data.items.length) return <Empty id="items-empty" />;
+  if (!data || !data.items.length) return <Empty id="items-empty" msg={NO_REVENUE} />;
   return (
     <table className="data-table" data-testid="items-table">
       <thead><tr><th>Item</th><th>Category</th><th>Qty</th><th>Revenue</th><th>COGS</th><th>Profit</th></tr></thead>
@@ -340,7 +340,7 @@ function ItemsTable({ data }: { data: ItemsResp | null }) {
 }
 
 function InventoryView({ data }: { data: InventoryResp | null }) {
-  if (!data) return <Empty id="inventory-empty" />;
+  if (!data || (!data.valuation && !data.consumption && !data.purchases.total && !data.wastage)) return <Empty id="inventory-empty" msg="No inventory activity in this period." />;
   return (
     <div data-testid="inventory-view">
       <div className="stats-grid" style={{ marginBottom: 20 }}>
@@ -377,7 +377,7 @@ function InventoryView({ data }: { data: InventoryResp | null }) {
   );
 }
 
-function AuditTable({ data }: { data: AuditResp | null }) {
+export function AuditTable({ data }: { data: AuditResp | null }) {
   if (!data || !data.entries.length) return <Empty id="audit-empty" />;
   return (
     <table className="data-table" data-testid="audit-table">

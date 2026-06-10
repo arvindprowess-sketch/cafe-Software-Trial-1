@@ -207,7 +207,14 @@ export default function StoreDayBook({ readOnly = false }: { readOnly?: boolean 
         </div>
       ) : notFound ? (
         <div data-testid="daybook-none">
-          <div style={{ color: '#9C9C9C', marginBottom: 16 }}>No business day for {date}.</div>
+          {/* PR-3: friendly empty state + Open-day CTA. */}
+          <div style={{ textAlign: 'center', padding: '28px 20px', background: '#FAFAF7', border: '1px solid #EFEFEF', borderRadius: 12, marginBottom: 16 }}>
+            <div style={{ fontSize: 32, marginBottom: 6 }}>🗓️</div>
+            <div style={{ fontWeight: 700, fontSize: 16, color: '#15140F' }}>No business day open for {date}</div>
+            <div style={{ color: '#9C9C9C', fontSize: 13, marginTop: 4 }}>
+              {canOpen ? 'Open the day below to start taking orders and tracking cash.' : 'The store hasn’t opened its day for this date yet.'}
+            </div>
+          </div>
           {canOpen ? (
             <form onSubmit={openDay} style={{ maxWidth: 420 }} data-testid="daybook-open-form">
               <h2 style={{ fontSize: 16 }}>Open day</h2>
@@ -219,9 +226,7 @@ export default function StoreDayBook({ readOnly = false }: { readOnly?: boolean 
               </div>
               <button type="submit" className="btn btn-primary" disabled={busy !== ''} data-testid="open-day-btn">{busy === 'open' ? 'Opening…' : 'Open day'}</button>
             </form>
-          ) : (
-            <div style={{ color: '#9C9C9C', fontSize: 13 }}>No day record for this date.</div>
-          )}
+          ) : null}
         </div>
       ) : null}
 

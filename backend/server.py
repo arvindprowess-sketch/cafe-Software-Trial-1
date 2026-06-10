@@ -4,6 +4,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import ReturnDocument  # PR-3: atomic stock decrement
 import io
 import os
 import re
@@ -5733,15 +5734,18 @@ async def low_stock_alerts(user, limit: int = 50) -> List[dict]:
     return rows[:limit]
 
 async def log_movement(*, store_id, item_id, product_id, mtype, qty_delta, qty_after,
-                       reason, user_id, ref_id=None, unit_cost_at_time=None):
+                       reason, user_id, ref_id=None, unit_cost_at_time=None,
+                       flagged_for_review=False):
     """The single append-only movement_log writer. Reused by every movement type
-    (3A inward; 3B discard/transfer; 3C sale)."""
+    (3A inward; 3B discard/transfer; 3C sale). PR-3: flagged_for_review marks rows
+    where the resulting on-hand went negative (oversold / untracked inward)."""
     entry = {
         "id": str(uuid.uuid4()),
         "store_id": store_id, "item_id": item_id, "product_id": product_id,
         "type": mtype, "qty_delta": qty_delta, "qty_after": qty_after,
         "reason": reason, "ref_id": ref_id, "unit_cost_at_time": unit_cost_at_time,
-        "user_id": user_id, "created_at": datetime.now(timezone.utc).isoformat(),
+        "user_id": user_id, "flagged_for_review": flagged_for_review,
+        "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.movement_log.insert_one(entry)
     return {k: v for k, v in entry.items() if k != "_id"}
@@ -5994,17 +5998,24 @@ def _explode_value(exploded: list) -> float:
     return round(sum(e["grams"] * e["unit_cost"] for e in exploded), 2)
 
 async def _apply_stock_deltas(exploded: list, store_id: str, mtype: str, reason: str, user_id: str, ref_id: str):
-    """Deduct each exploded raw from stock and append one movement per raw."""
+    """Deduct each exploded raw from stock and append one movement per raw.
+    PR-3: the decrement is atomic ($inc via find_one_and_update) so concurrent
+    sales can't race on the read-then-set; qty_after is derived from the returned
+    doc, and the movement is flagged_for_review when on-hand goes negative."""
     for e in exploded:
         item = e["item"]
-        new_qty = float(item.get("qty_on_hand", 0) or 0) - e["grams"]
-        await db.inventory_items.update_one(
+        updated = await db.inventory_items.find_one_and_update(
             {"id": item["id"], "store_id": store_id},
-            {"$set": {"qty_on_hand": new_qty, "updated_at": datetime.now(timezone.utc).isoformat()}},
+            {"$inc": {"qty_on_hand": -e["grams"]},
+             "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}},
+            return_document=ReturnDocument.AFTER,
         )
+        # Fallback if the row vanished mid-flight (shouldn't happen): derive locally.
+        new_qty = float((updated or {}).get("qty_on_hand", float(item.get("qty_on_hand", 0) or 0) - e["grams"]))
         await log_movement(store_id=store_id, item_id=item["id"], product_id=item.get("product_id"),
                            mtype=mtype, qty_delta=-e["grams"], qty_after=new_qty, reason=reason,
-                           user_id=user_id, ref_id=ref_id, unit_cost_at_time=e["unit_cost"])
+                           user_id=user_id, ref_id=ref_id, unit_cost_at_time=e["unit_cost"],
+                           flagged_for_review=new_qty < 0)
 
 # ---------- Discards ----------
 class DiscardCreate(BaseModel):
@@ -7538,6 +7549,14 @@ async def on_startup():
         logger.info("[startup] inventory indexes ensured")
     except Exception as e:
         logger.error(f"[startup] inventory index error: {e}")
+    # PR-3: (store_id, created_at desc) indexes for the remaining store-scoped,
+    # time-ordered collections (idempotent; skip silently if already present).
+    for coll in ("orders", "discards", "transfers", "refunds", "business_days", "audit_log"):
+        try:
+            await db[coll].create_index([("store_id", 1), ("created_at", -1)])
+        except Exception as e:
+            logger.error(f"[startup] {coll} index error: {e}")
+    logger.info("[startup] store/time indexes ensured")
     # One-time cleanup: remove plaintext PINs from all existing user docs (idempotent).
     try:
         result = await db.users.update_many(
