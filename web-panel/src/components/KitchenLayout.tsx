@@ -14,6 +14,7 @@ export default function KitchenLayout() {
         <div className="top-nav-links">
           <NavLink to="/kitchen" end className={({ isActive }) => `top-nav-link ${isActive ? 'active' : ''}`} data-testid="nav-orders">Orders</NavLink>
           <NavLink to="/kitchen/inventory" className={({ isActive }) => `top-nav-link ${isActive ? 'active' : ''}`} data-testid="nav-inventory">Inventory</NavLink>
+          <NavLink to="/kitchen/discards" className={({ isActive }) => `top-nav-link ${isActive ? 'active' : ''}`} data-testid="nav-discards">Discards</NavLink>
         </div>
         <div className="top-nav-actions">
           <span className="top-nav-user"><strong>{user?.name}</strong></span>
