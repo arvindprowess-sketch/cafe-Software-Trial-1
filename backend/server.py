@@ -19,6 +19,7 @@ from typing import List, Optional, Dict, Any, Union
 import uuid
 import time
 import hashlib
+import hmac
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 import bcrypt
@@ -4194,9 +4195,12 @@ async def get_profit_margins(user=Depends(get_current_user)):
     }
 
 # ========== RAZORPAY PAYMENT ==========
+def _payments_env_is_prod() -> bool:
+    # Request-time check; same APP_ENV convention as assert_prod_secrets.
+    return os.environ.get("APP_ENV", "development").lower() in ("prod", "production")
+
 class PaymentCreateRequest(BaseModel):
-    order_id: str
-    amount: float  # in INR
+    order_id: str  # amount is server-derived from the order; never accepted from the client
 
 class PaymentVerifyRequest(BaseModel):
     razorpay_order_id: str
@@ -4216,11 +4220,21 @@ async def create_payment_order(data: PaymentCreateRequest, user=Depends(get_curr
             raise HTTPException(status_code=403, detail="Access denied")
     else:
         assert_store_allowed(user, order.get("store_id"))
+    if order.get("payment_status") == "paid":
+        raise HTTPException(status_code=400, detail="Order is already paid")
+    if order.get("status") in ("cancelled", "voided", "refunded"):
+        raise HTTPException(status_code=400, detail="Order is not payable")
+    # Server-authoritative amount: the order's stored grand total, never a client value.
+    amount = round(float(order.get("total_price") or 0), 2)
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="Order total is invalid")
     order_store_id = order.get("store_id") or DEFAULT_STORE_ID
     key_id = os.environ.get("RAZORPAY_KEY_ID", "")
     key_secret = os.environ.get("RAZORPAY_KEY_SECRET", "")
     if not key_id or not key_secret:
-        # Mock mode - no keys configured
+        if _payments_env_is_prod():
+            raise HTTPException(status_code=503, detail="Payments not configured")
+        # Mock mode - no keys configured (non-production only)
         mock_order_id = f"order_mock_{uuid.uuid4().hex[:12]}"
         await db.payments.insert_one({
             "id": str(uuid.uuid4()),
@@ -4228,7 +4242,7 @@ async def create_payment_order(data: PaymentCreateRequest, user=Depends(get_curr
             "store_id": order_store_id,
             "user_id": user["id"],
             "razorpay_order_id": mock_order_id,
-            "amount": data.amount,
+            "amount": amount,
             "currency": "INR",
             "status": "created",
             "mock": True,
@@ -4236,7 +4250,7 @@ async def create_payment_order(data: PaymentCreateRequest, user=Depends(get_curr
         })
         return {
             "razorpay_order_id": mock_order_id,
-            "amount": int(data.amount * 100),
+            "amount": int(amount * 100),
             "currency": "INR",
             "key_id": "rzp_test_mock",
             "mock": True,
@@ -4245,7 +4259,7 @@ async def create_payment_order(data: PaymentCreateRequest, user=Depends(get_curr
         import razorpay
         client_rp = razorpay.Client(auth=(key_id, key_secret))
         rp_order = client_rp.order.create({
-            "amount": int(data.amount * 100),
+            "amount": int(amount * 100),
             "currency": "INR",
             "payment_capture": 1,
             "notes": {"boraroc_order": data.order_id, "user_id": user["id"]},
@@ -4256,7 +4270,7 @@ async def create_payment_order(data: PaymentCreateRequest, user=Depends(get_curr
             "store_id": order_store_id,
             "user_id": user["id"],
             "razorpay_order_id": rp_order["id"],
-            "amount": data.amount,
+            "amount": amount,
             "currency": "INR",
             "status": "created",
             "created_at": datetime.now(timezone.utc).isoformat(),
@@ -4277,7 +4291,20 @@ async def verify_payment(data: PaymentVerifyRequest, user=Depends(get_current_us
     payment = await db.payments.find_one({"razorpay_order_id": data.razorpay_order_id}, {"_id": 0})
     if not payment:
         raise HTTPException(status_code=404, detail="Payment not found")
+    if payment.get("order_id") != data.order_id:
+        raise HTTPException(status_code=400, detail="Payment/order mismatch")
+    if normalize_role(user) == "customer":
+        if payment.get("user_id") != user["id"]:
+            raise HTTPException(status_code=403, detail="Access denied")
+    else:
+        assert_store_allowed(user, payment.get("store_id"))
+    if payment.get("status") != "created":
+        if payment.get("status") == "paid" and payment.get("razorpay_payment_id") == data.razorpay_payment_id:
+            return {"status": "paid", "message": "Payment already verified"}
+        raise HTTPException(status_code=409, detail="Payment already processed")
     if payment.get("mock"):
+        if _payments_env_is_prod():
+            raise HTTPException(status_code=503, detail="Payments not configured")
         await db.payments.update_one(
             {"razorpay_order_id": data.razorpay_order_id},
             {"$set": {"status": "paid", "razorpay_payment_id": data.razorpay_payment_id, "paid_at": datetime.now(timezone.utc).isoformat()}}
@@ -4304,6 +4331,57 @@ async def verify_payment(data: PaymentVerifyRequest, user=Depends(get_current_us
         logger.error(f"Payment verification failed: {e}")
         await db.payments.update_one({"razorpay_order_id": data.razorpay_order_id}, {"$set": {"status": "failed"}})
         raise HTTPException(status_code=400, detail="Payment verification failed")
+
+@api_router.post("/payments/webhook")
+async def razorpay_webhook(request: Request):
+    """Razorpay server-to-server webhook (no auth — authenticated by HMAC signature).
+
+    Source of truth for captures: marks the payment/order paid even if the
+    client died before calling /payments/verify."""
+    webhook_secret = os.environ.get("RAZORPAY_WEBHOOK_SECRET", "")
+    if not webhook_secret:
+        # Without the secret the signature cannot be verified; refuse rather than trust.
+        if _payments_env_is_prod():
+            logger.error("Razorpay webhook hit but RAZORPAY_WEBHOOK_SECRET is not set in production")
+        raise HTTPException(status_code=503, detail="Payments webhook not configured")
+    body = await request.body()
+    signature = request.headers.get("X-Razorpay-Signature", "")
+    # Same HMAC-SHA256(raw body) scheme razorpay.Utility.verify_webhook_signature uses,
+    # without needing a razorpay.Client (keys may be absent in mock/dev).
+    expected = hmac.new(webhook_secret.encode(), body, hashlib.sha256).hexdigest()
+    if not signature or not hmac.compare_digest(expected, signature):
+        logger.warning("Razorpay webhook: invalid signature")
+        raise HTTPException(status_code=400, detail="Invalid webhook signature")
+    try:
+        event = json.loads(body)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid webhook payload")
+    event_type = event.get("event", "")
+    logger.info(f"Razorpay webhook received: event={event_type}")
+    if event_type == "payment.captured":
+        entity = (((event.get("payload") or {}).get("payment") or {}).get("entity") or {})
+        rp_order_id = entity.get("order_id")
+        rp_payment_id = entity.get("id")
+        if not rp_order_id:
+            raise HTTPException(status_code=400, detail="Missing order_id in webhook payload")
+        payment = await db.payments.find_one({"razorpay_order_id": rp_order_id}, {"_id": 0})
+        if not payment:
+            logger.warning(f"Razorpay webhook: no payment record for razorpay_order_id={rp_order_id}")
+            return {"status": "ignored"}
+        if payment.get("status") == "paid":
+            logger.info(f"Razorpay webhook: payment {rp_order_id} already paid (idempotent skip)")
+            return {"status": "ok", "message": "Already paid"}
+        await db.payments.update_one(
+            {"razorpay_order_id": rp_order_id},
+            {"$set": {"status": "paid", "razorpay_payment_id": rp_payment_id,
+                      "paid_at": datetime.now(timezone.utc).isoformat(), "paid_via": "webhook"}}
+        )
+        await db.orders.update_one(
+            {"id": payment["order_id"]},
+            {"$set": {"payment_status": "paid", "payment_method": "razorpay"}}
+        )
+        logger.info(f"Razorpay webhook: marked order {payment['order_id']} paid via {rp_payment_id}")
+    return {"status": "ok"}
 
 # ========== APPLY COUPON TO ORDER ==========
 @api_router.post("/orders/apply-coupon")
