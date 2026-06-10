@@ -8,7 +8,7 @@ export default function CashierLayout() {
     <div>
       <div className="top-nav">
         <div className="top-nav-brand">
-          <div className="brand-dot" style={{ background: '#C7F24E' }} />
+          <img src="/boraroc-logo.png" alt="BORAROC" style={{ width: 24, height: 24, borderRadius: 6, objectFit: 'cover' }} />
           <h2>Cashier POS</h2>
         </div>
         <div className="top-nav-links">

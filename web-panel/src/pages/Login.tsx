@@ -42,7 +42,7 @@ export default function Login() {
     <div className="login-page">
       <div className="login-card">
         <div className="login-logo">
-          <div className="icon-bg">⚡</div>
+          <img src="/boraroc-logo.png" alt="BORAROC" className="icon-bg" style={{ objectFit: 'cover', borderRadius: 12 }} />
           <h1>BORAROC</h1>
           <p>Management Panel</p>
         </div>

@@ -29,9 +29,7 @@ export default function AdminLayout() {
     <div className="layout">
       <aside className="sidebar">
         <div className="sidebar-brand">
-          <div style={{ width: 36, height: 36, borderRadius: 10, background: '#C7F24E', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#15140F" strokeWidth="2"><path d="M18 8h1a4 4 0 010 8h-1M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8zM6 1v3M10 1v3M14 1v3"/></svg>
-          </div>
+          <img src="/boraroc-logo.png" alt="BORAROC" style={{ width: 36, height: 36, borderRadius: 10, objectFit: 'cover' }} />
           <span>BORAROC</span>
         </div>
         <nav className="sidebar-nav">
