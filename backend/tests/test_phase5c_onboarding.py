@@ -6,6 +6,7 @@ Run:  pytest backend/tests/test_phase5c_onboarding.py
 """
 import os
 import asyncio
+from datetime import datetime, timezone, timedelta
 
 import pytest
 
@@ -52,13 +53,20 @@ def ctx():
     run(client.aclose())
 
 
+# PR-2: far-future expiry so go-live's expiry gate passes by default.
+def _far():
+    return (datetime.now(timezone.utc).date() + timedelta(days=400)).isoformat()
+
+
 async def _mk_store(ctx, gst=None, fssai=None):
     _codeseq[0] += 1
     body = {"name": f"S{_codeseq[0]}", "code": f"C{_codeseq[0]:04d}"}
     if gst:
         body["gst_no"] = gst
+        body["gst_expiry_at"] = _far()       # PR-2
     if fssai:
         body["fssai_license"] = fssai
+        body["fssai_expiry_at"] = _far()     # PR-2
     return (await ctx.client.post("/api/stores", json=body, headers=auth(ctx.hq))).json()["store_id"]
 
 
@@ -83,8 +91,11 @@ def test_go_live_requires_gst_and_fssai(ctx):
         # add GST only -> still 400
         await ctx.client.put(f"/api/stores/{s}", json={"gst_no": "29ABCDE1234F1Z5"}, headers=auth(ctx.hq))
         assert (await ctx.client.post(f"/api/stores/{s}/go-live", headers=auth(ctx.hq))).status_code == 400
-        # add FSSAI too -> live
+        # add FSSAI too -> still 400 until valid expiry dates are present (PR-2)
         await ctx.client.put(f"/api/stores/{s}", json={"fssai_license": "12345678901234"}, headers=auth(ctx.hq))
+        assert (await ctx.client.post(f"/api/stores/{s}/go-live", headers=auth(ctx.hq))).status_code == 400
+        # add far-future expiry -> live
+        await ctx.client.put(f"/api/stores/{s}", json={"gst_expiry_at": _far(), "fssai_expiry_at": _far()}, headers=auth(ctx.hq))
         ok = await ctx.client.post(f"/api/stores/{s}/go-live", headers=auth(ctx.hq))
         assert ok.status_code == 200 and ok.json()["onboarding_status"] == "live"
     run(go())
@@ -137,7 +148,7 @@ def test_advance_flow_with_gates(ctx):
         # compliance_done fails without GST/FSSAI
         a3 = await ctx.client.post(f"/api/stores/{s}/onboarding/advance", json={}, headers=auth(ctx.hq))
         assert a3.status_code == 400
-        await ctx.client.put(f"/api/stores/{s}", json={"gst_no": "G1", "fssai_license": "F1"}, headers=auth(ctx.hq))
+        await ctx.client.put(f"/api/stores/{s}", json={"gst_no": "G1", "fssai_license": "F1", "gst_expiry_at": _far(), "fssai_expiry_at": _far()}, headers=auth(ctx.hq))
         a3b = await ctx.client.post(f"/api/stores/{s}/onboarding/advance", json={}, headers=auth(ctx.hq))
         assert a3b.status_code == 200 and a3b.json()["onboarding_status"] == "compliance_done"
         # advancing further routes to go-live

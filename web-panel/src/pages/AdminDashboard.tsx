@@ -7,6 +7,7 @@ export default function AdminDashboard() {
   const [staff, setStaff] = useState<any[]>([]);
   const [resetPinId, setResetPinId] = useState('');
   const [newPin, setNewPin] = useState('');
+  const [expiring, setExpiring] = useState<any[]>([]);  // PR-2: compliance expiring soon
 
   useEffect(() => {
     (async () => {
@@ -15,6 +16,8 @@ export default function AdminDashboard() {
         setStats(s);
         setStaff(st);
       } catch {}
+      // PR-2: compliance expiring within 30 days (best-effort; non-fatal)
+      try { setExpiring(await api('/stores/compliance/expiring')); } catch {}
     })();
   }, []);
 
@@ -52,6 +55,26 @@ export default function AdminDashboard() {
           </div>
         ))}
       </div>
+
+      {/* PR-2: Compliance expiring (30 days) */}
+      {expiring.length > 0 && (
+        <div className="card" data-testid="compliance-expiring-card" style={{ marginBottom: 24, padding: 16, background: '#FFF8E6', border: '1px solid #F2D98C' }}>
+          <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 10, color: '#7A5A00' }}>
+            ⚠ Compliance expiring (30 days)
+          </h2>
+          <div style={{ display: 'grid', gap: 6 }}>
+            {expiring.map((e: any) => (
+              <div key={e.store_id} data-testid={`compliance-row-${e.store_id}`} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#7A5A00' }}>
+                <strong>{e.name}</strong>
+                <span>
+                  {e.gst_days_remaining !== null && e.gst_days_remaining <= 30 && <span style={{ marginRight: 10 }}>GST: {e.gst_days_remaining < 0 ? 'expired' : `${e.gst_days_remaining}d`}</span>}
+                  {e.fssai_days_remaining !== null && e.fssai_days_remaining <= 30 && <span>FSSAI: {e.fssai_days_remaining < 0 ? 'expired' : `${e.fssai_days_remaining}d`}</span>}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Low Stock Alerts */}
       {stats.low_stock_alerts?.length > 0 && (
