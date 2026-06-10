@@ -21,13 +21,13 @@ export const ROLE_DEFAULT_ROUTE: Record<string, string> = {
  */
 export const ADMIN_NAV_KEYS: Record<string, string[]> = {
   super_admin: [
-    'dashboard', 'categories', 'products', 'orders',
-    'kitchen', 'tables', 'staff', 'shifts',
+    'dashboard', 'categories', 'products',
+    'staff', 'shifts',
     'hq-stores', 'hq-catalog', 'hq-push', 'hq-offers',
   ],
   admin: [
-    'dashboard', 'categories', 'products', 'orders',
-    'kitchen', 'tables', 'staff', 'shifts',
+    'dashboard', 'categories', 'products',
+    'staff', 'shifts',
     'hq-stores', 'hq-catalog', 'hq-push', 'hq-offers',
   ],
   area_manager: [
