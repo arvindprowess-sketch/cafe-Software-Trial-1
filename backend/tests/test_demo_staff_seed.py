@@ -113,5 +113,9 @@ def test_store_manager_550001_untouched(ctx):
         assert await server.db.users.count_documents(
             {"role": "store_manager", "store_id": sid}) == 1
         sm = await server.db.users.find_one({"role": "store_manager", "store_id": sid}, {"_id": 0})
-        assert sm["pin_plain"] == "550001"
+        assert "pin_plain" not in sm, "pin_plain must not be persisted"
+        # Verify PIN still works via hash
+        r = await ctx.client.post("/api/auth/pin-login", json={"pin": "550001"})
+        assert r.status_code == 200
+        assert r.json()["user"]["role"] == "store_manager"
     run(go())
