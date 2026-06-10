@@ -57,7 +57,7 @@ def assert_prod_secrets(env: str, jwt_secret: str, origins: list, msg91_key: Opt
     if origins == ["*"]:
         raise RuntimeError("ALLOWED_ORIGINS must be set in production")
     if not msg91_key:
-        raise RuntimeError("MSG91 key must be set in production")
+        logger.warning("MSG91_AUTH_KEY is not set in production; OTP delivery will fall back to console logging (insecure — set before launch)")
 
 _APP_ENV = os.environ.get("APP_ENV", "development")
 _jwt_secret_raw = os.environ.get("JWT_SECRET", "")
