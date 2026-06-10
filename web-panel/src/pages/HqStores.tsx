@@ -8,7 +8,28 @@ import { useStores } from '../context/StoreContext';
 // - area_manager: READ-ONLY view of own cluster.
 // - others: not available (also hidden from nav).
 
-const EMPTY = { name: '', code: '', address: '', phone: '', gst_no: '', fssai_license: '', open_hours: '', area_manager_id: '', status: 'active', lat: '', lng: '' };
+const EMPTY = { name: '', code: '', address: '', phone: '', gst_no: '', fssai_license: '', gst_expiry_at: '', fssai_expiry_at: '', open_hours: '', area_manager_id: '', status: 'active', lat: '', lng: '' };
+
+// PR-2: whole days until an ISO date (negative = past); null when missing.
+function daysUntil(iso?: string | null): number | null {
+  if (!iso) return null;
+  const d = new Date(String(iso).slice(0, 10));
+  if (isNaN(d.getTime())) return null;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  return Math.round((d.getTime() - today.getTime()) / 86400000);
+}
+// Render a date cell with a red badge when within 30 days / expired.
+function ExpiryCell({ label, iso }: { label: string; iso?: string | null }) {
+  const d = daysUntil(iso);
+  if (!iso) return <span style={{ color: '#C0392B', fontSize: 12 }}>{label}: missing</span>;
+  const warn = d !== null && d <= 30;
+  return (
+    <span style={{ fontSize: 12 }}>
+      {label}: {String(iso).slice(0, 10)}{' '}
+      {warn && <span className="badge badge-red" data-testid={`expiry-warn-${label.toLowerCase()}`}>{d! < 0 ? 'expired' : `${d}d`}</span>}
+    </span>
+  );
+}
 
 export default function HqStores() {
   const { user } = useAuth();
@@ -49,6 +70,8 @@ export default function HqStores() {
     setForm({
       name: s.name || '', code: s.code || '', address: s.address || '', phone: s.phone || '',
       gst_no: s.gst_no || '', fssai_license: s.fssai_license || '', open_hours: s.open_hours || '',
+      gst_expiry_at: s.gst_expiry_at ? String(s.gst_expiry_at).slice(0, 10) : '',
+      fssai_expiry_at: s.fssai_expiry_at ? String(s.fssai_expiry_at).slice(0, 10) : '',
       area_manager_id: s.area_manager_id || '', status: s.status || 'active',
       lat: s.lat ?? '', lng: s.lng ?? '',
     });
@@ -63,6 +86,7 @@ export default function HqStores() {
       const body: any = {
         name: form.name, code: form.code, address: form.address || null, phone: form.phone || null,
         gst_no: form.gst_no || null, fssai_license: form.fssai_license || null, open_hours: form.open_hours || null,
+        gst_expiry_at: form.gst_expiry_at || null, fssai_expiry_at: form.fssai_expiry_at || null,
         area_manager_id: form.area_manager_id || null, status: form.status,
       };
       if (form.lat !== '') body.lat = parseFloat(form.lat);
@@ -92,7 +116,7 @@ export default function HqStores() {
       </div>
 
       <table className="data-table" data-testid="stores-table">
-        <thead><tr><th>Store</th><th>Code</th><th>Address</th><th>Area Manager</th><th>Status</th>{isHQ && <th style={{ width: 150 }}>Actions</th>}</tr></thead>
+        <thead><tr><th>Store</th><th>Code</th><th>Address</th><th>Area Manager</th><th>Compliance expiry</th><th>Status</th>{isHQ && <th style={{ width: 150 }}>Actions</th>}</tr></thead>
         <tbody>
           {stores.map((s) => (
             <tr key={s.store_id} data-testid={`store-row-${s.store_id}`}>
@@ -100,6 +124,12 @@ export default function HqStores() {
               <td><span className="badge badge-purple">{s.code}</span></td>
               <td style={{ fontSize: 13, color: '#696969' }}>{s.address || '—'}</td>
               <td style={{ fontSize: 13 }}>{isHQ ? amName(s.area_manager_id) : (s.area_manager_id ? amName(s.area_manager_id) : '—')}</td>
+              <td data-testid={`store-compliance-${s.store_id}`}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <ExpiryCell label="GST" iso={s.gst_expiry_at} />
+                  <ExpiryCell label="FSSAI" iso={s.fssai_expiry_at} />
+                </div>
+              </td>
               <td><span className={`badge ${s.status === 'active' ? 'badge-green' : 'badge-gray'}`}>{s.status}</span></td>
               {isHQ && (
                 <td>
@@ -159,6 +189,10 @@ export default function HqStores() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div className="form-group"><label>GST No.</label><input value={form.gst_no} onChange={(e) => setForm({ ...form, gst_no: e.target.value })} data-testid="store-gst" /></div>
                 <div className="form-group"><label>FSSAI License</label><input value={form.fssai_license} onChange={(e) => setForm({ ...form, fssai_license: e.target.value })} data-testid="store-fssai" /></div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div className="form-group"><label>GST expiry</label><input type="date" value={form.gst_expiry_at} onChange={(e) => setForm({ ...form, gst_expiry_at: e.target.value })} data-testid="store-gst-expiry" /></div>
+                <div className="form-group"><label>FSSAI expiry</label><input type="date" value={form.fssai_expiry_at} onChange={(e) => setForm({ ...form, fssai_expiry_at: e.target.value })} data-testid="store-fssai-expiry" /></div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div className="form-group"><label>Latitude</label><input type="number" step="any" value={form.lat} onChange={(e) => setForm({ ...form, lat: e.target.value })} /></div>

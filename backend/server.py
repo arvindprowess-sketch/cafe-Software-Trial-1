@@ -4645,6 +4645,8 @@ class StoreCreate(BaseModel):
     phone: Optional[str] = None
     gst_no: Optional[str] = None
     fssai_license: Optional[str] = None
+    gst_expiry_at: Optional[str] = None       # PR-2: ISO date
+    fssai_expiry_at: Optional[str] = None      # PR-2: ISO date
     open_hours: Optional[str] = None
     tax_settings: Optional[Dict[str, Any]] = None
     area_manager_id: Optional[str] = None
@@ -4659,6 +4661,8 @@ class StoreUpdate(BaseModel):
     phone: Optional[str] = None
     gst_no: Optional[str] = None
     fssai_license: Optional[str] = None
+    gst_expiry_at: Optional[str] = None       # PR-2: ISO date
+    fssai_expiry_at: Optional[str] = None      # PR-2: ISO date
     open_hours: Optional[str] = None
     tax_settings: Optional[Dict[str, Any]] = None
     area_manager_id: Optional[str] = None
@@ -4666,6 +4670,22 @@ class StoreUpdate(BaseModel):
 
 def _clean_store(s: dict) -> dict:
     return {k: v for k, v in s.items() if k != "_id"}
+
+def _days_until(iso_str: Optional[str]) -> Optional[int]:
+    """PR-2: whole days from today (UTC) until an ISO date/datetime string.
+    Negative = already past. None when missing or unparseable."""
+    if not iso_str or not str(iso_str).strip():
+        return None
+    raw = str(iso_str).strip()
+    try:
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        try:
+            dt = datetime.fromisoformat(raw[:10])  # date-only fallback
+        except ValueError:
+            return None
+    target = dt.date() if hasattr(dt, "date") else dt
+    return (target - datetime.now(timezone.utc).date()).days
 
 @api_router.get("/stores/public")
 async def list_public_stores():
@@ -4700,6 +4720,8 @@ async def create_store(data: StoreCreate, user=Depends(get_current_user)):
         "phone": data.phone,
         "gst_no": data.gst_no,
         "fssai_license": data.fssai_license,
+        "gst_expiry_at": data.gst_expiry_at,        # PR-2
+        "fssai_expiry_at": data.fssai_expiry_at,     # PR-2
         "open_hours": data.open_hours,
         "tax_settings": data.tax_settings or {"gst_percent": 5},
         "area_manager_id": data.area_manager_id,
@@ -4760,6 +4782,31 @@ async def delete_store(store_id: str, user=Depends(get_current_user)):
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Store not found")
     return {"message": "Store deactivated"}
+
+@api_router.get("/stores/compliance/expiring")
+async def stores_compliance_expiring(user=Depends(get_current_user)):
+    """PR-2 — READ-ONLY: stores whose GST or FSSAI expiry is within 30 days or
+    already past. super_admin (all) / area_manager (own cluster). store-bound
+    staff and cashier/kitchen: 403."""
+    if normalize_role(user) not in ("super_admin", "area_manager"):
+        raise HTTPException(status_code=403, detail="HQ / area manager only")
+    query = store_filter(user, field="store_id")
+    stores = await db.stores.find(query, {"_id": 0}).sort("name", 1).to_list(1000)
+    out = []
+    for s in stores:
+        gst_days = _days_until(s.get("gst_expiry_at"))
+        fssai_days = _days_until(s.get("fssai_expiry_at"))
+        flagged = [(lbl, d) for lbl, d in (("gst", gst_days), ("fssai", fssai_days)) if d is not None and d <= 30]
+        if not flagged:
+            continue
+        out.append({
+            "store_id": s["store_id"], "name": s.get("name"), "code": s.get("code"),
+            "gst_expiry_at": s.get("gst_expiry_at"), "fssai_expiry_at": s.get("fssai_expiry_at"),
+            "gst_days_remaining": gst_days, "fssai_days_remaining": fssai_days,
+            "days_remaining": min(d for _, d in flagged),  # soonest of the two
+        })
+    out.sort(key=lambda r: r["days_remaining"])
+    return out
 
 # ==========================================================================
 # PHASE 1C — SALES AGGREGATION (store-vs-store, scope-locked)
@@ -7283,6 +7330,15 @@ async def go_live(store_id: str, user=Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Store not found")
     if not ((store.get("gst_no") or "").strip() and (store.get("fssai_license") or "").strip()):
         raise HTTPException(status_code=400, detail="Compliance incomplete: GST number and FSSAI license are required to go live")
+    # PR-2: expiry hard-gate — both expiry dates must be present and more than
+    # 90 days out (not missing, not expired, not expiring soon).
+    for label, field in (("GST", "gst_expiry_at"), ("FSSAI", "fssai_expiry_at")):
+        days = _days_until(store.get(field))
+        if days is None:
+            raise HTTPException(status_code=400, detail=f"Compliance incomplete: {label} expiry date is required to go live")
+        if days < 90:
+            state = "has expired" if days < 0 else f"expires in {days} day(s)"
+            raise HTTPException(status_code=400, detail=f"Compliance {label} {state}: must be valid for at least 90 days to go live")
     await db.stores.update_one({"store_id": store_id}, {"$set": {"onboarding_status": "live"}})
     return {"store_id": store_id, "onboarding_status": "live"}
 
