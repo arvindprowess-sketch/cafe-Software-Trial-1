@@ -23,7 +23,12 @@ function DietChips({ value, onChange }: { value: string[]; onChange: (v: string[
 
 type ProductTab = 'all' | 'single' | 'ready_made';
 type FormType = 'single' | 'ready_made';
-interface Ingredient { name: string; grams_per_serving: number; }
+// PR-1: an ingredient may link to a single product (product_id) OR a pure-raw
+// inventory item (raw_item_id) for BOM-only raws with product_id=null.
+interface Ingredient { name: string; grams_per_serving: number; product_id?: string | null; raw_item_id?: string | null; }
+
+// PR-1: canonical subcategory order used for grouping (POS + customer app).
+const SUBCATEGORIES = ['Base', 'Protein', 'Veggies', 'Sauce', 'Toppings'];
 
 export default function AdminProducts() {
   const [products, setProducts] = useState<any[]>([]);
@@ -40,11 +45,18 @@ export default function AdminProducts() {
   const [editForm, setEditForm] = useState<any>({});
   const [editSaving, setEditSaving] = useState(false);
 
+  // PR-1: store list + selected store's raw inventory items (for the recipe raw-picker)
+  const [stores, setStores] = useState<any[]>([]);
+  const [recipeStoreId, setRecipeStoreId] = useState('');
+  const [storeRawItems, setStoreRawItems] = useState<any[]>([]);
+
   // Single form
   const [sName, setSName] = useState('');
   const [sPrice, setSPrice] = useState('');
   const [sGrams, setSGrams] = useState('');
   const [sCatId, setSCatId] = useState('');
+  const [sSubcat, setSSubcat] = useState('');       // PR-1
+  const [sSellable, setSSellable] = useState(true);  // PR-1
   const [sDiet, setSDiet] = useState('');
   const [sDietTypes, setSDietTypes] = useState<string[]>([]);
   const [sCal, setSCal] = useState('');
@@ -58,6 +70,8 @@ export default function AdminProducts() {
   const [rPrice, setRPrice] = useState('');
   const [rServingGrams, setRServingGrams] = useState('300');
   const [rCatId, setRCatId] = useState('');
+  const [rSubcat, setRSubcat] = useState('');        // PR-1
+  const [rSellable, setRSellable] = useState(true);   // PR-1
   const [rEditable, setREditable] = useState(false);
   const [rPrep, setRPrep] = useState('');
   const [rIngredients, setRIngredients] = useState<Ingredient[]>([{ name: '', grams_per_serving: 0 }]);
@@ -73,6 +87,33 @@ export default function AdminProducts() {
   };
   useEffect(() => { load(); }, []);
 
+  // PR-1: load stores once; the recipe raw-picker needs a store scope.
+  useEffect(() => {
+    (async () => {
+      try {
+        const s = await api('/stores');
+        const list = Array.isArray(s) ? s : (s?.stores || []);
+        setStores(list);
+        if (list.length && !recipeStoreId) setRecipeStoreId(list[0].store_id || list[0].id);
+      } catch {}
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // PR-1: load the selected store's raw inventory items for the ingredient picker.
+  useEffect(() => {
+    if (!recipeStoreId) { setStoreRawItems([]); return; }
+    (async () => {
+      try {
+        const items = await api(`/inventory/${recipeStoreId}/items`);
+        setStoreRawItems(Array.isArray(items) ? items : []);
+      } catch { setStoreRawItems([]); }
+    })();
+  }, [recipeStoreId]);
+
+  // PR-1: single products available as recipe components (link by product_id).
+  const singleProducts = products.filter(p => p.product_type !== 'ready_made');
+
   const filtered = (() => {
     let list = tab === 'all' ? products : products.filter(p => p.product_type === tab);
     if (search.trim()) {
@@ -83,10 +124,10 @@ export default function AdminProducts() {
   })();
 
   const resetForms = () => {
-    setSName(''); setSPrice(''); setSGrams(''); setSCatId(''); setSDiet(''); setSDietTypes([]);
+    setSName(''); setSPrice(''); setSGrams(''); setSCatId(''); setSSubcat(''); setSSellable(true); setSDiet(''); setSDietTypes([]);
     setSCal(''); setSPro(''); setSCarb(''); setSFat(''); setSPrep('');
-    setRName(''); setRPrice(''); setRServingGrams('300'); setRCatId(''); setREditable(false); setRPrep('');
-    setRIngredients([{ name: '', grams_per_serving: 0 }]); setRImages([]);
+    setRName(''); setRPrice(''); setRServingGrams('300'); setRCatId(''); setRSubcat(''); setRSellable(true); setREditable(false); setRPrep('');
+    setRIngredients([{ name: '', grams_per_serving: 0, product_id: null, raw_item_id: null }]); setRImages([]);
   };
 
   const openCreate = (type: FormType) => { resetForms(); setFormType(type); setCreatedProduct(null); setShowForm(true); };
@@ -116,6 +157,7 @@ export default function AdminProducts() {
     try {
       const result = await api('/products/single', { method: 'POST', body: {
         name: sName, price: parseFloat(sPrice), grams: parseFloat(sGrams), category_id: sCatId, diet_type: sDiet || undefined,
+        subcategory: sSubcat || undefined, is_sellable: sSellable,
         diet_types: sDietTypes.length ? sDietTypes : undefined,
         calories_per_100g: sCal ? parseFloat(sCal) : undefined,
         protein_per_100g: sPro ? parseFloat(sPro) : undefined,
@@ -131,21 +173,42 @@ export default function AdminProducts() {
   const handleCreateReadyMade = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!rName || !rPrice || !rCatId) { alert('Fill all required fields including category'); return; }
-    const validIng = rIngredients.filter(i => i.name.trim() && i.grams_per_serving > 0);
+    const validIng = rIngredients
+      .filter(i => i.name.trim() && i.grams_per_serving > 0)
+      .map(i => ({ name: i.name, grams_per_serving: i.grams_per_serving,
+                   product_id: i.product_id || undefined, raw_item_id: i.raw_item_id || undefined }));
     if (validIng.length === 0) { alert('Add at least one ingredient'); return; }
     setCreating(true);
     try {
-      const result = await api('/products/ready-made', { method: 'POST', body: { name: rName, price: parseFloat(rPrice), serving_grams: parseFloat(rServingGrams) || 300, ingredients: validIng, is_editable: rEditable, category_id: rCatId, images: rImages, preparation_time_minutes: rPrep ? parseInt(rPrep) : undefined } });
+      const result = await api('/products/ready-made', { method: 'POST', body: { name: rName, price: parseFloat(rPrice), serving_grams: parseFloat(rServingGrams) || 300, ingredients: validIng, is_editable: rEditable, category_id: rCatId, subcategory: rSubcat || undefined, is_sellable: rSellable, images: rImages, preparation_time_minutes: rPrep ? parseInt(rPrep) : undefined } });
       setCreatedProduct(result);
       load();
     } catch (e: any) { alert(e.message); } finally { setCreating(false); }
   };
 
-  const addIngredient = () => setRIngredients([...rIngredients, { name: '', grams_per_serving: 0 }]);
+  const addIngredient = () => setRIngredients([...rIngredients, { name: '', grams_per_serving: 0, product_id: null, raw_item_id: null }]);
   const removeIngredient = (idx: number) => setRIngredients(rIngredients.filter((_, i) => i !== idx));
   const updateIngredient = (idx: number, field: string, val: any) => {
     const updated = [...rIngredients];
     (updated[idx] as any)[field] = field === 'grams_per_serving' ? parseFloat(val) || 0 : val;
+    setRIngredients(updated);
+  };
+  // PR-1: link an ingredient to a single product ("p:<id>") or raw item ("r:<id>").
+  // Auto-fills the name from the chosen item when the name field is empty.
+  const linkIngredient = (idx: number, value: string) => {
+    const updated = [...rIngredients];
+    const ing = { ...updated[idx] };
+    if (!value) { ing.product_id = null; ing.raw_item_id = null; }
+    else if (value.startsWith('p:')) {
+      ing.product_id = value.slice(2); ing.raw_item_id = null;
+      const sp = singleProducts.find(p => p.id === ing.product_id);
+      if (sp && !ing.name.trim()) ing.name = sp.name;
+    } else if (value.startsWith('r:')) {
+      ing.raw_item_id = value.slice(2); ing.product_id = null;
+      const ri = storeRawItems.find(it => it.id === ing.raw_item_id);
+      if (ri && !ing.name.trim()) ing.name = ri.name;
+    }
+    updated[idx] = ing;
     setRIngredients(updated);
   };
 
@@ -157,6 +220,8 @@ export default function AdminProducts() {
       available_qty_grams: p.available_qty_grams || '',
       available_servings: p.available_servings || 20,
       category_id: categories.find(c => c.name === p.category)?.id || '',
+      subcategory: p.subcategory || '',                 // PR-1
+      is_sellable: p.is_sellable !== false,             // PR-1 (missing = sellable)
       diet_types: p.diet_types || [],
       is_active: p.is_active !== false,
       is_editable: p.is_editable || false,
@@ -185,6 +250,9 @@ export default function AdminProducts() {
         if (editForm.category_id !== origCatId) body.category_id = editForm.category_id;
       }
       if (editForm.is_active !== (editModal.is_active !== false)) body.is_active = editForm.is_active;
+      // PR-1: subcategory + is_sellable
+      if ((editForm.subcategory || '') !== (editModal.subcategory || '')) body.subcategory = editForm.subcategory || '';
+      if (editForm.is_sellable !== (editModal.is_sellable !== false)) body.is_sellable = editForm.is_sellable;
       if (Array.isArray(editForm.diet_types)) {
         const orig = JSON.stringify((editModal.diet_types || []).slice().sort());
         const now = JSON.stringify(editForm.diet_types.slice().sort());
@@ -253,7 +321,11 @@ export default function AdminProducts() {
                 </div>
               </td>
               <td><span className={`badge ${p.product_type === 'ready_made' ? 'badge-green' : 'badge-purple'}`}>{p.product_type === 'ready_made' ? 'Meal' : 'Single'}</span></td>
-              <td><span className="badge badge-purple">{p.category || '—'}</span></td>
+              <td>
+                <span className="badge badge-purple">{p.category || '—'}</span>
+                {p.subcategory && <span className="badge badge-gray" style={{ marginLeft: 4, fontSize: 10 }} data-testid={`subcat-${p.id}`}>{p.subcategory}</span>}
+                {p.is_sellable === false && <span className="badge badge-orange" style={{ marginLeft: 4, fontSize: 10 }} data-testid={`notsellable-${p.id}`}>Not sellable</span>}
+              </td>
               <td>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, maxWidth: 150 }} data-testid={`diet-tags-${p.id}`}>
                   {((p.diet_types && p.diet_types.length ? p.diet_types : [p.diet_type]).filter(Boolean)).map((t: string) => (
@@ -339,6 +411,14 @@ export default function AdminProducts() {
                     <div className="form-group"><label>Category *</label>
                       <select value={sCatId} onChange={e => setSCatId(e.target.value)} required data-testid="single-category"><option value="">Select category</option>{categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
                     </div>
+                    <div className="form-group"><label>Subcategory (for Build-Your-Own grouping)</label>
+                      <input list="subcat-list" value={sSubcat} onChange={e => setSSubcat(e.target.value)} placeholder="Base / Protein / Veggies / Sauce / Toppings…" data-testid="single-subcategory" />
+                      <datalist id="subcat-list">{SUBCATEGORIES.map(s => <option key={s} value={s} />)}</datalist>
+                    </div>
+                    <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <input type="checkbox" checked={sSellable} onChange={e => setSSellable(e.target.checked)} id="single-sellable" data-testid="single-sellable" />
+                      <label htmlFor="single-sellable" style={{ margin: 0, fontSize: 13 }}>Sellable (uncheck = recipe/stock-only, hidden from POS & customer menu)</label>
+                    </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                       <div className="form-group"><label>Price (₹) *</label><input type="number" value={sPrice} onChange={e => setSPrice(e.target.value)} placeholder="450" required data-testid="single-price" /></div>
                       <div className="form-group"><label>Stock (grams) *</label><input type="number" value={sGrams} onChange={e => setSGrams(e.target.value)} placeholder="5000" required data-testid="single-grams" /></div>
@@ -374,17 +454,43 @@ export default function AdminProducts() {
                     <div className="form-group"><label>Category *</label>
                       <select value={rCatId} onChange={e => setRCatId(e.target.value)} required data-testid="meal-category"><option value="">Select category</option>{categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
                     </div>
-                    {/* Ingredients */}
+                    <div className="form-group"><label>Subcategory (for grouping)</label>
+                      <input list="subcat-list" value={rSubcat} onChange={e => setRSubcat(e.target.value)} placeholder="Base / Protein / Veggies / Sauce / Toppings…" data-testid="meal-subcategory" />
+                    </div>
+                    <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <input type="checkbox" checked={rSellable} onChange={e => setRSellable(e.target.checked)} id="meal-sellable" data-testid="meal-sellable" />
+                      <label htmlFor="meal-sellable" style={{ margin: 0, fontSize: 13 }}>Sellable (uncheck = hidden from POS & customer menu)</label>
+                    </div>
+                    {/* Ingredients (PR-1: each can link to a single product or a raw inventory item) */}
                     <div className="form-group">
                       <label>Ingredients per plate *</label>
-                      {rIngredients.map((ing, idx) => (
-                        <div key={idx} style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center' }}>
-                          <input value={ing.name} onChange={e => updateIngredient(idx, 'name', e.target.value)} placeholder="Ingredient" style={{ flex: 2 }} data-testid={`ing-name-${idx}`} />
-                          <input type="number" value={ing.grams_per_serving || ''} onChange={e => updateIngredient(idx, 'grams_per_serving', e.target.value)} placeholder="g" style={{ flex: 1 }} data-testid={`ing-grams-${idx}`} />
-                          <span style={{ fontSize: 12, color: '#9C9C9C', width: 12 }}>g</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                        <span style={{ fontSize: 12, color: '#9C9C9C' }}>Raw items from store:</span>
+                        <select value={recipeStoreId} onChange={e => setRecipeStoreId(e.target.value)} data-testid="recipe-store-picker" style={{ flex: 1 }}>
+                          {stores.length === 0 && <option value="">No stores</option>}
+                          {stores.map(s => <option key={s.store_id || s.id} value={s.store_id || s.id}>{s.name || s.store_id || s.id}</option>)}
+                        </select>
+                      </div>
+                      {rIngredients.map((ing, idx) => {
+                        const linkVal = ing.product_id ? `p:${ing.product_id}` : ing.raw_item_id ? `r:${ing.raw_item_id}` : '';
+                        return (
+                        <div key={idx} style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                          <input value={ing.name} onChange={e => updateIngredient(idx, 'name', e.target.value)} placeholder="Ingredient" style={{ flex: 2, minWidth: 120 }} data-testid={`ing-name-${idx}`} />
+                          <input type="number" value={ing.grams_per_serving || ''} onChange={e => updateIngredient(idx, 'grams_per_serving', e.target.value)} placeholder="g" style={{ width: 64 }} data-testid={`ing-grams-${idx}`} />
+                          <span style={{ fontSize: 12, color: '#9C9C9C' }}>g</span>
+                          <select value={linkVal} onChange={e => linkIngredient(idx, e.target.value)} data-testid={`ing-link-${idx}`} style={{ flex: 2, minWidth: 160 }}>
+                            <option value="">Link to stock (by name)…</option>
+                            <optgroup label="Single products">
+                              {singleProducts.map(p => <option key={`p-${p.id}`} value={`p:${p.id}`}>{p.name}</option>)}
+                            </optgroup>
+                            <optgroup label="Raw inventory items">
+                              {storeRawItems.filter(it => !it.product_id).map(it => <option key={`r-${it.id}`} value={`r:${it.id}`}>{it.name} ({it.unit || 'g'})</option>)}
+                            </optgroup>
+                          </select>
                           {rIngredients.length > 1 && <button type="button" onClick={() => removeIngredient(idx)} style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid #E0E0E0', background: '#FFF', cursor: 'pointer', color: '#15140F', fontWeight: 700, lineHeight: '26px', textAlign: 'center' }}>×</button>}
                         </div>
-                      ))}
+                        );
+                      })}
                       <button type="button" className="btn btn-sm btn-secondary" onClick={addIngredient} data-testid="add-ingredient-btn">+ Add Ingredient</button>
                     </div>
                     {/* Photos */}
@@ -447,6 +553,16 @@ export default function AdminProducts() {
                   <option value="">— Keep current ({editModal.category}) —</option>
                   {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
+              </div>
+
+              {/* PR-1: subcategory + sellable */}
+              <div className="form-group"><label>Subcategory</label>
+                <input list="subcat-list-edit" value={editForm.subcategory || ''} onChange={e => setEditForm({ ...editForm, subcategory: e.target.value })} placeholder="Base / Protein / Veggies / Sauce / Toppings…" data-testid="edit-subcategory" />
+                <datalist id="subcat-list-edit">{SUBCATEGORIES.map(s => <option key={s} value={s} />)}</datalist>
+              </div>
+              <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input type="checkbox" checked={editForm.is_sellable !== false} onChange={e => setEditForm({ ...editForm, is_sellable: e.target.checked })} id="edit-sellable" data-testid="edit-sellable" />
+                <label htmlFor="edit-sellable" style={{ margin: 0, fontSize: 13 }}>Sellable (uncheck = recipe/stock-only, hidden from POS & customer menu)</label>
               </div>
 
               {/* Diet tags multi-select (shared attribute) */}

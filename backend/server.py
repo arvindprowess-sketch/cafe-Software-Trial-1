@@ -228,6 +228,8 @@ class ProductCreate(BaseModel):
     image_url: Optional[str] = None
     description: Optional[str] = None
     category: Optional[str] = None  # Admin can select category
+    subcategory: Optional[str] = None  # PR-1: e.g. Base / Protein / Veggies / Sauce / Toppings
+    is_sellable: Optional[bool] = True  # PR-1: False = usable in recipes/stock but hidden from POS + customer menu
     diet_type: Optional[str] = None  # "veg" or "non-veg" (legacy, kept for back-compat)
     diet_types: Optional[List[str]] = None  # multi tags: veg, non-veg, vegan, eggetarian, jain, keto, high-protein
     # B1: admin-entered nutrition (per 100g). When set, these override NUTRITION_DB.
@@ -249,6 +251,8 @@ class ProductUpdate(BaseModel):
     images: Optional[List[str]] = None
     category: Optional[str] = None
     category_id: Optional[str] = None
+    subcategory: Optional[str] = None  # PR-1
+    is_sellable: Optional[bool] = None  # PR-1: missing treated as True everywhere
     diet_type: Optional[str] = None
     diet_types: Optional[List[str]] = None
     description: Optional[str] = None
@@ -319,6 +323,8 @@ class SingleProductCreate(BaseModel):
     price: float
     grams: float
     category_id: Optional[str] = None
+    subcategory: Optional[str] = None  # PR-1
+    is_sellable: Optional[bool] = True  # PR-1
     diet_type: Optional[str] = None
     diet_types: Optional[List[str]] = None
     # B1 + B5
@@ -342,6 +348,8 @@ class ReadyMadeMealCreate(BaseModel):
     serving_grams: float = 300
     is_editable: bool = False
     category_id: Optional[str] = None
+    subcategory: Optional[str] = None  # PR-1
+    is_sellable: Optional[bool] = True  # PR-1
     preparation_time_minutes: Optional[int] = None  # B5
 
 class ReadyMadeOrderItem(BaseModel):
@@ -1012,6 +1020,8 @@ async def create_product(data: ProductCreate, user=Depends(get_current_user)):
         "cost_per_100g": data.cost_per_100g,
         "available_qty_grams": data.available_qty_grams or 10000,
         "category": data.category or nutrition["category"],
+        "subcategory": data.subcategory,  # PR-1
+        "is_sellable": data.is_sellable if data.is_sellable is not None else True,  # PR-1
         "diet_type": data.diet_type or nutrition.get("diet_type", detect_diet_type(data.name)),
         "calories_per_100g": nutrition["calories"],
         "protein_per_100g": nutrition["protein"],
@@ -1042,6 +1052,9 @@ async def list_products(diet: Optional[str] = None, store_id: Optional[str] = No
     # Filter: only show products in active categories (or with no category set)
     if active_cat_names:
         products = [p for p in products if p.get("category", "") in active_cat_names or not p.get("category")]
+    # PR-1: hide non-sellable products (recipe/stock-only) from the customer menu.
+    # Missing is_sellable is treated as True (back-compat).
+    products = [p for p in products if p.get("is_sellable", True)]
     products = [ensure_product_diet_types(p) for p in products]
     # Optional multi diet-tag filter (?diet=vegan,keto) — AND semantics
     if diet:
@@ -1124,6 +1137,9 @@ async def resolve_menu_for_store(store_id: str, diet: Optional[str] = None) -> L
     products = await db.products.find({"is_active": True}, {"_id": 0}).to_list(200)
     if active_cat_names:
         products = [p for p in products if p.get("category", "") in active_cat_names or not p.get("category")]
+    # PR-1: hide non-sellable products (recipe/stock-only) from the resolved menu
+    # served to the customer app AND the POS sellable list. Missing = sellable.
+    products = [p for p in products if p.get("is_sellable", True)]
     products = [ensure_product_diet_types(p) for p in products]
     if diet:
         prefs = [d.strip() for d in diet.split(",") if d.strip()]
@@ -1275,6 +1291,43 @@ async def get_catalog_push_log(user=Depends(get_current_user)):
     if not is_hq(user):
         raise HTTPException(status_code=403, detail="HQ only")
     return await db.catalog_push_log.find({}, {"_id": 0}).sort("pushed_at", -1).to_list(500)
+
+@api_router.get("/catalog/recipe-coverage")
+async def recipe_coverage(store_id: str, user=Depends(get_current_user)):
+    """PR-1 — READ-ONLY ghost-stock report for a store. Lists sellable products
+    that would complete a sale WITHOUT deducting any (or all) raw stock, because:
+      - a ready_made meal has an empty ingredients[] (no recipe), OR
+      - a ready_made meal has ingredient(s) that resolve to no inventory_items row
+        in this store (no raw_item_id and no product_id match), OR
+      - a sellable single has no inventory_items row in this store.
+    Resolvability is tested with the SAME explode_to_raw the sale path uses.
+    Changes nothing. super_admin / area_manager / store_manager only."""
+    require_inventory_manager(user)            # cashier/kitchen -> 403
+    assert_store_allowed(user, store_id)
+    products = await db.products.find({"is_active": True}, {"_id": 0}).to_list(2000)
+    report = []
+    for p in products:
+        if not p.get("is_sellable", True):
+            continue  # not sold -> no ghost-stock risk
+        ptype = p.get("product_type", "single")
+        if ptype == "ready_made":
+            ings = [i for i in (p.get("ingredients") or []) if float(i.get("grams_per_serving", 0) or 0) > 0]
+            if not ings:
+                report.append({"product_id": p["id"], "name": p.get("name"),
+                               "product_type": ptype, "reason": "empty recipe (no ingredients)"})
+                continue
+            exploded = await explode_to_raw("meal", p["id"], 1, store_id)
+            if len(exploded) < len(ings):
+                unresolved = len(ings) - len(exploded)
+                report.append({"product_id": p["id"], "name": p.get("name"),
+                               "product_type": ptype,
+                               "reason": f"{unresolved} of {len(ings)} ingredient(s) untracked in this store"})
+        else:  # single
+            exploded = await explode_to_raw("raw", p["id"], 1, store_id)
+            if not exploded:
+                report.append({"product_id": p["id"], "name": p.get("name"),
+                               "product_type": ptype, "reason": "no inventory row in this store"})
+    return report
 
 @api_router.post("/upload/image")
 async def upload_image(body: dict = Body(...), user=Depends(get_current_user)):
@@ -1601,6 +1654,8 @@ async def create_single_product(data: SingleProductCreate, user=Depends(get_curr
         "available_qty_grams": data.grams,
         "category": category_name,
         "category_id": data.category_id,
+        "subcategory": data.subcategory,  # PR-1
+        "is_sellable": data.is_sellable if data.is_sellable is not None else True,  # PR-1
         "diet_type": diet_type,
         "diet_types": diet_types,
         "calories_per_100g": nutrition["calories"],
@@ -1629,20 +1684,25 @@ async def create_ready_made_meal(data: ReadyMadeMealCreate, user=Depends(get_cur
     ingredients_list = [{"name": ing.name, "grams_per_serving": ing.grams_per_serving} for ing in data.ingredients]
     ingredient_names = [ing.name for ing in data.ingredients]
     
-    # Try to link ingredients to existing single products for stock tracking
+    # Link ingredients to inventory for stock tracking. PR-1: honor an explicit
+    # raw_item_id (BOM-only raw with product_id=null) or product_id from the
+    # picker; otherwise fall back to matching a single product by name.
     linked_ingredients = []
     for ing in data.ingredients:
-        # Find matching single product
-        product = await db.products.find_one({
-            "product_type": "single",
-            "name": {"$regex": f"^{ing.name}$", "$options": "i"},
-            "is_active": True
-        }, {"_id": 0})
+        product = None
+        if not ing.raw_item_id and not ing.product_id:
+            product = await db.products.find_one({
+                "product_type": "single",
+                "name": {"$regex": f"^{ing.name}$", "$options": "i"},
+                "is_active": True
+            }, {"_id": 0})
+        resolved_pid = ing.product_id or (product["id"] if product else None)
         linked_ingredients.append({
             "name": ing.name,
             "grams_per_serving": ing.grams_per_serving,
-            "product_id": product["id"] if product else None,
-            "linked": product is not None
+            "product_id": resolved_pid,
+            "raw_item_id": ing.raw_item_id,  # PR-1: explicit BOM-only raw link
+            "linked": bool(ing.raw_item_id or resolved_pid),
         })
     
     nutrition = await ai_calculate_ready_made_nutrition(data.name, ingredients_list)
@@ -1680,6 +1740,8 @@ async def create_ready_made_meal(data: ReadyMadeMealCreate, user=Depends(get_cur
         "available_servings": 20,
         "category": category_name,
         "category_id": data.category_id,
+        "subcategory": data.subcategory,  # PR-1
+        "is_sellable": data.is_sellable if data.is_sellable is not None else True,  # PR-1
         "diet_type": "non-veg" if is_nonveg else "veg",
         "calories_per_100g": nutrition["calories"],
         "protein_per_100g": nutrition["protein"],

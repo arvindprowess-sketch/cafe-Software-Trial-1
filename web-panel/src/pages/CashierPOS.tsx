@@ -99,6 +99,23 @@ export default function CashierPOS() {
     return p.category === selectedCat || p.diet_type === selectedCat;
   });
 
+  // PR-1: group Build-Your-Own singles by subcategory in canonical order;
+  // anything without a (known) subcategory falls into "Other" shown last.
+  // Server already filters out is_sellable=false items, so we render what we get.
+  const SUBCAT_ORDER = ['Base', 'Protein', 'Veggies', 'Sauce', 'Toppings'];
+  const groupedSingles = (() => {
+    const groups: Record<string, any[]> = {};
+    for (const p of filtered) {
+      const key = (p.subcategory && String(p.subcategory).trim()) ? String(p.subcategory).trim() : 'Other';
+      (groups[key] ||= []).push(p);
+    }
+    const ordered: { label: string; items: any[] }[] = [];
+    for (const label of SUBCAT_ORDER) if (groups[label]) { ordered.push({ label, items: groups[label] }); delete groups[label]; }
+    for (const label of Object.keys(groups).filter(k => k !== 'Other').sort()) ordered.push({ label, items: groups[label] });
+    if (groups['Other']) ordered.push({ label: 'Other', items: groups['Other'] });
+    return ordered;
+  })();
+
   const openDetail = (product: any) => {
     setDetailProduct(product);
     if (product.product_type === 'ready_made') {
@@ -397,9 +414,8 @@ export default function CashierPOS() {
           {dietFilter.length > 0 && <button type="button" onClick={() => setDietFilter([])} style={{ fontSize: 11, color: '#15140F', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>clear</button>}
         </div>
 
-        <div className="pos-products">
-          {filtered.length === 0 && <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: 40, color: '#9C9C9C' }}>{viewTab === 'readymade' ? 'No ready-made meals. Admin can create them.' : 'No items found'}</div>}
-          {filtered.map(p => {
+        {(() => {
+          const renderCard = (p: any) => {
             const unavailable = isUnavailable(p);
             const inCart = cart.find(c => c.id === p.id);
             const isRM = p.product_type === 'ready_made';
@@ -427,8 +443,25 @@ export default function CashierPOS() {
                 {inCart && <div style={{ marginTop: 4, fontSize: 11, fontWeight: 700, color: '#15140F' }}>In cart</div>}
               </div>
             );
-          })}
-        </div>
+          };
+          if (filtered.length === 0) {
+            return <div className="pos-products"><div style={{ gridColumn: '1/-1', textAlign: 'center', padding: 40, color: '#9C9C9C' }}>{viewTab === 'readymade' ? 'No ready-made meals. Admin can create them.' : 'No items found'}</div></div>;
+          }
+          // PR-1: Build-Your-Own grouped by subcategory; Ready-Made stays flat.
+          if (viewTab === 'single') {
+            return (
+              <div data-testid="pos-grouped-singles">
+                {groupedSingles.map(g => (
+                  <div key={g.label} data-testid={`pos-subcat-${g.label.toLowerCase().replace(/[^a-z]+/g, '-')}`}>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: '#9C9C9C', textTransform: 'uppercase', letterSpacing: '0.04em', margin: '10px 2px 6px' }}>{g.label}</div>
+                    <div className="pos-products">{g.items.map(renderCard)}</div>
+                  </div>
+                ))}
+              </div>
+            );
+          }
+          return <div className="pos-products">{filtered.map(renderCard)}</div>;
+        })()}
       </div>
 
       {/* RIGHT - Cart */}
