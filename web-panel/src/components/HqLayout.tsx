@@ -15,6 +15,9 @@ const HQ_NAV = [
   { path: '/hq/catalog', label: 'Store Catalog' },
   { path: '/hq/push', label: 'Catalog Push' },
   { path: '/hq/offers', label: 'Offers & Coupons' },
+  { path: '/hq/inventory/items', label: 'Item Master' },
+  { path: '/hq/inventory/health', label: 'Inventory Health' },
+  { path: '/hq/inventory/movements', label: 'Movement Log' },
   { path: '/hq/discards', label: 'Discards & Wastage' },
   { path: '/hq/transfers', label: 'Transfers' },
 ];
