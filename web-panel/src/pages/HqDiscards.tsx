@@ -68,8 +68,15 @@ const refId = (r: NamedRef) => r.id || r.item_id || r.product_id || '';
 
 export default function HqDiscards({ raiseOnly = false }: { raiseOnly?: boolean }) {
   const { user } = useAuth();
-  const { selectedStoreId } = useStores();
+  const { selectedStoreId, stores, loading: storesLoading, setSelectedStoreId } = useStores();
   const role = user?.role ?? '';
+
+  // PR-3: for switcher roles, auto-pick the first store instead of an empty state.
+  useEffect(() => {
+    if (role !== 'kitchen' && !storesLoading && !selectedStoreId && stores.length) {
+      setSelectedStoreId(stores[0].store_id);
+    }
+  }, [role, storesLoading, selectedStoreId, stores, setSelectedStoreId]);
 
   // kitchen always raises in its own store; everyone else uses the HQ switcher.
   const storeId = role === 'kitchen' ? (user?.store_id ?? null) : selectedStoreId;

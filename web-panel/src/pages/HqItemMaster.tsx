@@ -51,7 +51,11 @@ const EMPTY_INWARD: InwardForm = { item_id: '', qty: '', purchase_price: '', sup
 
 export default function HqItemMaster() {
   const { user } = useAuth();
-  const { selectedStoreId, loading: storesLoading } = useStores();
+  const { selectedStoreId, loading: storesLoading, stores, setSelectedStoreId } = useStores();
+  // PR-3: store-required page — auto-pick the first store instead of an empty state.
+  useEffect(() => {
+    if (!storesLoading && !selectedStoreId && stores.length) setSelectedStoreId(stores[0].store_id);
+  }, [storesLoading, selectedStoreId, stores, setSelectedStoreId]);
   const canSeeCost = user?.role !== 'cashier' && user?.role !== 'kitchen';
 
   const [items, setItems] = useState<InvItem[]>([]);

@@ -142,3 +142,8 @@ android-sdk/ -e
 credentials.json
 *.key
 .credentials
+
+# PR-3: track env templates (no real secrets)
+!.env.example
+!backend/.env.example
+!frontend/.env.example
