@@ -657,10 +657,10 @@ export default function CashierPOS() {
             {!aiResult ? (
               <>
                 <div className="form-group"><label>Goal</label>
-                  <div className="ai-options">{[{ k: 'fat_loss', l: 'Fat Loss' }, { k: 'muscle_gain', l: 'Muscle Gain' }, { k: 'maintenance', l: 'Balanced' }].map(g => <button key={g.k} className={`ai-option ${aiGoal === g.k ? 'active' : ''}`} onClick={() => setAiGoal(g.k)}>{g.l}</button>)}</div>
+                  <div className="ai-options" style={{ flexWrap: 'wrap' }}>{[{ k: 'fat_loss', l: 'Fat Loss' }, { k: 'muscle_gain', l: 'Muscle Gain' }, { k: 'maintenance', l: 'Maintenance' }, { k: 'beginner', l: 'Beginner' }, { k: 'recomposition', l: 'Recomp' }, { k: 'lean_bulk', l: 'Lean Bulk' }].map(g => <button key={g.k} className={`ai-option ${aiGoal === g.k ? 'active' : ''}`} onClick={() => setAiGoal(g.k)}>{g.l}</button>)}</div>
                 </div>
                 <div className="form-group"><label>Diet</label>
-                  <div className="ai-options">{[{ k: 'veg', l: 'Veg' }, { k: 'non-veg', l: 'Non-Veg' }, { k: 'both', l: 'Both' }].map(d => <button key={d.k} className={`ai-option ${aiDiet === d.k ? 'active' : ''}`} onClick={() => setAiDiet(d.k)}>{d.l}</button>)}</div>
+                  <div className="ai-options" style={{ flexWrap: 'wrap' }}>{[{ k: 'both', l: 'Any' }, ...POS_DIET_TAGS.map(t => ({ k: t, l: POS_DIET_LABEL[t] }))].map(d => <button key={d.k} className={`ai-option ${aiDiet === d.k ? 'active' : ''}`} onClick={() => setAiDiet(d.k)}>{d.l}</button>)}</div>
                 </div>
                 <div className="form-group"><label>Budget (₹)</label><input value={aiBudget} onChange={e => setAiBudget(e.target.value)} type="number" placeholder="200" data-testid="ai-budget-input" /></div>
                 <button className="btn btn-purple" style={{ width: '100%', padding: 14, marginTop: 8 }} onClick={runAI} disabled={aiLoading} data-testid="ai-build-btn">{aiLoading ? 'Building...' : 'Create Diet'}</button>
