@@ -22,6 +22,7 @@ const HQ_NAV = [
   { path: '/hq/transfers', label: 'Transfers' },
   { path: '/hq/reports', label: 'Reports' },
   { path: '/hq/onboarding', label: 'Onboarding' },
+  { path: '/hq/daybook', label: 'Day Book' },
 ];
 function navForRole(role?: string) {
   return HQ_NAV.filter(item => (HQ_SUB_ROUTE_ROLES[item.path] ?? []).includes(role ?? ''));
