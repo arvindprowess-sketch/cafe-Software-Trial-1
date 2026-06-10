@@ -43,8 +43,12 @@ _origins_env = os.environ.get("ALLOWED_ORIGINS", "").strip()
 ALLOWED_ORIGINS = [o.strip() for o in _origins_env.split(",") if o.strip()] or ["*"]
 
 # ========== ENV GUARD ==========
-def assert_prod_secrets(env: str, jwt_secret: str, origins: list) -> None:
-    """Raise RuntimeError if production env is missing required secrets."""
+def assert_prod_secrets(env: str, jwt_secret: str, origins: list, msg91_key: Optional[str] = None) -> None:
+    """Raise RuntimeError if production env is missing required secrets.
+
+    Login (OTP delivery via MSG91) is a core flow, so a missing MSG91 key fails
+    boot in production rather than silently falling back to console-logged OTPs
+    (nobody could log in, and the OTP would leak to logs)."""
     is_prod = env.lower() in ("prod", "production")
     if not is_prod:
         return
@@ -52,15 +56,22 @@ def assert_prod_secrets(env: str, jwt_secret: str, origins: list) -> None:
         raise RuntimeError("JWT_SECRET must be set in production")
     if origins == ["*"]:
         raise RuntimeError("ALLOWED_ORIGINS must be set in production")
+    if not msg91_key:
+        logger.warning("MSG91_AUTH_KEY is not set in production; OTP delivery will fall back to console logging (insecure — set before launch)")
 
 _APP_ENV = os.environ.get("APP_ENV", "development")
 _jwt_secret_raw = os.environ.get("JWT_SECRET", "")
-assert_prod_secrets(_APP_ENV, _jwt_secret_raw, ALLOWED_ORIGINS)
+_msg91_key_raw = os.environ.get("MSG91_AUTH_KEY", "").strip()
+assert_prod_secrets(_APP_ENV, _jwt_secret_raw, ALLOWED_ORIGINS, _msg91_key_raw)
 
+_is_prod = _APP_ENV.lower() in ("prod", "production")
 if not _jwt_secret_raw:
     logger.warning("JWT_SECRET is not set; using a random secret (tokens will not survive restarts)")
 if ALLOWED_ORIGINS == ["*"]:
     logger.warning("ALLOWED_ORIGINS is not set; defaulting to ['*'] (insecure for credentialed requests)")
+if _is_prod and not os.environ.get("EMERGENT_LLM_KEY", "").strip():
+    # Razorpay is not integrated yet, so it is intentionally not guarded here.
+    logger.warning("EMERGENT_LLM_KEY is not set in production; AI features will be degraded")
 
 # ========== SOCKET.IO REAL-TIME SERVER (Part C) ==========
 sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")
@@ -1400,7 +1411,7 @@ async def admin_dashboard_stats(user=Depends(get_current_user)):
     products_count = await db.products.count_documents({"is_active": True})
     categories_count = await db.categories.count_documents({"is_active": {"$ne": False}})
     today_orders = await db.orders.find({"created_at": {"$regex": f"^{today}"}}, {"_id": 0, "total_price": 1, "status": 1}).to_list(500)
-    low_stock = await db.products.find({"is_active": True, "product_type": {"$ne": "ready_made"}, "available_qty_grams": {"$lte": 500}}, {"_id": 0, "id": 1, "name": 1, "available_qty_grams": 1, "category": 1}).to_list(50)
+    low_stock = await low_stock_alerts(user, limit=50)  # Fix 2: live inventory_items, not frozen global
     pending_orders = await db.orders.count_documents({"status": {"$in": ["pending", "preparing"]}})
     revenue = sum(o.get("total_price", 0) for o in today_orders)
     return {
@@ -2678,30 +2689,46 @@ async def reorder(order_id: str, user=Depends(get_current_user)):
     order = await db.orders.find_one({"id": order_id, "user_id": user["id"]}, {"_id": 0})
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
-    # Validate items are still available
+    # Validate items are still available. Stock availability here is ADVISORY only
+    # (Fix 2): read this store's live inventory_items ledger so we don't gate on the
+    # frozen products.available_qty_grams. create_order does the authoritative
+    # recheck at pay (raw_single_available / raw_meal_available), so an item that
+    # looks low here is never silently dropped — it stays in the cart and the real
+    # gate is at placement.
+    store_id = order.get("store_id") or DEFAULT_STORE_ID
     cart_items = []
     unavailable = []
     for item in order.get("items", []):
         product = await db.products.find_one({"id": item["product_id"], "is_active": True}, {"_id": 0})
-        if product and product.get("available_qty_grams", 0) >= item["grams"]:
-            cart_items.append({
-                **item,
-                "cost_per_100g": product["cost_per_100g"],
-                "calories_per_100g": product["calories_per_100g"],
-                "protein_per_100g": product["protein_per_100g"],
-                "carbs_per_100g": product["carbs_per_100g"],
-                "fat_per_100g": product["fat_per_100g"],
-                "category": product.get("category", ""),
-                "diet_type": product.get("diet_type", "veg"),
-                "image_url": product.get("image_url"),
-                "description": product.get("description", ""),
-                "rating": product.get("rating", 4.0),
-                "available_qty_grams": product.get("available_qty_grams", 0),
-                "id": product["id"],
-                "name": product["name"],
-            })
+        if not product:
+            unavailable.append(item.get("product_name"))
+            continue
+        ptype = item.get("product_type", "single")
+        if ptype == "ready_made":
+            in_stock = await raw_meal_available(store_id, item["product_id"], int(item.get("quantity", 1) or 1))
+            live_qty = product.get("available_qty_grams", 0)
         else:
-            unavailable.append(item["product_name"])
+            inv = await db.inventory_items.find_one({"store_id": store_id, "product_id": item["product_id"]}, {"_id": 0})
+            live_qty = float(inv.get("qty_on_hand", 0) or 0) if inv else product.get("available_qty_grams", 0)
+            in_stock = await raw_single_available(store_id, item["product_id"], float(item.get("grams", 0) or 0))
+        cart_items.append({
+            **item,
+            "cost_per_100g": product["cost_per_100g"],
+            "calories_per_100g": product["calories_per_100g"],
+            "protein_per_100g": product["protein_per_100g"],
+            "carbs_per_100g": product["carbs_per_100g"],
+            "fat_per_100g": product["fat_per_100g"],
+            "category": product.get("category", ""),
+            "diet_type": product.get("diet_type", "veg"),
+            "image_url": product.get("image_url"),
+            "description": product.get("description", ""),
+            "rating": product.get("rating", 4.0),
+            "available_qty_grams": live_qty,
+            "id": product["id"],
+            "name": product["name"],
+        })
+        if not in_stock:
+            unavailable.append(item.get("product_name"))  # advisory warning, not a hard block
     return {
         "cart_items": cart_items,
         "order_type": order.get("order_type", "dine-in"),
@@ -3851,8 +3878,8 @@ async def get_admin_analytics(user=Depends(get_current_user)):
     # Customer stats
     unique_customers = len(set(o.get("user_id") for o in month_orders if o.get("user_id")))
     
-    # Low stock alerts
-    low_stock = await db.products.find({"available_qty_grams": {"$lt": 500}, "is_active": True}, {"_id": 0}).to_list(20)
+    # Low stock alerts (Fix 2: live inventory_items, store-scoped, not frozen global)
+    low_stock = await low_stock_alerts(user, limit=20)
     
     return {
         "today": {
@@ -3872,7 +3899,7 @@ async def get_admin_analytics(user=Depends(get_current_user)):
         "best_sellers": best_sellers,
         "order_types": order_types,
         "peak_hours": [{"hour": h, "orders": c} for h, c in peak_hours],
-        "low_stock_alerts": [{"name": p["name"], "stock": p["available_qty_grams"]} for p in low_stock],
+        "low_stock_alerts": [{"name": r["name"], "stock": r["qty_on_hand"]} for r in low_stock],
     }
 
 @api_router.post("/admin/ai-insights")
@@ -5452,6 +5479,32 @@ def _public_item(item: dict, user) -> dict:
 def require_inventory_manager(user):
     if normalize_role(user) not in INVENTORY_MANAGER_ROLES:
         raise HTTPException(status_code=403, detail="Inventory managers only")
+
+async def low_stock_alerts(user, limit: int = 50) -> List[dict]:
+    """Low / out-of-stock raws from inventory_items (Fix 2 — the live single source
+    of truth; no longer the frozen products.available_qty_grams), scoped to the
+    caller's store(s) via store_filter. Same low/out rule as GET /inventory
+    (reorder_level if set, else the 500g threshold). Cost is stripped for
+    cashier/kitchen via _public_item. The 'available_qty_grams' alias is kept so
+    existing UI keeps reading the field it expects."""
+    items = await db.inventory_items.find(store_filter(user), {"_id": 0}).to_list(5000)
+    rows = []
+    for it in items:
+        qty = float(it.get("qty_on_hand", 0) or 0)
+        rl = float(it.get("reorder_level", 0) or 0)
+        threshold = rl if rl > 0 else 500
+        if qty > threshold:
+            continue  # in stock — not an alert
+        row = {
+            "id": it.get("id"), "product_id": it.get("product_id"), "store_id": it.get("store_id"),
+            "name": it.get("name"), "category": it.get("category"),
+            "qty_on_hand": qty, "available_qty_grams": qty,  # legacy alias for existing UI
+            "reorder_level": rl, "avg_cost": it.get("avg_cost", 0),
+            "status": "low" if qty > 0 else "out_of_stock",
+        }
+        rows.append(_public_item(row, user))  # strips avg_cost for cashier/kitchen
+    rows.sort(key=lambda r: r["qty_on_hand"])
+    return rows[:limit]
 
 async def log_movement(*, store_id, item_id, product_id, mtype, qty_delta, qty_after,
                        reason, user_id, ref_id=None, unit_cost_at_time=None):

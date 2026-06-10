@@ -151,6 +151,53 @@ def test_expired_coupon_rejected_no_redemption(ctx):
     run(go())
 
 
+# ---------- reorder advisory (Fix 2b) ----------
+
+def test_reorder_in_stock_keeps_item(ctx):
+    async def go():
+        place = await ctx.client.post("/api/orders", json=_order(ctx, 200, 200), headers=auth(ctx.cust))
+        assert place.status_code == 200, place.text
+        oid = place.json()["id"]
+        r = await ctx.client.post(f"/api/orders/{oid}/reorder", headers=auth(ctx.cust))
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert any(ci["id"] == ctx.pid for ci in d["cart_items"])   # item kept
+        assert d["unavailable"] == []                               # plenty of stock
+    run(go())
+
+
+def test_reorder_out_of_stock_advisory_not_dropped(ctx):
+    async def go():
+        # A product whose FROZEN global field is huge but whose live inventory_items is 0.
+        pid2 = str(uuid.uuid4())
+        await server.db.products.insert_one({
+            "id": pid2, "name": "Empty", "product_type": "single", "cost_per_100g": 100,
+            "available_qty_grams": 99999, "is_active": True,
+            "calories_per_100g": 1, "protein_per_100g": 1, "carbs_per_100g": 1, "fat_per_100g": 1})
+        await ctx.client.post(f"/api/inventory/{ctx.store_a}/items", headers=auth(ctx.mgr),
+                              json={"name": "Empty", "unit": "g", "product_id": pid2, "qty_on_hand": 0, "avg_cost": 0})
+        # Craft a past order containing pid2 (so we can reorder it)
+        oid = str(uuid.uuid4())[:8].upper()
+        me = (await ctx.client.get("/api/auth/me", headers=auth(ctx.cust))).json()
+        await server.db.orders.insert_one({
+            "id": oid, "user_id": me["id"], "store_id": ctx.store_a, "order_type": "dine-in",
+            "items": [{"product_id": pid2, "product_name": "Empty", "grams": 100, "quantity": 1,
+                       "product_type": "single"}],
+            "status": "completed", "created_at": "2024-01-01T00:00:00+00:00"})
+        r = await ctx.client.post(f"/api/orders/{oid}/reorder", headers=auth(ctx.cust))
+        assert r.status_code == 200, r.text
+        d = r.json()
+        ci = next((x for x in d["cart_items"] if x["id"] == pid2), None)
+        assert ci is not None                       # NOT hard-dropped (advisory only)
+        assert ci["available_qty_grams"] == 0       # from inventory_items, NOT the 99999 global
+        assert "Empty" in d["unavailable"]          # advisory warning present
+        # create_order's authoritative recheck: the unstocked single is flagged out_of_stock
+        q = await ctx.client.post("/api/cart/quote", headers=auth(ctx.cust), json={
+            "items": [{"product_id": pid2, "grams": 100}], "order_type": "dine-in", "store_id": ctx.store_a})
+        assert any(o["product_id"] == pid2 for o in q.json()["out_of_stock"])
+    run(go())
+
+
 # ---------- cart_quote regression ----------
 
 def test_cart_quote_unchanged_totals(ctx):
