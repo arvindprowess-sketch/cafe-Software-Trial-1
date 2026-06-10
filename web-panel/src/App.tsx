@@ -23,6 +23,8 @@ import HqItemMaster from './pages/HqItemMaster';
 import HqMovementLog from './pages/HqMovementLog';
 import HqInventoryDashboard from './pages/HqInventoryDashboard';
 import HqReports from './pages/HqReports';
+import StoreDayBook from './pages/StoreDayBook';
+import CashierRefunds from './pages/CashierRefunds';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminProducts from './pages/AdminProducts';
 import AdminKitchen from './pages/AdminKitchen';
@@ -89,6 +91,7 @@ export default function App() {
         <Route path="inventory/health" element={<RoleRoute allowed={HQ_SUB_ROUTE_ROLES['/hq/inventory/health']}><HqInventoryDashboard /></RoleRoute>} />
         <Route path="inventory/movements" element={<RoleRoute allowed={HQ_SUB_ROUTE_ROLES['/hq/inventory/movements']}><HqMovementLog /></RoleRoute>} />
         <Route path="reports" element={<RoleRoute allowed={HQ_SUB_ROUTE_ROLES['/hq/reports']}><HqReports /></RoleRoute>} />
+        <Route path="daybook" element={<RoleRoute allowed={HQ_SUB_ROUTE_ROLES['/hq/daybook']}><StoreDayBook readOnly /></RoleRoute>} />
       </Route>
 
       <Route path="/admin" element={<ProtectedRoute roles={ADMIN_PORTAL_ROLES}><AdminLayout /></ProtectedRoute>}>
@@ -113,6 +116,8 @@ export default function App() {
         <Route index element={<CashierPOS />} />
         <Route path="orders" element={<CashierOrders />} />
         <Route path="tables" element={<CashierTables />} />
+        <Route path="daybook" element={<StoreDayBook />} />
+        <Route path="refunds" element={<CashierRefunds />} />
       </Route>
 
       <Route path="*" element={<Navigate to={getDefaultRoute()} />} />

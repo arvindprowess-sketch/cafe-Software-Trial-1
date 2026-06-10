@@ -15,6 +15,8 @@ export default function CashierLayout() {
           <NavLink to="/cashier" end className={({ isActive }) => `top-nav-link ${isActive ? 'active' : ''}`} data-testid="nav-pos">POS</NavLink>
           <NavLink to="/cashier/orders" className={({ isActive }) => `top-nav-link ${isActive ? 'active' : ''}`} data-testid="nav-orders">Orders</NavLink>
           <NavLink to="/cashier/tables" className={({ isActive }) => `top-nav-link ${isActive ? 'active' : ''}`} data-testid="nav-tables">Tables</NavLink>
+          <NavLink to="/cashier/daybook" className={({ isActive }) => `top-nav-link ${isActive ? 'active' : ''}`} data-testid="nav-daybook">Day Book</NavLink>
+          <NavLink to="/cashier/refunds" className={({ isActive }) => `top-nav-link ${isActive ? 'active' : ''}`} data-testid="nav-refunds">Refunds</NavLink>
         </div>
         <div className="top-nav-actions">
           <span className="top-nav-user"><strong>{user?.name}</strong></span>
