@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Body, Query
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Body, Query, Request
 from fastapi.responses import Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
@@ -16,6 +16,9 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any, Union
 import uuid
+import time
+import hashlib
+from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 import bcrypt
 import jwt
@@ -93,6 +96,31 @@ def store_event_rooms(store_id: str, channels=("kitchen", "cashier", "manager"))
 
 @sio.event
 async def connect(sid, environ):
+    # Require a valid JWT: extract from ?token=… query param or Authorization header.
+    qs = environ.get("QUERY_STRING", "")
+    params = {}
+    for part in qs.split("&"):
+        if "=" in part:
+            k, v = part.split("=", 1)
+            params[k] = v
+    token = params.get("token") or environ.get("HTTP_AUTHORIZATION", "").replace("Bearer ", "").strip()
+    if not token:
+        logger.warning(f"[WS] connect rejected (no token): {sid}")
+        return False  # python-socketio: returning False disconnects
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        user = await db.users.find_one({"id": payload["user_id"]}, {"_id": 0})
+        if not user:
+            raise ValueError("user not found")
+        await sio.save_session(sid, {
+            "user_id": user["id"],
+            "role": normalize_role(user),
+            "store_id": user.get("store_id"),
+            "cluster_store_ids": user.get("cluster_store_ids") or [],
+        })
+    except Exception as exc:
+        logger.warning(f"[WS] connect rejected ({exc}): {sid}")
+        return False
     logger.info(f"[WS] Client connected: {sid}")
 
 @sio.event
@@ -104,7 +132,39 @@ async def join_room(sid, data):
     """Clients join rooms by name. Staff use store-scoped rooms such as
     'kitchen:<store_id>' / 'cashier:<store_id>' / 'manager:<store_id>', HQ uses
     'hq', and customers use 'user:<id>'. A single client may join several rooms
-    (e.g. an area manager joins each store in its cluster)."""
+    (e.g. an area manager joins each store in its cluster).
+    Requires a valid JWT on connect; room scope is enforced per role."""
+    session = await sio.get_session(sid)
+    if not session:
+        logger.warning(f"[WS] join_room from unauthenticated {sid}")
+        await sio.disconnect(sid)
+        return
+
+    role = session["role"]
+    store_id = session.get("store_id")
+    cluster_ids = session.get("cluster_store_ids") or []
+    user_id = session.get("user_id")
+
+    def room_allowed(r: str) -> bool:
+        parts = r.split(":", 1)
+        prefix = parts[0]
+        room_store = parts[1] if len(parts) > 1 else None
+        if role == "super_admin":
+            return True  # HQ can join any room
+        if prefix == "hq":
+            return False  # HQ room for super_admin only
+        if prefix in ("kitchen", "cashier", "manager"):
+            if role == "area_manager":
+                return room_store in cluster_ids
+            if role in ("store_manager", "cashier", "kitchen"):
+                return room_store == store_id
+            return False
+        if prefix == "user":
+            return role == "customer" and room_store == user_id
+        if prefix == "customers":
+            return role == "customer"
+        return False
+
     room_id = (data or {}).get("room_id")
     rooms = (data or {}).get("rooms")
     join_targets = []
@@ -115,10 +175,22 @@ async def join_room(sid, data):
     if not join_targets:
         logger.warning(f"[WS] join_room without room_id from {sid}")
         return
+
+    allowed, denied = [], []
     for r in join_targets:
+        if room_allowed(r):
+            allowed.append(r)
+        else:
+            denied.append(r)
+
+    for r in allowed:
         await sio.enter_room(sid, r)
-    await sio.emit("joined", {"rooms": join_targets}, to=sid)
-    logger.info(f"[WS] {sid} joined rooms {join_targets}")
+    if allowed:
+        await sio.emit("joined", {"rooms": allowed}, to=sid)
+        logger.info(f"[WS] {sid} joined rooms {allowed}")
+    if denied:
+        await sio.emit("join_denied", {"rooms": denied}, to=sid)
+        logger.warning(f"[WS] {sid} denied rooms {denied} (role={role})")
 
 async def broadcast_event(event_type: str, payload: dict, rooms=None, store_id=None):
     """Broadcast a real-time event.
@@ -390,6 +462,36 @@ def verify_password(password: str, hashed: str) -> bool:
 def create_token(user_id: str, role: str) -> str:
     payload = {"user_id": user_id, "role": role, "exp": datetime.now(timezone.utc).timestamp() + 86400 * 7}
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+def pin_uniqueness_token(pin: str) -> str:
+    """SHA-256 of PIN — stored for fast duplicate-PIN lookup only; never used for auth."""
+    return hashlib.sha256(pin.encode()).hexdigest()
+
+# ── PIN-login brute-force guard ──────────────────────────────────────────────
+# In-memory: per-worker (acceptable for pilot; replace with Redis for multi-worker).
+_PIN_FAIL_LOG: dict = defaultdict(list)  # key -> [fail_timestamp, ...]
+_PIN_WINDOW_SECS = 300    # 5-minute failure window
+_PIN_MAX_FAILS   = 5      # max failures before lockout
+_PIN_LOCKOUT_SECS = 600   # 10-minute lockout
+
+def check_pin_login_rate(key: str, now: float) -> tuple:
+    """Return (allowed: bool, retry_after: int). Unit-testable; no I/O."""
+    timestamps = _PIN_FAIL_LOG.get(key, [])
+    cutoff = now - _PIN_LOCKOUT_SECS
+    fresh = [t for t in timestamps if t > cutoff]
+    _PIN_FAIL_LOG[key] = fresh
+    window_start = now - _PIN_WINDOW_SECS
+    recent = [t for t in fresh if t > window_start]
+    if len(recent) >= _PIN_MAX_FAILS:
+        retry_after = int(_PIN_LOCKOUT_SECS - (now - recent[0])) + 1
+        return False, retry_after
+    return True, 0
+
+def record_pin_fail(key: str, now: float):
+    _PIN_FAIL_LOG[key].append(now)
+
+def reset_pin_counter(key: str):
+    _PIN_FAIL_LOG.pop(key, None)
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     try:
@@ -4740,7 +4842,7 @@ async def create_staff(data: StaffCreate, user=Depends(get_current_user)):
         "name": data.name,
         "role": data.role,
         "pin_hash": hash_password(data.pin),
-        "pin_plain": data.pin,  # For admin display (in production, remove this)
+        "pin_token": pin_uniqueness_token(data.pin),
         "is_active": True,
         "store_id": None,
         "cluster_store_ids": None,
@@ -4764,8 +4866,8 @@ async def create_staff(data: StaffCreate, user=Depends(get_current_user)):
             raise HTTPException(status_code=400, detail="Invalid store_id")
         staff_doc["store_id"] = store_id
 
-    # PIN uniqueness
-    existing = await db.users.find_one({"pin_plain": data.pin, "pin_hash": {"$exists": True}}, {"_id": 0})
+    # PIN uniqueness (fast lookup via sha256 token, no plaintext stored)
+    existing = await db.users.find_one({"pin_token": pin_uniqueness_token(data.pin)}, {"_id": 0})
     if existing:
         raise HTTPException(status_code=400, detail="This PIN is already in use")
 
@@ -4793,7 +4895,8 @@ async def list_staff(user=Depends(get_current_user)):
     staff = await db.users.find(base, {"_id": 0}).to_list(200)
     return [
         {
-            "id": s["id"], "name": s["name"], "role": s["role"], "pin": s.get("pin_plain", "****"),
+            "id": s["id"], "name": s["name"], "role": s["role"],
+            "pin": "***",  # PIN shown only at creation time; never stored as plaintext
             "store_id": s.get("store_id"), "cluster_store_ids": s.get("cluster_store_ids"),
             "is_active": s.get("is_active", True), "created_at": s.get("created_at"),
         }
@@ -4820,7 +4923,7 @@ async def update_staff(staff_id: str, data: StaffUpdate, user=Depends(get_curren
         if not data.pin.isdigit() or len(data.pin) < 4 or len(data.pin) > 6:
             raise HTTPException(status_code=400, detail="PIN must be 4-6 digits")
         update_data["pin_hash"] = hash_password(data.pin)
-        update_data["pin_plain"] = data.pin
+        update_data["pin_token"] = pin_uniqueness_token(data.pin)
     if data.is_active is not None:
         update_data["is_active"] = data.is_active
     if data.store_id is not None and role == "super_admin":
@@ -4849,11 +4952,23 @@ async def delete_staff(staff_id: str, user=Depends(get_current_user)):
     return {"message": "Staff deleted"}
 
 @api_router.post("/auth/pin-login")
-async def pin_login(data: PinLogin):
+async def pin_login(data: PinLogin, request: Request):
     """PIN-based login for store staff (store_manager/cashier/kitchen/area_manager)."""
     if not data.pin.isdigit() or len(data.pin) < 4 or len(data.pin) > 6:
         raise HTTPException(status_code=400, detail="Invalid PIN format")
-    # Find staff by PIN
+    # Rate-limit by (client IP + submitted PIN prefix) to guard brute-force.
+    # In-memory per-worker — flag for Redis if multi-worker deployment is needed.
+    ip = (request.client.host if request.client else "unknown")
+    rl_key = f"{ip}:{data.pin[:3]}"
+    now = time.time()
+    allowed, retry_after = check_pin_login_rate(rl_key, now)
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many failed PIN attempts. Try again later.",
+            headers={"Retry-After": str(retry_after)},
+        )
+    # Find staff by PIN (hash verify)
     staff_list = await db.users.find(
         {"role": {"$in": ["store_manager", "kitchen", "cashier", "area_manager"]}, "is_active": True}, {"_id": 0}
     ).to_list(500)
@@ -4863,7 +4978,9 @@ async def pin_login(data: PinLogin):
             matched_staff = s
             break
     if not matched_staff:
+        record_pin_fail(rl_key, now)
         raise HTTPException(status_code=401, detail="Invalid PIN")
+    reset_pin_counter(rl_key)
     token = create_token(matched_staff["id"], matched_staff["role"])
     return {
         "token": token,
@@ -7121,7 +7238,7 @@ async def _free_pin(preferred: str) -> Optional[str]:
     (mirrors the 550001..550005 loop in run_store_migration)."""
     base = int(preferred)
     for candidate in [str(base + i) for i in range(0, 6)]:
-        if not await db.users.find_one({"pin_plain": candidate}, {"_id": 0}):
+        if not await db.users.find_one({"pin_token": pin_uniqueness_token(candidate)}, {"_id": 0}):
             return candidate
     return None
 
@@ -7145,7 +7262,7 @@ async def admin_seed_demo_staff(user=Depends(get_current_user)):
             existing = await db.users.find_one(
                 {"role": role, "store_id": DEFAULT_STORE_ID}, {"_id": 0})
         if existing:
-            creds.append({"role": role, "pin": existing.get("pin_plain", "****"),
+            creds.append({"role": role, "pin": "*** (PIN shown only at creation)",
                           "store_id": existing.get("store_id"),
                           "cluster_store_ids": existing.get("cluster_store_ids")})
             continue
@@ -7158,7 +7275,7 @@ async def admin_seed_demo_staff(user=Depends(get_current_user)):
             "name": spec["name"],
             "role": role,
             "pin_hash": hash_password(pin),
-            "pin_plain": pin,
+            "pin_token": pin_uniqueness_token(pin),
             "is_active": True,
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
@@ -7247,7 +7364,7 @@ async def run_store_migration():
     if not sm:
         pin = None
         for candidate in ["550001", "550002", "550003", "550004", "550005"]:
-            if not await db.users.find_one({"pin_plain": candidate}, {"_id": 0}):
+            if not await db.users.find_one({"pin_token": pin_uniqueness_token(candidate)}, {"_id": 0}):
                 pin = candidate
                 break
         if pin:
@@ -7257,7 +7374,7 @@ async def run_store_migration():
                 "role": "store_manager",
                 "store_id": DEFAULT_STORE_ID,
                 "pin_hash": hash_password(pin),
-                "pin_plain": pin,
+                "pin_token": pin_uniqueness_token(pin),
                 "is_active": True,
                 "created_at": datetime.now(timezone.utc).isoformat(),
             })
@@ -7303,6 +7420,16 @@ async def on_startup():
         logger.info("[startup] inventory indexes ensured")
     except Exception as e:
         logger.error(f"[startup] inventory index error: {e}")
+    # One-time cleanup: remove plaintext PINs from all existing user docs (idempotent).
+    try:
+        result = await db.users.update_many(
+            {"pin_plain": {"$exists": True}},
+            {"$unset": {"pin_plain": ""}},
+        )
+        if result.modified_count:
+            logger.info(f"[startup] unset pin_plain from {result.modified_count} user doc(s)")
+    except Exception as e:
+        logger.error(f"[startup] pin_plain cleanup error: {e}")
     # Multi-store foundation: ensure default store + migrate legacy data
     try:
         await run_store_migration()
