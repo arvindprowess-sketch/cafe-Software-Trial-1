@@ -22,12 +22,12 @@ export const ROLE_DEFAULT_ROUTE: Record<string, string> = {
 export const ADMIN_NAV_KEYS: Record<string, string[]> = {
   super_admin: [
     'dashboard', 'categories', 'products', 'orders',
-    'kitchen', 'offers', 'tables', 'staff', 'shifts',
+    'kitchen', 'tables', 'staff', 'shifts',
     'hq-stores', 'hq-catalog', 'hq-push', 'hq-offers',
   ],
   admin: [
     'dashboard', 'categories', 'products', 'orders',
-    'kitchen', 'offers', 'tables', 'staff', 'shifts',
+    'kitchen', 'tables', 'staff', 'shifts',
     'hq-stores', 'hq-catalog', 'hq-push', 'hq-offers',
   ],
   area_manager: [
@@ -38,7 +38,7 @@ export const ADMIN_NAV_KEYS: Record<string, string[]> = {
   ],
   store_manager: [
     // Dashboard/Orders(Analytics) are super_admin-only & global -> excluded.
-    'kitchen', 'offers', 'tables', 'shifts',
+    'kitchen', 'tables', 'shifts',
     // HQ: own store catalog overrides + offers. Stores & Clusters / Push — no.
     'hq-catalog', 'hq-offers',
   ],
