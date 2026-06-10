@@ -4417,7 +4417,7 @@ async def compute_authoritative_bill(items, order_type, coupon_code, tip, store_
                 coupon_info = {"code": coupon_code, "title": offer["title"], "discount_type": offer["discount_type"]}
 
     # Delivery fee (free over threshold) + tip
-    free_delivery = subtotal >= FREE_DELIVERY_THRESHOLD
+    free_delivery = subtotal >= await get_setting("free_delivery_threshold")
     if order_type == "delivery":
         base_delivery = 30.0
         delivery_fee = 0.0 if free_delivery else base_delivery
@@ -4470,7 +4470,7 @@ async def compute_authoritative_bill(items, order_type, coupon_code, tip, store_
         "price_changes": price_changes,
         "tiers": tiers,
         "next_tier": next_tier,
-        "free_delivery_threshold": FREE_DELIVERY_THRESHOLD,
+        "free_delivery_threshold": await get_setting("free_delivery_threshold"),
     }
 
 @api_router.post("/cart/quote")
@@ -5963,6 +5963,70 @@ async def admin_migrate_inventory(user=Depends(get_current_user)):
 # ==========================================================================
 HQ_VALUE_THRESHOLD = 2000.0  # >= needs HQ/area escalation
 
+# ==========================================================================
+# PR-4 — HQ-editable system settings (single Mongo doc, cached in-process).
+# Thresholds that used to be hard-coded constants are now read through
+# get_setting() with the constant as the fallback when the doc is absent.
+# ==========================================================================
+SETTINGS_DOC_ID = "system"
+DEFAULT_SETTINGS = {
+    "hq_value_threshold": HQ_VALUE_THRESHOLD,
+    "free_delivery_threshold": float(FREE_DELIVERY_THRESHOLD),
+}
+_settings_cache: Optional[dict] = None
+
+async def get_settings() -> dict:
+    """Return the effective settings (doc merged over defaults), cached."""
+    global _settings_cache
+    if _settings_cache is not None:
+        return _settings_cache
+    doc = await db.system_settings.find_one({"id": SETTINGS_DOC_ID}, {"_id": 0})
+    merged = dict(DEFAULT_SETTINGS)
+    for k in DEFAULT_SETTINGS:
+        if doc and doc.get(k) is not None:
+            merged[k] = doc[k]
+    _settings_cache = merged
+    return merged
+
+async def get_setting(key: str):
+    return (await get_settings()).get(key, DEFAULT_SETTINGS.get(key))
+
+def _invalidate_settings_cache():
+    global _settings_cache
+    _settings_cache = None
+
+class SettingsUpdate(BaseModel):
+    hq_value_threshold: Optional[float] = None
+    free_delivery_threshold: Optional[float] = None
+
+@api_router.get("/admin/settings")
+async def get_admin_settings(user=Depends(get_current_user)):
+    """super_admin: read the effective system settings (doc merged over defaults)."""
+    if not is_hq(user):
+        raise HTTPException(status_code=403, detail="HQ only")
+    return await get_settings()
+
+@api_router.put("/admin/settings")
+async def update_admin_settings(data: SettingsUpdate, user=Depends(get_current_user)):
+    """super_admin: update HQ-editable thresholds. Only the provided fields change."""
+    if not is_hq(user):
+        raise HTTPException(status_code=403, detail="HQ only")
+    updates = {k: v for k, v in data.dict().items() if v is not None}
+    for k, v in updates.items():
+        if v < 0:
+            raise HTTPException(status_code=400, detail=f"{k} must be >= 0")
+    if not updates:
+        raise HTTPException(status_code=400, detail="No settings provided")
+    updates["updated_by"] = user["id"]
+    updates["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.system_settings.update_one(
+        {"id": SETTINGS_DOC_ID},
+        {"$set": updates, "$setOnInsert": {"id": SETTINGS_DOC_ID}},
+        upsert=True,
+    )
+    _invalidate_settings_cache()
+    return await get_settings()
+
 async def explode_to_raw(target_type: str, ref_id: str, qty: float, store_id: str):
     """Expand a target into the raw inventory_items it consumes from THIS store.
 
@@ -6059,7 +6123,7 @@ async def raise_discard(data: DiscardCreate, user=Depends(get_current_user)):
         "photo_url": data.photo_url,
         "value": value,
         "status": "pending",
-        "hq_required": value >= HQ_VALUE_THRESHOLD,
+        "hq_required": value >= await get_setting("hq_value_threshold"),
         "raised_by": user["id"],
         "raised_at": now,
         "approved_by": None,
@@ -6293,7 +6357,7 @@ async def adjust_inventory(store_id: str, data: AdjustRequest, user=Depends(get_
     old_qty = float(item.get("qty_on_hand", 0) or 0)
     variance = float(data.new_qty) - old_qty
     variance_value = abs(variance) * float(item.get("avg_cost", 0) or 0)
-    large = variance_value >= HQ_VALUE_THRESHOLD
+    large = variance_value >= await get_setting("hq_value_threshold")
     if large and normalize_role(user) == "store_manager":
         raise HTTPException(status_code=403, detail="Large adjustment requires area manager approval")
     now = datetime.now(timezone.utc).isoformat()
@@ -6383,7 +6447,7 @@ async def physical_count(store_id: str, data: CountRequest, user=Depends(get_cur
         system_qty = float(item.get("qty_on_hand", 0) or 0)
         variance = float(line.counted_qty) - system_qty
         variance_value = abs(variance) * float(item.get("avg_cost", 0) or 0)
-        flagged = variance_value >= HQ_VALUE_THRESHOLD
+        flagged = variance_value >= await get_setting("hq_value_threshold")
         await db.inventory_items.update_one({"id": item["id"], "store_id": store_id},
                                             {"$set": {"qty_on_hand": float(line.counted_qty), "updated_at": now}})
         mv = await log_movement(store_id=store_id, item_id=item["id"], product_id=item.get("product_id"),
@@ -7117,7 +7181,7 @@ async def _execute_reversal(order, kind, amount, reason, lines, user, existing_r
         rec = {
             "id": str(uuid.uuid4()), "order_id": order["id"], "store_id": order.get("store_id"),
             "kind": kind, "amount": amount, "reason": reason, "lines": lines,
-            "status": "completed", "flagged": amount >= HQ_VALUE_THRESHOLD,
+            "status": "completed", "flagged": amount >= await get_setting("hq_value_threshold"),
             "raised_by": user["id"], "raised_at": now, "finalized_by": user["id"], "finalized_at": now,
             "stock_reversed": reversed_ok,
         }
@@ -7133,7 +7197,7 @@ async def _raise_or_execute(order, kind, amount, reason, lines, user):
         rec = {
             "id": str(uuid.uuid4()), "order_id": order["id"], "store_id": order.get("store_id"),
             "kind": kind, "amount": amount, "reason": reason, "lines": lines,
-            "status": "pending", "flagged": amount >= HQ_VALUE_THRESHOLD,
+            "status": "pending", "flagged": amount >= await get_setting("hq_value_threshold"),
             "raised_by": user["id"], "raised_at": now, "finalized_by": None, "finalized_at": None,
             "stock_reversed": False,
         }
