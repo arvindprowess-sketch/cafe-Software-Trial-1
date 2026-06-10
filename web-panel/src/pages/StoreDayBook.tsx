@@ -165,10 +165,11 @@ export default function StoreDayBook({ readOnly = false }: { readOnly?: boolean 
 
           <div className="stats-grid" style={{ marginBottom: 20 }}>
             {field('Opening float', money(day.opening_cash_float), 'db-opening-float')}
+            {/* Cashier still sees cash drawer flow (sales + payouts) ... */}
+            {day.cash_sales != null && field('Cash sales', money(day.cash_sales), 'db-cash-sales')}
+            {day.payouts != null && field('Payouts', money(day.payouts), 'db-payouts')}
             {day.closing_cash_counted != null && field('Cash counted', money(day.closing_cash_counted), 'db-closing-counted')}
-            {/* Cost / reconciliation fields — hidden for cashier (mirrors backend strip) */}
-            {!isCashier && day.cash_sales != null && field('Cash sales', money(day.cash_sales), 'db-cash-sales')}
-            {!isCashier && day.payouts != null && field('Payouts', money(day.payouts), 'db-payouts')}
+            {/* ... but reconciliation (expected/variance) is stripped for cashier (mirrors backend) */}
             {!isCashier && day.expected_cash != null && field('Expected cash', money(day.expected_cash), 'db-expected-cash')}
             {!isCashier && day.cash_variance != null && field(
               'Cash variance',
