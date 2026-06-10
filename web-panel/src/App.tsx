@@ -17,6 +17,9 @@ import HqStores from './pages/HqStores';
 import HqCatalog from './pages/HqCatalog';
 import HqPush from './pages/HqPush';
 import HqOffers from './pages/HqOffers';
+import HqItemMaster from './pages/HqItemMaster';
+import HqMovementLog from './pages/HqMovementLog';
+import HqInventoryDashboard from './pages/HqInventoryDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminProducts from './pages/AdminProducts';
 import AdminKitchen from './pages/AdminKitchen';
@@ -75,6 +78,9 @@ export default function App() {
         <Route path="catalog" element={<RoleRoute allowed={HQ_SUB_ROUTE_ROLES['/hq/catalog']}><HqCatalog /></RoleRoute>} />
         <Route path="push" element={<RoleRoute allowed={HQ_SUB_ROUTE_ROLES['/hq/push']}><HqPush /></RoleRoute>} />
         <Route path="offers" element={<RoleRoute allowed={HQ_SUB_ROUTE_ROLES['/hq/offers']}><HqOffers /></RoleRoute>} />
+        <Route path="inventory/items" element={<RoleRoute allowed={HQ_SUB_ROUTE_ROLES['/hq/inventory/items']}><HqItemMaster /></RoleRoute>} />
+        <Route path="inventory/health" element={<RoleRoute allowed={HQ_SUB_ROUTE_ROLES['/hq/inventory/health']}><HqInventoryDashboard /></RoleRoute>} />
+        <Route path="inventory/movements" element={<RoleRoute allowed={HQ_SUB_ROUTE_ROLES['/hq/inventory/movements']}><HqMovementLog /></RoleRoute>} />
       </Route>
 
       <Route path="/admin" element={<ProtectedRoute roles={ADMIN_PORTAL_ROLES}><AdminLayout /></ProtectedRoute>}>
