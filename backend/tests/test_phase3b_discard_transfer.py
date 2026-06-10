@@ -211,6 +211,49 @@ def test_cross_cluster_transfer_blocks_area_allows_hq(ctx):
     run(go())
 
 
+# ---------- transfers list (read-only, UI-0) ----------
+
+def test_list_transfers_store_manager_scoped(ctx):
+    async def go():
+        # fresh requested transfer touching store A
+        r = await ctx.client.post("/api/transfers", headers=auth(ctx.mgr_a), json={
+            "from_store_id": ctx.store_a, "to_store_id": ctx.store_b, "item_id": ctx.chicken_id, "qty": 5})
+        assert r.status_code == 200, r.text
+        lst = await ctx.client.get("/api/transfers", headers=auth(ctx.mgr_a))
+        assert lst.status_code == 200, lst.text
+        rows = lst.json()
+        assert len(rows) >= 1
+        for t in rows:
+            assert ctx.store_a in (t["from_store_id"], t["to_store_id"])
+    run(go())
+
+
+def test_list_transfers_kitchen_forbidden(ctx):
+    async def go():
+        r = await ctx.client.get("/api/transfers", headers=auth(ctx.kitchen_a))
+        assert r.status_code == 403
+    run(go())
+
+
+def test_list_transfers_area_out_of_cluster_store_id_forbidden(ctx):
+    async def go():
+        r = await ctx.client.get(f"/api/transfers?store_id={ctx.store_z}", headers=auth(ctx.area_ab))
+        assert r.status_code == 403  # store_z outside area's cluster
+    run(go())
+
+
+def test_list_transfers_status_filter(ctx):
+    async def go():
+        await ctx.client.post("/api/transfers", headers=auth(ctx.mgr_a), json={
+            "from_store_id": ctx.store_a, "to_store_id": ctx.store_b, "item_id": ctx.chicken_id, "qty": 7})
+        r = await ctx.client.get("/api/transfers?status=requested", headers=auth(ctx.area_ab))
+        assert r.status_code == 200, r.text
+        rows = r.json()
+        assert len(rows) >= 1
+        assert all(t["status"] == "requested" for t in rows)
+    run(go())
+
+
 # ---------- adjust ----------
 
 def test_adjust_requires_reason_and_value_gating(ctx):

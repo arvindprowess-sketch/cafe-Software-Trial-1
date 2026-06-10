@@ -6006,6 +6006,27 @@ async def decide_transfer(transfer_id: str, data: DecisionRequest, user=Depends(
         "status": "completed", "approved_by": user["id"], "decided_at": now}})
     return await db.transfers.find_one({"id": transfer_id}, {"_id": 0})
 
+# list endpoint — added for UI rendering 2026-06-10
+@api_router.get("/transfers")
+async def list_transfers(store_id: Optional[str] = None, status: Optional[str] = None,
+                         user=Depends(get_current_user)):
+    """Read-only list of transfers, scoped like POST /transfers + decide. Managers
+    only (cashier/kitchen -> 403); store_manager sees transfers touching their store
+    (from OR to), area_manager their cluster, super_admin all. Newest-first."""
+    if normalize_role(user) not in INVENTORY_MANAGER_ROLES:
+        raise HTTPException(status_code=403, detail="Inventory managers only")
+    q = {}
+    if store_id:
+        assert_store_allowed(user, store_id)
+        q["$or"] = [{"from_store_id": store_id}, {"to_store_id": store_id}]
+    else:
+        scope = staff_store_scope(user)  # None => all stores (HQ)
+        if scope is not None:
+            q["$or"] = [{"from_store_id": {"$in": scope}}, {"to_store_id": {"$in": scope}}]
+    if status:
+        q["status"] = status
+    return await db.transfers.find(q, {"_id": 0}).sort("requested_at", -1).to_list(1000)
+
 # ---------- Manual adjustment ----------
 class AdjustRequest(BaseModel):
     item_id: Optional[str] = None
@@ -6932,6 +6953,27 @@ async def finalize_refund(refund_id: str, user=Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Order not found")
     return await _execute_reversal(order, rec.get("kind", "refund"), rec.get("amount"), rec.get("reason"),
                                    rec.get("lines"), user, existing_rec=rec)
+
+# list endpoint — added for UI rendering 2026-06-10
+@api_router.get("/refunds")
+async def list_refunds(store_id: Optional[str] = None, status: Optional[str] = None,
+                       flagged: Optional[bool] = None, user=Depends(get_current_user)):
+    """Read-only list of refund/void records, scoped like the refund handlers.
+    cashier/store_manager -> own store, area_manager -> cluster, super_admin -> all
+    (kitchen -> 403). Cost fields stripped via _public_item. Newest-first."""
+    if normalize_role(user) not in ("cashier", "store_manager", "area_manager", "super_admin"):
+        raise HTTPException(status_code=403, detail="Cashier/Store-Manager/Area/HQ only")
+    if store_id:
+        assert_store_allowed(user, store_id)
+        q = {"store_id": store_id}
+    else:
+        q = store_filter(user)  # {} for HQ, else {store_id: {$in: scope}}
+    if status:
+        q["status"] = status
+    if flagged is not None:
+        q["flagged"] = flagged
+    rows = await db.refunds.find(q, {"_id": 0}).sort("raised_at", -1).to_list(1000)
+    return [_public_item(r, user) for r in rows]
 
 @api_router.get("/orders/{order_id}/invoice")
 async def order_invoice(order_id: str, user=Depends(get_current_user)):
