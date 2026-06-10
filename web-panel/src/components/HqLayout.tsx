@@ -23,6 +23,7 @@ const HQ_NAV = [
   { path: '/hq/reports', label: 'Reports' },
   { path: '/hq/audit-log', label: 'Audit Log' },
   { path: '/hq/onboarding', label: 'Onboarding' },
+  { path: '/hq/settings', label: 'Settings' },
   { path: '/hq/daybook', label: 'Day Book' },
 ];
 function navForRole(role?: string) {
