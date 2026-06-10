@@ -17,6 +17,8 @@ import HqStores from './pages/HqStores';
 import HqCatalog from './pages/HqCatalog';
 import HqPush from './pages/HqPush';
 import HqOffers from './pages/HqOffers';
+import HqDiscards from './pages/HqDiscards';
+import HqTransfers from './pages/HqTransfers';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminProducts from './pages/AdminProducts';
 import AdminKitchen from './pages/AdminKitchen';
@@ -77,6 +79,8 @@ export default function App() {
         <Route path="catalog" element={<RoleRoute allowed={HQ_SUB_ROUTE_ROLES['/hq/catalog']}><HqCatalog /></RoleRoute>} />
         <Route path="push" element={<RoleRoute allowed={HQ_SUB_ROUTE_ROLES['/hq/push']}><HqPush /></RoleRoute>} />
         <Route path="offers" element={<RoleRoute allowed={HQ_SUB_ROUTE_ROLES['/hq/offers']}><HqOffers /></RoleRoute>} />
+        <Route path="discards" element={<RoleRoute allowed={HQ_SUB_ROUTE_ROLES['/hq/discards']}><HqDiscards /></RoleRoute>} />
+        <Route path="transfers" element={<RoleRoute allowed={HQ_SUB_ROUTE_ROLES['/hq/transfers']}><HqTransfers /></RoleRoute>} />
       </Route>
 
       <Route path="/admin" element={<ProtectedRoute roles={ADMIN_PORTAL_ROLES}><AdminLayout /></ProtectedRoute>}>
@@ -94,6 +98,7 @@ export default function App() {
       <Route path="/kitchen" element={<ProtectedRoute roles={['kitchen']}><KitchenLayout /></ProtectedRoute>}>
         <Route index element={<KitchenOrders />} />
         <Route path="inventory" element={<KitchenInventory />} />
+        <Route path="discards" element={<HqDiscards raiseOnly />} />
       </Route>
 
       <Route path="/cashier" element={<ProtectedRoute roles={['cashier', 'store_manager', 'area_manager']}><CashierLayout /></ProtectedRoute>}>

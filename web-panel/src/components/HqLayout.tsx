@@ -15,6 +15,8 @@ const HQ_NAV = [
   { path: '/hq/catalog', label: 'Store Catalog' },
   { path: '/hq/push', label: 'Catalog Push' },
   { path: '/hq/offers', label: 'Offers & Coupons' },
+  { path: '/hq/discards', label: 'Discards & Wastage' },
+  { path: '/hq/transfers', label: 'Transfers' },
 ];
 function navForRole(role?: string) {
   return HQ_NAV.filter(item => (HQ_SUB_ROUTE_ROLES[item.path] ?? []).includes(role ?? ''));
