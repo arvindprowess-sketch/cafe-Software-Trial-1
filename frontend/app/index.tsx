@@ -8,6 +8,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiCall } from '../utils/api';
+import { isOnboardingDone, setOnboardingDone } from '../utils/onboarding';
 import { FUEL, FONT, RADIUS, SPACE } from '../utils/theme';
 
 type Step = 'phone' | 'otp' | 'name';
@@ -95,6 +96,31 @@ export default function AuthScreen() {
     }
   };
 
+  // PR-E: first-launch onboarding — after login, if no fitness goal is set yet
+  // and the one-time flag is absent, route ONCE to the existing /goal-setup.
+  // Flag is set as soon as the decision is made so it never fires twice; the
+  // goal-setup back button (skip) returns to home. Non-blocking: any failure
+  // just lands on tabs.
+  const navigateAfterLogin = async () => {
+    try {
+      const done = await isOnboardingDone();
+      if (!done) {
+        await setOnboardingDone(); // decision made once — never re-trigger
+        const target = await apiCall('/user/daily-target').catch(() => null);
+        if (target && !target.has_body_stats) {
+          router.replace('/(tabs)/home');
+          // Push on top of home so back/skip lands on tabs; goal-setup's own
+          // "Done" (next: 'home') also returns to tabs/home after save.
+          setTimeout(() => {
+            router.push({ pathname: '/goal-setup', params: { goal: 'maintenance', next: 'home' } });
+          }, 0);
+          return;
+        }
+      }
+    } catch {}
+    router.replace('/(tabs)/home');
+  };
+
   const handleVerifyOtp = async () => {
     setError('');
     const otpString = otp.join('');
@@ -124,8 +150,8 @@ export default function AuthScreen() {
         setIsNewUser(true);
         setStep('name');
       } else {
-        // Navigate to home
-        router.replace('/(tabs)/home');
+        // Navigate to home (with one-time onboarding check)
+        await navigateAfterLogin();
       }
     } catch (e: any) {
       setError(e.message || 'Invalid OTP');
@@ -140,8 +166,8 @@ export default function AuthScreen() {
       return;
     }
 
-    // Name already sent during OTP verify, just navigate
-    router.replace('/(tabs)/home');
+    // Name already sent during OTP verify, just navigate (with onboarding check)
+    navigateAfterLogin();
   };
 
   const handleResendOtp = async () => {
