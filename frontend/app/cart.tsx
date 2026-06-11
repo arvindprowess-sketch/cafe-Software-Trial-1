@@ -11,6 +11,13 @@ import { apiCall, getStoredUser } from '../utils/api';
 import { useCart, itemPrice, CartItem } from '../utils/CartContext';
 import { useStore } from '../utils/StoreContext';
 import { FUEL, FONT, RADIUS, SPACE } from '../utils/theme';
+import PressableScale from './components/PressableScale';
+import * as Haptics from 'expo-haptics';
+
+// PR-C: success haptic on the order-placed moment (safe no-op on web)
+const hapticSuccess = () => {
+  try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {}); } catch {}
+};
 
 const TIP_PRESETS = [10, 20, 30, 50];
 const ORDER_TYPES = [
@@ -181,6 +188,7 @@ export default function CartScreen() {
 
       const order = await apiCall('/orders', { method: 'POST', body: orderBody });
       clear();
+      hapticSuccess(); // PR-C: order-placed success moment
       Alert.alert(isScheduled ? 'Order Scheduled!' : 'Order Placed!', `₹${Math.round(fresh.grand_total)} · ${orderType}`);
       router.replace({ pathname: '/order-detail', params: { orderId: order.id } });
     } catch (e: any) {
@@ -478,14 +486,14 @@ export default function CartScreen() {
           <Text style={styles.bottomLabel}>To Pay</Text>
           <Text style={styles.bottomTotal}>₹{Math.round(grandTotal)}{quoting && <Text style={styles.bottomQuoting}>  …</Text>}</Text>
         </View>
-        <TouchableOpacity testID="place-order-btn" style={[styles.payBtn, placing && { opacity: 0.6 }]} disabled={placing} onPress={() => placeOrder(false)}>
+        <PressableScale haptic testID="place-order-btn" style={[styles.payBtn, placing && { opacity: 0.6 }]} disabled={placing} onPress={() => placeOrder(false)}>
           {placing ? <ActivityIndicator color={FUEL.ink} /> : (
             <>
               <Text style={styles.payBtnText}>{isScheduled ? 'Schedule Order' : 'Place Order'}</Text>
               <Ionicons name="arrow-forward" size={18} color={FUEL.ink} />
             </>
           )}
-        </TouchableOpacity>
+        </PressableScale>
       </View>
     </SafeAreaView>
   );

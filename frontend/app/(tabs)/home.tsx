@@ -14,6 +14,13 @@ import CartPill from '../components/CartPill';
 import { useCart } from '../../utils/CartContext';
 import { FUEL, FONT, GOALS as FUEL_GOALS, RADIUS, SPACE } from '../../utils/theme';
 import { DIET_TAGS, DIET_LABEL, toggleDietTag } from '../../utils/diet';
+import PressableScale from '../components/PressableScale';
+import * as Haptics from 'expo-haptics';
+
+// PR-C: success haptic on add-to-cart (safe no-op on web)
+const hapticSuccess = () => {
+  try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {}); } catch {}
+};
 
 const { width } = Dimensions.get('window');
 
@@ -186,9 +193,9 @@ export default function HomeScreen() {
                 <TouchableOpacity testID={`popular-inc-${item.id}`} style={styles.popQtyBtn} onPress={() => cartCtx.incItem(item.id)}><Ionicons name="add" size={13} color={FUEL.lime} /></TouchableOpacity>
               </View>
             ) : (
-              <TouchableOpacity testID={`popular-add-${item.id}`} style={styles.addBtn} onPress={() => cartCtx.addItem(item)}>
+              <PressableScale haptic testID={`popular-add-${item.id}`} style={styles.addBtn} onPress={() => { cartCtx.addItem(item); hapticSuccess(); }}>
                 <Text style={styles.addBtnText}>Add +</Text>
-              </TouchableOpacity>
+              </PressableScale>
             )}
           </View>
         </View>
@@ -392,16 +399,15 @@ export default function HomeScreen() {
             {FUEL_GOALS.map((g) => {
               const active = mealGoal === g.key;
               return (
-                <TouchableOpacity
+                <PressableScale
                   key={g.key}
                   testID={`home-goal-${g.key}`}
                   style={[styles.goalSelectorChip, active && styles.goalSelectorChipActive]}
                   onPress={() => handleGoalTap(g.key)}
-                  activeOpacity={0.85}
                 >
                   <Ionicons name={g.icon as any} size={20} color={active ? FUEL.ink : FUEL.limeDeep} />
                   <Text style={[styles.goalSelectorLabel, active && styles.goalSelectorLabelActive]}>{g.label}</Text>
-                </TouchableOpacity>
+                </PressableScale>
               );
             })}
           </View>
@@ -674,7 +680,7 @@ export default function HomeScreen() {
             />
 
             {/* Build Button */}
-            <TouchableOpacity testID="build-meal-btn" style={styles.buildBtn} onPress={buildMeal} disabled={aiLoading} activeOpacity={0.85}>
+            <PressableScale haptic testID="build-meal-btn" style={styles.buildBtn} onPress={buildMeal} disabled={aiLoading}>
               {aiLoading ? (
                 <View style={styles.buildBtnContent}>
                   <ActivityIndicator color={FUEL.ink} size="small" />
@@ -686,7 +692,7 @@ export default function HomeScreen() {
                   <Text style={styles.buildBtnText}>Build My Meal</Text>
                 </View>
               )}
-            </TouchableOpacity>
+            </PressableScale>
           </View>
         )}
 
