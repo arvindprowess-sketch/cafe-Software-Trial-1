@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator, Alert
+  KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator, Alert, Linking
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -12,6 +12,10 @@ import { apiCall } from '../utils/api';
 import { FUEL, FONT, RADIUS, SPACE } from '../utils/theme';
 
 type Step = 'phone' | 'otp' | 'name';
+
+// P8 compliance: legal links shown under the primary CTA. Env-overridable per build.
+const PRIVACY_URL = process.env.EXPO_PUBLIC_PRIVACY_URL || 'https://boraroc.in/privacy';
+const TERMS_URL = process.env.EXPO_PUBLIC_TERMS_URL || 'https://boraroc.in/terms';
 
 export default function AuthScreen() {
   const router = useRouter();
@@ -337,8 +341,12 @@ export default function AuthScreen() {
             {step === 'name' && renderNameStep()}
           </View>
 
-          <Text style={styles.terms}>
-            By continuing, you agree to our Terms of Service & Privacy Policy
+          {/* P8 compliance: consent line with tappable legal links */}
+          <Text style={styles.terms} testID="consent-line">
+            By continuing you agree to our{' '}
+            <Text style={styles.termsLink} onPress={() => Linking.openURL(PRIVACY_URL)}>Privacy Policy</Text>
+            {' '}and{' '}
+            <Text style={styles.termsLink} onPress={() => Linking.openURL(TERMS_URL)}>Terms</Text>
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -415,6 +423,7 @@ const styles = StyleSheet.create({
   // Error
   error: { color: FUEL.error, fontFamily: FONT.bodySemibold, fontSize: 13, textAlign: 'center', marginBottom: SPACE.m },
 
-  // Terms
+  // Terms / consent line
   terms: { fontFamily: FONT.body, fontSize: 11, color: 'rgba(244,241,233,0.5)', textAlign: 'center', marginTop: SPACE.xl },
+  termsLink: { fontFamily: FONT.bodySemibold, color: 'rgba(244,241,233,0.8)', textDecorationLine: 'underline' },
 });

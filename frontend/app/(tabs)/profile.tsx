@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, KeyboardAvoidingView, Platform, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -22,6 +22,10 @@ export default function ProfileScreen() {
   const [fat, setFat] = useState('65');
   const [saving, setSaving] = useState(false);
   const [target, setTarget] = useState<any>(null);
+  // P8 compliance: delete-account flow
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   const loadTarget = async () => {
     try { setTarget(await apiCall('/user/daily-target')); } catch {}
@@ -50,6 +54,23 @@ export default function ProfileScreen() {
   };
 
   const handleLogout = async () => { await logout(); router.replace('/'); };
+
+  const openDeleteModal = () => { setDeleteConfirmText(''); setDeleteModalVisible(true); };
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText.trim() !== 'DELETE' || deleting) return;
+    setDeleting(true);
+    try {
+      await apiCall('/users/me', { method: 'DELETE' });
+      setDeleteModalVisible(false);
+      await logout(); // clear auth_token / user_data (old token is revoked server-side too)
+      router.replace('/');
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Could not delete your account. Please try again.');
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -133,9 +154,57 @@ export default function ProfileScreen() {
           <TouchableOpacity testID="save-goals-btn" style={styles.saveBtn} onPress={saveGoals} disabled={saving}>
             <Text style={styles.saveBtnText}>{saving ? 'Saving...' : 'Save Goals'}</Text>
           </TouchableOpacity>
+
+          {/* P8 compliance: danger zone — permanent account deletion */}
+          <View style={styles.dangerZone}>
+            <Text style={styles.dangerZoneTitle}>Danger zone</Text>
+            <Text style={styles.dangerZoneText}>Permanently delete your account and personal data.</Text>
+            <TouchableOpacity testID="delete-account-btn" style={styles.deleteAccountBtn} onPress={openDeleteModal}>
+              <Ionicons name="trash-outline" size={16} color={FUEL.error} />
+              <Text style={styles.deleteAccountBtnText}>Delete my account</Text>
+            </TouchableOpacity>
+          </View>
           <View style={{ height: 40 }} />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Delete-account confirmation modal */}
+      <Modal visible={deleteModalVisible} transparent animationType="fade" onRequestClose={() => setDeleteModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalIcon}><Ionicons name="warning" size={26} color={FUEL.error} /></View>
+            <Text style={styles.modalTitle}>Delete account?</Text>
+            <Text style={styles.modalBody}>
+              This is permanent and cannot be undone.{'\n\n'}
+              • Your profile, saved meals, meal history and body stats are deleted{'\n'}
+              • Past order records are kept for tax (GST) purposes, unlinked to your identity{'\n'}
+              • You will be logged out on every device immediately
+            </Text>
+            <Text style={styles.modalHint}>Type DELETE to confirm</Text>
+            <TextInput
+              testID="delete-confirm-input"
+              style={styles.modalInput}
+              value={deleteConfirmText}
+              onChangeText={setDeleteConfirmText}
+              placeholder="DELETE"
+              placeholderTextColor={FUEL.muted}
+              autoCapitalize="characters"
+              autoCorrect={false}
+            />
+            <TouchableOpacity
+              testID="delete-confirm-btn"
+              style={[styles.modalDeleteBtn, (deleteConfirmText.trim() !== 'DELETE' || deleting) && styles.modalDeleteBtnDisabled]}
+              onPress={handleDeleteAccount}
+              disabled={deleteConfirmText.trim() !== 'DELETE' || deleting}
+            >
+              <Text style={styles.modalDeleteBtnText}>{deleting ? 'Deleting...' : 'Delete my account forever'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity testID="delete-cancel-btn" style={styles.modalCancelBtn} onPress={() => setDeleteModalVisible(false)} disabled={deleting}>
+              <Text style={styles.modalCancelBtnText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -176,4 +245,23 @@ const styles = StyleSheet.create({
   targetInput: { backgroundColor: FUEL.sand, borderRadius: RADIUS.sm, padding: SPACE.m, color: FUEL.ink, fontSize: 18, fontFamily: FONT.bodyBold },
   saveBtn: { backgroundColor: Z_RED, borderRadius: RADIUS.md, paddingVertical: SPACE.l, alignItems: 'center' },
   saveBtnText: { color: '#FFF', fontSize: 16, fontFamily: FONT.bodyBold },
+
+  // P8 compliance: danger zone + delete-account modal
+  dangerZone: { marginTop: SPACE.xxl, paddingTop: SPACE.xl, borderTopWidth: 1, borderTopColor: FUEL.sandBorder },
+  dangerZoneTitle: { fontSize: 13, fontFamily: FONT.bodyBold, color: FUEL.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: SPACE.xs },
+  dangerZoneText: { fontSize: 12.5, color: FUEL.muted, marginBottom: SPACE.m },
+  deleteAccountBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.s, backgroundColor: '#FFF', borderRadius: RADIUS.md, paddingVertical: SPACE.m, borderWidth: 1.5, borderColor: FUEL.error },
+  deleteAccountBtnText: { fontSize: 14, fontFamily: FONT.bodyBold, color: FUEL.error },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(21,20,15,0.6)', alignItems: 'center', justifyContent: 'center', padding: SPACE.xl },
+  modalCard: { width: '100%', backgroundColor: '#FFF', borderRadius: RADIUS.lg, padding: SPACE.xl },
+  modalIcon: { width: 48, height: 48, borderRadius: 24, backgroundColor: FUEL.proteinTint, alignItems: 'center', justifyContent: 'center', alignSelf: 'center', marginBottom: SPACE.m }, // circle
+  modalTitle: { fontSize: 18, fontFamily: FONT.bodyExtrabold, color: FUEL.ink, textAlign: 'center', marginBottom: SPACE.m },
+  modalBody: { fontSize: 13, color: FUEL.muted, lineHeight: 19, marginBottom: SPACE.l },
+  modalHint: { fontSize: 12.5, fontFamily: FONT.bodySemibold, color: FUEL.ink, marginBottom: SPACE.s },
+  modalInput: { backgroundColor: FUEL.sand, borderRadius: RADIUS.sm, padding: SPACE.m, color: FUEL.ink, fontSize: 16, fontFamily: FONT.bodyBold, borderWidth: 1.5, borderColor: FUEL.sandBorder, letterSpacing: 2, marginBottom: SPACE.l },
+  modalDeleteBtn: { backgroundColor: FUEL.error, borderRadius: RADIUS.md, paddingVertical: SPACE.l, alignItems: 'center' },
+  modalDeleteBtnDisabled: { opacity: 0.4 },
+  modalDeleteBtnText: { color: '#FFF', fontSize: 15, fontFamily: FONT.bodyBold },
+  modalCancelBtn: { paddingVertical: SPACE.m, alignItems: 'center', marginTop: SPACE.s },
+  modalCancelBtnText: { color: FUEL.muted, fontSize: 14, fontFamily: FONT.bodySemibold },
 });
