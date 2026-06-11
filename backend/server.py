@@ -8,6 +8,7 @@ from pymongo import ReturnDocument  # PR-3: atomic stock decrement
 import io
 import os
 import re
+import sys
 import logging
 import json
 import base64
@@ -24,6 +25,12 @@ from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 import bcrypt
 import jwt
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
+from limits import parse as parse_rate_limit
+from limits.storage import MemoryStorage
+from limits.strategies import MovingWindowRateLimiter
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -39,6 +46,24 @@ db = client[os.environ['DB_NAME']]
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
 security = HTTPBearer()
+
+# ========== RATE LIMITING (slowapi) ==========
+# In-memory storage — swap to Redis storage when multi-instance.
+# Disabled by default under pytest: the suite's module fixtures all log in from
+# one IP in one process-wide window. The rate-limit tests re-enable it explicitly
+# (or set RATE_LIMIT_ENABLED=1).
+limiter = Limiter(
+    key_func=get_remote_address,
+    enabled=("pytest" not in sys.modules or os.environ.get("RATE_LIMIT_ENABLED") == "1"),
+)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Per-phone OTP send limit — keyed on the normalized phone from the request body,
+# which slowapi's request-based key_func can't see. Same in-memory caveat as above.
+_otp_phone_storage = MemoryStorage()
+_otp_phone_limiter = MovingWindowRateLimiter(_otp_phone_storage)
+_OTP_PHONE_LIMIT = parse_rate_limit("3/15minutes")
 
 # ========== CONFIG (env-driven, A3 + A4) ==========
 JWT_SECRET = os.environ.get("JWT_SECRET") or secrets.token_hex(32)
@@ -469,8 +494,11 @@ def hash_password(password: str) -> str:
 def verify_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode(), hashed.encode())
 
-def create_token(user_id: str, role: str) -> str:
-    payload = {"user_id": user_id, "role": role, "exp": datetime.now(timezone.utc).timestamp() + 86400 * 7}
+def create_token(user_id: str, role: str, token_version: int = 0) -> str:
+    # tv: bumped on deactivate/role change to revoke all outstanding tokens.
+    # Missing token_version (old users/tokens) is treated as 0 on both sides.
+    payload = {"user_id": user_id, "role": role, "tv": token_version,
+               "exp": datetime.now(timezone.utc).timestamp() + 86400 * 7}
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 def pin_uniqueness_token(pin: str) -> str:
@@ -509,6 +537,10 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         user = await db.users.find_one({"id": payload["user_id"]}, {"_id": 0})
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
+        if user.get("is_active") is False:
+            raise HTTPException(status_code=401, detail="Account deactivated")
+        if payload.get("tv", 0) != user.get("token_version", 0):
+            raise HTTPException(status_code=401, detail="Token revoked")
         return user
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
@@ -525,7 +557,12 @@ async def get_optional_user(credentials: Optional[HTTPAuthorizationCredentials] 
         return None
     try:
         payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        return await db.users.find_one({"id": payload["user_id"]}, {"_id": 0})
+        user = await db.users.find_one({"id": payload["user_id"]}, {"_id": 0})
+        if not user or user.get("is_active") is False:
+            return None
+        if payload.get("tv", 0) != user.get("token_version", 0):
+            return None
+        return user
     except Exception:
         return None
 
@@ -901,13 +938,16 @@ class OTPVerifyRequest(BaseModel):
     otp: str
     name: Optional[str] = None  # For new user registration
 
-@api_router.post("/auth/otp/send")
-async def send_otp(data: OTPSendRequest):
-    """Send OTP to phone number (A1: never returns the OTP)."""
+async def _send_otp_impl(data: OTPSendRequest):
+    """Shared by /auth/otp/send and /auth/otp/resend (A1: never returns the OTP)."""
     phone = data.phone.strip().replace(" ", "").replace("-", "")
 
     if not phone.isdigit() or len(phone) != 10:
         raise HTTPException(status_code=400, detail="Invalid phone number. Enter 10 digits.")
+
+    # 3 sends / 15 min per phone (covers send AND resend), on top of the per-IP limit.
+    if limiter.enabled and not _otp_phone_limiter.hit(_OTP_PHONE_LIMIT, "otp-send", phone):
+        raise HTTPException(status_code=429, detail="Too many OTP requests for this number. Try again later.")
 
     otp = generate_otp()
     await store_otp(phone, otp, data.name)
@@ -932,8 +972,15 @@ async def send_otp(data: OTPSendRequest):
         response["dev_otp"] = otp
     return response
 
+@api_router.post("/auth/otp/send")
+@limiter.limit("10/hour")
+async def send_otp(request: Request, data: OTPSendRequest):
+    """Send OTP to phone number (A1: never returns the OTP)."""
+    return await _send_otp_impl(data)
+
 @api_router.post("/auth/otp/verify")
-async def verify_otp(data: OTPVerifyRequest):
+@limiter.limit("10/15minutes")
+async def verify_otp(request: Request, data: OTPVerifyRequest):
     """Verify OTP and login/register user"""
     phone = data.phone.strip().replace(" ", "").replace("-", "")
 
@@ -964,7 +1011,7 @@ async def verify_otp(data: OTPVerifyRequest):
 
     if user:
         # Existing user - login
-        token = create_token(user["id"], user["role"])
+        token = create_token(user["id"], user["role"], user.get("token_version", 0))
         return {
             "token": token,
             "user": {
@@ -1020,7 +1067,8 @@ async def verify_otp(data: OTPVerifyRequest):
         }
 
 @api_router.post("/auth/otp/resend")
-async def resend_otp(data: OTPSendRequest):
+@limiter.limit("10/hour")
+async def resend_otp(request: Request, data: OTPSendRequest):
     """Resend OTP to phone number"""
     phone = data.phone.strip().replace(" ", "").replace("-", "")
 
@@ -1032,7 +1080,7 @@ async def resend_otp(data: OTPSendRequest):
         if (datetime.now(timezone.utc) - last_sent).total_seconds() < 30:
             raise HTTPException(status_code=429, detail="Please wait 30 seconds before requesting new OTP.")
 
-    return await send_otp(data)
+    return await _send_otp_impl(data)
 
 # Keep existing email/password login for admin
 @api_router.post("/auth/register")
@@ -1071,11 +1119,12 @@ async def register(data: UserRegister):
     }
 
 @api_router.post("/auth/login")
-async def login(data: UserLogin):
+@limiter.limit("10/15minutes")
+async def login(request: Request, data: UserLogin):
     user = await db.users.find_one({"email": data.email}, {"_id": 0})
     if not user or not verify_password(data.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    token = create_token(user["id"], user["role"])
+    token = create_token(user["id"], user["role"], user.get("token_version", 0))
     return {
         "token": token,
         "user": {
@@ -5120,7 +5169,12 @@ async def update_staff(staff_id: str, data: StaffUpdate, user=Depends(get_curren
         update_data["cluster_store_ids"] = data.cluster_store_ids
     if not update_data:
         raise HTTPException(status_code=400, detail="No updates provided")
-    await db.users.update_one({"id": staff_id}, {"$set": update_data})
+    update_ops: Dict[str, Any] = {"$set": update_data}
+    if data.is_active is False:
+        # Revoke every outstanding token for the deactivated account
+        # ($inc initializes token_version to 1 when the field is absent).
+        update_ops["$inc"] = {"token_version": 1}
+    await db.users.update_one({"id": staff_id}, update_ops)
     return {"message": "Staff updated"}
 
 @api_router.delete("/staff/{staff_id}")
@@ -5169,7 +5223,7 @@ async def pin_login(data: PinLogin, request: Request):
         record_pin_fail(rl_key, now)
         raise HTTPException(status_code=401, detail="Invalid PIN")
     reset_pin_counter(rl_key)
-    token = create_token(matched_staff["id"], matched_staff["role"])
+    token = create_token(matched_staff["id"], matched_staff["role"], matched_staff.get("token_version", 0))
     return {
         "token": token,
         "user": {
