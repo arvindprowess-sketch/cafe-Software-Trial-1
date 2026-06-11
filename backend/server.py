@@ -6497,6 +6497,9 @@ SETTINGS_DOC_ID = "system"
 DEFAULT_SETTINGS = {
     "hq_value_threshold": HQ_VALUE_THRESHOLD,
     "free_delivery_threshold": float(FREE_DELIVERY_THRESHOLD),
+    # P7: HQ control for the menu "best value" card.
+    # mode: "auto" (client picks min ₹/g protein) | "pin" (show product_id) | "off" (hidden).
+    "value_card": {"mode": "auto", "product_id": None},
 }
 _settings_cache: Optional[dict] = None
 
@@ -6523,6 +6526,8 @@ def _invalidate_settings_cache():
 class SettingsUpdate(BaseModel):
     hq_value_threshold: Optional[float] = None
     free_delivery_threshold: Optional[float] = None
+    # P7: {"mode": "auto"|"pin"|"off", "product_id": optional (required for "pin")}
+    value_card: Optional[Dict[str, Any]] = None
 
 @api_router.get("/admin/settings")
 async def get_admin_settings(user=Depends(get_current_user)):
@@ -6537,7 +6542,19 @@ async def update_admin_settings(data: SettingsUpdate, user=Depends(get_current_u
     if not is_hq(user):
         raise HTTPException(status_code=403, detail="HQ only")
     updates = {k: v for k, v in data.dict().items() if v is not None}
+    # P7: value_card is a dict — validate separately from the numeric thresholds.
+    if "value_card" in updates:
+        vc = updates["value_card"] or {}
+        mode = vc.get("mode")
+        if mode not in ("auto", "pin", "off"):
+            raise HTTPException(status_code=400, detail="value_card.mode must be one of: auto, pin, off")
+        product_id = vc.get("product_id")
+        if mode == "pin" and not product_id:
+            raise HTTPException(status_code=400, detail="value_card.product_id is required when mode is 'pin'")
+        updates["value_card"] = {"mode": mode, "product_id": product_id if mode == "pin" else None}
     for k, v in updates.items():
+        if k == "value_card":
+            continue
         if v < 0:
             raise HTTPException(status_code=400, detail=f"{k} must be >= 0")
     if not updates:
@@ -6551,6 +6568,115 @@ async def update_admin_settings(data: SettingsUpdate, user=Depends(get_current_u
     )
     _invalidate_settings_cache()
     return await get_settings()
+
+# ==========================================================================
+# P7 — ENGAGEMENT PACK
+# A. Saved builds ("My Meals"): customer-owned snapshots of a composed meal.
+# B. Order rating: one rating per completed order, stored on the order doc.
+# C. Value-card control: public read of the HQ-set best-value card mode.
+# ==========================================================================
+
+@api_router.get("/settings/value-card")
+async def get_value_card_public():
+    """PUBLIC (no auth): the menu best-value card control for the customer app."""
+    vc = await get_setting("value_card") or {}
+    return {"mode": vc.get("mode", "auto"), "product_id": vc.get("product_id")}
+
+MAX_SAVED_MEALS_PER_USER = 20
+
+class SavedMealCreate(BaseModel):
+    name: str
+    items: List[Dict[str, Any]]  # same structure as cart/order items
+    macros: Optional[Dict[str, Any]] = None  # {calories, protein, carbs, fat}
+    price_estimate: Optional[float] = None
+
+@api_router.post("/saved-meals")
+async def create_saved_meal(data: SavedMealCreate, user=Depends(get_current_user)):
+    """Customer: save the current build-your-own composition as a reusable meal."""
+    name = (data.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Meal name is required")
+    if len(name) > 60:
+        raise HTTPException(status_code=400, detail="Meal name must be 60 characters or fewer")
+    if not data.items:
+        raise HTTPException(status_code=400, detail="Saved meal must contain at least one item")
+    count = await db.saved_meals.count_documents({"user_id": user["id"]})
+    if count >= MAX_SAVED_MEALS_PER_USER:
+        raise HTTPException(status_code=400, detail=f"You can save up to {MAX_SAVED_MEALS_PER_USER} meals. Delete one to save a new meal.")
+    macros = data.macros or {}
+    def _num(v):
+        try:
+            return float(v or 0)
+        except (TypeError, ValueError):
+            return 0.0
+    doc = {
+        "id": str(uuid.uuid4()),
+        "user_id": user["id"],
+        "name": name,
+        "items": data.items,
+        "macros": {
+            "calories": _num(macros.get("calories")),
+            "protein": _num(macros.get("protein")),
+            "carbs": _num(macros.get("carbs")),
+            "fat": _num(macros.get("fat")),
+        },
+        "price_estimate": _num(data.price_estimate),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.saved_meals.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+@api_router.get("/saved-meals")
+async def list_saved_meals(user=Depends(get_current_user)):
+    """Customer: own saved meals, newest first."""
+    return await db.saved_meals.find({"user_id": user["id"]}, {"_id": 0}) \
+        .sort("created_at", -1).to_list(MAX_SAVED_MEALS_PER_USER)
+
+@api_router.delete("/saved-meals/{meal_id}")
+async def delete_saved_meal(meal_id: str, user=Depends(get_current_user)):
+    """Customer: delete an own saved meal (404 if it isn't yours)."""
+    res = await db.saved_meals.delete_one({"id": meal_id, "user_id": user["id"]})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Saved meal not found")
+    return {"success": True}
+
+# B. Order rating — order-level only (no product-wise rollup).
+# "completed" is the single terminal success status in ORDER_STATUSES
+# (dine-in served / takeaway picked up / delivery delivered all end there).
+RATEABLE_ORDER_STATUSES = {"completed"}
+
+class OrderRatingCreate(BaseModel):
+    stars: int
+    comment: Optional[str] = None
+
+@api_router.post("/orders/{order_id}/rating")
+async def rate_order(order_id: str, data: OrderRatingCreate, user=Depends(get_current_user)):
+    """Customer: rate own completed order once. Stored on the order doc as
+    order.rating = {stars, comment, created_at}.
+
+    NOTE: ratings are collected as a future popularity-ranking signal but are
+    intentionally NOT used in any ranking/popularity computation today."""
+    if data.stars < 1 or data.stars > 5:
+        raise HTTPException(status_code=400, detail="stars must be between 1 and 5")
+    comment = (data.comment or "").strip()
+    if len(comment) > 300:
+        raise HTTPException(status_code=400, detail="Comment must be 300 characters or fewer")
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    # 404 for both missing and not-yours: don't leak other users' order ids.
+    if not order or order.get("user_id") != user["id"]:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if order.get("status") not in RATEABLE_ORDER_STATUSES:
+        raise HTTPException(status_code=400, detail="Only completed orders can be rated")
+    if order.get("rating"):
+        raise HTTPException(status_code=409, detail="Order already rated")
+    rating = {
+        "stars": data.stars,
+        "comment": comment or None,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.orders.update_one({"id": order_id}, {"$set": {"rating": rating}})
+    return {"success": True, "rating": rating}
 
 async def explode_to_raw(target_type: str, ref_id: str, qty: float, store_id: str):
     """Expand a target into the raw inventory_items it consumes from THIS store.

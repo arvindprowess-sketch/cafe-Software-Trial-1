@@ -70,6 +70,12 @@ export default function HomeScreen() {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiMeal, setAiMeal] = useState<any>(null);
 
+  // P7: saved builds ("My Meals")
+  const [savedMeals, setSavedMeals] = useState<any[]>([]);
+  const loadSavedMeals = useCallback(async () => {
+    try { setSavedMeals(await apiCall('/saved-meals')); } catch {}
+  }, []);
+
   // Phase 2/3/4: personalized daily target + coach nudge (from body stats)
   const [dailyTarget, setDailyTarget] = useState<any>(null);
   const [coachNudge, setCoachNudge] = useState<any>(null);
@@ -94,12 +100,14 @@ export default function HomeScreen() {
       ]);
       setUser(u); setSummary(s); setProducts(best); setBanners(b);
       loadTarget();
+      loadSavedMeals();
     } catch (e) {} finally { setLoading(false); }
-  }, [loadTarget]);
+  }, [loadTarget, loadSavedMeals]);
 
   useEffect(() => { loadData(); }, []);
-  // Refresh the personalized target whenever Home regains focus (e.g. after goal-setup)
-  useFocusEffect(useCallback(() => { loadTarget(); }, [loadTarget]));
+  // Refresh the personalized target (and saved meals — e.g. after saving a build)
+  // whenever Home regains focus
+  useFocusEffect(useCallback(() => { loadTarget(); loadSavedMeals(); }, [loadTarget, loadSavedMeals]));
   useEffect(() => {
     AsyncStorage.getItem('delivery_address').then(a => { if (a) setDeliveryAddress(a); }).catch(() => {});
   }, []);
@@ -229,6 +237,32 @@ export default function HomeScreen() {
       diet_type: item.diet_type, image_url: item.image_url,
     })));
     router.push('/cart');
+  };
+
+  // P7: tap a saved meal → all items into the unified cart (same addMeal path
+  // as orderAiMeal; the authoritative stock recheck stays at order placement).
+  const orderSavedMeal = (meal: any) => {
+    if (!meal?.items?.length) return;
+    cartCtx.addMeal(meal.items);
+    hapticSuccess();
+    router.push('/cart');
+  };
+
+  const confirmDeleteSavedMeal = (meal: any) => {
+    Alert.alert('Delete meal?', `Remove "${meal.name}" from My Meals?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete', style: 'destructive',
+        onPress: async () => {
+          try {
+            await apiCall(`/saved-meals/${meal.id}`, { method: 'DELETE' });
+            setSavedMeals(prev => prev.filter(m => m.id !== meal.id));
+          } catch (e: any) {
+            Alert.alert('Error', e?.message || 'Could not delete meal');
+          }
+        },
+      },
+    ]);
   };
 
   // ===== FIX 1: Delivery location detection (expo-location) + manual fallback =====
@@ -788,6 +822,55 @@ export default function HomeScreen() {
           </View>
         )}
 
+        {/* ===== P7: MY MEALS — saved builds, hidden when empty ===== */}
+        {savedMeals.length > 0 && (
+          <>
+            <View style={styles.popularHeaderRow}>
+              <Text style={styles.sectionTitle}>My Meals</Text>
+              <Text style={styles.popularHint}>Saved builds • tap to order</Text>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.myMealsScroll}
+              testID="my-meals-row"
+            >
+              {savedMeals.map((meal) => (
+                <TouchableOpacity
+                  key={meal.id}
+                  testID={`my-meal-${meal.id}`}
+                  style={styles.myMealCard}
+                  onPress={() => orderSavedMeal(meal)}
+                  onLongPress={() => confirmDeleteSavedMeal(meal)}
+                  activeOpacity={0.9}
+                >
+                  <View style={styles.myMealTopRow}>
+                    <Ionicons name="bookmark" size={13} color={FUEL.limeDeep} />
+                    <Text style={styles.myMealName} numberOfLines={1}>{meal.name}</Text>
+                    <TouchableOpacity
+                      testID={`my-meal-delete-${meal.id}`}
+                      onPress={() => confirmDeleteSavedMeal(meal)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Ionicons name="close" size={15} color={FUEL.muted} />
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={styles.myMealMeta}>
+                    {Math.round(meal.macros?.calories || 0)} kcal · <Text style={{ color: FUEL.protein }}>{Math.round(meal.macros?.protein || 0)}g P</Text>
+                  </Text>
+                  <View style={styles.myMealBottomRow}>
+                    <Text style={styles.myMealPrice}>₹{Math.round(meal.price_estimate || 0)}</Text>
+                    <View style={styles.myMealAddChip}>
+                      <Ionicons name="cart" size={11} color={FUEL.ink} />
+                      <Text style={styles.myMealAddText}>ADD</Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </>
+        )}
+
         {/* ===== POPULAR ITEMS — best sellers, 5-row horizontal grid (Swiggy-style) ===== */}
         <View style={styles.popularHeaderRow}>
           <Text style={styles.sectionTitle}>Popular Items</Text>
@@ -1226,6 +1309,17 @@ const styles = StyleSheet.create({
   mealErrorText: { flex: 1, fontFamily: FONT.body, color: FUEL.muted, fontSize: 13, lineHeight: 18 },
   retryBtn: { backgroundColor: FUEL.lime, borderRadius: RADIUS.pill, paddingVertical: SPACE.m, alignItems: 'center', marginTop: SPACE.l },
   retryText: { color: FUEL.ink, fontFamily: FONT.display, fontSize: 14, textTransform: 'uppercase' },
+
+  // P7: My Meals — saved builds row
+  myMealsScroll: { paddingHorizontal: SPACE.l, gap: SPACE.m, paddingBottom: SPACE.xs },
+  myMealCard: { width: 190, backgroundColor: FUEL.white, borderRadius: RADIUS.md, padding: SPACE.m, borderWidth: 1.5, borderColor: FUEL.lime },
+  myMealTopRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.xs },
+  myMealName: { flex: 1, fontFamily: FONT.bodyExtrabold, fontSize: 13, color: FUEL.ink },
+  myMealMeta: { fontFamily: FONT.bodySemibold, fontSize: 11, color: FUEL.muted, marginTop: SPACE.s },
+  myMealBottomRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: SPACE.s },
+  myMealPrice: { fontFamily: FONT.display, fontSize: 16, color: FUEL.ink },
+  myMealAddChip: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: FUEL.lime, borderRadius: RADIUS.lg, paddingHorizontal: SPACE.m, paddingVertical: SPACE.xs },
+  myMealAddText: { fontFamily: FONT.bodyExtrabold, fontSize: 10, color: FUEL.ink, letterSpacing: 0.3 },
 
   // Popular Items — compact cards
   popularScroll: { paddingHorizontal: SPACE.m, gap: SPACE.m },

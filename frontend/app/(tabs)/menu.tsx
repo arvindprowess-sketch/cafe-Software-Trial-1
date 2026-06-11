@@ -82,6 +82,8 @@ export default function MenuScreen() {
   // Protein-left strip: personalized daily target + today's consumption
   const [dailyTarget, setDailyTarget] = useState<any>(null);
   const [nutritionSummary, setNutritionSummary] = useState<any>(null);
+  // P7: HQ value-card control — {mode: 'auto'|'pin'|'off', product_id}; null → auto
+  const [valueCardSetting, setValueCardSetting] = useState<any>(null);
   const userGoal = user?.fitness_goal;
 
   // Handle URL params for category/diet filter (only on initial load)
@@ -97,14 +99,16 @@ export default function MenuScreen() {
 
   const loadProducts = useCallback(async () => {
     try {
-      const [data, u, cats, target, summary] = await Promise.all([
+      const [data, u, cats, target, summary, valueCard] = await Promise.all([
         apiCall('/products'),
         getStoredUser(),
         apiCall('/categories').catch(() => []),
         apiCall('/user/daily-target').catch(() => null),
         apiCall('/user/nutrition-summary').catch(() => null),
+        apiCall('/settings/value-card').catch(() => null), // P7: default auto on failure
       ]);
       setUser(u);
+      setValueCardSetting(valueCard);
       setProducts(data.filter((p: any) => {
         if (p.product_type === 'ready_made') return p.is_active !== false;
         return p.available_qty_grams > 0;
@@ -185,9 +189,22 @@ export default function MenuScreen() {
     return products.filter(p => matchesAnyDiet(p, dietFilter)).slice(0, 6);
   }, [products, dietFilter]);
 
-  // Today's best protein value — CLIENT-SIDE pick: in-stock product with the
-  // minimum price-per-gram-protein (products state already excludes out-of-stock).
+  // Today's best protein value — honours the HQ value-card control (P7):
+  // off → hidden; pin → show the pinned product (fall back to auto when the
+  // pinned product is missing/out-of-stock — products state already excludes
+  // out-of-stock); auto (default) → CLIENT-SIDE pick: in-stock product with
+  // the minimum price-per-gram-protein.
   const bestValue = useMemo(() => {
+    const mode = valueCardSetting?.mode || 'auto';
+    if (mode === 'off') return null;
+    if (mode === 'pin' && valueCardSetting?.product_id) {
+      const pinned = products.find(p => p.id === valueCardSetting.product_id);
+      if (pinned) {
+        const ratio = getPricePerGramProtein(pinned);
+        if (ratio != null) return { product: pinned, ratio };
+      }
+      // pinned product unavailable → fall through to auto
+    }
     let best: any = null;
     let bestRatio = Infinity;
     for (const p of products) {
@@ -195,7 +212,7 @@ export default function MenuScreen() {
       if (ratio != null && ratio < bestRatio) { bestRatio = ratio; best = p; }
     }
     return best ? { product: best, ratio: bestRatio } : null;
-  }, [products]);
+  }, [products, valueCardSetting]);
 
   // Protein left today (hidden when no goal / body stats set)
   const proteinLeft = useMemo(() => {
