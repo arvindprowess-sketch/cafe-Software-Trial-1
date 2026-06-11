@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { apiCall } from '../utils/api';
-import { FUEL, FONT } from '../utils/theme';
+import { FUEL, FONT, RADIUS, SPACE } from '../utils/theme';
 
 export default function NutritionDetailScreen() {
   const router = useRouter();
@@ -323,62 +323,62 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: FUEL.ink,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingHorizontal: SPACE.l,
+    paddingVertical: SPACE.l,
   },
-  backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: FUEL.inkSoft, alignItems: 'center', justifyContent: 'center' },
+  backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: FUEL.inkSoft, alignItems: 'center', justifyContent: 'center' }, // circle
   headerTitle: { fontFamily: FONT.display, fontSize: 18, color: FUEL.sand, textTransform: 'uppercase' },
 
-  summaryCard: { backgroundColor: FUEL.white, margin: 16, borderRadius: 16, padding: 18, borderWidth: 1, borderColor: FUEL.sandBorder },
-  card: { backgroundColor: FUEL.white, marginHorizontal: 16, marginBottom: 16, borderRadius: 16, padding: 18, borderWidth: 1, borderColor: FUEL.sandBorder },
-  cardTitle: { fontFamily: FONT.display, fontSize: 18, color: FUEL.ink, marginBottom: 14, textTransform: 'uppercase' },
+  summaryCard: { backgroundColor: FUEL.white, margin: SPACE.l, borderRadius: RADIUS.md, padding: SPACE.l, borderWidth: 1, borderColor: FUEL.sandBorder },
+  card: { backgroundColor: FUEL.white, marginHorizontal: SPACE.l, marginBottom: SPACE.l, borderRadius: RADIUS.md, padding: SPACE.l, borderWidth: 1, borderColor: FUEL.sandBorder },
+  cardTitle: { fontFamily: FONT.display, fontSize: 18, color: FUEL.ink, marginBottom: SPACE.l, textTransform: 'uppercase' },
 
-  statsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
+  statsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: SPACE.m },
   statBox: { alignItems: 'center' },
-  statLabel: { fontFamily: FONT.bodyMedium, fontSize: 10, color: FUEL.muted, textTransform: 'uppercase', marginBottom: 4 },
+  statLabel: { fontFamily: FONT.bodyMedium, fontSize: 10, color: FUEL.muted, textTransform: 'uppercase', marginBottom: SPACE.xs },
   statValue: { fontFamily: FONT.display, fontSize: 24 },
   statGoal: { fontFamily: FONT.body, fontSize: 11, color: FUEL.muted, marginTop: 2 },
-  mealsCount: { fontFamily: FONT.body, fontSize: 13, color: FUEL.muted, textAlign: 'center', marginTop: 8 },
+  mealsCount: { fontFamily: FONT.body, fontSize: 13, color: FUEL.muted, textAlign: 'center', marginTop: SPACE.s },
 
-  mealItem: { backgroundColor: FUEL.sand, borderRadius: 12, padding: 14, marginBottom: 12 },
-  mealHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
+  mealItem: { backgroundColor: FUEL.sand, borderRadius: RADIUS.md, padding: SPACE.l, marginBottom: SPACE.m },
+  mealHeader: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s, marginBottom: SPACE.m },
   mealTitle: { flex: 1, fontFamily: FONT.bodyExtrabold, fontSize: 16, color: FUEL.ink },
   mealTime: { fontFamily: FONT.body, fontSize: 12, color: FUEL.muted },
-  itemRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },
+  itemRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: SPACE.xs },
   itemName: { flex: 1, fontFamily: FONT.body, fontSize: 13, color: FUEL.ink },
   itemCals: { fontFamily: FONT.bodyBold, fontSize: 13, color: FUEL.ink },
-  mealTotal: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: FUEL.sandBorder },
+  mealTotal: { flexDirection: 'row', justifyContent: 'space-between', marginTop: SPACE.s, paddingTop: SPACE.s, borderTopWidth: 1, borderTopColor: FUEL.sandBorder },
   mealTotalLabel: { fontFamily: FONT.bodyBold, fontSize: 14, color: FUEL.ink },
   mealTotalValue: { fontFamily: FONT.display, fontSize: 16, color: FUEL.ink },
 
-  remainingGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  remainingBox: { width: '47%', backgroundColor: FUEL.sand, borderRadius: 12, padding: 16, alignItems: 'center' },
-  remainingValue: { fontFamily: FONT.display, fontSize: 28, color: FUEL.ink, marginTop: 8 },
-  remainingLabel: { fontFamily: FONT.bodyMedium, fontSize: 11, color: FUEL.muted, textTransform: 'uppercase', marginTop: 4 },
+  remainingGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.m },
+  remainingBox: { width: '47%', backgroundColor: FUEL.sand, borderRadius: RADIUS.md, padding: SPACE.l, alignItems: 'center' },
+  remainingValue: { fontFamily: FONT.display, fontSize: 28, color: FUEL.ink, marginTop: SPACE.s },
+  remainingLabel: { fontFamily: FONT.bodyMedium, fontSize: 11, color: FUEL.muted, textTransform: 'uppercase', marginTop: SPACE.xs },
 
   aiCard: { backgroundColor: FUEL.limeTint, borderColor: FUEL.limeDeep },
-  aiHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
-  aiSuggestion: { fontFamily: FONT.body, fontSize: 14, lineHeight: 22, color: FUEL.ink, marginBottom: 16 },
-  aiLoading: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  aiHeader: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s, marginBottom: SPACE.l },
+  aiSuggestion: { fontFamily: FONT.body, fontSize: 14, lineHeight: 22, color: FUEL.ink, marginBottom: SPACE.l },
+  aiLoading: { flexDirection: 'row', alignItems: 'center', gap: SPACE.m },
   aiLoadingText: { fontFamily: FONT.body, fontSize: 14, color: FUEL.muted },
 
-  recommendedSection: { marginTop: 8 },
-  recommendedTitle: { fontFamily: FONT.bodyExtrabold, fontSize: 14, color: FUEL.ink, marginBottom: 12 },
+  recommendedSection: { marginTop: SPACE.s },
+  recommendedTitle: { fontFamily: FONT.bodyExtrabold, fontSize: 14, color: FUEL.ink, marginBottom: SPACE.m },
   recommendedItem: {
     flexDirection: 'row',
     backgroundColor: FUEL.white,
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 10,
+    borderRadius: RADIUS.md,
+    padding: SPACE.l,
+    marginBottom: SPACE.m,
     borderWidth: 1,
     borderColor: FUEL.sandBorder,
     alignItems: 'center'
   },
-  recommendedLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
-  dietDot: { width: 16, height: 16, borderRadius: 2, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
-  dietDotFill: { width: 8, height: 8, borderRadius: 4 },
+  recommendedLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: SPACE.m },
+  dietDot: { width: 16, height: 16, borderRadius: RADIUS.xs, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  dietDotFill: { width: 8, height: 8, borderRadius: 4 }, // circle
   recommendedName: { fontFamily: FONT.bodyExtrabold, fontSize: 15, color: FUEL.ink, marginBottom: 2 },
-  recommendedReason: { fontFamily: FONT.body, fontSize: 12, color: FUEL.muted, fontStyle: 'italic', marginBottom: 4 },
+  recommendedReason: { fontFamily: FONT.body, fontSize: 12, color: FUEL.muted, fontStyle: 'italic', marginBottom: SPACE.xs },
   recommendedNutrition: { fontFamily: FONT.bodyBold, fontSize: 11, color: FUEL.success },
   recommendedRight: {},
   goToMenuBtn: {
@@ -386,12 +386,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 14,
-    borderRadius: 25,
-    marginTop: 8
+    gap: SPACE.s,
+    paddingVertical: SPACE.l,
+    borderRadius: RADIUS.pill,
+    marginTop: SPACE.s
   },
   goToMenuText: { fontFamily: FONT.display, fontSize: 15, color: FUEL.ink, textTransform: 'uppercase' },
 
-  emptyText: { fontFamily: FONT.body, fontSize: 14, color: FUEL.muted, textAlign: 'center', paddingVertical: 20 },
+  emptyText: { fontFamily: FONT.body, fontSize: 14, color: FUEL.muted, textAlign: 'center', paddingVertical: SPACE.xl },
 });

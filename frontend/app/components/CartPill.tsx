@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { FUEL, FONT } from '../../utils/theme';
+import { FUEL, FONT, RADIUS, SPACE } from '../../utils/theme';
 import { useCart } from '../../utils/CartContext';
 
 // Persistent floating cart pill shown on browsing screens.
@@ -38,16 +38,16 @@ export default function CartPill({ bottom = 80 }: { bottom?: number }) {
 const styles = StyleSheet.create({
   pill: {
     position: 'absolute', left: 16, right: 16,
-    backgroundColor: FUEL.ink, borderRadius: 30,
-    paddingVertical: 12, paddingHorizontal: 18,
+    backgroundColor: FUEL.ink, borderRadius: RADIUS.pill,
+    paddingVertical: SPACE.m, paddingHorizontal: SPACE.l,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 14,
     zIndex: 200,
   },
-  left: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  badge: { width: 34, height: 34, borderRadius: 17, backgroundColor: FUEL.lime, alignItems: 'center', justifyContent: 'center' },
-  title: { color: FUEL.white, fontSize: 13, fontFamily: FONT.bodyExtrabold, fontWeight: '800' },
-  sub: { color: FUEL.lime, fontSize: 15, fontFamily: FONT.display, fontWeight: '800', marginTop: 1 },
-  right: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  viewText: { color: FUEL.lime, fontSize: 14, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
+  left: { flexDirection: 'row', alignItems: 'center', gap: SPACE.m },
+  badge: { width: 34, height: 34, borderRadius: 17, backgroundColor: FUEL.lime, alignItems: 'center', justifyContent: 'center' }, // circle
+  title: { color: FUEL.white, fontSize: 13, fontFamily: FONT.bodyExtrabold },
+  sub: { color: FUEL.lime, fontSize: 15, fontFamily: FONT.display, marginTop: 1 },
+  right: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s },
+  viewText: { color: FUEL.lime, fontSize: 14, fontFamily: FONT.bodyExtrabold, textTransform: 'uppercase', letterSpacing: 0.5 },
 });

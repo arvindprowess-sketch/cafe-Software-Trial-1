@@ -36,6 +36,12 @@ export const FUEL = {
   fatTint: '#E4EEF4',
 } as const;
 
+// Radii — snap every borderRadius to one of these (true circles excepted).
+export const RADIUS = { xs: 6, sm: 10, md: 14, lg: 20, pill: 999 } as const;
+
+// Spacing — padding/margin/gap scale.
+export const SPACE = { xs: 4, s: 8, m: 12, l: 16, xl: 24, xxl: 32 } as const;
+
 // Typography — loaded in app/_layout.tsx via @expo-google-fonts.
 export const FONT = {
   display: 'Anton_400Regular',                 // headings / prices / CTAs (uppercase)

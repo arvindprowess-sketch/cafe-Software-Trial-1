@@ -8,7 +8,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiCall } from '../utils/api';
-import { FUEL, FONT } from '../utils/theme';
+import { FUEL, FONT, RADIUS, SPACE } from '../utils/theme';
 
 type Step = 'phone' | 'otp' | 'name';
 
@@ -349,73 +349,73 @@ export default function AuthScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: FUEL.ink },
-  scroll: { flexGrow: 1, justifyContent: 'center', padding: 24 },
+  scroll: { flexGrow: 1, justifyContent: 'center', padding: SPACE.xl },
 
   // Logo
-  logoSection: { alignItems: 'center', marginBottom: 32 },
-  logoBg: { width: 68, height: 68, borderRadius: 16, backgroundColor: FUEL.lime, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
+  logoSection: { alignItems: 'center', marginBottom: SPACE.xxl },
+  logoBg: { width: 68, height: 68, borderRadius: RADIUS.md, backgroundColor: FUEL.lime, alignItems: 'center', justifyContent: 'center', marginBottom: SPACE.m },
   brand: { fontFamily: FONT.display, fontSize: 40, color: FUEL.sand, textTransform: 'uppercase', letterSpacing: 1 },
 
   // Form Card
-  formCard: { backgroundColor: FUEL.white, borderRadius: 20, padding: 28, shadowColor: FUEL.ink, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 20, elevation: 6 },
+  formCard: { backgroundColor: FUEL.white, borderRadius: RADIUS.lg, padding: SPACE.xxl, shadowColor: FUEL.ink, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 20, elevation: 6 },
 
   // Back button
-  backBtn: { position: 'absolute', top: 16, left: 16, width: 40, height: 40, borderRadius: 20, backgroundColor: FUEL.sand, alignItems: 'center', justifyContent: 'center', zIndex: 10 },
+  backBtn: { position: 'absolute', top: 16, left: 16, width: 40, height: 40, borderRadius: 20, backgroundColor: FUEL.sand, alignItems: 'center', justifyContent: 'center', zIndex: 10 }, // circle
 
   // Icon containers
-  iconContainer: { alignItems: 'center', marginBottom: 20, marginTop: 8 },
-  phoneBg: { width: 80, height: 80, borderRadius: 40, backgroundColor: FUEL.limeTint, alignItems: 'center', justifyContent: 'center' },
-  otpBg: { width: 80, height: 80, borderRadius: 40, backgroundColor: FUEL.limeTint, alignItems: 'center', justifyContent: 'center' },
-  nameBg: { width: 80, height: 80, borderRadius: 40, backgroundColor: FUEL.fatTint, alignItems: 'center', justifyContent: 'center' },
+  iconContainer: { alignItems: 'center', marginBottom: SPACE.xl, marginTop: SPACE.s },
+  phoneBg: { width: 80, height: 80, borderRadius: 40, backgroundColor: FUEL.limeTint, alignItems: 'center', justifyContent: 'center' }, // circle
+  otpBg: { width: 80, height: 80, borderRadius: 40, backgroundColor: FUEL.limeTint, alignItems: 'center', justifyContent: 'center' }, // circle
+  nameBg: { width: 80, height: 80, borderRadius: 40, backgroundColor: FUEL.fatTint, alignItems: 'center', justifyContent: 'center' }, // circle
 
   // Titles
-  title: { fontFamily: FONT.display, fontSize: 24, color: FUEL.ink, textAlign: 'center', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.3 },
-  subtitle: { fontFamily: FONT.body, fontSize: 14, color: FUEL.muted, textAlign: 'center', marginBottom: 24 },
+  title: { fontFamily: FONT.display, fontSize: 24, color: FUEL.ink, textAlign: 'center', marginBottom: SPACE.s, textTransform: 'uppercase', letterSpacing: 0.3 },
+  subtitle: { fontFamily: FONT.body, fontSize: 14, color: FUEL.muted, textAlign: 'center', marginBottom: SPACE.xl },
 
   // Phone input
-  phoneInputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: FUEL.sand, borderRadius: 14, overflow: 'hidden', marginBottom: 16, borderWidth: 1.5, borderColor: FUEL.sandBorder },
-  countryCode: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 14, backgroundColor: FUEL.sandBorder, gap: 6 },
+  phoneInputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: FUEL.sand, borderRadius: RADIUS.md, overflow: 'hidden', marginBottom: SPACE.l, borderWidth: 1.5, borderColor: FUEL.sandBorder },
+  countryCode: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACE.l, paddingVertical: SPACE.l, backgroundColor: FUEL.sandBorder, gap: SPACE.s },
   flag: { fontSize: 18 },
   countryText: { fontFamily: FONT.bodyBold, fontSize: 16, color: FUEL.ink },
-  phoneInput: { flex: 1, fontFamily: FONT.bodySemibold, fontSize: 18, color: FUEL.ink, paddingHorizontal: 14, paddingVertical: 14, letterSpacing: 1 },
+  phoneInput: { flex: 1, fontFamily: FONT.bodySemibold, fontSize: 18, color: FUEL.ink, paddingHorizontal: SPACE.l, paddingVertical: SPACE.l, letterSpacing: 1 },
 
   // OTP input
-  otpContainer: { flexDirection: 'row', justifyContent: 'center', gap: 10, marginBottom: 20 },
-  otpInput: { width: 48, height: 56, borderRadius: 12, backgroundColor: FUEL.sand, borderWidth: 1.5, borderColor: FUEL.sandBorder, textAlign: 'center', fontFamily: FONT.bodyExtrabold, fontSize: 22, color: FUEL.ink },
+  otpContainer: { flexDirection: 'row', justifyContent: 'center', gap: SPACE.m, marginBottom: SPACE.xl },
+  otpInput: { width: 48, height: 56, borderRadius: RADIUS.md, backgroundColor: FUEL.sand, borderWidth: 1.5, borderColor: FUEL.sandBorder, textAlign: 'center', fontFamily: FONT.bodyExtrabold, fontSize: 22, color: FUEL.ink },
   otpInputFilled: { borderColor: FUEL.limeDeep, backgroundColor: FUEL.limeTint },
 
   // Demo OTP box
-  demoOtpBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: FUEL.sand, borderRadius: 12, padding: 12, marginBottom: 16 },
+  demoOtpBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.s, backgroundColor: FUEL.sand, borderRadius: RADIUS.md, padding: SPACE.m, marginBottom: SPACE.l },
   demoOtpText: { fontFamily: FONT.body, fontSize: 13, color: FUEL.muted },
   demoOtpCode: { fontFamily: FONT.bodyExtrabold, fontSize: 16, letterSpacing: 2, color: FUEL.ink },
 
   // Name input
-  nameInput: { backgroundColor: FUEL.sand, borderRadius: 14, padding: 16, fontFamily: FONT.bodySemibold, fontSize: 18, color: FUEL.ink, marginBottom: 16, textAlign: 'center', borderWidth: 1.5, borderColor: FUEL.sandBorder },
+  nameInput: { backgroundColor: FUEL.sand, borderRadius: RADIUS.md, padding: SPACE.l, fontFamily: FONT.bodySemibold, fontSize: 18, color: FUEL.ink, marginBottom: SPACE.l, textAlign: 'center', borderWidth: 1.5, borderColor: FUEL.sandBorder },
 
   // Buttons (lime pill CTA)
-  primaryBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: FUEL.lime, borderRadius: 28, paddingVertical: 16, marginBottom: 12 },
+  primaryBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.s, backgroundColor: FUEL.lime, borderRadius: RADIUS.pill, paddingVertical: SPACE.l, marginBottom: SPACE.m },
   primaryBtnDisabled: { backgroundColor: FUEL.sandBorder },
   primaryBtnText: { color: FUEL.ink, fontFamily: FONT.display, fontSize: 16, textTransform: 'uppercase', letterSpacing: 0.5 },
 
-  resendBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12 },
+  resendBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.s, paddingVertical: SPACE.m },
   resendText: { fontFamily: FONT.bodyBold, fontSize: 14, color: FUEL.limeDeep },
 
   // Divider
-  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 20 },
+  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: SPACE.xl },
   dividerLine: { flex: 1, height: 1, backgroundColor: FUEL.sandBorder },
-  dividerText: { paddingHorizontal: 16, fontFamily: FONT.body, fontSize: 13, color: FUEL.muted },
+  dividerText: { paddingHorizontal: SPACE.l, fontFamily: FONT.body, fontSize: 13, color: FUEL.muted },
 
   // Admin button
-  adminBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: FUEL.limeTint, borderRadius: 14, paddingVertical: 14 },
+  adminBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.s, backgroundColor: FUEL.limeTint, borderRadius: RADIUS.md, paddingVertical: SPACE.l },
   adminBtnText: { fontFamily: FONT.bodyBold, fontSize: 14, color: FUEL.ink },
 
   // Staff button
-  staffBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: FUEL.sand, borderRadius: 14, paddingVertical: 14, marginTop: 10 },
+  staffBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.s, backgroundColor: FUEL.sand, borderRadius: RADIUS.md, paddingVertical: SPACE.l, marginTop: SPACE.m },
   staffBtnText: { fontFamily: FONT.bodyBold, fontSize: 14, color: FUEL.ink },
 
   // Error
-  error: { color: FUEL.error, fontFamily: FONT.bodySemibold, fontSize: 13, textAlign: 'center', marginBottom: 12 },
+  error: { color: FUEL.error, fontFamily: FONT.bodySemibold, fontSize: 13, textAlign: 'center', marginBottom: SPACE.m },
 
   // Terms
-  terms: { fontFamily: FONT.body, fontSize: 11, color: 'rgba(244,241,233,0.5)', textAlign: 'center', marginTop: 24 },
+  terms: { fontFamily: FONT.body, fontSize: 11, color: 'rgba(244,241,233,0.5)', textAlign: 'center', marginTop: SPACE.xl },
 });

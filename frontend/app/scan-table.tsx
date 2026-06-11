@@ -8,7 +8,8 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { apiCall } from '../utils/api';
 
-const Z_RED = '#15140F';
+import { FUEL, FONT, RADIUS, SPACE } from '../utils/theme';
+const Z_RED = FUEL.ink;
 const GREEN = '#3FA34D';
 const PURPLE = '#15140F';
 
@@ -218,28 +219,28 @@ export default function ScanTableScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#15140F' },
+  safe: { flex: 1, backgroundColor: FUEL.ink },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   
   // Header
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 },
-  backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#15140F' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACE.l, paddingVertical: SPACE.m },
+  backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' }, // circle
+  headerTitle: { fontSize: 18, fontFamily: FONT.bodyBold, color: FUEL.ink },
   
   // Permission
-  permissionBox: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40, backgroundColor: '#FFF' },
-  permTitle: { fontSize: 22, fontWeight: '800', color: '#15140F', marginTop: 20 },
-  permDesc: { fontSize: 14, color: '#6B6A5E', textAlign: 'center', marginTop: 8 },
-  permBtn: { backgroundColor: Z_RED, borderRadius: 12, paddingHorizontal: 32, paddingVertical: 14, marginTop: 24 },
-  permBtnText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
-  manualBtn: { marginTop: 16 },
-  manualBtnText: { color: PURPLE, fontSize: 14, fontWeight: '600' },
+  permissionBox: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: SPACE.xxl, backgroundColor: '#FFF' },
+  permTitle: { fontSize: 22, fontFamily: FONT.bodyExtrabold, color: FUEL.ink, marginTop: SPACE.xl },
+  permDesc: { fontSize: 14, color: FUEL.muted, textAlign: 'center', marginTop: SPACE.s },
+  permBtn: { backgroundColor: Z_RED, borderRadius: RADIUS.md, paddingHorizontal: SPACE.xxl, paddingVertical: SPACE.l, marginTop: SPACE.xl },
+  permBtnText: { color: '#FFF', fontSize: 16, fontFamily: FONT.bodyBold },
+  manualBtn: { marginTop: SPACE.l },
+  manualBtnText: { color: PURPLE, fontSize: 14, fontFamily: FONT.bodySemibold },
   
   // Scanner
   scannerContainer: { flex: 1, position: 'relative' },
   camera: { flex: 1 },
-  webFallback: { flex: 1, backgroundColor: '#15140F', alignItems: 'center', justifyContent: 'center' },
-  webFallbackText: { color: '#6B6A5E', fontSize: 14, marginTop: 16 },
+  webFallback: { flex: 1, backgroundColor: FUEL.ink, alignItems: 'center', justifyContent: 'center' },
+  webFallbackText: { color: FUEL.muted, fontSize: 14, marginTop: SPACE.l },
   overlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
   scanFrame: { width: 250, height: 250, position: 'relative' },
   corner: { position: 'absolute', width: 40, height: 40, borderColor: Z_RED, borderWidth: 4 },
@@ -248,32 +249,32 @@ const styles = StyleSheet.create({
   cornerBL: { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0 },
   cornerBR: { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0 },
   loadingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.7)', alignItems: 'center', justifyContent: 'center' },
-  loadingText: { color: '#FFF', fontSize: 14, marginTop: 12 },
+  loadingText: { color: '#FFF', fontSize: 14, marginTop: SPACE.m },
   
   // Bottom
-  bottomInfo: { backgroundColor: '#FFF', padding: 24, borderTopLeftRadius: 24, borderTopRightRadius: 24 },
-  scanHint: { fontSize: 14, color: '#6B6A5E', textAlign: 'center' },
-  manualEntry: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 16, paddingVertical: 12, backgroundColor: '#F1E7E1', borderRadius: 10 },
-  manualEntryText: { color: Z_RED, fontSize: 14, fontWeight: '600' },
+  bottomInfo: { backgroundColor: '#FFF', padding: SPACE.xl, borderTopLeftRadius: RADIUS.lg, borderTopRightRadius: RADIUS.lg },
+  scanHint: { fontSize: 14, color: FUEL.muted, textAlign: 'center' },
+  manualEntry: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.s, marginTop: SPACE.l, paddingVertical: SPACE.m, backgroundColor: FUEL.proteinTint, borderRadius: RADIUS.sm },
+  manualEntryText: { color: Z_RED, fontSize: 14, fontFamily: FONT.bodySemibold },
   
   // Table Card
-  tableCard: { backgroundColor: '#FFF', marginHorizontal: 16, marginTop: 20, borderRadius: 20, padding: 24, alignItems: 'center' },
-  tableIconBg: { width: 80, height: 80, borderRadius: 40, backgroundColor: Z_RED, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
-  tableNumber: { fontSize: 32, fontWeight: '800', color: '#15140F' },
-  tableSeats: { fontSize: 14, color: '#6B6A5E', marginTop: 4 },
-  statusBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#EAF2DD', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, marginTop: 16 },
-  statusText: { color: GREEN, fontSize: 13, fontWeight: '600' },
-  existingOrder: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#EEF1EC', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, marginTop: 12 },
-  existingOrderText: { color: PURPLE, fontSize: 12, fontWeight: '500' },
+  tableCard: { backgroundColor: '#FFF', marginHorizontal: SPACE.l, marginTop: SPACE.xl, borderRadius: RADIUS.lg, padding: SPACE.xl, alignItems: 'center' },
+  tableIconBg: { width: 80, height: 80, borderRadius: 40, backgroundColor: Z_RED, alignItems: 'center', justifyContent: 'center', marginBottom: SPACE.l }, // circle
+  tableNumber: { fontSize: 32, fontFamily: FONT.bodyExtrabold, color: FUEL.ink },
+  tableSeats: { fontSize: 14, color: FUEL.muted, marginTop: SPACE.xs },
+  statusBadge: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s, backgroundColor: FUEL.limeTint, paddingHorizontal: SPACE.l, paddingVertical: SPACE.s, borderRadius: RADIUS.lg, marginTop: SPACE.l },
+  statusText: { color: GREEN, fontSize: 13, fontFamily: FONT.bodySemibold },
+  existingOrder: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s, backgroundColor: FUEL.limeTint, paddingHorizontal: SPACE.l, paddingVertical: SPACE.m, borderRadius: RADIUS.sm, marginTop: SPACE.m },
+  existingOrderText: { color: PURPLE, fontSize: 12, fontFamily: FONT.bodyMedium },
   
   // Actions
-  actions: { padding: 16, gap: 12 },
-  primaryBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: Z_RED, borderRadius: 14, paddingVertical: 16 },
-  primaryBtnText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
-  secondaryBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: '#FFF', borderRadius: 14, paddingVertical: 14, borderWidth: 1.5, borderColor: '#E6E1D4' },
-  secondaryBtnText: { color: '#15140F', fontSize: 15, fontWeight: '600' },
+  actions: { padding: SPACE.l, gap: SPACE.m },
+  primaryBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.m, backgroundColor: Z_RED, borderRadius: RADIUS.md, paddingVertical: SPACE.l },
+  primaryBtnText: { color: '#FFF', fontSize: 16, fontFamily: FONT.bodyBold },
+  secondaryBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.m, backgroundColor: '#FFF', borderRadius: RADIUS.md, paddingVertical: SPACE.l, borderWidth: 1.5, borderColor: FUEL.sandBorder },
+  secondaryBtnText: { color: FUEL.ink, fontSize: 15, fontFamily: FONT.bodySemibold },
   
   // Tip
-  tip: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, padding: 16 },
-  tipText: { color: '#6B6A5E', fontSize: 12 },
+  tip: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.s, padding: SPACE.l },
+  tipText: { color: FUEL.muted, fontSize: 12 },
 });
