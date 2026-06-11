@@ -59,7 +59,14 @@ export async function apiCall(endpoint: string, options: RequestOptions = {}) {
     err.detail = detail;
     throw err;
   }
-  return response.json();
+  const json = await response.json();
+  // P6: fresh CUSTOMER login (any auth flow) -> register this device for push.
+  // Fire-and-forget; dynamic import avoids an api<->push module cycle.
+  if (json?.token && json?.user?.role === 'customer' &&
+      (endpoint === '/auth/otp/verify' || endpoint === '/auth/login' || endpoint === '/auth/register')) {
+    import('./push').then(p => p.registerPushToken()).catch(() => {});
+  }
+  return json;
 }
 
 export async function login(email: string, password: string) {

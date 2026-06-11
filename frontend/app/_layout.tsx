@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View, StyleSheet } from 'react-native';
@@ -14,6 +15,8 @@ import * as Sentry from '@sentry/react-native';
 import { FUEL } from '../utils/theme';
 import { CartProvider } from '../utils/CartContext';
 import { StoreProvider } from '../utils/StoreContext';
+import { getStoredUser } from '../utils/api';
+import { registerPushToken, watchPushTokenRefresh } from '../utils/push';
 
 // Crash reporting — env-gated: no EXPO_PUBLIC_SENTRY_DSN -> skip entirely.
 const sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
@@ -33,6 +36,17 @@ function RootLayout() {
     HankenGrotesk_700Bold,
     HankenGrotesk_800ExtraBold,
   });
+
+  useEffect(() => {
+    // Push registration for already-logged-in customers (fresh logins are
+    // handled by the api.ts auth hook). Permission denied -> silent skip.
+    (async () => {
+      const user = await getStoredUser();
+      if (user?.role === 'customer') registerPushToken();
+    })();
+    const sub = watchPushTokenRefresh();
+    return () => sub.remove();
+  }, []);
 
   return (
     <View style={styles.container}>
