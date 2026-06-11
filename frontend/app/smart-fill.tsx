@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Image,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { apiCall } from '../utils/api';
 import { useCart } from '../utils/CartContext';
-import { FUEL, FONT, getGoal, RADIUS, SPACE } from '../utils/theme';
+import { FUEL, FONT, getGoal, IMG_PLACEHOLDER, RADIUS, SPACE } from '../utils/theme';
 import { DIET_LABEL } from '../utils/diet';
 
 const Z_RED = FUEL.ink;
@@ -226,7 +227,7 @@ export default function SmartFillScreen() {
                     activeOpacity={0.85}
                   >
                     {item.image_url ? (
-                      <Image source={{ uri: item.image_url }} style={styles.dishImg} />
+                      <Image source={{ uri: item.image_url }} style={styles.dishImg} cachePolicy="memory-disk" transition={200} placeholder={IMG_PLACEHOLDER} />
                     ) : (
                       <View style={[styles.dishImg, styles.dishImgPlaceholder]}>
                         <Ionicons name="restaurant" size={22} color="#D0D0D0" />

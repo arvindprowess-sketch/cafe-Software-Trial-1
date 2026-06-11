@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { apiCall } from '../utils/api';
 
-import { FUEL, FONT, RADIUS, SPACE } from '../utils/theme';
+import { FUEL, FONT, IMG_PLACEHOLDER, RADIUS, SPACE } from '../utils/theme';
 const Z_RED = FUEL.ink;
 const GREEN = '#3FA34D';
 
@@ -76,7 +77,7 @@ export default function OfferDetailScreen() {
             <View key={p.id} style={s.productCard} testID={`offer-product-${p.id}`}>
               <View style={s.productRow}>
                 {p.image_url ? (
-                  <Image source={{ uri: p.image_url }} style={s.productImg} />
+                  <Image source={{ uri: p.image_url }} style={s.productImg} cachePolicy="memory-disk" transition={200} placeholder={IMG_PLACEHOLDER} />
                 ) : (
                   <View style={[s.productImg, s.imgPlaceholder]}>
                     <Ionicons name="restaurant" size={24} color="#D0D0D0" />

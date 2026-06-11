@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated, Dimensions, Image, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated, Dimensions, ActivityIndicator, Alert } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { apiCall } from '../utils/api';
 import { useCart } from '../utils/CartContext';
-import { GOALS as FUEL_GOALS, FUEL, FONT, RADIUS, SPACE } from '../utils/theme';
+import { GOALS as FUEL_GOALS, FUEL, FONT, IMG_PLACEHOLDER, RADIUS, SPACE } from '../utils/theme';
 import PressableScale from './components/PressableScale';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -303,7 +304,7 @@ export default function ComboBuilderScreen() {
               <View key={idx} style={s.itemCard} testID={`combo-item-${idx}`}>
                 <View style={s.itemRow}>
                   {item.image_url ? (
-                    <Image source={{ uri: item.image_url }} style={s.itemImg} />
+                    <Image source={{ uri: item.image_url }} style={s.itemImg} cachePolicy="memory-disk" transition={200} placeholder={IMG_PLACEHOLDER} />
                   ) : (
                     <View style={[s.itemImg, s.imgPlaceholder]}>
                       <Ionicons name="restaurant" size={20} color="#D0D0D0" />
