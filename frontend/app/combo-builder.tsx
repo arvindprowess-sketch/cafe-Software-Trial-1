@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import { apiCall } from '../utils/api';
 import { useCart } from '../utils/CartContext';
 import { GOALS as FUEL_GOALS, FUEL, FONT, RADIUS, SPACE } from '../utils/theme';
+import PressableScale from './components/PressableScale';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const Z_RED = '#15140F';
@@ -352,14 +353,15 @@ export default function ComboBuilderScreen() {
       {/* Bottom CTA */}
       {step < 3 && (
         <View style={s.bottomBar}>
-          <TouchableOpacity
+          <PressableScale
+            haptic
             testID="combo-next-btn"
             style={[s.nextBtn, { backgroundColor: step === 2 ? PURPLE : DARK }]}
             onPress={() => step < 2 ? animateStep(step + 1) : generateCombo()}
           >
             <Text style={s.nextText}>{step === 2 ? 'Generate My Combo' : 'Next'}</Text>
             <Ionicons name={step === 2 ? 'sparkles' : 'arrow-forward'} size={18} color="#FFF" />
-          </TouchableOpacity>
+          </PressableScale>
         </View>
       )}
 

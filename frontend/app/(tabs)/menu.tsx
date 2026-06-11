@@ -15,6 +15,13 @@ import { useCart } from '../../utils/CartContext';
 import { DIET_TAGS, DIET_LABEL, matchesDiet, matchesAnyDiet, toggleDietTag } from '../../utils/diet';
 import { goalFitForProduct, sortByGoalFit } from '../../utils/goalFit';
 import CartPill from '../components/CartPill';
+import PressableScale from '../components/PressableScale';
+import * as Haptics from 'expo-haptics';
+
+// PR-C: success haptic on add-to-cart (safe no-op on web)
+const hapticSuccess = () => {
+  try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {}); } catch {}
+};
 
 const { width } = Dimensions.get('window');
 
@@ -325,9 +332,9 @@ export default function MenuScreen() {
                 </TouchableOpacity>
               </View>
             ) : (
-              <TouchableOpacity testID={`add-${item.id}`} style={styles.addBtn} onPress={() => addItem(item)}>
+              <PressableScale haptic testID={`add-${item.id}`} style={styles.addBtn} onPress={() => { addItem(item); hapticSuccess(); }}>
                 <Text style={styles.addBtnText}>ADD +</Text>
-              </TouchableOpacity>
+              </PressableScale>
             )}
           </View>
         </View>
