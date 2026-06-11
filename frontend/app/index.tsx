@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiCall } from '../utils/api';
 import { FUEL, FONT, RADIUS, SPACE } from '../utils/theme';
@@ -326,9 +327,7 @@ export default function AuthScreen() {
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           {/* Logo */}
           <View style={styles.logoSection}>
-            <View style={styles.logoBg}>
-              <Ionicons name="restaurant" size={32} color={FUEL.ink} />
-            </View>
+            <Image source={require('../assets/images/boraroc-monogram.png')} style={styles.logoImg} contentFit="contain" />
             <Text style={styles.brand}>BORAROC</Text>
           </View>
 
@@ -353,7 +352,7 @@ const styles = StyleSheet.create({
 
   // Logo
   logoSection: { alignItems: 'center', marginBottom: SPACE.xxl },
-  logoBg: { width: 68, height: 68, borderRadius: RADIUS.md, backgroundColor: FUEL.lime, alignItems: 'center', justifyContent: 'center', marginBottom: SPACE.m },
+  logoImg: { width: 96, height: 96, marginBottom: SPACE.l },
   brand: { fontFamily: FONT.display, fontSize: 40, color: FUEL.sand, textTransform: 'uppercase', letterSpacing: 1 },
 
   // Form Card
