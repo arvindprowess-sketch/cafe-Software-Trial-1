@@ -2304,6 +2304,11 @@ async def update_order_status(order_id: str, status: str, user=Depends(get_curre
         await notify_order_status(order_id, status)
     except Exception:
         pass
+    # P6: Expo push to the customer's devices — a push failure NEVER fails the update.
+    try:
+        await send_order_status_push(order, status)
+    except Exception as e:
+        logger.error(f"[push] order status push failed for {order_id}: {e}")
     # Real-time propagation to this store's staff panels + the customer's tracking screen (C1/C2)
     await broadcast_event("order_status", order, store_id=order.get("store_id"))
     if order.get("user_id"):
@@ -4930,6 +4935,100 @@ Respond ONLY in JSON: {{"adjusted_items": [{{"name": "...", "original_grams": 10
             new_grams = max(50, round(i['grams'] * ratio / 25) * 25)
             adjusted.append({"name": i["name"], "original_grams": i["grams"], "adjusted_grams": new_grams, "reason": "Proportional reduction"})
         return {"adjusted_items": adjusted, "summary": "Portions reduced proportionally to fit your calorie goal", "new_total_calories": round(total_cal * ratio), "calorie_goal": round(remaining_cal), "saved_calories": round(total_cal * (1 - ratio))}
+
+# ========== P6 PUSH NOTIFICATIONS (Expo, multi-device) ==========
+EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send"
+
+class UserPushTokenRequest(BaseModel):
+    token: str
+    platform: Optional[str] = "unknown"
+
+@api_router.post("/users/push-token")
+async def save_user_push_token(data: UserPushTokenRequest, user=Depends(get_current_user)):
+    """Save an Expo push token on the user doc. Multi-device: array, deduped by token."""
+    token = (data.token or "").strip()
+    if not token:
+        raise HTTPException(status_code=400, detail="token is required")
+    # Dedupe: drop any existing entry for this token, then append the fresh one.
+    await db.users.update_one({"id": user["id"]}, {"$pull": {"push_tokens": {"token": token}}})
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$push": {"push_tokens": {
+            "token": token,
+            "platform": (data.platform or "unknown"),
+            "registered_at": datetime.now(timezone.utc).isoformat(),
+        }}},
+    )
+    return {"message": "Push token saved"}
+
+async def _post_expo_push(messages: list) -> list:
+    """POST one chunk (<=100 messages) to Expo; returns the per-message tickets."""
+    import aiohttp
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            EXPO_PUSH_URL, json=messages,
+            headers={"Accept": "application/json", "Content-Type": "application/json"},
+            timeout=aiohttp.ClientTimeout(total=10),
+        ) as resp:
+            payload = await resp.json()
+            return payload.get("data", []) if isinstance(payload, dict) else []
+
+async def send_push(user_id: str, title: str, body: str, data: Optional[dict] = None):
+    """Expo push to every registered device of user_id, chunked <=100 per request.
+    DeviceNotRegistered tokens are removed from the user doc. Failures are
+    logged and swallowed — push must never break the operation that fired it."""
+    try:
+        target = await db.users.find_one({"id": user_id}, {"_id": 0})
+        if not target:
+            return
+        tokens = [t.get("token") for t in (target.get("push_tokens") or []) if t.get("token")]
+        legacy = target.get("expo_push_token")  # pre-P6 single-token field
+        if legacy and legacy not in tokens:
+            tokens.append(legacy)
+        if not tokens:
+            return
+        for i in range(0, len(tokens), 100):  # Expo hard limit: 100 messages/request
+            chunk = tokens[i:i + 100]
+            messages = [{"to": t, "title": title, "body": body, "data": data or {}} for t in chunk]
+            try:
+                tickets = await _post_expo_push(messages)
+            except Exception as e:
+                logger.error(f"[push] Expo request failed for user {user_id}: {e}")
+                continue
+            for t, ticket in zip(chunk, tickets):
+                if not (isinstance(ticket, dict) and ticket.get("status") == "error"):
+                    continue
+                err = (ticket.get("details") or {}).get("error") or ticket.get("message")
+                logger.warning(f"[push] ticket error for user {user_id}: {err}")
+                if (ticket.get("details") or {}).get("error") == "DeviceNotRegistered":
+                    await db.users.update_one({"id": user_id}, {"$pull": {"push_tokens": {"token": t}}})
+                    if t == legacy:
+                        await db.users.update_one({"id": user_id}, {"$unset": {"expo_push_token": ""}})
+    except Exception as e:
+        logger.error(f"[push] send_push failed for user {user_id}: {e}")
+
+# Customer-facing status pushes (P6). out_for_delivery only applies to delivery orders.
+ORDER_PUSH_MESSAGES = {
+    "accepted": ("Order accepted ✅", "Order #{oid} is confirmed and queued."),
+    "ready": ("Order ready ⚡ FUEL pe aa jao", "Order #{oid} is ready for you!"),
+    "out_for_delivery": ("Rider nikal gaya 🛵", "Order #{oid} is on its way."),
+    "completed": ("Enjoy! 💪", "Order #{oid} served — thanks for fueling with us!"),
+}
+
+async def send_order_status_push(order: dict, status: str):
+    """Push the 4 customer-facing status updates; skip the delivery-only status
+    for dine-in/takeaway orders."""
+    if status not in ORDER_PUSH_MESSAGES:
+        return
+    if status == "out_for_delivery" and order.get("order_type") != "delivery":
+        return
+    if not order.get("user_id"):
+        return
+    title, body_tpl = ORDER_PUSH_MESSAGES[status]
+    await send_push(
+        order["user_id"], title, body_tpl.format(oid=str(order.get("id", ""))[:8]),
+        {"type": "order_status", "order_id": order.get("id"), "status": status},
+    )
 
 # ========== ENHANCED PUSH: Auto-notify on order status ==========
 async def notify_order_status(order_id: str, status: str):
