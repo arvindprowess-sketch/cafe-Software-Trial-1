@@ -16,26 +16,45 @@ import { DIET_TAGS, DIET_LABEL, matchesDiet, matchesAnyDiet, toggleDietTag } fro
 import { goalFitForProduct, sortByGoalFit } from '../../utils/goalFit';
 import CartPill from '../components/CartPill';
 
-// BK Design System Colors
-const BK_RED = '#15140F';
-const BK_ORANGE = '#15140F';
-const BK_BROWN = '#15140F';
-const BK_CREAM = '#F4F1E9';
-const BK_GREEN = '#3FA34D';
-const BK_WHITE = '#FFFFFF';
-const BK_TEXT_LIGHT = '#6B6A5E';
-const Z_RED = BK_RED;
-const GREEN = BK_GREEN;
-const PURPLE = BK_RED;
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
 // Default categories (used as fallback if no DB categories)
 const DEFAULT_CATS = [
-  { key: 'Protein', label: 'Protein', icon: 'barbell', color: Z_RED, image_url: 'https://images.unsplash.com/photo-1632778149955-e80f8ceca2e8?w=80&h=80&fit=crop' },
-  { key: 'Carb', label: 'Carbs', icon: 'leaf', color: '#D69A35', image_url: 'https://images.unsplash.com/photo-1536304929831-ee1ca9d44726?w=80&h=80&fit=crop' },
-  { key: 'Fat', label: 'Fats', icon: 'water', color: PURPLE, image_url: 'https://images.unsplash.com/photo-1523049673857-eb18f1d7b578?w=80&h=80&fit=crop' },
-  { key: 'Meal', label: 'Meals', icon: 'fast-food', color: GREEN, image_url: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=80&h=80&fit=crop' },
+  { key: 'Protein', label: 'Protein', icon: 'barbell', color: FUEL.protein, image_url: 'https://images.unsplash.com/photo-1632778149955-e80f8ceca2e8?w=80&h=80&fit=crop' },
+  { key: 'Carb', label: 'Carbs', icon: 'leaf', color: FUEL.carbs, image_url: 'https://images.unsplash.com/photo-1536304929831-ee1ca9d44726?w=80&h=80&fit=crop' },
+  { key: 'Fat', label: 'Fats', icon: 'water', color: FUEL.fat, image_url: 'https://images.unsplash.com/photo-1523049673857-eb18f1d7b578?w=80&h=80&fit=crop' },
+  { key: 'Meal', label: 'Meals', icon: 'fast-food', color: FUEL.success, image_url: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=80&h=80&fit=crop' },
 ];
+
+// Budget pills — CLIENT-SIDE price filter on the displayed price of a default serving
+const BUDGET_PILLS = [
+  { key: '150', label: 'UNDER ₹150', cap: 150 },
+  { key: '250', label: 'UNDER ₹250', cap: 250 },
+  { key: '400', label: 'UNDER ₹400', cap: 400 },
+  { key: 'all', label: 'ALL', cap: null as number | null },
+];
+
+// Displayed price of a default serving — same formula the product rows use
+const getDisplayPrice = (p: any) => {
+  const isReadyMade = p.product_type === 'ready_made';
+  return isReadyMade
+    ? (p.fixed_price || Math.round(p.cost_per_100g * (p.serving_grams || 300) / 100))
+    : p.cost_per_100g;
+};
+
+// Protein grams in that same default serving (for ₹/g-protein value)
+const getServingProtein = (p: any) => {
+  const isReadyMade = p.product_type === 'ready_made';
+  return isReadyMade
+    ? (p.protein_per_100g || 0) * (p.serving_grams || 300) / 100
+    : (p.protein_per_100g || 0);
+};
+
+const getPricePerGramProtein = (p: any): number | null => {
+  const protein = getServingProtein(p);
+  if (!protein || protein <= 0) return null;
+  return getDisplayPrice(p) / protein;
+};
 
 export default function MenuScreen() {
   const router = useRouter();
@@ -51,6 +70,11 @@ export default function MenuScreen() {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [dietFilter, setDietFilter] = useState<string[]>([]);
+  const [budgetCap, setBudgetCap] = useState<number | null>(null);
+  const [wallExpanded, setWallExpanded] = useState(false);
+  // Protein-left strip: personalized daily target + today's consumption
+  const [dailyTarget, setDailyTarget] = useState<any>(null);
+  const [nutritionSummary, setNutritionSummary] = useState<any>(null);
   const userGoal = user?.fitness_goal;
 
   // Handle URL params for category/diet filter (only on initial load)
@@ -59,22 +83,27 @@ export default function MenuScreen() {
       setSelectedCat(params.category as string);
     }
     if (params.dietFilter) {
-      setDietFilter(params.dietFilter as 'veg' | 'non-veg');
+      // Param arrives as a string ('veg' | 'non-veg'); diet filter state is a tag array.
+      setDietFilter(Array.isArray(params.dietFilter) ? params.dietFilter : [params.dietFilter as string]);
     }
   }, []); // Only run once on mount
 
   const loadProducts = useCallback(async () => {
-    try { 
-      const [data, u, cats] = await Promise.all([
+    try {
+      const [data, u, cats, target, summary] = await Promise.all([
         apiCall('/products'),
         getStoredUser(),
-        apiCall('/categories').catch(() => [])
+        apiCall('/categories').catch(() => []),
+        apiCall('/user/daily-target').catch(() => null),
+        apiCall('/user/nutrition-summary').catch(() => null),
       ]);
       setUser(u);
       setProducts(data.filter((p: any) => {
         if (p.product_type === 'ready_made') return p.is_active !== false;
         return p.available_qty_grams > 0;
       }));
+      setDailyTarget(target);
+      setNutritionSummary(summary);
       // Merge DB categories with defaults
       if (cats && cats.length > 0) {
         setCategories(cats);
@@ -94,34 +123,34 @@ export default function MenuScreen() {
   // addItem(product) handles single (+100g) vs ready-made (+1 plate);
   // incItem/decItem drive the stepper.
 
+  // Category match — identical semantics to the old chip filter
+  const matchesCategory = (p: any, cat: string) => {
+    if (!cat) return true;
+    if (cat === 'veg') return p.diet_type === 'veg';
+    if (cat === 'non-veg') return p.diet_type === 'non-veg';
+    if (cat === 'Meal') return p.product_type === 'ready_made' || p.category === 'Meal';
+    return p.category === cat;
+  };
+
   // Filter products (memoized for performance)
   const filtered = useMemo(() => {
     const list = products.filter(p => {
       // Search filter
       const searchMatch = !search || p.name.toLowerCase().includes(search.toLowerCase());
       if (!searchMatch) return false;
-      
+
       // Diet type filter (multi-select tags, AND semantics)
       if (!matchesDiet(p, dietFilter)) return false;
-      
+
+      // Budget pill filter (client-side, on the displayed serving price)
+      if (budgetCap != null && getDisplayPrice(p) > budgetCap) return false;
+
       // Category filter
-      if (!selectedCat) return true;
-      
-      // Handle special categories
-      if (selectedCat === 'veg') return p.diet_type === 'veg';
-      if (selectedCat === 'non-veg') return p.diet_type === 'non-veg';
-      
-      // Meal category - show ready-made meals OR products in Meal category
-      if (selectedCat === 'Meal') {
-        return p.product_type === 'ready_made' || p.category === 'Meal';
-      }
-      
-      // Standard category matching
-      return p.category === selectedCat;
+      return matchesCategory(p, selectedCat);
     });
     // Phase 3: sort goal-fit dishes first (only when the user has a personalized goal)
     return userGoal ? sortByGoalFit(list, userGoal) : list;
-  }, [products, search, dietFilter, selectedCat, userGoal]);
+  }, [products, search, dietFilter, selectedCat, budgetCap, userGoal]);
 
   // PR-1: group the visible list by subcategory in canonical order (display only).
   // Headers are injected as sentinel rows; products without a known subcategory
@@ -149,40 +178,59 @@ export default function MenuScreen() {
     return products.filter(p => matchesAnyDiet(p, dietFilter)).slice(0, 6);
   }, [products, dietFilter]);
 
+  // Today's best protein value — CLIENT-SIDE pick: in-stock product with the
+  // minimum price-per-gram-protein (products state already excludes out-of-stock).
+  const bestValue = useMemo(() => {
+    let best: any = null;
+    let bestRatio = Infinity;
+    for (const p of products) {
+      const ratio = getPricePerGramProtein(p);
+      if (ratio != null && ratio < bestRatio) { bestRatio = ratio; best = p; }
+    }
+    return best ? { product: best, ratio: bestRatio } : null;
+  }, [products]);
+
+  // Protein left today (hidden when no goal / body stats set)
+  const proteinLeft = useMemo(() => {
+    if (!dailyTarget?.has_body_stats || !dailyTarget?.daily_protein) return null;
+    const consumed = nutritionSummary?.consumed?.protein || 0;
+    return Math.max(0, Math.round(dailyTarget.daily_protein - consumed));
+  }, [dailyTarget, nutritionSummary]);
+
   const goCustomize = () => {
     if (cartCount === 0) { Alert.alert('Empty Cart', 'Add items first'); return; }
     router.push('/cart');
   };
 
-  // Render left sidebar category card
-  const renderSidebarCat = (cat: any, index: number) => {
-    // Use name for filtering consistency (products use category name, not key)
-    const catValue = cat.name;
+  // ===== Category wall (2-column grid replacing the old chip rail) =====
+  const catValueOf = (cat: any) => cat.name || cat.key;
+  const countFor = (cat: any) => products.filter(p => matchesCategory(p, catValueOf(cat))).length;
+
+  const WALL_MAX = 6;
+  const showAllTile = categories.length > WALL_MAX;
+  const visibleCats = (wallExpanded || !showAllTile) ? categories : categories.slice(0, WALL_MAX - 1);
+  const hiddenCount = categories.length - (WALL_MAX - 1);
+
+  const renderWallTile = (cat: any, index: number) => {
+    const catValue = catValueOf(cat);
     const isActive = selectedCat === catValue;
-    const catColor = cat.color || '#15140F';
-    const fontStyleProp = cat.font_style === 'bold' ? { fontWeight: '800' as const } : cat.font_style === 'italic' ? { fontStyle: 'italic' as const } : cat.font_style === 'mono' ? { fontFamily: 'monospace' } : {};
+    const isFirst = index === 0;
+    const fontStyleProp = cat.font_style === 'italic' ? { fontStyle: 'italic' as const } : cat.font_style === 'mono' ? { fontFamily: 'monospace' } : {};
     return (
       <TouchableOpacity
         key={cat.id || catValue}
         testID={`sidebar-cat-${catValue}`}
-        style={[styles.sidebarCat, isActive && styles.sidebarCatActive]}
-        onPress={() => {
-          console.log('Category clicked:', catValue, 'Current:', selectedCat);
-          setSelectedCat(prev => prev === catValue ? '' : catValue);
-        }}
-        activeOpacity={0.8}
+        style={[styles.wallTile, isFirst && styles.wallTileFirst, isActive && styles.wallTileActive]}
+        onPress={() => setSelectedCat(prev => prev === catValue ? '' : catValue)}
+        activeOpacity={0.85}
       >
-        {cat.image_url ? (
-          <Image source={{ uri: cat.image_url }} style={styles.sidebarCatImg} />
-        ) : (
-          <View style={[styles.sidebarCatIcon, { backgroundColor: catColor }]}>
-            <Ionicons name={(cat.icon || 'grid') as any} size={24} color="#FFF" />
-          </View>
-        )}
-        <Text style={[styles.sidebarCatLabel, isActive && { color: catColor, fontWeight: '800' }, fontStyleProp]} numberOfLines={2}>
-          {cat.label || cat.name}
-        </Text>
-        {isActive && <View style={[styles.sidebarActiveBar, { backgroundColor: catColor }]} />}
+        <View style={styles.wallTileTop}>
+          <Text style={[styles.wallTileTitle, isFirst && styles.wallTileTitleFirst, fontStyleProp]} numberOfLines={2}>
+            {cat.label || cat.name}
+          </Text>
+          {isActive && <Ionicons name="checkmark-circle" size={18} color={isFirst ? FUEL.lime : FUEL.limeDeep} />}
+        </View>
+        <Text style={[styles.wallTileCount, isFirst && styles.wallTileCountFirst]}>{countFor(cat)} ITEMS</Text>
       </TouchableOpacity>
     );
   };
@@ -198,81 +246,48 @@ export default function MenuScreen() {
     return renderProduct({ item });
   };
 
-  // Render product card (ENHANCED)
+  // Render product row — photo left + ₹/g-protein badge + macros + ADD
   const renderProduct = ({ item }: { item: any }) => {
     const inCart = getItem(item.id);
     const isReadyMade = item.product_type === 'ready_made';
-    const displayPrice = isReadyMade 
-      ? (item.fixed_price || Math.round(item.cost_per_100g * (item.serving_grams || 300) / 100))
-      : item.cost_per_100g;
+    const displayPrice = getDisplayPrice(item);
     const priceUnit = isReadyMade ? '' : '/100g';
-    
-    // Smart badges logic
-    const isHighProtein = item.protein_per_100g >= 20;
-    const isUnderBudget = item.cost_per_100g <= 50;
-    const showSmartBadge = isHighProtein || isUnderBudget;
+    const valuePerGram = getPricePerGramProtein(item);
+
     // Phase 3: goal-fit flag for the user's current goal
     const goalFit = userGoal ? goalFitForProduct(item, userGoal) : null;
-    
+
     return (
       <View style={styles.productCard} testID={`product-${item.id}`}>
-        {/* Product Image with Badges */}
+        {/* Photo (72px, rounded) with ₹/g-protein badge */}
         <View style={styles.productImageWrapper}>
           {item.image_url ? (
             <Image source={{ uri: item.image_url }} style={styles.productImage} />
           ) : (
             <View style={[styles.productImage, styles.productImagePlaceholder]}>
-              <Ionicons name={isReadyMade ? 'fast-food' : 'restaurant'} size={32} color="#D0D0D0" />
+              <Ionicons name={isReadyMade ? 'fast-food' : 'restaurant'} size={26} color={FUEL.sandBorder} />
             </View>
           )}
-          
-          {/* Smart Badge (High Protein or Budget) */}
-          {showSmartBadge && (
-            <View style={[styles.smartBadge, { backgroundColor: isHighProtein ? BK_BROWN : BK_GREEN }]}>
-              <Ionicons name={isHighProtein ? 'barbell' : 'wallet'} size={10} color="#FFF" />
-              <Text style={styles.smartBadgeText}>{isHighProtein ? 'HIGH PROTEIN' : 'BUDGET'}</Text>
+          {valuePerGram != null && (
+            <View style={styles.valueBadge} testID={`value-badge-${item.id}`}>
+              <Text style={styles.valueBadgeText}>₹{valuePerGram.toFixed(1)}/g P</Text>
             </View>
           )}
-          
-          {/* Protein Badge (BK style) */}
-          <View style={styles.proteinBadge}>
-            <Text style={styles.proteinValue}>{item.protein_per_100g}g</Text>
-            <Text style={styles.proteinLabel}>Protein</Text>
-          </View>
-          
-          {/* Ready-made vs Build-your-own tag */}
-          <View style={[styles.typeTag, isReadyMade ? styles.typeTagMeal : styles.typeTagBuild]}>
-            <Ionicons name={isReadyMade ? 'fast-food' : 'construct'} size={9} color={isReadyMade ? '#FFF' : FUEL.ink} />
-            <Text style={[styles.typeTagText, !isReadyMade && { color: FUEL.ink }]}>{isReadyMade ? 'READY-MADE' : 'BUILD'}</Text>
-          </View>
         </View>
-        
+
         {/* Product Info */}
         <View style={styles.productInfo}>
           <View style={styles.productHeader}>
             <Text style={styles.productName} numberOfLines={2}>{item.name}</Text>
             {/* Veg/Non-veg indicator */}
-            <View style={[styles.vegIndicator, { borderColor: item.diet_type === 'non-veg' ? Z_RED : GREEN }]}>
-              <View style={[styles.vegDot, { backgroundColor: item.diet_type === 'non-veg' ? Z_RED : GREEN }]} />
+            <View style={[styles.vegIndicator, { borderColor: item.diet_type === 'non-veg' ? FUEL.nonVeg : FUEL.veg }]}>
+              <View style={[styles.vegDot, { backgroundColor: item.diet_type === 'non-veg' ? FUEL.nonVeg : FUEL.veg }]} />
             </View>
           </View>
-          
-          <Text style={styles.productDesc} numberOfLines={2}>
+
+          <Text style={styles.productDesc} numberOfLines={1}>
             {item.description || `${item.category} • ${item.calories_per_100g} cal${priceUnit}`}
           </Text>
-
-          {/* Macro chips (P / C / F) — color-coded per-100g nutrition */}
-          <View style={styles.macroChips}>
-            <View style={[styles.macroChip, { backgroundColor: FUEL.proteinTint }]}>
-              <Text style={[styles.macroChipText, { color: FUEL.protein }]}>P {Math.round(item.protein_per_100g || 0)}g</Text>
-            </View>
-            <View style={[styles.macroChip, { backgroundColor: FUEL.carbsTint }]}>
-              <Text style={[styles.macroChipText, { color: '#9A6E1E' }]}>C {Math.round(item.carbs_per_100g || 0)}g</Text>
-            </View>
-            <View style={[styles.macroChip, { backgroundColor: FUEL.fatTint }]}>
-              <Text style={[styles.macroChipText, { color: '#3E6E8A' }]}>F {Math.round(item.fat_per_100g || 0)}g</Text>
-            </View>
-          </View>
 
           {/* Phase 3: "Fits your goal" badge */}
           {goalFit?.fits && (
@@ -282,23 +297,36 @@ export default function MenuScreen() {
             </View>
           )}
 
+          {/* Macro chips (P / C / F) — color-coded per-100g nutrition */}
+          <View style={styles.macroChips}>
+            <View style={[styles.macroChip, { backgroundColor: FUEL.proteinTint }]}>
+              <Text style={[styles.macroChipText, { color: FUEL.protein }]}>P {Math.round(item.protein_per_100g || 0)}g</Text>
+            </View>
+            <View style={[styles.macroChip, { backgroundColor: FUEL.carbsTint }]}>
+              <Text style={[styles.macroChipText, { color: FUEL.carbs }]}>C {Math.round(item.carbs_per_100g || 0)}g</Text>
+            </View>
+            <View style={[styles.macroChip, { backgroundColor: FUEL.fatTint }]}>
+              <Text style={[styles.macroChipText, { color: FUEL.fat }]}>F {Math.round(item.fat_per_100g || 0)}g</Text>
+            </View>
+          </View>
+
           {/* Price and Add Button Row */}
           <View style={styles.productFooter}>
-            <Text style={styles.productPrice}>₹ {displayPrice}{priceUnit && <Text style={styles.priceUnit}>{priceUnit}</Text>}</Text>
-            
+            <Text style={styles.productPrice}>₹{displayPrice}{priceUnit ? <Text style={styles.priceUnit}>{priceUnit}</Text> : null}</Text>
+
             {inCart ? (
-              <View style={[styles.qtyBox, isReadyMade && { backgroundColor: PURPLE }]}>
+              <View style={styles.qtyBox}>
                 <TouchableOpacity testID={`minus-${item.id}`} style={styles.qtyBtn} onPress={() => decItem(item.id)}>
-                  <Ionicons name="remove" size={14} color="#FFF" />
+                  <Ionicons name="remove" size={14} color={FUEL.lime} />
                 </TouchableOpacity>
                 <Text style={styles.qtyText}>{isReadyMade ? inCart.quantity : `${inCart.grams}g`}</Text>
                 <TouchableOpacity testID={`plus-${item.id}`} style={styles.qtyBtn} onPress={() => incItem(item.id)}>
-                  <Ionicons name="add" size={14} color="#FFF" />
+                  <Ionicons name="add" size={14} color={FUEL.lime} />
                 </TouchableOpacity>
               </View>
             ) : (
               <TouchableOpacity testID={`add-${item.id}`} style={styles.addBtn} onPress={() => addItem(item)}>
-                <Text style={styles.addBtnText}>Add +</Text>
+                <Text style={styles.addBtnText}>ADD +</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -307,39 +335,41 @@ export default function MenuScreen() {
     );
   };
 
-  if (loading) return <SafeAreaView style={styles.safe}><View style={styles.center}><ActivityIndicator size="large" color={Z_RED} /></View></SafeAreaView>;
+  if (loading) return <SafeAreaView style={styles.safe}><View style={styles.center}><ActivityIndicator size="large" color={FUEL.ink} /></View></SafeAreaView>;
 
-  return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      {/* Side Drawer */}
-      <SideDrawer visible={drawerVisible} onClose={() => setDrawerVisible(false)} user={user} />
-      
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.menuBtn} onPress={() => setDrawerVisible(true)}>
-          <Ionicons name="menu" size={24} color="#F4F1E9" />
-        </TouchableOpacity>
-        <Text style={styles.title}>Our Menu</Text>
-        <TouchableOpacity style={styles.searchBtn} onPress={() => {}}>
-          <Ionicons name="search" size={22} color={FUEL.lime} />
-        </TouchableOpacity>
-      </View>
-      
-      {/* Search Bar (collapsible) */}
-      <View style={styles.searchBar}>
-        <Ionicons name="search" size={18} color="#9C9C9C" />
-        <TextInput
-          style={styles.searchInput}
-          value={search}
-          onChangeText={setSearch}
-          placeholder="Search menu..."
-          placeholderTextColor="#B0B0B0"
-        />
-        {search ? (
-          <TouchableOpacity onPress={() => setSearch('')}>
-            <Ionicons name="close-circle" size={18} color="#9C9C9C" />
-          </TouchableOpacity>
-        ) : null}
+  // ===== Scrolling header: hero + diet chips + category wall + best-value card =====
+  const listHeader = (
+    <View>
+      {/* HERO — ink, rounded bottom */}
+      <View style={styles.hero}>
+        <Text style={styles.heroLine1}>FIT YOUR BUDGET.</Text>
+        <Text style={styles.heroLine2}>FUEL YOUR GOAL.</Text>
+
+        {proteinLeft != null && (
+          <View style={styles.proteinStrip} testID="protein-left-strip">
+            <Ionicons name="flash" size={13} color={FUEL.lime} />
+            <Text style={styles.proteinStripText}>
+              <Text style={styles.proteinStripValue}>{proteinLeft}g</Text> protein left today
+            </Text>
+          </View>
+        )}
+
+        <View style={styles.budgetRow}>
+          {BUDGET_PILLS.map(pill => {
+            const active = budgetCap === pill.cap;
+            return (
+              <TouchableOpacity
+                key={pill.key}
+                testID={`budget-pill-${pill.key}`}
+                style={[styles.budgetPill, active && styles.budgetPillActive]}
+                onPress={() => setBudgetCap(pill.cap)}
+                activeOpacity={0.85}
+              >
+                <Text style={[styles.budgetPillText, active && styles.budgetPillTextActive]}>{pill.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
       </View>
 
       {/* Diet filter — multi-select chips */}
@@ -350,12 +380,12 @@ export default function MenuScreen() {
             style={[styles.dietToggleBtn, dietFilter.length === 0 && styles.dietToggleBtnAllActive]}
             onPress={() => setDietFilter([])}
           >
-            <Ionicons name="apps" size={14} color={dietFilter.length === 0 ? '#FFF' : '#696969'} />
+            <Ionicons name="apps" size={14} color={dietFilter.length === 0 ? FUEL.lime : FUEL.muted} />
             <Text style={[styles.dietToggleText, dietFilter.length === 0 && styles.dietToggleTextActive]}>All</Text>
           </TouchableOpacity>
           {DIET_TAGS.map(tag => {
             const on = dietFilter.includes(tag);
-            const accent = tag === 'non-veg' ? Z_RED : GREEN;
+            const accent = tag === 'non-veg' ? FUEL.nonVeg : FUEL.veg;
             return (
               <TouchableOpacity
                 key={tag}
@@ -363,70 +393,139 @@ export default function MenuScreen() {
                 style={[styles.dietToggleBtn, on && { backgroundColor: accent, borderColor: accent }]}
                 onPress={() => setDietFilter(prev => toggleDietTag(prev, tag))}
               >
-                <View style={[styles.dietToggleDot, { backgroundColor: on ? '#FFF' : accent, borderColor: on ? '#FFF' : accent }]} />
-                <Text style={[styles.dietToggleText, on && { color: '#FFF', fontWeight: '800' }]}>{DIET_LABEL[tag]}</Text>
+                <View style={[styles.dietToggleDot, { backgroundColor: on ? FUEL.white : accent, borderColor: on ? FUEL.white : accent }]} />
+                <Text style={[styles.dietToggleText, on && { color: FUEL.white, fontFamily: FONT.bodyExtrabold }]}>{DIET_LABEL[tag]}</Text>
               </TouchableOpacity>
             );
           })}
         </ScrollView>
       </View>
 
-      {/* Main Content: Left Sidebar + Right Product List */}
-      <View style={styles.mainContent}>
-        {/* Left Sidebar Categories - Fixed Width */}
-        <View style={styles.sidebarContainer}>
-          <ScrollView 
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.sidebarContent}
+      {/* CATEGORY WALL — 2-column display-type grid */}
+      <View style={styles.wallGrid}>
+        {visibleCats.map(renderWallTile)}
+        {showAllTile && !wallExpanded && (
+          <TouchableOpacity
+            testID="category-wall-all"
+            style={[styles.wallTile, styles.wallTileAll]}
+            onPress={() => setWallExpanded(true)}
+            activeOpacity={0.85}
           >
-            {categories.map(renderSidebarCat)}
-          </ScrollView>
+            <Text style={styles.wallTileAllText}>ALL CATEGORIES +{hiddenCount} ▸</Text>
+          </TouchableOpacity>
+        )}
+        {showAllTile && wallExpanded && (
+          <TouchableOpacity
+            testID="category-wall-less"
+            style={[styles.wallTile, styles.wallTileAll]}
+            onPress={() => setWallExpanded(false)}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.wallTileAllText}>SHOW LESS ▴</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* TODAY'S BEST PROTEIN VALUE — auto, client-side */}
+      {bestValue && (
+        <View style={styles.bestValueCard} testID="best-value-card">
+          <View style={styles.bestValueLeft}>
+            <View style={styles.bestValueLabelRow}>
+              <Ionicons name="trophy" size={12} color={FUEL.lime} />
+              <Text style={styles.bestValueLabel}>TODAY'S BEST PROTEIN VALUE</Text>
+            </View>
+            <Text style={styles.bestValueName} numberOfLines={1}>{bestValue.product.name}</Text>
+            <Text style={styles.bestValueMeta}>
+              {Math.round(getServingProtein(bestValue.product))}g protein · ₹{getDisplayPrice(bestValue.product)}{bestValue.product.product_type === 'ready_made' ? '' : '/100g'}
+            </Text>
+          </View>
+          <View style={styles.bestValueRight}>
+            <Text style={styles.bestValueRatio}>₹{bestValue.ratio.toFixed(1)}</Text>
+            <Text style={styles.bestValueRatioLabel}>/g PROTEIN</Text>
+          </View>
         </View>
-        
-        {/* Right Product List - Takes remaining space */}
-        <View style={styles.productListContainer}>
-          <FlatList
-            data={sectioned}
-            keyExtractor={i => i.id}
-            renderItem={renderRow}
-            contentContainerStyle={styles.productListContent}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Z_RED} />}
-            showsVerticalScrollIndicator={false}
-            ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
-            removeClippedSubviews={true}
-            maxToRenderPerBatch={10}
-            updateCellsBatchingPeriod={50}
-            windowSize={10}
-            initialNumToRender={8}
-            ListEmptyComponent={
-              <View style={styles.emptyState}>
-                <Ionicons name="restaurant-outline" size={44} color="#D0D0D0" />
-                <Text style={styles.emptyText}>
-                  {dietFilter.length
-                    ? `No items match ${dietFilter.map(t => DIET_LABEL[t]).join(' + ')}`
-                    : 'No items found'}
-                </Text>
-                {dietFilter.length > 0 && (
-                  <>
-                    <Text style={styles.emptySub}>Try removing a filter. Closest picks:</Text>
-                    <View style={styles.nearestWrap}>
-                      {nearest.map(np => (
-                        <TouchableOpacity key={np.id} testID={`nearest-${np.id}`} style={styles.nearestChip} onPress={() => addItem(np)} activeOpacity={0.8}>
-                          <Text style={styles.nearestChipText} numberOfLines={1}>{np.name}</Text>
-                          <Ionicons name="add-circle" size={16} color={GREEN} />
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                    <TouchableOpacity testID="clear-diet-filters" style={styles.clearFiltersBtn} onPress={() => setDietFilter([])} activeOpacity={0.8}>
-                      <Text style={styles.clearFiltersText}>Clear diet filters</Text>
-                    </TouchableOpacity>
-                  </>
-                )}
-              </View>
-            }
+      )}
+    </View>
+  );
+
+  return (
+    <SafeAreaView style={styles.safe} edges={['top']}>
+      {/* Side Drawer */}
+      <SideDrawer visible={drawerVisible} onClose={() => setDrawerVisible(false)} user={user} />
+
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.menuBtn} onPress={() => setDrawerVisible(true)}>
+          <Ionicons name="menu" size={24} color={FUEL.sand} />
+        </TouchableOpacity>
+        <Text style={styles.title}>Our Menu</Text>
+        <TouchableOpacity style={styles.searchBtn} onPress={() => {}}>
+          <Ionicons name="search" size={22} color={FUEL.lime} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Search Bar — part of the dark header band */}
+      <View style={styles.searchStrip}>
+        <View style={styles.searchBar}>
+          <Ionicons name="search" size={18} color={FUEL.muted} />
+          <TextInput
+            style={styles.searchInput}
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Search menu..."
+            placeholderTextColor={FUEL.muted}
           />
+          {search ? (
+            <TouchableOpacity onPress={() => setSearch('')}>
+              <Ionicons name="close-circle" size={18} color={FUEL.muted} />
+            </TouchableOpacity>
+          ) : null}
         </View>
       </View>
+
+      {/* Product list with hero / wall / best-value header */}
+      <FlatList
+        data={sectioned}
+        keyExtractor={i => i.id}
+        renderItem={renderRow}
+        ListHeaderComponent={listHeader}
+        contentContainerStyle={styles.productListContent}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={FUEL.ink} />}
+        showsVerticalScrollIndicator={false}
+        ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={10}
+        updateCellsBatchingPeriod={50}
+        windowSize={10}
+        initialNumToRender={8}
+        keyboardShouldPersistTaps="handled"
+        ListEmptyComponent={
+          <View style={styles.emptyState}>
+            <Ionicons name="restaurant-outline" size={44} color={FUEL.sandBorder} />
+            <Text style={styles.emptyText}>
+              {dietFilter.length
+                ? `No items match ${dietFilter.map(t => DIET_LABEL[t]).join(' + ')}`
+                : 'No items found'}
+            </Text>
+            {dietFilter.length > 0 && (
+              <>
+                <Text style={styles.emptySub}>Try removing a filter. Closest picks:</Text>
+                <View style={styles.nearestWrap}>
+                  {nearest.map(np => (
+                    <TouchableOpacity key={np.id} testID={`nearest-${np.id}`} style={styles.nearestChip} onPress={() => addItem(np)} activeOpacity={0.8}>
+                      <Text style={styles.nearestChipText} numberOfLines={1}>{np.name}</Text>
+                      <Ionicons name="add-circle" size={16} color={FUEL.veg} />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <TouchableOpacity testID="clear-diet-filters" style={styles.clearFiltersBtn} onPress={() => setDietFilter([])} activeOpacity={0.8}>
+                  <Text style={styles.clearFiltersText}>Clear diet filters</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        }
+      />
 
       {/* Cart Bar */}
       {cartCount > 0 && (
@@ -445,62 +544,102 @@ export default function MenuScreen() {
   );
 }
 
-const SIDEBAR_WIDTH = 90;
+const WALL_TILE_WIDTH = (width - 16 * 2 - 10) / 2;
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: BK_CREAM },
+  safe: { flex: 1, backgroundColor: FUEL.sand },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  
-  // Header (BK Dark Brown)
-  header: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
+
+  // Header (ink)
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: BK_BROWN, 
-    paddingHorizontal: 12, 
+    backgroundColor: FUEL.ink,
+    paddingHorizontal: 12,
     paddingVertical: 12,
   },
-  menuBtn: { 
-    width: 36, 
-    height: 36, 
-    borderRadius: 8, 
-    backgroundColor: 'rgba(245,235,220,0.15)', 
-    alignItems: 'center', 
-    justifyContent: 'center' 
+  menuBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: FUEL.inkSoft,
+    alignItems: 'center',
+    justifyContent: 'center'
   },
-  title: { fontSize: 20, fontWeight: '800', color: BK_CREAM, textTransform: 'uppercase', letterSpacing: 0.5 },
+  title: { fontFamily: FONT.display, fontSize: 20, color: FUEL.sand, textTransform: 'uppercase', letterSpacing: 0.5 },
   searchBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(245,235,220,0.15)',
+    backgroundColor: FUEL.inkSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  
-  // Search Bar
+
+  // Search Bar (dark strip continues the header)
+  searchStrip: {
+    backgroundColor: FUEL.ink,
+    paddingHorizontal: 12,
+    paddingBottom: 10,
+  },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: BK_WHITE,
-    marginHorizontal: 10,
-    marginVertical: 8,
+    backgroundColor: FUEL.inkSoft,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 25,
     gap: 8,
-    borderWidth: 2,
-    borderColor: '#E6E1D4',
   },
-  searchInput: { flex: 1, fontSize: 13, color: BK_BROWN },
-  
-  // Diet Toggle (BK style pills)
+  searchInput: { flex: 1, fontFamily: FONT.bodyMedium, fontSize: 13, color: FUEL.sand },
+
+  // HERO — ink block, rounded bottom corners
+  hero: {
+    backgroundColor: FUEL.ink,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    paddingHorizontal: 16,
+    paddingTop: 6,
+    paddingBottom: 18,
+    marginHorizontal: -8,
+    marginTop: -8,
+    marginBottom: 4,
+  },
+  heroLine1: { fontFamily: FONT.display, fontSize: 28, color: FUEL.sand, textTransform: 'uppercase', letterSpacing: 0.5, lineHeight: 34 },
+  heroLine2: { fontFamily: FONT.display, fontSize: 28, color: FUEL.lime, textTransform: 'uppercase', letterSpacing: 0.5, lineHeight: 34 },
+  proteinStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    backgroundColor: FUEL.inkSoft,
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginTop: 12,
+  },
+  proteinStripText: { fontFamily: FONT.bodySemibold, fontSize: 12, color: FUEL.sand },
+  proteinStripValue: { fontFamily: FONT.bodyExtrabold, color: FUEL.lime },
+  budgetRow: { flexDirection: 'row', gap: 8, marginTop: 14, flexWrap: 'wrap' },
+  budgetPill: {
+    backgroundColor: FUEL.inkSoft,
+    borderRadius: 20,
+    paddingHorizontal: 13,
+    paddingVertical: 9,
+  },
+  budgetPillActive: { backgroundColor: FUEL.lime },
+  budgetPillText: { fontFamily: FONT.display, fontSize: 11, color: 'rgba(244,241,233,0.7)', letterSpacing: 0.4, textTransform: 'uppercase' },
+  budgetPillTextActive: { color: FUEL.ink },
+
+  // Diet Toggle (FUEL pills)
   dietToggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    paddingHorizontal: 10,
-    paddingBottom: 8,
+    paddingHorizontal: 4,
+    paddingTop: 12,
+    paddingBottom: 4,
   },
   dietToggleBtn: {
     flexDirection: 'row',
@@ -509,21 +648,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: BK_WHITE,
-    borderWidth: 2,
-    borderColor: '#E6E1D4',
+    backgroundColor: FUEL.white,
+    borderWidth: 1.5,
+    borderColor: FUEL.sandBorder,
   },
   dietToggleBtnAllActive: {
-    backgroundColor: BK_BROWN,
-    borderColor: BK_BROWN,
-  },
-  dietToggleBtnVegActive: {
-    backgroundColor: '#EAF2DD',
-    borderColor: BK_GREEN,
-  },
-  dietToggleBtnNonvegActive: {
-    backgroundColor: '#F1E7E1',
-    borderColor: BK_RED,
+    backgroundColor: FUEL.ink,
+    borderColor: FUEL.ink,
   },
   dietToggleDot: {
     width: 12,
@@ -532,95 +663,89 @@ const styles = StyleSheet.create({
     borderWidth: 2,
   },
   dietToggleText: {
+    fontFamily: FONT.bodyBold,
     fontSize: 13,
-    fontWeight: '700',
-    color: BK_TEXT_LIGHT,
+    color: FUEL.muted,
     textTransform: 'uppercase',
     letterSpacing: 0.3,
   },
   dietToggleTextActive: {
-    color: BK_CREAM,
-    fontWeight: '800',
+    color: FUEL.lime,
+    fontFamily: FONT.bodyExtrabold,
   },
-  
-  // Main Content
-  mainContent: { 
-    flex: 1, 
+
+  // Category wall — 2-column grid
+  wallGrid: {
     flexDirection: 'row',
-  },
-  
-  // Left Sidebar (BK)
-  sidebarContainer: { 
-    width: SIDEBAR_WIDTH, 
-    backgroundColor: BK_WHITE,
-    borderRightWidth: 2,
-    borderRightColor: '#E6E1D4',
-    zIndex: 10,
-  },
-  sidebarContent: { 
-    paddingVertical: 6,
-    paddingHorizontal: 2,
-    paddingBottom: 100,
-  },
-  sidebarCat: { 
-    width: SIDEBAR_WIDTH - 4,
-    alignItems: 'center', 
-    paddingVertical: 12,
+    flexWrap: 'wrap',
+    gap: 10,
     paddingHorizontal: 4,
-    marginBottom: 4,
-    borderLeftWidth: 3,
-    borderLeftColor: 'transparent',
-    position: 'relative',
+    paddingTop: 10,
+    paddingBottom: 4,
   },
-  sidebarCatActive: { 
-    backgroundColor: '#F2EEE0',
+  wallTile: {
+    width: WALL_TILE_WIDTH,
+    backgroundColor: FUEL.white,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: FUEL.sandBorder,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    minHeight: 76,
+    justifyContent: 'space-between',
   },
-  sidebarActiveBar: {
-    position: 'absolute',
-    left: 0,
-    top: 8,
-    bottom: 8,
-    width: 3,
-    borderRadius: 2,
+  wallTileFirst: {
+    backgroundColor: FUEL.ink,
+    borderColor: FUEL.ink,
   },
-  sidebarCatImg: { 
-    width: 56, 
-    height: 56, 
-    borderRadius: 12,
-    marginBottom: 8,
+  wallTileActive: {
+    borderColor: FUEL.lime,
+    borderWidth: 2,
   },
-  sidebarCatIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 12,
-    alignItems: 'center',
+  wallTileAll: {
+    backgroundColor: FUEL.lime,
+    borderColor: FUEL.lime,
+    alignItems: 'flex-start',
     justifyContent: 'center',
-    marginBottom: 8,
   },
-  sidebarCatLabel: { 
-    fontSize: 10, 
-    fontWeight: '700', 
-    color: BK_TEXT_LIGHT, 
-    textAlign: 'center',
-    lineHeight: 13,
-    width: '100%',
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
+  wallTileTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 6 },
+  wallTileTitle: { flex: 1, fontFamily: FONT.display, fontSize: 16, color: FUEL.ink, textTransform: 'uppercase', letterSpacing: 0.4 },
+  wallTileTitleFirst: { color: FUEL.lime },
+  wallTileCount: { fontFamily: FONT.bodyBold, fontSize: 10, color: FUEL.muted, letterSpacing: 0.6, marginTop: 6 },
+  wallTileCountFirst: { color: 'rgba(244,241,233,0.6)' },
+  wallTileAllText: { fontFamily: FONT.display, fontSize: 14, color: FUEL.ink, textTransform: 'uppercase', letterSpacing: 0.4 },
+
+  // Best protein value card — dark hero
+  bestValueCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: FUEL.ink,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginHorizontal: 4,
+    marginTop: 10,
+    marginBottom: 12,
   },
-  
+  bestValueLeft: { flex: 1, paddingRight: 12 },
+  bestValueLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  bestValueLabel: { fontFamily: FONT.bodyExtrabold, fontSize: 9.5, color: 'rgba(244,241,233,0.6)', letterSpacing: 1 },
+  bestValueName: { fontFamily: FONT.display, fontSize: 18, color: FUEL.sand, textTransform: 'uppercase', marginTop: 4 },
+  bestValueMeta: { fontFamily: FONT.bodyMedium, fontSize: 12, color: 'rgba(244,241,233,0.7)', marginTop: 3 },
+  bestValueRight: { alignItems: 'center', backgroundColor: FUEL.inkSoft, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10 },
+  bestValueRatio: { fontFamily: FONT.display, fontSize: 20, color: FUEL.lime },
+  bestValueRatioLabel: { fontFamily: FONT.bodyBold, fontSize: 8, color: 'rgba(244,241,233,0.6)', letterSpacing: 0.6, marginTop: 2 },
+
   // Product List
-  productListContainer: {
-    flex: 1,
-    zIndex: 1,
-  },
   productListContent: {
     padding: 8,
     paddingBottom: 120,
   },
   subcatHeader: {  // PR-1
+    fontFamily: FONT.bodyExtrabold,
     fontSize: 12,
-    fontWeight: '800',
-    color: '#9C9C9C',
+    color: FUEL.muted,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginTop: 10,
@@ -628,70 +753,47 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
 
-  // Product Card (ENHANCED)
-  productCard: { 
-    backgroundColor: BK_WHITE, 
-    borderRadius: 16, 
-    overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: '#E6E1D4',
-    shadowColor: BK_BROWN,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
-    elevation: 4,
+  // Product row — photo left
+  productCard: {
+    flexDirection: 'row',
+    backgroundColor: FUEL.white,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: FUEL.sandBorder,
+    padding: 10,
+    gap: 12,
+    shadowColor: FUEL.ink,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 5,
+    elevation: 2,
   },
   productImageWrapper: {
-    position: 'relative',
-    width: '100%',
-    height: 140,
+    width: 72,
   },
-  productImage: { 
-    width: '100%', 
-    height: '100%',
-    backgroundColor: BK_CREAM,
+  productImage: {
+    width: 72,
+    height: 72,
+    borderRadius: 14,
+    backgroundColor: FUEL.sand,
   },
-  productImagePlaceholder: { 
-    alignItems: 'center', 
-    justifyContent: 'center' 
-  },
-  smartBadge: {
-    position: 'absolute',
-    top: 8,
-    left: 8,
-    flexDirection: 'row',
+  productImagePlaceholder: {
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
+    justifyContent: 'center'
   },
-  smartBadgeText: { fontSize: 9, fontWeight: '800', color: BK_WHITE, textTransform: 'uppercase', letterSpacing: 0.5 },
-  proteinBadge: {
+  valueBadge: {
     position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: BK_BROWN,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 20,
-    alignItems: 'center',
+    bottom: -6,
+    alignSelf: 'center',
+    backgroundColor: FUEL.ink,
+    borderRadius: 10,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
   },
-  proteinValue: { fontSize: 15, fontWeight: '800', color: BK_CREAM },
-  proteinLabel: { fontSize: 8, color: 'rgba(245,235,220,0.8)', marginTop: 1, textTransform: 'uppercase' },
-  newBadge: {
-    position: 'absolute',
-    bottom: 8,
-    right: 8,
-    backgroundColor: BK_GREEN,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-  },
-  newBadgeText: { fontSize: 9, fontWeight: '800', color: BK_WHITE, textTransform: 'uppercase' },
-  
-  productInfo: { 
-    padding: 10,
+  valueBadgeText: { fontFamily: FONT.bodyExtrabold, fontSize: 8.5, color: FUEL.lime, letterSpacing: 0.2 },
+
+  productInfo: {
+    flex: 1,
   },
   productHeader: {
     flexDirection: 'row',
@@ -699,11 +801,11 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 8,
   },
-  productName: { 
+  productName: {
     flex: 1,
-    fontSize: 14, 
-    fontWeight: '800', 
-    color: BK_BROWN,
+    fontFamily: FONT.bodyExtrabold,
+    fontSize: 14,
+    color: FUEL.ink,
     lineHeight: 18,
   },
   vegIndicator: {
@@ -713,13 +815,14 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: BK_WHITE,
+    backgroundColor: FUEL.white,
   },
   vegDot: { width: 8, height: 8, borderRadius: 4 },
-  productDesc: { 
-    fontSize: 11, 
-    color: BK_TEXT_LIGHT, 
-    marginTop: 4,
+  productDesc: {
+    fontFamily: FONT.body,
+    fontSize: 11,
+    color: FUEL.muted,
+    marginTop: 3,
     lineHeight: 14,
   },
   productFooter: {
@@ -728,39 +831,38 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 10,
   },
-  productPrice: { 
+  productPrice: {
     fontFamily: FONT.display,
-    fontSize: 19, 
-    fontWeight: '800', 
-    color: BK_BROWN 
+    fontSize: 19,
+    color: FUEL.ink,
   },
-  priceUnit: { 
-    fontSize: 10, 
-    fontWeight: '400', 
-    color: BK_TEXT_LIGHT 
+  priceUnit: {
+    fontFamily: FONT.body,
+    fontSize: 10,
+    color: FUEL.muted,
   },
-  addBtn: { 
-    backgroundColor: BK_RED, 
-    paddingHorizontal: 18, 
-    paddingVertical: 8, 
+  addBtn: {
+    backgroundColor: FUEL.lime,
+    paddingHorizontal: 18,
+    paddingVertical: 8,
     borderRadius: 20,
   },
-  addBtnText: { 
-    color: BK_CREAM, 
-    fontSize: 13, 
-    fontWeight: '800',
+  addBtnText: {
+    color: FUEL.ink,
+    fontFamily: FONT.display,
+    fontSize: 13,
     textTransform: 'uppercase',
   },
-  qtyBox: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    backgroundColor: BK_RED, 
-    borderRadius: 20, 
-    overflow: 'hidden' 
+  qtyBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: FUEL.ink,
+    borderRadius: 20,
+    overflow: 'hidden'
   },
   qtyBtn: { paddingHorizontal: 10, paddingVertical: 8 },
-  qtyText: { color: BK_CREAM, fontSize: 12, fontWeight: '800', minWidth: 36, textAlign: 'center' },
-  
+  qtyText: { color: FUEL.white, fontFamily: FONT.bodyExtrabold, fontSize: 12, minWidth: 36, textAlign: 'center' },
+
   // Empty State
   emptyState: {
     alignItems: 'center',
@@ -768,56 +870,50 @@ const styles = StyleSheet.create({
     paddingVertical: 60,
   },
   emptyText: {
+    fontFamily: FONT.bodySemibold,
     fontSize: 14,
-    color: BK_TEXT_LIGHT,
+    color: FUEL.muted,
     marginTop: 12,
-    fontWeight: '600',
     textAlign: 'center',
     paddingHorizontal: 20,
   },
-  emptySub: { fontSize: 12, color: BK_TEXT_LIGHT, marginTop: 10, marginBottom: 8 },
+  emptySub: { fontFamily: FONT.body, fontSize: 12, color: FUEL.muted, marginTop: 10, marginBottom: 8 },
   nearestWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center', paddingHorizontal: 16 },
-  nearestChip: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 20, paddingVertical: 7, paddingHorizontal: 12, maxWidth: 150 },
-  nearestChipText: { fontSize: 12, fontWeight: '700', color: BK_BROWN },
-  clearFiltersBtn: { marginTop: 16, backgroundColor: BK_BROWN, borderRadius: 22, paddingVertical: 10, paddingHorizontal: 22 },
-  clearFiltersText: { color: '#FFF', fontWeight: '800', fontSize: 13 },
-  
-  // Cart Bar (BK Red)
-  cartBar: { 
-    position: 'absolute', 
-    bottom: 0, 
-    left: 16, 
-    right: 16, 
-    backgroundColor: FUEL.lime, 
-    borderRadius: 25, 
-    paddingHorizontal: 22, 
-    paddingVertical: 14, 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
-    marginBottom: 6, 
+  nearestChip: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: FUEL.white, borderWidth: 1, borderColor: FUEL.sandBorder, borderRadius: 20, paddingVertical: 7, paddingHorizontal: 12, maxWidth: 150 },
+  nearestChipText: { fontFamily: FONT.bodyBold, fontSize: 12, color: FUEL.ink },
+  clearFiltersBtn: { marginTop: 16, backgroundColor: FUEL.ink, borderRadius: 22, paddingVertical: 10, paddingHorizontal: 22 },
+  clearFiltersText: { color: FUEL.lime, fontFamily: FONT.bodyExtrabold, fontSize: 13 },
+
+  // Cart Bar (lime CTA)
+  cartBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 16,
+    right: 16,
+    backgroundColor: FUEL.lime,
+    borderRadius: 25,
+    paddingHorizontal: 22,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
     elevation: 12,
     zIndex: 100,
-    shadowColor: BK_BROWN,
+    shadowColor: FUEL.ink,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
   },
-  cartItems: { color: FUEL.ink, fontSize: 12, fontWeight: '700' },
-  cartTotal: { color: FUEL.ink, fontFamily: FONT.display, fontSize: 24, fontWeight: '800' },
+  cartItems: { color: FUEL.ink, fontFamily: FONT.bodyBold, fontSize: 12 },
+  cartTotal: { color: FUEL.ink, fontFamily: FONT.display, fontSize: 24 },
   cartRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  cartAction: { color: FUEL.ink, fontSize: 15, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
+  cartAction: { color: FUEL.ink, fontFamily: FONT.display, fontSize: 15, textTransform: 'uppercase', letterSpacing: 0.5 },
 
   // Macro chips (P / C / F)
   macroChips: { flexDirection: 'row', gap: 6, marginTop: 8 },
   macroChip: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
-  macroChipText: { fontFamily: FONT.bodyExtrabold, fontSize: 10, fontWeight: '800', letterSpacing: 0.2 },
+  macroChipText: { fontFamily: FONT.bodyExtrabold, fontSize: 10, letterSpacing: 0.2 },
   goalFitBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8, alignSelf: 'flex-start', backgroundColor: FUEL.limeTint, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 9 },
-  goalFitText: { fontSize: 10, fontWeight: '800', color: '#4F5A2E' },
-
-  // Ready-made vs Build-your-own tag
-  typeTag: { position: 'absolute', bottom: 8, left: 8, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 20 },
-  typeTagMeal: { backgroundColor: FUEL.ink },
-  typeTagBuild: { backgroundColor: FUEL.lime },
-  typeTagText: { fontFamily: FONT.bodyExtrabold, fontSize: 9, fontWeight: '800', color: '#FFF', textTransform: 'uppercase', letterSpacing: 0.4 },
+  goalFitText: { fontFamily: FONT.bodyExtrabold, fontSize: 10, color: '#4F5A2E' },
 });
