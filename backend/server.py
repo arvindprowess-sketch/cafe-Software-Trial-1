@@ -5,9 +5,11 @@ from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo import ReturnDocument  # PR-3: atomic stock decrement
+import asyncio
 import io
 import os
 import re
+import sys
 import logging
 import json
 import base64
@@ -24,6 +26,12 @@ from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 import bcrypt
 import jwt
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
+from limits import parse as parse_rate_limit
+from limits.storage import MemoryStorage
+from limits.strategies import MovingWindowRateLimiter
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -54,6 +62,24 @@ db = client[os.environ['DB_NAME']]
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
 security = HTTPBearer()
+
+# ========== RATE LIMITING (slowapi) ==========
+# In-memory storage — swap to Redis storage when multi-instance.
+# Disabled by default under pytest: the suite's module fixtures all log in from
+# one IP in one process-wide window. The rate-limit tests re-enable it explicitly
+# (or set RATE_LIMIT_ENABLED=1).
+limiter = Limiter(
+    key_func=get_remote_address,
+    enabled=("pytest" not in sys.modules or os.environ.get("RATE_LIMIT_ENABLED") == "1"),
+)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Per-phone OTP send limit — keyed on the normalized phone from the request body,
+# which slowapi's request-based key_func can't see. Same in-memory caveat as above.
+_otp_phone_storage = MemoryStorage()
+_otp_phone_limiter = MovingWindowRateLimiter(_otp_phone_storage)
+_OTP_PHONE_LIMIT = parse_rate_limit("3/15minutes")
 
 # ========== CONFIG (env-driven, A3 + A4) ==========
 JWT_SECRET = os.environ.get("JWT_SECRET") or secrets.token_hex(32)
@@ -484,8 +510,11 @@ def hash_password(password: str) -> str:
 def verify_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode(), hashed.encode())
 
-def create_token(user_id: str, role: str) -> str:
-    payload = {"user_id": user_id, "role": role, "exp": datetime.now(timezone.utc).timestamp() + 86400 * 7}
+def create_token(user_id: str, role: str, token_version: int = 0) -> str:
+    # tv: bumped on deactivate/role change to revoke all outstanding tokens.
+    # Missing token_version (old users/tokens) is treated as 0 on both sides.
+    payload = {"user_id": user_id, "role": role, "tv": token_version,
+               "exp": datetime.now(timezone.utc).timestamp() + 86400 * 7}
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 def pin_uniqueness_token(pin: str) -> str:
@@ -524,6 +553,10 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         user = await db.users.find_one({"id": payload["user_id"]}, {"_id": 0})
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
+        if user.get("is_active") is False:
+            raise HTTPException(status_code=401, detail="Account deactivated")
+        if payload.get("tv", 0) != user.get("token_version", 0):
+            raise HTTPException(status_code=401, detail="Token revoked")
         return user
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
@@ -540,7 +573,12 @@ async def get_optional_user(credentials: Optional[HTTPAuthorizationCredentials] 
         return None
     try:
         payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        return await db.users.find_one({"id": payload["user_id"]}, {"_id": 0})
+        user = await db.users.find_one({"id": payload["user_id"]}, {"_id": 0})
+        if not user or user.get("is_active") is False:
+            return None
+        if payload.get("tv", 0) != user.get("token_version", 0):
+            return None
+        return user
     except Exception:
         return None
 
@@ -957,13 +995,16 @@ class OTPVerifyRequest(BaseModel):
     otp: str
     name: Optional[str] = None  # For new user registration
 
-@api_router.post("/auth/otp/send")
-async def send_otp(data: OTPSendRequest):
-    """Send OTP to phone number (A1: never returns the OTP)."""
+async def _send_otp_impl(data: OTPSendRequest):
+    """Shared by /auth/otp/send and /auth/otp/resend (A1: never returns the OTP)."""
     phone = data.phone.strip().replace(" ", "").replace("-", "")
 
     if not phone.isdigit() or len(phone) != 10:
         raise HTTPException(status_code=400, detail="Invalid phone number. Enter 10 digits.")
+
+    # 3 sends / 15 min per phone (covers send AND resend), on top of the per-IP limit.
+    if limiter.enabled and not _otp_phone_limiter.hit(_OTP_PHONE_LIMIT, "otp-send", phone):
+        raise HTTPException(status_code=429, detail="Too many OTP requests for this number. Try again later.")
 
     otp = generate_otp()
     await store_otp(phone, otp, data.name)
@@ -988,8 +1029,15 @@ async def send_otp(data: OTPSendRequest):
         response["dev_otp"] = otp
     return response
 
+@api_router.post("/auth/otp/send")
+@limiter.limit("10/hour")
+async def send_otp(request: Request, data: OTPSendRequest):
+    """Send OTP to phone number (A1: never returns the OTP)."""
+    return await _send_otp_impl(data)
+
 @api_router.post("/auth/otp/verify")
-async def verify_otp(data: OTPVerifyRequest):
+@limiter.limit("10/15minutes")
+async def verify_otp(request: Request, data: OTPVerifyRequest):
     """Verify OTP and login/register user"""
     phone = data.phone.strip().replace(" ", "").replace("-", "")
 
@@ -1020,7 +1068,7 @@ async def verify_otp(data: OTPVerifyRequest):
 
     if user:
         # Existing user - login
-        token = create_token(user["id"], user["role"])
+        token = create_token(user["id"], user["role"], user.get("token_version", 0))
         return {
             "token": token,
             "user": {
@@ -1076,7 +1124,8 @@ async def verify_otp(data: OTPVerifyRequest):
         }
 
 @api_router.post("/auth/otp/resend")
-async def resend_otp(data: OTPSendRequest):
+@limiter.limit("10/hour")
+async def resend_otp(request: Request, data: OTPSendRequest):
     """Resend OTP to phone number"""
     phone = data.phone.strip().replace(" ", "").replace("-", "")
 
@@ -1088,7 +1137,7 @@ async def resend_otp(data: OTPSendRequest):
         if (datetime.now(timezone.utc) - last_sent).total_seconds() < 30:
             raise HTTPException(status_code=429, detail="Please wait 30 seconds before requesting new OTP.")
 
-    return await send_otp(data)
+    return await _send_otp_impl(data)
 
 # Keep existing email/password login for admin
 @api_router.post("/auth/register")
@@ -1127,11 +1176,12 @@ async def register(data: UserRegister):
     }
 
 @api_router.post("/auth/login")
-async def login(data: UserLogin):
+@limiter.limit("10/15minutes")
+async def login(request: Request, data: UserLogin):
     user = await db.users.find_one({"email": data.email}, {"_id": 0})
     if not user or not verify_password(data.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    token = create_token(user["id"], user["role"])
+    token = create_token(user["id"], user["role"], user.get("token_version", 0))
     return {
         "token": token,
         "user": {
@@ -2417,81 +2467,333 @@ Respond in this exact JSON format:
         logger.error(f"AI suggestion error: {e}")
         return {"suggestions": [], "summary": "AI suggestion unavailable. Please select items manually."}
 
-# ========== QUICK MEAL (AI BUILD MY MEAL) ==========
+# ========== QUICK MEAL (RULE-ENGINE BUILD MY MEAL; AI = language layer only) ==========
+# Define strict nutrition guidelines for each goal
+GOAL_GUIDELINES = {
+    "fat_loss": {
+        "description": "Fat Loss - High protein, low carb, calorie deficit",
+        "target_calories": "400-600 kcal per meal",
+        "protein_priority": "50-60% of budget on protein sources",
+        "macro_ratio": "High protein (40-50%), Low carb (20-30%), Moderate fat (20-30%)",
+        "foods_to_prioritize": "Lean proteins (chicken, fish, egg whites, tofu), Low-calorie vegetables",
+        "foods_to_avoid": "High-carb items (rice, bread), High-fat items",
+        "portion_size": "Smaller portions, focus on protein density"
+    },
+    "muscle_gain": {
+        "description": "Muscle Gain - High protein, high carb, calorie surplus",
+        "target_calories": "700-1000 kcal per meal",
+        "protein_priority": "40-50% of budget on protein sources",
+        "macro_ratio": "High protein (35-45%), High carb (40-50%), Moderate fat (15-25%)",
+        "foods_to_prioritize": "Lean proteins, Complex carbs (brown rice, quinoa, oats), Healthy fats",
+        "foods_to_avoid": "Low-calorie items that don't support growth",
+        "portion_size": "Larger portions to support muscle building"
+    },
+    "maintenance": {
+        "description": "Maintenance - Balanced nutrition",
+        "target_calories": "500-700 kcal per meal",
+        "protein_priority": "30-40% of budget on protein sources",
+        "macro_ratio": "Balanced - Protein (30-35%), Carbs (35-45%), Fat (20-30%)",
+        "foods_to_prioritize": "Variety of proteins, carbs, and fats",
+        "foods_to_avoid": "None - balanced approach",
+        "portion_size": "Moderate portions for energy balance"
+    },
+    "beginner": {
+        "description": "Beginner / Adaptation Phase - Easy to digest, moderate calories",
+        "target_calories": "450-600 kcal per meal",
+        "protein_priority": "30-40% of budget on easily digestible proteins",
+        "macro_ratio": "Moderate protein (30-35%), Moderate carb (40-45%), Lower fat (20-25%)",
+        "foods_to_prioritize": "Easy to digest proteins (paneer, dal, egg whites), Simple carbs (brown rice, oats), Easily digestible foods",
+        "foods_to_avoid": "Very high fiber items, Heavy/rich foods, Excessive fats",
+        "portion_size": "Moderate portions to allow body adaptation"
+    },
+    "recovery": {
+        "description": "Recovery / Deload Phase - Lower intensity, anti-inflammatory",
+        "target_calories": "400-550 kcal per meal",
+        "protein_priority": "30-35% of budget on protein for recovery",
+        "macro_ratio": "Moderate protein (30-35%), Lower carb (30-35%), Moderate-high healthy fats (30-35%)",
+        "foods_to_prioritize": "Quality proteins, Anti-inflammatory foods, Healthy fats (avocado, nuts), Vegetables",
+        "foods_to_avoid": "Excessive carbs, Processed foods, High-sugar items",
+        "portion_size": "Slightly smaller portions to aid recovery"
+    },
+    "recomposition": {
+        "description": "Recomposition / Body Recomp - Build muscle AND lose fat simultaneously at maintenance calories",
+        "target_calories": "500-650 kcal per meal (maintenance-level)",
+        "protein_priority": "45-55% of budget on high-quality protein (VERY high protein)",
+        "macro_ratio": "Very high protein (40-45%), Moderate carb (30-35%), Moderate fat (20-25%)",
+        "foods_to_prioritize": "Lean proteins (chicken, fish, egg whites, paneer, tofu), Fibrous vegetables, Moderate complex carbs",
+        "foods_to_avoid": "Refined sugars, Excess oils/fats, Empty-calorie carbs",
+        "portion_size": "Moderate, maintenance-level portions with a strong protein emphasis"
+    },
+    "lean_bulk": {
+        "description": "Lean Bulk - Slight calorie surplus to build muscle with minimal fat gain",
+        "target_calories": "650-850 kcal per meal (slight surplus ~+10-15%)",
+        "protein_priority": "40-50% of budget on protein sources (high protein)",
+        "macro_ratio": "High protein (30-35%), High carb (40-50%), Controlled fat (15-20%)",
+        "foods_to_prioritize": "Lean proteins, Complex carbs (brown rice, quinoa, oats), Controlled healthy fats",
+        "foods_to_avoid": "Excessive fats and fried foods, Empty calories that add fat instead of muscle",
+        "portion_size": "Slightly larger portions for a controlled surplus"
+    }
+}
+
+# KEEP IN SYNC with GOAL_GUIDELINES above: these are the machine-readable keyword
+# lists derived from each goal's foods_to_prioritize / foods_to_avoid text, used
+# by rule_engine_pick for deterministic item selection.
+GOAL_KEYWORDS = {
+    "fat_loss": {
+        "prioritize": ["chicken", "fish", "egg", "tofu", "paneer", "salad", "sprout", "spinach", "broccoli", "vegetable"],
+        "avoid": ["rice", "bread", "fried", "noodle", "pasta", "butter", "sugar"],
+    },
+    "muscle_gain": {
+        "prioritize": ["chicken", "paneer", "egg", "fish", "rice", "quinoa", "oats", "almond", "peanut", "soya"],
+        "avoid": [],
+    },
+    "maintenance": {
+        "prioritize": [],
+        "avoid": [],
+    },
+    "beginner": {
+        "prioritize": ["paneer", "dal", "egg", "rice", "oats", "banana", "yogurt", "curd"],
+        "avoid": ["fried", "butter"],
+    },
+    "recovery": {
+        "prioritize": ["chicken", "fish", "paneer", "almond", "nut", "avocado", "salad", "vegetable", "yogurt", "curd"],
+        "avoid": ["sugar", "fried", "bread"],
+    },
+    "recomposition": {
+        "prioritize": ["chicken", "fish", "egg", "paneer", "tofu", "salad", "sprout", "vegetable"],
+        "avoid": ["sugar", "fried", "butter"],
+    },
+    "lean_bulk": {
+        "prioritize": ["chicken", "paneer", "egg", "fish", "rice", "quinoa", "oats"],
+        "avoid": ["fried", "butter", "sugar"],
+    },
+}
+
+# Template fallback for the AI language layer (per-goal reason variants picked by
+# item index, plus a one-line summary). Used when AI_ENABLED=false or the LLM
+# call times out/fails — the meal itself never depends on the LLM.
+QUICKMEAL_REASON_TEMPLATES = {
+    "fat_loss": [
+        "Protein-dense and light on calories — keeps you full while in a deficit.",
+        "Lean pick that supports fat loss without crowding your calorie budget.",
+        "Adds quality protein with minimal calories, ideal for cutting.",
+    ],
+    "muscle_gain": [
+        "High-quality fuel with the protein and calories muscle growth needs.",
+        "Calorie-dense pick that supports your surplus and training recovery.",
+        "Brings substantial protein to drive muscle building.",
+    ],
+    "maintenance": [
+        "Balanced choice that fits a steady, sustainable day of eating.",
+        "Rounds out the meal with a good mix of macros.",
+        "Solid all-rounder for energy balance.",
+    ],
+    "beginner": [
+        "Easy on digestion and a gentle way to build the habit.",
+        "Simple, familiar nutrition that suits an adaptation phase.",
+        "Light and balanced — a good starting-point portion.",
+    ],
+    "recovery": [
+        "Quality nutrients that support recovery without excess load.",
+        "Gentle, anti-inflammatory-friendly pick for a deload period.",
+        "Replenishes without overshooting your needs.",
+    ],
+    "recomposition": [
+        "Very high protein at maintenance calories — exactly what recomp asks for.",
+        "Lean, protein-first pick to build muscle while losing fat.",
+        "Keeps protein high and empty calories out.",
+    ],
+    "lean_bulk": [
+        "Protein-forward fuel for a controlled surplus with minimal fat gain.",
+        "Adds clean calories and protein for lean muscle growth.",
+        "Supports the slight surplus a lean bulk needs.",
+    ],
+}
+QUICKMEAL_SUMMARY_TEMPLATES = {
+    "fat_loss": "A high-protein, calorie-controlled meal built for fat loss within your budget.",
+    "muscle_gain": "A protein- and carb-rich meal sized to fuel muscle growth within your budget.",
+    "maintenance": "A balanced meal that fits your budget and keeps your day on track.",
+    "beginner": "An easy-to-digest, balanced meal to ease you into your nutrition plan.",
+    "recovery": "A lighter, nutrient-focused meal to support recovery within your budget.",
+    "recomposition": "A very high-protein, maintenance-calorie meal built for body recomposition.",
+    "lean_bulk": "A high-protein meal with controlled extras for a lean, low-fat-gain surplus.",
+}
+
+def _quickmeal_slot(p: dict) -> str:
+    """Coarse slot for the composition rule: veg/side, base/carb, or protein."""
+    name = (p.get("name") or "").lower()
+    if any(k in name for k in ("salad", "sprout", "soup", "greens", "sabzi", "veggie", "vegetable")) \
+            or float(p.get("calories_per_100g") or 0) <= 80:
+        return "veg"
+    if any(k in name for k in ("rice", "quinoa", "oats", "bread", "roti", "potato", "noodle", "pasta")) \
+            or float(p.get("carbs_per_100g") or 0) >= 2 * max(float(p.get("protein_per_100g") or 0), 1.0):
+        return "base"
+    return "protein"
+
+def _quickmeal_score(p: dict, goal: str) -> float:
+    """Deterministic per-goal score. Components per the rule-engine design:
+    protein density (high for muscle_gain/recomposition/lean_bulk/fat_loss),
+    calorie density (penalized for fat_loss, mildly rewarded for bulking goals),
+    cost efficiency (protein per ₹, always positive), keyword prioritize/avoid."""
+    cal = max(float(p.get("calories_per_100g") or 0), 1.0)
+    protein = float(p.get("protein_per_100g") or 0)
+    cost = max(float(p.get("cost_per_100g") or 1), 1.0)
+    kw = GOAL_KEYWORDS.get(goal, GOAL_KEYWORDS["maintenance"])
+    name = (p.get("name") or "").lower()
+
+    protein_density = protein / cal           # ~0..0.25
+    calorie_density = cal / 100.0             # ~0.3..5
+    protein_per_rupee = protein / cost        # cost efficiency
+
+    pd_weight = 10.0 if goal in ("muscle_gain", "recomposition", "lean_bulk", "fat_loss") else 5.0
+    if goal == "fat_loss":
+        cd_weight = -0.6
+    elif goal in ("muscle_gain", "lean_bulk"):
+        cd_weight = 0.3
+    else:
+        cd_weight = 0.0
+
+    score = pd_weight * protein_density + cd_weight * calorie_density + 2.0 * protein_per_rupee
+    if any(k in name for k in kw["prioritize"]):
+        score += 2.0
+    if any(k in name for k in kw["avoid"]):
+        score -= 4.0
+    return score
+
+def _protein_share_pct(goal: str) -> float:
+    """Midpoint of the goal's protein_priority band, parsed from GOAL_GUIDELINES."""
+    text = GOAL_GUIDELINES.get(goal, GOAL_GUIDELINES["maintenance"])["protein_priority"]
+    m = re.search(r"(\d+)\s*-\s*(\d+)\s*%", text)
+    if not m:
+        return 40.0
+    return (int(m.group(1)) + int(m.group(2))) / 2.0
+
+def rule_engine_pick(products: list, goal: str, budget: float, prefs) -> list:
+    """Deterministic replacement for the old STEP-1 LLM item selection.
+
+    Returns [{product, share, reason_slots, reason}] with shares summing to 100.
+    Composition: >=1 top-protein item, 1 base/carb item (skipped for fat_loss
+    under ₹200, or when only avoid-listed bases exist), 1 veg/side, rest by
+    score. Variety: each slot picks randomly among its top-3 scorers (unseeded
+    on purpose — true variety per request)."""
+    import random
+
+    if goal not in GOAL_GUIDELINES:
+        goal = "maintenance"
+    if prefs:
+        products = [p for p in products if product_matches_diet(p, prefs)]
+    if not products:
+        return []
+    # Prefer items with usable stock (min portion + buffer); if literally nothing
+    # has stock recorded, keep the full list (legacy behavior never blanked the meal).
+    in_stock = [p for p in products if float(p.get("available_qty_grams") or 0) >= 25]
+    pool = in_stock or products
+
+    kw_avoid = GOAL_KEYWORDS.get(goal, GOAL_KEYWORDS["maintenance"])["avoid"]
+    def is_avoid(p):
+        return any(k in (p.get("name") or "").lower() for k in kw_avoid)
+
+    scored = sorted(pool, key=lambda p: _quickmeal_score(p, goal), reverse=True)
+    clean = [p for p in scored if not is_avoid(p)] or scored  # avoid-list only if nothing else
+
+    def take_from(candidates, picked):
+        chosen_ids = {q["id"] for q in picked}
+        options = [p for p in candidates if p["id"] not in chosen_ids]
+        if not options:
+            return None
+        return random.choice(options[:3])  # variety: random among the slot's top-3 scorers
+
+    picked = []
+    slots = {}
+    # Required slots: protein always; base unless fat_loss on a tight budget; veg/side.
+    want_base = not (goal == "fat_loss" and budget < 200)
+    for slot_name, wanted in (("protein", True), ("base", want_base), ("veg", True)):
+        if not wanted:
+            continue
+        candidates = [p for p in clean if _quickmeal_slot(p) == slot_name]
+        choice = take_from(candidates, picked)
+        if choice is not None:
+            picked.append(choice)
+            slots[choice["id"]] = slot_name
+    # Fill to 3-5 items by overall score (non-avoid first). Fewer than 3 matching
+    # products -> return what exists (min 1).
+    target_count = min(5, max(3, len(picked)), len(pool))
+    while len(picked) < target_count:
+        choice = take_from(clean, picked) or take_from(scored, picked)
+        if choice is None:
+            break
+        picked.append(choice)
+        slots.setdefault(choice["id"], _quickmeal_slot(choice))
+    if not picked:
+        return []
+
+    # Budget shares: protein-slot items split the goal's protein_priority band
+    # (midpoint), everything else splits the remainder; normalized to 100.
+    protein_pct = _protein_share_pct(goal)
+    protein_items = [p for p in picked if slots.get(p["id"]) == "protein"]
+    others = [p for p in picked if slots.get(p["id"]) != "protein"]
+    shares = {}
+    if protein_items and others:
+        for p in protein_items:
+            shares[p["id"]] = protein_pct / len(protein_items)
+        for p in others:
+            shares[p["id"]] = (100.0 - protein_pct) / len(others)
+    else:
+        for p in picked:
+            shares[p["id"]] = 100.0 / len(picked)
+
+    result = []
+    for p in picked:
+        result.append({
+            "product": p,
+            "share": shares[p["id"]],
+            "reason_slots": {
+                "slot": slots.get(p["id"], "protein"),
+                "protein_per_100g": p.get("protein_per_100g"),
+                "calories_per_100g": p.get("calories_per_100g"),
+                "prioritized": any(k in (p.get("name") or "").lower()
+                                   for k in GOAL_KEYWORDS.get(goal, GOAL_KEYWORDS["maintenance"])["prioritize"]),
+            },
+            "reason": "",  # filled by the language layer (AI or template) after totals
+        })
+    return result
+
+async def _quickmeal_language_layer(items: list, goal: str) -> dict:
+    """ONE LLM call for per-item reason lines + a one-line summary. The meal is
+    already final — this only words it. Raises on any problem; the caller falls
+    back to templates (the meal NEVER fails because of AI)."""
+    from emergentintegrations.llm.chat import LlmChat, UserMessage
+    items_str = "\n".join(
+        f"- {it['product_name']}: {it['grams']}g, {it['calories']} kcal, P:{it['protein']}g, C:{it['carbs']}g, F:{it['fat']}g"
+        for it in items
+    )
+    prompt = f"""The meal below is FINAL — do not change, add, or remove items or amounts.
+For each item write ONE short line on why it fits the {goal} goal, plus a one-line overall summary.
+
+{items_str}
+
+Respond ONLY in this JSON format (no markdown, no backticks):
+{{"reasons": ["one line per item, same order as listed"], "summary": "one line"}}"""
+    chat = LlmChat(
+        api_key=os.environ.get('EMERGENT_LLM_KEY', ''),
+        session_id=f"quickmeal-lang-{uuid.uuid4()}",
+        system_message=f"You are a professional nutritionist. You MUST strictly follow {goal} guidelines. You are NOT a doctor: do not give medical/clinical/diagnostic advice; for health conditions advise consulting a professional. Respond ONLY in valid JSON. No markdown, no backticks, no extra text."
+    ).with_model("openai", "gpt-5.2")
+    response = await chat.send_message(UserMessage(text=prompt))
+    cleaned = response.strip()
+    if cleaned.startswith("```"):
+        cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
+        cleaned = cleaned.rsplit("```", 1)[0]
+    parsed = json.loads(cleaned)
+    reasons = [str(r) for r in (parsed.get("reasons") or [])]
+    summary = str(parsed.get("summary") or "").strip()
+    if not summary or len(reasons) < len(items):
+        raise ValueError("incomplete language-layer response")
+    return {"reasons": reasons[:len(items)], "summary": summary}
+
 @api_router.post("/ai/quick-meal")
 async def ai_quick_meal(data: QuickMealRequest, user=Depends(get_current_user)):
     try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage
-
-        # Define strict nutrition guidelines for each goal
-        GOAL_GUIDELINES = {
-            "fat_loss": {
-                "description": "Fat Loss - High protein, low carb, calorie deficit",
-                "target_calories": "400-600 kcal per meal",
-                "protein_priority": "50-60% of budget on protein sources",
-                "macro_ratio": "High protein (40-50%), Low carb (20-30%), Moderate fat (20-30%)",
-                "foods_to_prioritize": "Lean proteins (chicken, fish, egg whites, tofu), Low-calorie vegetables",
-                "foods_to_avoid": "High-carb items (rice, bread), High-fat items",
-                "portion_size": "Smaller portions, focus on protein density"
-            },
-            "muscle_gain": {
-                "description": "Muscle Gain - High protein, high carb, calorie surplus",
-                "target_calories": "700-1000 kcal per meal",
-                "protein_priority": "40-50% of budget on protein sources",
-                "macro_ratio": "High protein (35-45%), High carb (40-50%), Moderate fat (15-25%)",
-                "foods_to_prioritize": "Lean proteins, Complex carbs (brown rice, quinoa, oats), Healthy fats",
-                "foods_to_avoid": "Low-calorie items that don't support growth",
-                "portion_size": "Larger portions to support muscle building"
-            },
-            "maintenance": {
-                "description": "Maintenance - Balanced nutrition",
-                "target_calories": "500-700 kcal per meal",
-                "protein_priority": "30-40% of budget on protein sources",
-                "macro_ratio": "Balanced - Protein (30-35%), Carbs (35-45%), Fat (20-30%)",
-                "foods_to_prioritize": "Variety of proteins, carbs, and fats",
-                "foods_to_avoid": "None - balanced approach",
-                "portion_size": "Moderate portions for energy balance"
-            },
-            "beginner": {
-                "description": "Beginner / Adaptation Phase - Easy to digest, moderate calories",
-                "target_calories": "450-600 kcal per meal",
-                "protein_priority": "30-40% of budget on easily digestible proteins",
-                "macro_ratio": "Moderate protein (30-35%), Moderate carb (40-45%), Lower fat (20-25%)",
-                "foods_to_prioritize": "Easy to digest proteins (paneer, dal, egg whites), Simple carbs (brown rice, oats), Easily digestible foods",
-                "foods_to_avoid": "Very high fiber items, Heavy/rich foods, Excessive fats",
-                "portion_size": "Moderate portions to allow body adaptation"
-            },
-            "recovery": {
-                "description": "Recovery / Deload Phase - Lower intensity, anti-inflammatory",
-                "target_calories": "400-550 kcal per meal",
-                "protein_priority": "30-35% of budget on protein for recovery",
-                "macro_ratio": "Moderate protein (30-35%), Lower carb (30-35%), Moderate-high healthy fats (30-35%)",
-                "foods_to_prioritize": "Quality proteins, Anti-inflammatory foods, Healthy fats (avocado, nuts), Vegetables",
-                "foods_to_avoid": "Excessive carbs, Processed foods, High-sugar items",
-                "portion_size": "Slightly smaller portions to aid recovery"
-            },
-            "recomposition": {
-                "description": "Recomposition / Body Recomp - Build muscle AND lose fat simultaneously at maintenance calories",
-                "target_calories": "500-650 kcal per meal (maintenance-level)",
-                "protein_priority": "45-55% of budget on high-quality protein (VERY high protein)",
-                "macro_ratio": "Very high protein (40-45%), Moderate carb (30-35%), Moderate fat (20-25%)",
-                "foods_to_prioritize": "Lean proteins (chicken, fish, egg whites, paneer, tofu), Fibrous vegetables, Moderate complex carbs",
-                "foods_to_avoid": "Refined sugars, Excess oils/fats, Empty-calorie carbs",
-                "portion_size": "Moderate, maintenance-level portions with a strong protein emphasis"
-            },
-            "lean_bulk": {
-                "description": "Lean Bulk - Slight calorie surplus to build muscle with minimal fat gain",
-                "target_calories": "650-850 kcal per meal (slight surplus ~+10-15%)",
-                "protein_priority": "40-50% of budget on protein sources (high protein)",
-                "macro_ratio": "High protein (30-35%), High carb (40-50%), Controlled fat (15-20%)",
-                "foods_to_prioritize": "Lean proteins, Complex carbs (brown rice, quinoa, oats), Controlled healthy fats",
-                "foods_to_avoid": "Excessive fats and fried foods, Empty calories that add fat instead of muscle",
-                "portion_size": "Slightly larger portions for a controlled surplus"
-            }
-        }
-
-        goal_guide = GOAL_GUIDELINES.get(data.goal, GOAL_GUIDELINES["maintenance"])
-
         # Get user's daily targets from profile
         user_goals = {
             "daily_calories": user.get("daily_calories", 2000),
@@ -2510,96 +2812,10 @@ async def ai_quick_meal(data: QuickMealRequest, user=Depends(get_current_user)):
         if not products:
             return {"meal_items": [], "summary": "No products available for your preference.", "totals": {}}
 
-        # Build stock-aware menu string for AI
-        available_str = "\n".join([
-            f"- {p['name']} ({p.get('diet_type','veg')}): ₹{p['cost_per_100g']}/100g | {p['calories_per_100g']}cal, P:{p['protein_per_100g']}g, C:{p['carbs_per_100g']}g, F:{p['fat_per_100g']}g per 100g | MAX available: {int(p['available_qty_grams'])}g"
-            for p in products
-        ])
-        diet_pref_str = (", ".join(_prefs).upper() + " ONLY") if _prefs else "Both veg and non-veg allowed"
-        budget_str = f"Budget: ₹{data.budget}" if data.budget else "No specific budget"
-
-        # User's fitness profile
-        user_profile_str = f"""
-**USER'S DAILY TARGETS:**
-- Daily Calorie Target: {user_goals['daily_calories']} kcal
-- Daily Protein Target: {user_goals['daily_protein']}g
-- Daily Carbs Target: {user_goals['daily_carbs']}g
-- Daily Fat Target: {user_goals['daily_fat']}g
-- User's Fitness Goal: {user_goals['fitness_goal']}
-
-NOTE: This is ONE MEAL. Keep portions reasonable to fit within user's daily targets (typically 25-35% of daily calories per meal)."""
-
-        # HYBRID STEP 1: AI picks items with STRICT goal-based guidelines
-        prompt = f"""You are a professional nutritionist and meal planner. Create a meal that STRICTLY follows the fitness goal guidelines.
-
-**GOAL: {goal_guide['description']}**
-
-{user_profile_str}
-
-**STRICT NUTRITIONAL REQUIREMENTS:**
-- Target Calories: {goal_guide['target_calories']}
-- Protein Priority: {goal_guide['protein_priority']}
-- Macro Ratio: {goal_guide['macro_ratio']}
-- Foods to Prioritize: {goal_guide['foods_to_prioritize']}
-- Foods to Avoid: {goal_guide['foods_to_avoid']}
-- Portion Size: {goal_guide['portion_size']}
-
-**CUSTOMER PREFERENCES:**
-- Diet: {diet_pref_str}
-- {budget_str}
-
-**AVAILABLE MENU (with MAX stock):**
-{available_str}
-
-**CRITICAL RULES - YOU MUST FOLLOW THESE EXACTLY:**
-1. Pick 3-5 items that STRICTLY ALIGN with the {data.goal} goal guidelines above
-2. ONLY pick items from the available menu
-3. Use EXACT product names as listed
-4. For each item, assign budget_share_percent (total must equal 100)
-5. DO NOT exceed MAX available stock
-6. PRIORITIZE foods listed in "Foods to Prioritize" for {data.goal}
-7. AVOID or MINIMIZE foods listed in "Foods to Avoid" for {data.goal}
-8. Ensure the meal targets the specified calorie range and macro ratios
-9. For {data.goal} specifically:
-   - {"Focus on lean proteins and low-carb vegetables. Minimize rice, bread, and high-fat items." if data.goal == "fat_loss" else ""}
-   - {"Include substantial protein AND complex carbs. Higher calorie items preferred." if data.goal == "muscle_gain" else ""}
-   - {"Balance of all macros - variety is key." if data.goal == "maintenance" else ""}
-   - {"Easy to digest proteins (paneer, dal, egg whites) and simple carbs. Avoid heavy foods." if data.goal == "beginner" else ""}
-   - {"Quality proteins, healthy fats (nuts, avocado), vegetables. Lower carbs." if data.goal == "recovery" else ""}
-   - {"Maintenance-level calories with VERY high protein to build muscle and lose fat at the same time. Moderate carbs, moderate fats." if data.goal == "recomposition" else ""}
-   - {"Slight calorie surplus (~+10-15%) with high protein and controlled fats to gain lean muscle while minimizing fat gain." if data.goal == "lean_bulk" else ""}
-
-Respond ONLY in this JSON format (no markdown, no backticks):
-{{"items": [{{"product_name": "Exact Name", "budget_share_percent": 40, "reason": "Why this fits {data.goal} goal"}}], "summary": "One line explaining how this meal supports {data.goal}"}}"""
-
-        chat = LlmChat(
-            api_key=os.environ.get('EMERGENT_LLM_KEY', ''),
-            session_id=f"quickmeal-{uuid.uuid4()}",
-            system_message=f"You are a professional nutritionist. You MUST strictly follow {data.goal} guidelines. You are NOT a doctor: do not give medical/clinical/diagnostic advice; for health conditions advise consulting a professional. Respond ONLY in valid JSON. No markdown, no backticks, no extra text."
-        ).with_model("openai", "gpt-5.2")
-        response = await chat.send_message(UserMessage(text=prompt))
-
-        # Parse AI response
-        cleaned = response.strip()
-        if cleaned.startswith("```"):
-            cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
-            cleaned = cleaned.rsplit("```", 1)[0]
-        result = json.loads(cleaned)
-
-        ai_picks = result.get("items", result.get("meal_items", []))
-        if not ai_picks:
-            return {"meal_items": [], "summary": "AI returned no items. Please try again.", "totals": {}}
-
-        # HYBRID STEP 2: Match AI picks to real products
-        matched = []
-        for pick in ai_picks:
-            name = pick.get("product_name", "")
-            product = next((p for p in products if p["name"].lower() == name.lower()), None)
-            if not product:
-                product = next((p for p in products if name.lower() in p["name"].lower() or p["name"].lower() in name.lower()), None)
-            if product:
-                share = max(5, pick.get("budget_share_percent", round(100 / len(ai_picks))))
-                matched.append({"product": product, "share": share, "reason": pick.get("reason", "")})
+        # STEP 1 (deterministic rule engine): pick items + budget shares.
+        # The engine returns product objects directly, so the old STEP 2 name
+        # matching collapses; `matched` keeps the same structure STEPS 3-4 expect.
+        matched = rule_engine_pick(products, data.goal, data.budget or 300, _prefs)
 
         if not matched:
             return {"meal_items": [], "summary": "Could not match AI suggestions to menu. Try again.", "totals": {}}
@@ -2722,9 +2938,29 @@ Respond ONLY in this JSON format (no markdown, no backticks):
         if all(25 <= pct <= 35 for pct in meal_percentage.values()):
             warnings.append("✅ This meal is well-balanced and fits perfectly within your daily targets!")
 
+        # AI language layer (non-blocking polish): per-item reasons + summary on the
+        # FINALIZED meal. Timeout/error/AI_ENABLED=false -> per-goal templates; the
+        # meal never fails because of AI.
+        lang = None
+        if os.environ.get("AI_ENABLED", "true").strip().lower() != "false":
+            try:
+                lang = await asyncio.wait_for(
+                    _quickmeal_language_layer(enriched_items, data.goal), timeout=3.0)
+            except Exception as lang_err:
+                logger.warning(f"Quick-meal language layer fell back to templates: {lang_err}")
+        if lang:
+            for it, reason in zip(enriched_items, lang["reasons"]):
+                it["reason"] = reason
+            summary = lang["summary"]
+        else:
+            reason_templates = QUICKMEAL_REASON_TEMPLATES.get(data.goal, QUICKMEAL_REASON_TEMPLATES["maintenance"])
+            for i, it in enumerate(enriched_items):
+                it["reason"] = reason_templates[i % len(reason_templates)]
+            summary = QUICKMEAL_SUMMARY_TEMPLATES.get(data.goal, QUICKMEAL_SUMMARY_TEMPLATES["maintenance"])
+
         return {
             "meal_items": enriched_items,
-            "summary": result.get("summary", "AI-built meal"),
+            "summary": summary,
             "totals": totals,
             "diet_preference": data.diet_preference,
             "goal": data.goal,
@@ -2732,9 +2968,6 @@ Respond ONLY in this JSON format (no markdown, no backticks):
             "meal_percentage": meal_percentage,
             "user_daily_targets": user_goals
         }
-    except json.JSONDecodeError:
-        logger.error("AI quick-meal JSON parse error")
-        return {"meal_items": [], "summary": "Could not parse AI response. Please try again.", "totals": {}}
     except Exception as e:
         logger.error(f"AI quick-meal error: {e}")
         return {"meal_items": [], "summary": "AI meal builder unavailable. Please try the manual menu.", "totals": {}}
@@ -5195,7 +5428,12 @@ async def update_staff(staff_id: str, data: StaffUpdate, user=Depends(get_curren
         update_data["cluster_store_ids"] = data.cluster_store_ids
     if not update_data:
         raise HTTPException(status_code=400, detail="No updates provided")
-    await db.users.update_one({"id": staff_id}, {"$set": update_data})
+    update_ops: Dict[str, Any] = {"$set": update_data}
+    if data.is_active is False:
+        # Revoke every outstanding token for the deactivated account
+        # ($inc initializes token_version to 1 when the field is absent).
+        update_ops["$inc"] = {"token_version": 1}
+    await db.users.update_one({"id": staff_id}, update_ops)
     audit_after = await db.users.find_one({"id": staff_id}, {"_id": 0})
     # Covers update / role-change / deactivate (is_active=false) in one place.
     await log_admin_audit(user, "deactivate" if data.is_active is False else "update",
@@ -5279,7 +5517,7 @@ async def pin_login(data: PinLogin, request: Request):
         record_pin_fail(rl_key, now)
         raise HTTPException(status_code=401, detail="Invalid PIN")
     reset_pin_counter(rl_key)
-    token = create_token(matched_staff["id"], matched_staff["role"])
+    token = create_token(matched_staff["id"], matched_staff["role"], matched_staff.get("token_version", 0))
     return {
         "token": token,
         "user": {

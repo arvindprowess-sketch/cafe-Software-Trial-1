@@ -12,31 +12,28 @@ import { apiCall, getStoredUser } from '../../utils/api';
 import SideDrawer from '../components/SideDrawer';
 import CartPill from '../components/CartPill';
 import { useCart } from '../../utils/CartContext';
-import { FUEL, FONT, GOALS as FUEL_GOALS } from '../../utils/theme';
+import { FUEL, FONT, GOALS as FUEL_GOALS, RADIUS, SPACE } from '../../utils/theme';
 import { DIET_TAGS, DIET_LABEL, toggleDietTag } from '../../utils/diet';
+import PressableScale from '../components/PressableScale';
+import * as Haptics from 'expo-haptics';
 
-// BK Design System Colors
-const BK_RED = '#15140F';
-const BK_ORANGE = '#15140F';
-const BK_BROWN = '#15140F';
-const BK_CREAM = '#F4F1E9';
-const BK_GREEN = '#3FA34D';
-const BK_WHITE = '#FFFFFF';
-const BK_TEXT_LIGHT = '#6B6A5E';
-const Z_RED = BK_RED;
-const GREEN = BK_GREEN;
+// PR-C: success haptic on add-to-cart (safe no-op on web)
+const hapticSuccess = () => {
+  try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {}); } catch {}
+};
+
 const { width } = Dimensions.get('window');
 
-// Category grid for BK-style menu
+// Category grid (FUEL palette)
 const MENU_CATEGORIES = [
-  { key: 'Protein', label: 'High Protein', icon: 'barbell', color: BK_RED, image: 'https://images.unsplash.com/photo-1632778149955-e80f8ceca2e8?w=100&h=100&fit=crop' },
-  { key: 'Carb', label: 'Healthy Carbs', icon: 'leaf', color: '#D69A35', image: 'https://images.unsplash.com/photo-1536304929831-ee1ca9d44726?w=100&h=100&fit=crop' },
-  { key: 'Fat', label: 'Good Fats', icon: 'water', color: BK_ORANGE, image: 'https://images.unsplash.com/photo-1523049673857-eb18f1d7b578?w=100&h=100&fit=crop' },
-  { key: 'Meal', label: 'Ready Meals', icon: 'restaurant', color: '#3FA34D', image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=100&h=100&fit=crop' },
-  { key: 'veg', label: 'Veg Only', icon: 'nutrition', color: '#3FA34D', image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=100&h=100&fit=crop' },
-  { key: 'non-veg', label: 'Non-Veg', icon: 'flame', color: BK_RED, image: 'https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=100&h=100&fit=crop' },
-  { key: 'budget', label: 'Budget Meals', icon: 'wallet', color: '#15140F', image: 'https://images.unsplash.com/photo-1490818387583-1baba5e638af?w=100&h=100&fit=crop' },
-  { key: 'ai', label: 'AI Picks', icon: 'sparkles', color: BK_ORANGE, image: null },
+  { key: 'Protein', label: 'High Protein', icon: 'barbell', color: FUEL.protein, image: 'https://images.unsplash.com/photo-1632778149955-e80f8ceca2e8?w=100&h=100&fit=crop' },
+  { key: 'Carb', label: 'Healthy Carbs', icon: 'leaf', color: FUEL.carbs, image: 'https://images.unsplash.com/photo-1536304929831-ee1ca9d44726?w=100&h=100&fit=crop' },
+  { key: 'Fat', label: 'Good Fats', icon: 'water', color: FUEL.fat, image: 'https://images.unsplash.com/photo-1523049673857-eb18f1d7b578?w=100&h=100&fit=crop' },
+  { key: 'Meal', label: 'Ready Meals', icon: 'restaurant', color: FUEL.success, image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=100&h=100&fit=crop' },
+  { key: 'veg', label: 'Veg Only', icon: 'nutrition', color: FUEL.veg, image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=100&h=100&fit=crop' },
+  { key: 'non-veg', label: 'Non-Veg', icon: 'flame', color: FUEL.nonVeg, image: 'https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=100&h=100&fit=crop' },
+  { key: 'budget', label: 'Budget Meals', icon: 'wallet', color: FUEL.ink, image: 'https://images.unsplash.com/photo-1490818387583-1baba5e638af?w=100&h=100&fit=crop' },
+  { key: 'ai', label: 'AI Picks', icon: 'sparkles', color: FUEL.ink, image: null },
 ];
 
 export default function HomeScreen() {
@@ -50,10 +47,10 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const bannerRef = useRef<FlatList>(null);
   const [bannerIdx, setBannerIdx] = useState(0);
-  
+
   // Side drawer state
   const [drawerVisible, setDrawerVisible] = useState(false);
-  
+
   // Order type toggle
   const [orderType, setOrderType] = useState<'delivery' | 'dine-in'>('dine-in');
 
@@ -90,8 +87,8 @@ export default function HomeScreen() {
   const loadData = useCallback(async () => {
     try {
       const [u, s, best, b] = await Promise.all([
-        getStoredUser(), 
-        apiCall('/user/nutrition-summary').catch(() => null), 
+        getStoredUser(),
+        apiCall('/user/nutrition-summary').catch(() => null),
         apiCall('/products/best-sellers').catch(() => apiCall('/products')).catch(() => []),
         apiCall('/banners'),
       ]);
@@ -129,6 +126,9 @@ export default function HomeScreen() {
   const isCalorieOver = calPct > 100;
   const caloriesOverAmount = Math.round((consumed.calories || 0) - (goals.daily_calories || 2000));
 
+  // Avatar initial derived from the loaded user's name
+  const userInitial = (user?.name || '').trim().charAt(0).toUpperCase();
+
   // Memoize popular products (best sellers, up to 30) arranged into a 5-row horizontal grid
   const popularProducts = useMemo(() => products.slice(0, 30), [products]);
   const POPULAR_ROWS = 5;
@@ -154,24 +154,24 @@ export default function HomeScreen() {
           <Image source={{ uri: item.image_url }} style={styles.popularImg} resizeMode="cover" />
         ) : (
           <View style={[styles.popularImg, styles.popularImgPlaceholder]}>
-            <Ionicons name="restaurant" size={28} color="#D0D0D0" />
+            <Ionicons name="restaurant" size={28} color={FUEL.sandBorder} />
           </View>
         )}
         {isPopular && (
           <View style={styles.popularBadge}>
-            <Ionicons name="flame" size={10} color="#FFF" />
+            <Ionicons name="flame" size={10} color={FUEL.lime} />
             <Text style={styles.popularBadgeText}>POPULAR</Text>
           </View>
         )}
         {isHighProtein && !isPopular && (
-          <View style={[styles.popularBadge, { backgroundColor: BK_BROWN }]}>
-            <Ionicons name="barbell" size={10} color="#FFF" />
+          <View style={[styles.popularBadge, { backgroundColor: FUEL.ink }]}>
+            <Ionicons name="barbell" size={10} color={FUEL.lime} />
             <Text style={styles.popularBadgeText}>HIGH PROTEIN</Text>
           </View>
         )}
         {isUnderBudget && !isPopular && !isHighProtein && (
-          <View style={[styles.popularBadge, { backgroundColor: BK_GREEN }]}>
-            <Ionicons name="wallet" size={10} color="#FFF" />
+          <View style={[styles.popularBadge, { backgroundColor: FUEL.success }]}>
+            <Ionicons name="wallet" size={10} color={FUEL.white} />
             <Text style={styles.popularBadgeText}>BUDGET</Text>
           </View>
         )}
@@ -179,8 +179,8 @@ export default function HomeScreen() {
           <Text style={styles.proteinText}>{item.protein_per_100g}g</Text>
           <Text style={styles.proteinLabel}>Protein</Text>
         </View>
-        <View style={[styles.vegBadge, { borderColor: item.diet_type === 'non-veg' ? Z_RED : GREEN }]}>
-          <View style={[styles.vegBadgeDot, { backgroundColor: item.diet_type === 'non-veg' ? Z_RED : GREEN }]} />
+        <View style={[styles.vegBadge, { borderColor: item.diet_type === 'non-veg' ? FUEL.nonVeg : FUEL.veg }]}>
+          <View style={[styles.vegBadgeDot, { backgroundColor: item.diet_type === 'non-veg' ? FUEL.nonVeg : FUEL.veg }]} />
         </View>
         <View style={styles.popularInfo}>
           <Text style={styles.popularName} numberOfLines={1}>{item.name}</Text>
@@ -188,14 +188,14 @@ export default function HomeScreen() {
             <Text style={styles.popularPrice}>₹{item.cost_per_100g}<Text style={styles.per100}>/100g</Text></Text>
             {ci ? (
               <View style={styles.popQtyBox}>
-                <TouchableOpacity testID={`popular-dec-${item.id}`} style={styles.popQtyBtn} onPress={() => cartCtx.decItem(item.id)}><Ionicons name="remove" size={13} color="#FFF" /></TouchableOpacity>
+                <TouchableOpacity testID={`popular-dec-${item.id}`} style={styles.popQtyBtn} onPress={() => cartCtx.decItem(item.id)}><Ionicons name="remove" size={13} color={FUEL.lime} /></TouchableOpacity>
                 <Text style={styles.popQtyText}>{ci.grams}g</Text>
-                <TouchableOpacity testID={`popular-inc-${item.id}`} style={styles.popQtyBtn} onPress={() => cartCtx.incItem(item.id)}><Ionicons name="add" size={13} color="#FFF" /></TouchableOpacity>
+                <TouchableOpacity testID={`popular-inc-${item.id}`} style={styles.popQtyBtn} onPress={() => cartCtx.incItem(item.id)}><Ionicons name="add" size={13} color={FUEL.lime} /></TouchableOpacity>
               </View>
             ) : (
-              <TouchableOpacity testID={`popular-add-${item.id}`} style={styles.addBtn} onPress={() => cartCtx.addItem(item)}>
+              <PressableScale haptic testID={`popular-add-${item.id}`} style={styles.addBtn} onPress={() => { cartCtx.addItem(item); hapticSuccess(); }}>
                 <Text style={styles.addBtnText}>Add +</Text>
-              </TouchableOpacity>
+              </PressableScale>
             )}
           </View>
         </View>
@@ -309,30 +309,30 @@ export default function HomeScreen() {
     }
   };
 
-  if (loading) return <SafeAreaView style={styles.safe}><View style={styles.center}><ActivityIndicator size="large" color={Z_RED} /></View></SafeAreaView>;
+  if (loading) return <SafeAreaView style={styles.safe}><View style={styles.center}><ActivityIndicator size="large" color={FUEL.ink} /></View></SafeAreaView>;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       {/* Side Drawer */}
       <SideDrawer visible={drawerVisible} onClose={() => setDrawerVisible(false)} user={user} />
-      
-      <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Z_RED} />} showsVerticalScrollIndicator={false}>
-        {/* ===== HEADER WITH HAMBURGER & ORDER TYPE TOGGLE ===== */}
+
+      <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={FUEL.ink} />} showsVerticalScrollIndicator={false}>
+        {/* ===== HEADER: ☰ · DELIVERY/DINE-IN TOGGLE · AVATAR ===== */}
         <View style={styles.header}>
           <TouchableOpacity testID="menu-drawer-btn" style={styles.menuBtn} onPress={() => setDrawerVisible(true)}>
-            <Ionicons name="menu" size={24} color="#F4F1E9" />
+            <Ionicons name="menu" size={24} color={FUEL.sand} />
           </TouchableOpacity>
-          
+
           {/* Delivery / Dine-in Toggle */}
           <View style={styles.orderToggle}>
-            <TouchableOpacity 
+            <TouchableOpacity
               testID="order-delivery-toggle"
               style={[styles.toggleBtn, orderType === 'delivery' && styles.toggleBtnActive]}
               onPress={() => setOrderType('delivery')}
             >
               <Text style={[styles.toggleText, orderType === 'delivery' && styles.toggleTextActive]}>DELIVERY</Text>
             </TouchableOpacity>
-            <TouchableOpacity 
+            <TouchableOpacity
               testID="order-dinein-toggle"
               style={[styles.toggleBtn, orderType === 'dine-in' && styles.toggleBtnActive]}
               onPress={() => setOrderType('dine-in')}
@@ -340,28 +340,55 @@ export default function HomeScreen() {
               <Text style={[styles.toggleText, orderType === 'dine-in' && styles.toggleTextActive]}>DINE-IN</Text>
             </TouchableOpacity>
           </View>
+
+          {/* Avatar — lime circle with the user's initial, opens the drawer */}
+          <TouchableOpacity testID="header-avatar" style={styles.avatar} onPress={() => setDrawerVisible(true)} activeOpacity={0.85}>
+            {userInitial ? (
+              <Text style={styles.avatarInitial}>{userInitial}</Text>
+            ) : (
+              <Ionicons name="person" size={18} color={FUEL.ink} />
+            )}
+          </TouchableOpacity>
         </View>
 
         {/* Location Bar */}
         {orderType === 'dine-in' && (
-          <TouchableOpacity style={styles.locationBar} onPress={() => router.push('/scan-table')}>
-            <Ionicons name="restaurant" size={18} color={Z_RED} />
-            <Text style={styles.locationText}>DINE-IN AT:</Text>
+          <TouchableOpacity style={styles.locationBar} onPress={() => router.push('/scan-table')} activeOpacity={0.85}>
+            <View style={styles.locationIconBox}>
+              <Ionicons name="restaurant" size={16} color={FUEL.lime} />
+            </View>
             <View style={styles.locationValue}>
-              <Text style={styles.locationName}>BORAROC • Scan Table</Text>
-              <Ionicons name="chevron-down" size={16} color="#9C9C9C" />
+              <Text style={styles.locationText}>DINE-IN AT</Text>
+              <View style={styles.locationNameRow}>
+                <Text style={styles.locationName} numberOfLines={1}>BORAROC • Scan Table</Text>
+                <Ionicons name="chevron-down" size={14} color={FUEL.muted} />
+              </View>
             </View>
           </TouchableOpacity>
         )}
-        
+
         {orderType === 'delivery' && (
           <TouchableOpacity style={styles.locationBar} onPress={() => setShowAddressModal(true)} testID="delivery-address-bar" activeOpacity={0.8}>
-            <Ionicons name="bicycle" size={18} color={Z_RED} />
-            <Text style={styles.locationText}>DELIVER TO:</Text>
-            <View style={styles.locationValue}>
-              <Text style={styles.locationName} numberOfLines={1}>{deliveryAddress || 'Select Address'}</Text>
-              <Ionicons name="chevron-down" size={16} color="#9C9C9C" />
+            <View style={styles.locationIconBox}>
+              <Ionicons name="bicycle" size={16} color={FUEL.lime} />
             </View>
+            <View style={styles.locationValue}>
+              <Text style={styles.locationText}>DELIVER TO</Text>
+              <View style={styles.locationNameRow}>
+                <Text style={styles.locationName} numberOfLines={1}>{deliveryAddress || 'Select Address'}</Text>
+                <Ionicons name="chevron-down" size={14} color={FUEL.muted} />
+              </View>
+            </View>
+            <TouchableOpacity testID="detect-location-chip" style={styles.detectChip} onPress={detectLocation} disabled={locating} activeOpacity={0.85}>
+              {locating ? (
+                <ActivityIndicator size="small" color={FUEL.ink} />
+              ) : (
+                <>
+                  <Ionicons name="location" size={12} color={FUEL.ink} />
+                  <Text style={styles.detectChipText}>DETECT</Text>
+                </>
+              )}
+            </TouchableOpacity>
           </TouchableOpacity>
         )}
 
@@ -372,16 +399,15 @@ export default function HomeScreen() {
             {FUEL_GOALS.map((g) => {
               const active = mealGoal === g.key;
               return (
-                <TouchableOpacity
+                <PressableScale
                   key={g.key}
                   testID={`home-goal-${g.key}`}
                   style={[styles.goalSelectorChip, active && styles.goalSelectorChipActive]}
                   onPress={() => handleGoalTap(g.key)}
-                  activeOpacity={0.85}
                 >
                   <Ionicons name={g.icon as any} size={20} color={active ? FUEL.ink : FUEL.limeDeep} />
                   <Text style={[styles.goalSelectorLabel, active && styles.goalSelectorLabelActive]}>{g.label}</Text>
-                </TouchableOpacity>
+                </PressableScale>
               );
             })}
           </View>
@@ -416,7 +442,7 @@ export default function HomeScreen() {
           ) : null}
         </View>
 
-        {/* ===== PROMOTIONAL BANNERS (ENHANCED) ===== */}
+        {/* ===== PROMOTIONAL BANNERS — dark hero style (ink + lime) ===== */}
         {banners.length > 0 && (
           <FlatList
             ref={bannerRef}
@@ -439,7 +465,7 @@ export default function HomeScreen() {
                   }
                 }}
               >
-                <View style={[styles.banner, { backgroundColor: item.color }]}>
+                <View style={styles.banner}>
                   <View style={styles.bannerContent}>
                     <Text style={styles.bannerTitle}>{item.title}</Text>
                     <Text style={styles.bannerSub}>{item.subtitle}</Text>
@@ -452,14 +478,14 @@ export default function HomeScreen() {
                       </View>
                     )}
                     {item.type === 'pack' && (
-                      <View style={[styles.bannerBadge, { backgroundColor: 'rgba(255,255,255,0.25)' }]}>
-                        <Ionicons name="nutrition" size={12} color="#FFF" />
+                      <View style={styles.bannerBadge}>
+                        <Ionicons name="nutrition" size={12} color={FUEL.lime} />
                         <Text style={styles.bannerBadgeText}>View Pack</Text>
                       </View>
                     )}
                   </View>
                   <View style={styles.bannerImagePlaceholder}>
-                    <Ionicons name={item.type === 'pack' ? 'fitness' : item.type === 'offer' ? 'pricetag' : 'fast-food'} size={60} color="rgba(255,255,255,0.4)" />
+                    <Ionicons name={item.type === 'pack' ? 'fitness' : item.type === 'offer' ? 'pricetag' : 'fast-food'} size={60} color="rgba(199,242,78,0.35)" />
                   </View>
                 </View>
               </TouchableOpacity>
@@ -472,7 +498,7 @@ export default function HomeScreen() {
           ))}
         </View>
 
-        {/* ===== CATEGORY GRID (ENHANCED) ===== */}
+        {/* ===== CATEGORY GRID ===== */}
         <Text style={styles.sectionTitle}>Our Menu</Text>
         <View style={styles.categoryGrid}>
           {MENU_CATEGORIES.map((cat) => (
@@ -487,7 +513,7 @@ export default function HomeScreen() {
                 <Image source={{ uri: cat.image }} style={styles.categoryImage} />
               ) : (
                 <View style={[styles.categoryImage, styles.categoryIconBg, { backgroundColor: cat.color }]}>
-                  <Ionicons name={cat.icon as any} size={32} color="#FFF" />
+                  <Ionicons name={cat.icon as any} size={32} color={cat.key === 'ai' ? FUEL.lime : FUEL.white} />
                 </View>
               )}
               <Text style={styles.categoryLabel} numberOfLines={2}>{cat.label}</Text>
@@ -496,27 +522,27 @@ export default function HomeScreen() {
         </View>
 
         {/* ===== TODAY'S NUTRITION CARD (CLICKABLE) ===== */}
-        <TouchableOpacity 
-          style={styles.nutriCard} 
+        <TouchableOpacity
+          style={styles.nutriCard}
           testID="nutrition-summary-card"
           onPress={() => router.push('/nutrition-detail')}
           activeOpacity={0.8}
         >
           <View style={styles.nutriHeader}>
-            <Ionicons name="fitness" size={18} color={isCalorieOver ? '#C0392B' : Z_RED} />
+            <Ionicons name="fitness" size={18} color={isCalorieOver ? FUEL.error : FUEL.limeDeep} />
             <Text style={styles.nutriTitle}>Today's Nutrition</Text>
             <Text style={styles.nutriMeals}>{summary?.meals_count || 0} meals</Text>
-            <Ionicons name="chevron-forward" size={18} color={BK_TEXT_LIGHT} style={{ marginLeft: 'auto' }} />
+            <Ionicons name="chevron-forward" size={18} color={FUEL.muted} style={{ marginLeft: 'auto' }} />
           </View>
           <View style={styles.nutriRow}>
             <View style={styles.nutriMain}>
-              <Text style={[styles.calValue, isCalorieOver && { color: BK_RED }]}>{Math.round(consumed.calories || 0)}</Text>
+              <Text style={[styles.calValue, isCalorieOver && { color: FUEL.error }]}>{Math.round(consumed.calories || 0)}</Text>
               <Text style={styles.calUnit}>/ {goals.daily_calories || 2000} kcal</Text>
             </View>
             <View style={styles.macroRow}>
               {[
                 { label: 'Protein', val: consumed.protein, goal: goals.daily_protein, color: FUEL.protein },
-                { label: 'Carbs', val: consumed.carbs, goal: goals.daily_carbs, color: '#D69A35' },
+                { label: 'Carbs', val: consumed.carbs, goal: goals.daily_carbs, color: FUEL.carbs },
                 { label: 'Fat', val: consumed.fat, goal: goals.daily_fat, color: FUEL.fat },
               ].map(m => (
                 <View key={m.label} style={styles.macroItem}>
@@ -531,7 +557,7 @@ export default function HomeScreen() {
           </View>
           {isCalorieOver && (
             <View style={styles.overGoalBanner} testID="calorie-over-banner">
-              <Ionicons name="information-circle" size={14} color={BK_RED} />
+              <Ionicons name="information-circle" size={14} color={FUEL.error} />
               <Text style={styles.overGoalText}>
                 {caloriesOverAmount} cal over your daily goal — you're in control!
               </Text>
@@ -544,56 +570,56 @@ export default function HomeScreen() {
           <TouchableOpacity style={styles.scanTableCTA} onPress={() => router.push('/scan-table')} activeOpacity={0.9}>
             <View style={styles.scanCtaLeft}>
               <View style={styles.scanCtaIconBg}>
-                <Ionicons name="qr-code" size={20} color="#FFF" />
+                <Ionicons name="qr-code" size={20} color={FUEL.white} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.scanCtaTitle}>Scan Table QR</Text>
                 <Text style={styles.scanCtaSub}>Order from your seat</Text>
               </View>
             </View>
-            <Ionicons name="scan" size={24} color={GREEN} />
+            <Ionicons name="scan" size={24} color={FUEL.success} />
           </TouchableOpacity>
         )}
 
-        {/* ===== AI QUICK MEAL BUILDER ===== */}
+        {/* ===== AI COMBO BUILDER — dark hero card ===== */}
         {!showMealBuilder && !aiMeal && (
           <TouchableOpacity testID="open-meal-builder" style={styles.mealBuilderCTA} onPress={() => router.push('/combo-builder')} activeOpacity={0.9}>
             <View style={styles.ctaLeft}>
-              <View style={styles.ctaIconBg}>
-                <Ionicons name="sparkles" size={20} color="#FFF" />
+              <View style={styles.heroCtaIconBg}>
+                <Ionicons name="sparkles" size={20} color={FUEL.ink} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.ctaTitle}>AI Combo Builder</Text>
-                <Text style={styles.ctaSub}>Budget + Goal = Perfect meal in seconds</Text>
+                <Text style={styles.heroCtaTitle}>AI Combo Builder</Text>
+                <Text style={styles.heroCtaSub}>Budget + Goal = Perfect meal in seconds</Text>
               </View>
             </View>
-            <Ionicons name="arrow-forward-circle" size={28} color={BK_ORANGE} />
+            <Ionicons name="arrow-forward-circle" size={28} color={FUEL.lime} />
           </TouchableOpacity>
         )}
 
         {/* ===== SCHEDULE FOR LATER ===== */}
         <TouchableOpacity testID="schedule-for-later" style={styles.scheduleCTA} onPress={() => router.push('/(tabs)/menu')} activeOpacity={0.9}>
           <View style={styles.ctaLeft}>
-            <View style={[styles.ctaIconBg, { backgroundColor: BK_GREEN }]}>
-              <Ionicons name="time" size={20} color="#FFF" />
+            <View style={[styles.ctaIconBg, { backgroundColor: FUEL.success }]}>
+              <Ionicons name="time" size={20} color={FUEL.white} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.ctaTitle}>Schedule for Later</Text>
               <Text style={styles.ctaSub}>Pre-order your meals in advance</Text>
             </View>
           </View>
-          <Ionicons name="calendar" size={28} color={BK_GREEN} />
+          <Ionicons name="calendar" size={28} color={FUEL.success} />
         </TouchableOpacity>
 
         {showMealBuilder && !aiMeal && (
           <View style={styles.builderCard}>
             <View style={styles.builderHeader}>
               <View style={styles.builderTitleRow}>
-                <Ionicons name="sparkles" size={18} color={BK_ORANGE} />
+                <Ionicons name="sparkles" size={18} color={FUEL.limeDeep} />
                 <Text style={styles.builderTitle}>AI Meal Builder</Text>
               </View>
               <TouchableOpacity testID="close-builder" onPress={resetBuilder}>
-                <Ionicons name="close-circle" size={24} color="#D0D0D0" />
+                <Ionicons name="close-circle" size={24} color={FUEL.sandBorder} />
               </TouchableOpacity>
             </View>
 
@@ -602,23 +628,23 @@ export default function HomeScreen() {
             <View style={[styles.dietRow, { flexWrap: 'wrap' }]}>
               <TouchableOpacity
                 testID="diet-all"
-                style={[styles.dietChip, dietPref.length === 0 && { backgroundColor: '#D69A35', borderColor: '#D69A35' }]}
+                style={[styles.dietChip, dietPref.length === 0 && { backgroundColor: FUEL.ink, borderColor: FUEL.ink }]}
                 onPress={() => setDietPref([])}
               >
-                <Ionicons name="apps" size={14} color={dietPref.length === 0 ? '#FFF' : '#D69A35'} />
-                <Text style={[styles.dietText, dietPref.length === 0 && { color: '#FFF' }]}>All</Text>
+                <Ionicons name="apps" size={14} color={dietPref.length === 0 ? FUEL.lime : FUEL.muted} />
+                <Text style={[styles.dietText, dietPref.length === 0 && { color: FUEL.white }]}>All</Text>
               </TouchableOpacity>
               {DIET_TAGS.map(tag => {
                 const on = dietPref.includes(tag);
-                const color = tag === 'non-veg' ? Z_RED : GREEN;
+                const color = tag === 'non-veg' ? FUEL.nonVeg : FUEL.veg;
                 return (
                   <TouchableOpacity
                     key={tag} testID={`diet-${tag}`}
                     style={[styles.dietChip, on && { backgroundColor: color, borderColor: color }]}
                     onPress={() => setDietPref(prev => toggleDietTag(prev, tag))}
                   >
-                    <View style={[styles.vegIndicator, { borderColor: on ? '#FFF' : color }]}><View style={[styles.vegDotInner, { backgroundColor: on ? '#FFF' : color }]} /></View>
-                    <Text style={[styles.dietText, on && { color: '#FFF' }]}>{DIET_LABEL[tag]}</Text>
+                    <View style={[styles.vegIndicator, { borderColor: on ? FUEL.white : color }]}><View style={[styles.vegDotInner, { backgroundColor: on ? FUEL.white : color }]} /></View>
+                    <Text style={[styles.dietText, on && { color: FUEL.white }]}>{DIET_LABEL[tag]}</Text>
                   </TouchableOpacity>
                 );
               })}
@@ -634,8 +660,8 @@ export default function HomeScreen() {
                     style={[styles.goalChip6, mealGoal === g.key && { backgroundColor: g.color, borderColor: g.color }]}
                     onPress={() => setMealGoal(g.key)}
                   >
-                    <Ionicons name={g.icon as any} size={15} color={mealGoal === g.key ? '#FFF' : g.color} />
-                    <Text style={[styles.goalText, mealGoal === g.key && { color: '#FFF' }]}>{g.shortLabel}</Text>
+                    <Ionicons name={g.icon as any} size={15} color={mealGoal === g.key ? FUEL.white : g.color} />
+                    <Text style={[styles.goalText, mealGoal === g.key && { color: FUEL.white }]}>{g.shortLabel}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -649,24 +675,24 @@ export default function HomeScreen() {
               value={mealBudget}
               onChangeText={setMealBudget}
               placeholder="₹ Enter budget"
-              placeholderTextColor="#B0B0B0"
+              placeholderTextColor={FUEL.muted}
               keyboardType="number-pad"
             />
 
             {/* Build Button */}
-            <TouchableOpacity testID="build-meal-btn" style={styles.buildBtn} onPress={buildMeal} disabled={aiLoading} activeOpacity={0.85}>
+            <PressableScale haptic testID="build-meal-btn" style={styles.buildBtn} onPress={buildMeal} disabled={aiLoading}>
               {aiLoading ? (
                 <View style={styles.buildBtnContent}>
-                  <ActivityIndicator color="#FFF" size="small" />
+                  <ActivityIndicator color={FUEL.ink} size="small" />
                   <Text style={styles.buildBtnText}>Building your meal...</Text>
                 </View>
               ) : (
                 <View style={styles.buildBtnContent}>
-                  <Ionicons name="sparkles" size={18} color="#FFF" />
+                  <Ionicons name="sparkles" size={18} color={FUEL.ink} />
                   <Text style={styles.buildBtnText}>Build My Meal</Text>
                 </View>
               )}
-            </TouchableOpacity>
+            </PressableScale>
           </View>
         )}
 
@@ -675,11 +701,11 @@ export default function HomeScreen() {
           <View style={styles.mealResultCard}>
             <View style={styles.mealResultHeader}>
               <View style={styles.mealResultTitleRow}>
-                <Ionicons name="sparkles" size={16} color={BK_ORANGE} />
+                <Ionicons name="sparkles" size={16} color={FUEL.limeDeep} />
                 <Text style={styles.mealResultTitle}>Your AI Meal</Text>
               </View>
               <TouchableOpacity testID="rebuild-meal" onPress={resetBuilder}>
-                <View style={styles.rebuildBadge}><Ionicons name="refresh" size={14} color={BK_ORANGE} /><Text style={styles.rebuildText}>New</Text></View>
+                <View style={styles.rebuildBadge}><Ionicons name="refresh" size={14} color={FUEL.limeDeep} /><Text style={styles.rebuildText}>New</Text></View>
               </TouchableOpacity>
             </View>
             <Text style={styles.mealSummary}>{aiMeal.summary}</Text>
@@ -710,8 +736,8 @@ export default function HomeScreen() {
             {aiMeal.meal_items.map((item: any, i: number) => (
               <View key={i} style={styles.mealItem}>
                 <View style={styles.mealItemLeft}>
-                  <View style={[styles.vegDot, { borderColor: item.diet_type === 'non-veg' ? Z_RED : GREEN }]}>
-                    <View style={[styles.vegDotFill, { backgroundColor: item.diet_type === 'non-veg' ? Z_RED : GREEN }]} />
+                  <View style={[styles.vegDot, { borderColor: item.diet_type === 'non-veg' ? FUEL.nonVeg : FUEL.veg }]}>
+                    <View style={[styles.vegDotFill, { backgroundColor: item.diet_type === 'non-veg' ? FUEL.nonVeg : FUEL.veg }]} />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.mealItemName}>{item.product_name}</Text>
@@ -728,10 +754,10 @@ export default function HomeScreen() {
             <View style={styles.mealTotals}>
               <View style={styles.totalRow}>
                 {[
-                  { label: 'Calories', val: aiMeal.totals.calories, color: Z_RED },
-                  { label: 'Protein', val: `${Math.round(aiMeal.totals.protein)}g`, color: Z_RED },
-                  { label: 'Carbs', val: `${Math.round(aiMeal.totals.carbs)}g`, color: '#D69A35' },
-                  { label: 'Fat', val: `${Math.round(aiMeal.totals.fat)}g`, color: BK_ORANGE },
+                  { label: 'Calories', val: aiMeal.totals.calories, color: FUEL.ink },
+                  { label: 'Protein', val: `${Math.round(aiMeal.totals.protein)}g`, color: FUEL.protein },
+                  { label: 'Carbs', val: `${Math.round(aiMeal.totals.carbs)}g`, color: FUEL.carbs },
+                  { label: 'Fat', val: `${Math.round(aiMeal.totals.fat)}g`, color: FUEL.fat },
                 ].map(t => (
                   <View key={t.label} style={styles.totalItem}>
                     <Text style={styles.totalLabel}>{t.label}</Text>
@@ -746,7 +772,7 @@ export default function HomeScreen() {
             </View>
 
             <TouchableOpacity testID="order-ai-meal-btn" style={styles.orderMealBtn} onPress={orderAiMeal} activeOpacity={0.85}>
-              <Ionicons name="cart" size={18} color="#FFF" />
+              <Ionicons name="cart" size={18} color={FUEL.ink} />
               <Text style={styles.orderMealText}>Order This Meal</Text>
             </TouchableOpacity>
           </View>
@@ -755,7 +781,7 @@ export default function HomeScreen() {
         {aiMeal && (!aiMeal.meal_items || aiMeal.meal_items.length === 0) && (
           <View style={styles.mealResultCard}>
             <View style={styles.mealErrorRow}>
-              <Ionicons name="alert-circle" size={24} color="#D69A35" />
+              <Ionicons name="alert-circle" size={24} color={FUEL.warning} />
               <Text style={styles.mealErrorText}>{aiMeal.summary || 'Could not build meal. Try again.'}</Text>
             </View>
             <TouchableOpacity style={styles.retryBtn} onPress={resetBuilder}><Text style={styles.retryText}>Try Again</Text></TouchableOpacity>
@@ -767,9 +793,9 @@ export default function HomeScreen() {
           <Text style={styles.sectionTitle}>Popular Items</Text>
           <Text style={styles.popularHint}>Best sellers • swipe →</Text>
         </View>
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false} 
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.popularGridScroll}
           removeClippedSubviews={true}
         >
@@ -783,18 +809,18 @@ export default function HomeScreen() {
         <View style={{ height: 100 }} />
       </ScrollView>
 
-      {/* Floating AI Chat Button */}
-      <TouchableOpacity 
+      {/* Floating AI Chat Button — ink with lime accent */}
+      <TouchableOpacity
         style={[styles.floatingAiBtn, cartCtx.count > 0 && { bottom: 76 }]}
         onPress={() => router.push('/ai-chat')}
         activeOpacity={0.9}
         testID="floating-ai-chat-btn"
       >
         <View style={styles.floatingAiInner}>
-          <Ionicons name="chatbubbles" size={22} color="#FFF" />
+          <Ionicons name="chatbubbles" size={22} color={FUEL.lime} />
         </View>
         <View style={styles.floatingAiBadge}>
-          <Ionicons name="sparkles" size={10} color="#FFF" />
+          <Ionicons name="sparkles" size={10} color={FUEL.ink} />
         </View>
       </TouchableOpacity>
 
@@ -806,28 +832,28 @@ export default function HomeScreen() {
             <View style={styles.addrHeader}>
               <Text style={styles.addrTitle}>Delivery Address</Text>
               <TouchableOpacity testID="addr-close-btn" onPress={() => setShowAddressModal(false)}>
-                <Ionicons name="close-circle" size={26} color="#D0D0D0" />
+                <Ionicons name="close-circle" size={26} color={FUEL.sandBorder} />
               </TouchableOpacity>
             </View>
 
             {!!deliveryAddress && (
               <View style={styles.addrCurrent}>
-                <Ionicons name="checkmark-circle" size={16} color={GREEN} />
+                <Ionicons name="checkmark-circle" size={16} color={FUEL.success} />
                 <Text style={styles.addrCurrentText} numberOfLines={2}>{deliveryAddress}</Text>
               </View>
             )}
 
             <TouchableOpacity testID="detect-location-btn" style={styles.addrDetectBtn} onPress={detectLocation} disabled={locating} activeOpacity={0.85}>
               {locating ? (
-                <><ActivityIndicator color="#FFF" size="small" /><Text style={styles.addrDetectText}>Detecting your location…</Text></>
+                <><ActivityIndicator color={FUEL.ink} size="small" /><Text style={styles.addrDetectText}>Detecting your location…</Text></>
               ) : (
-                <><Ionicons name="navigate" size={18} color="#FFF" /><Text style={styles.addrDetectText}>Use my current location</Text></>
+                <><Ionicons name="navigate" size={18} color={FUEL.ink} /><Text style={styles.addrDetectText}>Use my current location</Text></>
               )}
             </TouchableOpacity>
 
             {!!locationError && (
               <View style={styles.addrErrorRow} testID="addr-error">
-                <Ionicons name="alert-circle" size={14} color={Z_RED} />
+                <Ionicons name="alert-circle" size={14} color={FUEL.error} />
                 <Text style={styles.addrErrorText}>{locationError}</Text>
               </View>
             )}
@@ -844,7 +870,7 @@ export default function HomeScreen() {
               value={manualAddress}
               onChangeText={setManualAddress}
               placeholder="House / Flat, Street, Area, City"
-              placeholderTextColor="#B0B0B0"
+              placeholderTextColor={FUEL.muted}
               multiline
             />
             <TouchableOpacity testID="save-address-btn" style={styles.addrSaveBtn} onPress={saveManualAddress} activeOpacity={0.85}>
@@ -860,397 +886,439 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: BK_CREAM },
+  safe: { flex: 1, backgroundColor: FUEL.sand },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 
   // Goal-first ordering
-  goalSelector: { paddingHorizontal: 16, marginTop: 18 },
-  goalSelectorTitle: { fontFamily: FONT.display, fontSize: 22, color: BK_BROWN, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12 },
-  goalSelectorRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  goalSelectorChip: { flexGrow: 1, minWidth: '46%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, paddingHorizontal: 14, borderRadius: 16, backgroundColor: BK_WHITE, borderWidth: 1.5, borderColor: '#E6E1D4' },
+  goalSelector: { paddingHorizontal: SPACE.l, marginTop: SPACE.l },
+  goalSelectorTitle: { fontFamily: FONT.display, fontSize: 22, color: FUEL.ink, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: SPACE.m },
+  goalSelectorRow: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.m },
+  goalSelectorChip: { flexGrow: 1, minWidth: '46%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.s, paddingVertical: SPACE.l, paddingHorizontal: SPACE.l, borderRadius: RADIUS.md, backgroundColor: FUEL.white, borderWidth: 1.5, borderColor: FUEL.sandBorder },
   goalSelectorChipActive: { backgroundColor: FUEL.lime, borderColor: FUEL.lime },
-  goalSelectorLabel: { fontFamily: FONT.bodyExtrabold, fontSize: 13, fontWeight: '800', color: BK_TEXT_LIGHT, textTransform: 'uppercase', letterSpacing: 0.3 },
+  goalSelectorLabel: { fontFamily: FONT.bodyExtrabold, fontSize: 13, color: FUEL.muted, textTransform: 'uppercase', letterSpacing: 0.3 },
   goalSelectorLabelActive: { color: FUEL.ink },
 
   // Phase 2/3: personalized daily target banner
-  targetBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: FUEL.ink, borderRadius: 16, paddingVertical: 13, paddingHorizontal: 16, marginTop: 12 },
+  targetBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: FUEL.ink, borderRadius: RADIUS.md, paddingVertical: SPACE.m, paddingHorizontal: SPACE.l, marginTop: SPACE.m },
   targetBannerLeft: { flex: 1 },
-  targetBannerLabel: { fontSize: 10.5, color: FUEL.sand, opacity: 0.7, letterSpacing: 1, fontWeight: '700' },
-  targetBannerValue: { fontSize: 16, color: FUEL.lime, fontWeight: '800', marginTop: 3 },
-  targetBannerCta: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: FUEL.lime, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7 },
-  targetBannerCtaText: { fontSize: 11.5, fontWeight: '800', color: FUEL.ink, letterSpacing: 0.5 },
-  targetSetup: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: FUEL.limeTint, borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14, marginTop: 12 },
-  targetSetupText: { flex: 1, fontSize: 13, fontWeight: '600', color: '#4F5A2E' },
-  nudgeBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: FUEL.limeTint, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12, marginTop: 10 },
-  nudgeBannerText: { flex: 1, fontSize: 12.5, fontWeight: '600', color: '#4F5A2E', lineHeight: 17 },
-  
-  // Header (BK Dark Brown)
-  header: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
-    paddingHorizontal: 16, 
-    paddingTop: 8, 
-    paddingBottom: 12, 
-    backgroundColor: BK_BROWN,
+  targetBannerLabel: { fontFamily: FONT.bodyBold, fontSize: 10.5, color: FUEL.sand, opacity: 0.7, letterSpacing: 1 },
+  targetBannerValue: { fontFamily: FONT.bodyExtrabold, fontSize: 16, color: FUEL.lime, marginTop: 3 },
+  targetBannerCta: { flexDirection: 'row', alignItems: 'center', gap: SPACE.xs, backgroundColor: FUEL.lime, borderRadius: RADIUS.lg, paddingHorizontal: SPACE.m, paddingVertical: SPACE.s },
+  targetBannerCtaText: { fontFamily: FONT.bodyExtrabold, fontSize: 11.5, color: FUEL.ink, letterSpacing: 0.5 },
+  targetSetup: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s, backgroundColor: FUEL.limeTint, borderRadius: RADIUS.md, paddingVertical: SPACE.m, paddingHorizontal: SPACE.l, marginTop: SPACE.m },
+  targetSetupText: { flex: 1, fontFamily: FONT.bodySemibold, fontSize: 13, color: '#4F5A2E' },
+  nudgeBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACE.s, backgroundColor: FUEL.limeTint, borderRadius: RADIUS.md, paddingVertical: SPACE.m, paddingHorizontal: SPACE.m, marginTop: SPACE.m },
+  nudgeBannerText: { flex: 1, fontFamily: FONT.bodySemibold, fontSize: 12.5, color: '#4F5A2E', lineHeight: 17 },
+
+  // Header (ink)
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: SPACE.l,
+    paddingTop: SPACE.s,
+    paddingBottom: SPACE.m,
+    backgroundColor: FUEL.ink,
   },
-  menuBtn: { 
-    width: 44, 
-    height: 44, 
-    borderRadius: 12, 
-    backgroundColor: 'rgba(245,235,220,0.15)', 
-    alignItems: 'center', 
-    justifyContent: 'center' 
+  menuBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: RADIUS.md,
+    backgroundColor: FUEL.inkSoft,
+    alignItems: 'center',
+    justifyContent: 'center'
   },
-  avatar: { 
-    width: 44, 
-    height: 44, 
-    borderRadius: 22, 
-    backgroundColor: 'rgba(245,235,220,0.15)', 
-    alignItems: 'center', 
-    justifyContent: 'center' 
+  avatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18, // circle
+    backgroundColor: FUEL.lime,
+    alignItems: 'center',
+    justifyContent: 'center'
   },
-  
-  // Order type toggle (BK)
-  orderToggle: { 
-    flexDirection: 'row', 
-    backgroundColor: 'rgba(245,235,220,0.15)', 
-    borderRadius: 25, 
-    padding: 4 
+  avatarInitial: {
+    fontFamily: FONT.display,
+    fontSize: 16,
+    color: FUEL.ink,
+    textTransform: 'uppercase',
   },
-  toggleBtn: { 
-    paddingHorizontal: 16, 
-    paddingVertical: 10, 
-    borderRadius: 20 
+
+  // Order type toggle
+  orderToggle: {
+    flexDirection: 'row',
+    backgroundColor: FUEL.inkSoft,
+    borderRadius: RADIUS.pill,
+    padding: SPACE.xs
   },
-  toggleBtnActive: { 
-    backgroundColor: FUEL.lime 
+  toggleBtn: {
+    paddingHorizontal: SPACE.l,
+    paddingVertical: SPACE.m,
+    borderRadius: RADIUS.lg
   },
-  toggleText: { 
-    fontSize: 12, 
-    fontWeight: '800', 
-    color: 'rgba(245,235,220,0.5)',
+  toggleBtnActive: {
+    backgroundColor: FUEL.lime
+  },
+  toggleText: {
+    fontFamily: FONT.display,
+    fontSize: 12,
+    color: 'rgba(244,241,233,0.55)',
     letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
-  toggleTextActive: { 
-    color: FUEL.ink 
+  toggleTextActive: {
+    color: FUEL.ink
   },
-  
-  // Location bar
-  locationBar: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    backgroundColor: BK_WHITE, 
-    paddingHorizontal: 16, 
-    paddingVertical: 12, 
-    gap: 8, 
-    borderBottomWidth: 1, 
-    borderBottomColor: '#E6E1D4' 
+
+  // Location bar — ink-soft rounded bar
+  locationBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: FUEL.inkSoft,
+    marginHorizontal: SPACE.l,
+    marginTop: SPACE.m,
+    paddingHorizontal: SPACE.m,
+    paddingVertical: SPACE.m,
+    gap: SPACE.m,
+    borderRadius: RADIUS.md,
   },
-  locationText: { 
-    fontSize: 11, 
-    fontWeight: '800', 
-    color: BK_RED,
+  locationIconBox: {
+    width: 34,
+    height: 34,
+    borderRadius: RADIUS.sm,
+    backgroundColor: 'rgba(199,242,78,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  locationText: {
+    fontFamily: FONT.bodyExtrabold,
+    fontSize: 9.5,
+    color: 'rgba(244,241,233,0.55)',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  locationValue: {
+    flex: 1,
+  },
+  locationNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACE.xs,
+  },
+  locationName: {
+    flexShrink: 1,
+    fontFamily: FONT.bodySemibold,
+    fontSize: 13.5,
+    color: FUEL.sand,
+    marginTop: 1,
+  },
+  detectChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACE.xs,
+    backgroundColor: FUEL.lime,
+    borderRadius: RADIUS.lg,
+    paddingHorizontal: SPACE.m,
+    paddingVertical: SPACE.s,
+  },
+  detectChipText: {
+    fontFamily: FONT.display,
+    fontSize: 10.5,
+    color: FUEL.ink,
     letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
-  locationValue: { 
-    flex: 1, 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'space-between' 
-  },
-  locationName: { 
-    fontSize: 14, 
-    fontWeight: '600', 
-    color: BK_BROWN 
-  },
-  
-  // Banners (ENHANCED)
-  bannerList: { marginTop: 12 },
-  banner: { 
-    width: width - 32, 
-    marginHorizontal: 16, 
-    borderRadius: 20, 
-    padding: 24, 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
+
+  // Banners — dark hero (ink + lime)
+  bannerList: { marginTop: SPACE.m },
+  banner: {
+    width: width - 32,
+    marginHorizontal: SPACE.l,
+    borderRadius: RADIUS.lg,
+    padding: SPACE.xl,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
     minHeight: 160,
-    shadowColor: BK_BROWN,
+    backgroundColor: FUEL.ink,
+    shadowColor: FUEL.ink,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 6,
   },
   bannerContent: { flex: 1 },
-  bannerTitle: { fontSize: 28, fontWeight: '800', color: BK_CREAM, letterSpacing: 0.8, textTransform: 'uppercase' },
-  bannerSub: { fontSize: 14, color: 'rgba(245,235,220,0.9)', marginTop: 8, fontWeight: '600' },
+  bannerTitle: { fontFamily: FONT.display, fontSize: 28, color: FUEL.sand, letterSpacing: 0.8, textTransform: 'uppercase' },
+  bannerSub: { fontFamily: FONT.bodySemibold, fontSize: 14, color: 'rgba(244,241,233,0.85)', marginTop: SPACE.s },
   bannerDiscountCircle: {
     width: 70,
     height: 70,
-    borderRadius: 35,
-    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: 35, // circle
+    backgroundColor: FUEL.lime,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 12,
+    marginTop: SPACE.m,
     borderWidth: 3,
-    borderColor: 'rgba(255,255,255,0.5)',
+    borderColor: 'rgba(199,242,78,0.4)',
   },
-  bannerDiscountPercent: { fontSize: 20, fontWeight: '800', color: BK_RED },
-  bannerDiscountLabel: { fontSize: 10, fontWeight: '800', color: BK_BROWN, textTransform: 'uppercase', letterSpacing: 0.5 },
-  bannerBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(245,235,220,0.3)', alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20, marginTop: 8 },
-  bannerBadgeText: { fontSize: 11, fontWeight: '800', color: BK_CREAM, letterSpacing: 0.5 },
+  bannerDiscountPercent: { fontFamily: FONT.display, fontSize: 20, color: FUEL.ink },
+  bannerDiscountLabel: { fontFamily: FONT.bodyExtrabold, fontSize: 10, color: FUEL.ink, textTransform: 'uppercase', letterSpacing: 0.5 },
+  bannerBadge: { flexDirection: 'row', alignItems: 'center', gap: SPACE.xs, backgroundColor: FUEL.inkSoft, alignSelf: 'flex-start', paddingHorizontal: SPACE.m, paddingVertical: SPACE.xs, borderRadius: RADIUS.lg, marginTop: SPACE.s },
+  bannerBadgeText: { fontFamily: FONT.bodyExtrabold, fontSize: 11, color: FUEL.lime, letterSpacing: 0.5 },
   bannerImagePlaceholder: { width: 100, height: 100, alignItems: 'center', justifyContent: 'center' },
-  dots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 12 },
-  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#CFC8B8' },
-  dotActive: { backgroundColor: BK_ORANGE, width: 24 },
-  
-  // Category Grid (CLEAN - No Box)
-  sectionTitle: { fontFamily: FONT.display, fontSize: 24, fontWeight: '800', color: BK_BROWN, paddingHorizontal: 16, marginTop: 24, marginBottom: 14, letterSpacing: 0.3, textTransform: 'uppercase' },
-  categoryGrid: { 
-    flexDirection: 'row', 
-    flexWrap: 'wrap', 
-    paddingHorizontal: 12, 
-    gap: 12 
+  dots: { flexDirection: 'row', justifyContent: 'center', gap: SPACE.s, marginTop: SPACE.m },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: FUEL.sandBorder }, // circle
+  dotActive: { backgroundColor: FUEL.limeDeep, width: 24 },
+
+  // Category Grid
+  sectionTitle: { fontFamily: FONT.display, fontSize: 24, color: FUEL.ink, paddingHorizontal: SPACE.l, marginTop: SPACE.xl, marginBottom: SPACE.l, letterSpacing: 0.3, textTransform: 'uppercase' },
+  categoryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: SPACE.m,
+    gap: SPACE.m
   },
-  categoryCard: { 
-    width: (width - 60) / 4, 
-    alignItems: 'center', 
+  categoryCard: {
+    width: (width - 60) / 4,
+    alignItems: 'center',
     backgroundColor: 'transparent',
-    padding: 8,
+    padding: SPACE.s,
   },
-  categoryImage: { 
-    width: 60, 
-    height: 60, 
-    borderRadius: 14, 
-    marginBottom: 6 
+  categoryImage: {
+    width: 60,
+    height: 60,
+    borderRadius: RADIUS.md,
+    marginBottom: SPACE.s
   },
-  categoryIconBg: { 
-    alignItems: 'center', 
-    justifyContent: 'center' 
+  categoryIconBg: {
+    alignItems: 'center',
+    justifyContent: 'center'
   },
-  categoryLabel: { 
-    fontSize: 11, 
-    fontWeight: '800', 
-    color: BK_BROWN, 
+  categoryLabel: {
+    fontFamily: FONT.bodyExtrabold,
+    fontSize: 11,
+    color: FUEL.ink,
     textAlign: 'center',
     textTransform: 'uppercase',
     letterSpacing: 0.3,
   },
-  
+
   // Nutrition Card
-  nutriCard: { backgroundColor: BK_WHITE, marginHorizontal: 16, marginTop: 16, borderRadius: 16, padding: 18, borderWidth: 2, borderColor: '#E6E1D4' },
-  nutriHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
-  nutriTitle: { flex: 1, fontSize: 16, fontWeight: '800', color: BK_BROWN, textTransform: 'uppercase', letterSpacing: 0.3 },
-  nutriMeals: { fontSize: 12, color: BK_TEXT_LIGHT },
+  nutriCard: { backgroundColor: FUEL.white, marginHorizontal: SPACE.l, marginTop: SPACE.l, borderRadius: RADIUS.md, padding: SPACE.l, borderWidth: 1, borderColor: FUEL.sandBorder },
+  nutriHeader: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s, marginBottom: SPACE.l },
+  nutriTitle: { flex: 1, fontFamily: FONT.display, fontSize: 16, color: FUEL.ink, textTransform: 'uppercase', letterSpacing: 0.3 },
+  nutriMeals: { fontFamily: FONT.body, fontSize: 12, color: FUEL.muted },
   nutriRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  nutriMain: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
-  calValue: { fontSize: 34, fontWeight: '800', color: BK_BROWN },
-  calUnit: { fontSize: 13, color: BK_TEXT_LIGHT },
-  macroRow: { flexDirection: 'row', gap: 16 },
+  nutriMain: { flexDirection: 'row', alignItems: 'baseline', gap: SPACE.xs },
+  calValue: { fontFamily: FONT.display, fontSize: 34, color: FUEL.ink },
+  calUnit: { fontFamily: FONT.body, fontSize: 13, color: FUEL.muted },
+  macroRow: { flexDirection: 'row', gap: SPACE.l },
   macroItem: { alignItems: 'center' },
-  macroVal: { fontSize: 16, fontWeight: '800' },
-  macroLabel: { fontSize: 10, color: BK_TEXT_LIGHT, marginTop: 2, textTransform: 'uppercase', letterSpacing: 0.5 },
-  progressBg: { height: 6, backgroundColor: '#E6E1D4', borderRadius: 3, marginTop: 14, overflow: 'hidden' },
-  progressFill: { height: '100%', backgroundColor: BK_ORANGE, borderRadius: 3 },
-  progressFillOver: { backgroundColor: BK_RED },
-  overGoalBanner: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, backgroundColor: '#F1E7E1', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 },
-  overGoalText: { fontSize: 11, color: BK_RED, fontWeight: '700', flex: 1 },
-  
+  macroVal: { fontFamily: FONT.bodyExtrabold, fontSize: 16 },
+  macroLabel: { fontFamily: FONT.bodyMedium, fontSize: 10, color: FUEL.muted, marginTop: 2, textTransform: 'uppercase', letterSpacing: 0.5 },
+  progressBg: { height: 6, backgroundColor: FUEL.sandBorder, borderRadius: RADIUS.pill, marginTop: SPACE.l, overflow: 'hidden' },
+  progressFill: { height: '100%', backgroundColor: FUEL.limeDeep, borderRadius: RADIUS.xs },
+  progressFillOver: { backgroundColor: FUEL.error },
+  overGoalBanner: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s, marginTop: SPACE.m, backgroundColor: FUEL.proteinTint, borderRadius: RADIUS.sm, paddingHorizontal: SPACE.m, paddingVertical: SPACE.s },
+  overGoalText: { fontFamily: FONT.bodyBold, fontSize: 11, color: FUEL.error, flex: 1 },
+
   // Scan Table CTA
-  scanTableCTA: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#EAF2DD', marginHorizontal: 16, marginTop: 16, borderRadius: 14, padding: 16, borderWidth: 2, borderColor: BK_GREEN },
-  scanCtaLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
-  scanCtaIconBg: { width: 44, height: 44, borderRadius: 12, backgroundColor: BK_GREEN, alignItems: 'center', justifyContent: 'center' },
-  scanCtaTitle: { fontSize: 16, fontWeight: '800', color: BK_GREEN, textTransform: 'uppercase' },
-  scanCtaSub: { fontSize: 12, color: '#5E9E4E', marginTop: 2 },
-  
-  // AI Meal Builder CTA
-  mealBuilderCTA: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: BK_WHITE, marginHorizontal: 16, marginTop: 16, borderRadius: 14, padding: 16, borderWidth: 2, borderColor: BK_ORANGE, borderStyle: 'dashed' },
-  ctaLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
-  ctaIconBg: { width: 44, height: 44, borderRadius: 12, backgroundColor: BK_ORANGE, alignItems: 'center', justifyContent: 'center' },
-  ctaTitle: { fontSize: 16, fontWeight: '800', color: BK_BROWN, textTransform: 'uppercase' },
-  ctaSub: { fontSize: 12, color: BK_TEXT_LIGHT, marginTop: 2 },
-  
+  scanTableCTA: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: FUEL.limeTint, marginHorizontal: SPACE.l, marginTop: SPACE.l, borderRadius: RADIUS.md, padding: SPACE.l, borderWidth: 1, borderColor: FUEL.success },
+  scanCtaLeft: { flexDirection: 'row', alignItems: 'center', gap: SPACE.m, flex: 1 },
+  scanCtaIconBg: { width: 44, height: 44, borderRadius: RADIUS.md, backgroundColor: FUEL.success, alignItems: 'center', justifyContent: 'center' },
+  scanCtaTitle: { fontFamily: FONT.display, fontSize: 16, color: FUEL.success, textTransform: 'uppercase' },
+  scanCtaSub: { fontFamily: FONT.bodyMedium, fontSize: 12, color: '#4F5A2E', marginTop: 2 },
+
+  // AI Combo Builder CTA — dark hero card
+  mealBuilderCTA: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: FUEL.ink, marginHorizontal: SPACE.l, marginTop: SPACE.l, borderRadius: RADIUS.md, padding: SPACE.l },
+  ctaLeft: { flexDirection: 'row', alignItems: 'center', gap: SPACE.m, flex: 1 },
+  heroCtaIconBg: { width: 44, height: 44, borderRadius: RADIUS.md, backgroundColor: FUEL.lime, alignItems: 'center', justifyContent: 'center' },
+  heroCtaTitle: { fontFamily: FONT.display, fontSize: 16, color: FUEL.sand, textTransform: 'uppercase' },
+  heroCtaSub: { fontFamily: FONT.bodyMedium, fontSize: 12, color: 'rgba(244,241,233,0.7)', marginTop: 2 },
+  ctaIconBg: { width: 44, height: 44, borderRadius: RADIUS.md, backgroundColor: FUEL.ink, alignItems: 'center', justifyContent: 'center' },
+  ctaTitle: { fontFamily: FONT.display, fontSize: 16, color: FUEL.ink, textTransform: 'uppercase' },
+  ctaSub: { fontFamily: FONT.bodyMedium, fontSize: 12, color: FUEL.muted, marginTop: 2 },
+
   // Schedule for Later CTA
-  scheduleCTA: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#EAF2DD', marginHorizontal: 16, marginTop: 12, borderRadius: 14, padding: 16, borderWidth: 2, borderColor: BK_GREEN },
-  
+  scheduleCTA: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: FUEL.white, marginHorizontal: SPACE.l, marginTop: SPACE.m, borderRadius: RADIUS.md, padding: SPACE.l, borderWidth: 1, borderColor: FUEL.sandBorder },
+
   // Builder Card
-  builderCard: { backgroundColor: BK_WHITE, marginHorizontal: 16, marginTop: 16, borderRadius: 16, padding: 18, borderWidth: 2, borderColor: BK_ORANGE },
-  builderHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
-  builderTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  builderTitle: { fontSize: 18, fontWeight: '800', color: BK_BROWN, textTransform: 'uppercase' },
-  builderLabel: { fontSize: 13, fontWeight: '800', color: BK_TEXT_LIGHT, marginBottom: 8, marginTop: 6, textTransform: 'uppercase', letterSpacing: 0.5 },
-  dietRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-  dietChip: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 25, backgroundColor: BK_WHITE, borderWidth: 2, borderColor: '#E6E1D4' },
-  dietText: { fontSize: 13, fontWeight: '700', color: BK_TEXT_LIGHT },
-  vegIndicator: { width: 14, height: 14, borderRadius: 2, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  vegDotInner: { width: 7, height: 7, borderRadius: 4 },
-  goalContainer: { marginBottom: 8 },
-  goalRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-  goalGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  goalChip6: { flexBasis: '31%', flexGrow: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 12, paddingHorizontal: 6, borderRadius: 25, backgroundColor: BK_WHITE, borderWidth: 2, borderColor: '#E6E1D4' },
-  goalChip: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 12, borderRadius: 25, backgroundColor: BK_WHITE, borderWidth: 2, borderColor: '#E6E1D4' },
-  goalText: { fontSize: 11, fontWeight: '700', color: BK_TEXT_LIGHT },
-  budgetInput: { backgroundColor: BK_CREAM, borderRadius: 12, padding: 14, color: BK_BROWN, fontSize: 15, fontWeight: '600', borderWidth: 2, borderColor: '#E6E1D4', marginBottom: 14 },
-  buildBtn: { backgroundColor: BK_RED, borderRadius: 25, paddingVertical: 16, alignItems: 'center', justifyContent: 'center' },
-  buildBtnContent: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  buildBtnText: { color: FUEL.lime, fontSize: 15, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
-  
+  builderCard: { backgroundColor: FUEL.white, marginHorizontal: SPACE.l, marginTop: SPACE.l, borderRadius: RADIUS.md, padding: SPACE.l, borderWidth: 1, borderColor: FUEL.sandBorder },
+  builderHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACE.l },
+  builderTitleRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s },
+  builderTitle: { fontFamily: FONT.display, fontSize: 18, color: FUEL.ink, textTransform: 'uppercase' },
+  builderLabel: { fontFamily: FONT.bodyExtrabold, fontSize: 13, color: FUEL.muted, marginBottom: SPACE.s, marginTop: SPACE.s, textTransform: 'uppercase', letterSpacing: 0.5 },
+  dietRow: { flexDirection: 'row', gap: SPACE.s, marginBottom: SPACE.m },
+  dietChip: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.s, paddingVertical: SPACE.m, borderRadius: RADIUS.pill, backgroundColor: FUEL.white, borderWidth: 1.5, borderColor: FUEL.sandBorder },
+  dietText: { fontFamily: FONT.bodyBold, fontSize: 13, color: FUEL.muted },
+  vegIndicator: { width: 14, height: 14, borderRadius: RADIUS.xs, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  vegDotInner: { width: 7, height: 7, borderRadius: RADIUS.xs },
+  goalContainer: { marginBottom: SPACE.s },
+  goalRow: { flexDirection: 'row', gap: SPACE.s, marginBottom: SPACE.m },
+  goalGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.s },
+  goalChip6: { flexBasis: '31%', flexGrow: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.xs, paddingVertical: SPACE.m, paddingHorizontal: SPACE.s, borderRadius: RADIUS.pill, backgroundColor: FUEL.white, borderWidth: 1.5, borderColor: FUEL.sandBorder },
+  goalChip: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.xs, paddingVertical: SPACE.m, borderRadius: RADIUS.pill, backgroundColor: FUEL.white, borderWidth: 1.5, borderColor: FUEL.sandBorder },
+  goalText: { fontFamily: FONT.bodyBold, fontSize: 11, color: FUEL.muted },
+  budgetInput: { backgroundColor: FUEL.sand, borderRadius: RADIUS.md, padding: SPACE.l, color: FUEL.ink, fontFamily: FONT.bodySemibold, fontSize: 15, borderWidth: 1.5, borderColor: FUEL.sandBorder, marginBottom: SPACE.l },
+  buildBtn: { backgroundColor: FUEL.lime, borderRadius: RADIUS.pill, paddingVertical: SPACE.l, alignItems: 'center', justifyContent: 'center' },
+  buildBtnContent: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s },
+  buildBtnText: { color: FUEL.ink, fontFamily: FONT.display, fontSize: 15, textTransform: 'uppercase', letterSpacing: 0.5 },
+
   // Meal Result
-  mealResultCard: { backgroundColor: BK_WHITE, marginHorizontal: 16, marginTop: 16, borderRadius: 16, padding: 16, borderWidth: 2, borderColor: '#E6E1D4' },
-  mealResultHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  mealResultTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  mealResultTitle: { fontSize: 18, fontWeight: '800', color: BK_BROWN, textTransform: 'uppercase' },
-  rebuildBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F2EEE0', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
-  rebuildText: { fontSize: 12, fontWeight: '800', color: BK_ORANGE },
-  mealSummary: { color: BK_TEXT_LIGHT, fontSize: 13, lineHeight: 19, marginBottom: 12 },
-  warningsContainer: { marginBottom: 12, gap: 8 },
+  mealResultCard: { backgroundColor: FUEL.white, marginHorizontal: SPACE.l, marginTop: SPACE.l, borderRadius: RADIUS.md, padding: SPACE.l, borderWidth: 1, borderColor: FUEL.sandBorder },
+  mealResultHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACE.m },
+  mealResultTitleRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s },
+  mealResultTitle: { fontFamily: FONT.display, fontSize: 18, color: FUEL.ink, textTransform: 'uppercase' },
+  rebuildBadge: { flexDirection: 'row', alignItems: 'center', gap: SPACE.xs, backgroundColor: FUEL.limeTint, paddingHorizontal: SPACE.m, paddingVertical: SPACE.s, borderRadius: RADIUS.lg },
+  rebuildText: { fontFamily: FONT.bodyExtrabold, fontSize: 12, color: FUEL.limeDeep },
+  mealSummary: { fontFamily: FONT.body, color: FUEL.muted, fontSize: 13, lineHeight: 19, marginBottom: SPACE.m },
+  warningsContainer: { marginBottom: SPACE.m, gap: SPACE.s },
   warningItem: {
     flexDirection: 'row',
-    backgroundColor: '#F2EEE0',
+    backgroundColor: FUEL.carbsTint,
     borderLeftWidth: 3,
-    borderLeftColor: '#D69A35',
-    padding: 10,
-    borderRadius: 8,
+    borderLeftColor: FUEL.warning,
+    padding: SPACE.m,
+    borderRadius: RADIUS.sm,
   },
   warningPositive: {
-    backgroundColor: '#EAF2DD',
-    borderLeftColor: '#3FA34D',
+    backgroundColor: FUEL.limeTint,
+    borderLeftColor: FUEL.success,
   },
   warningCaution: {
-    backgroundColor: '#F1E7E1',
-    borderLeftColor: '#15140F',
+    backgroundColor: FUEL.proteinTint,
+    borderLeftColor: FUEL.ink,
   },
   warningText: {
+    fontFamily: FONT.body,
     fontSize: 12,
-    color: '#6B6A5E',
+    color: FUEL.muted,
     lineHeight: 18,
     flex: 1,
   },
   warningTextPositive: {
-    color: '#3FA34D',
-    fontWeight: '600',
+    color: FUEL.success,
+    fontFamily: FONT.bodySemibold,
   },
   warningTextCaution: {
-    color: '#15140F',
-    fontWeight: '600',
+    color: FUEL.ink,
+    fontFamily: FONT.bodySemibold,
   },
-  mealItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#E6E1D4' },
-  mealItemLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
-  vegDot: { width: 16, height: 16, borderRadius: 2, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  vegDotFill: { width: 8, height: 8, borderRadius: 4 },
-  mealItemName: { fontSize: 14, fontWeight: '700', color: BK_BROWN },
-  mealItemReason: { fontSize: 11, color: BK_TEXT_LIGHT, marginTop: 2 },
+  mealItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: SPACE.m, borderBottomWidth: 1, borderBottomColor: FUEL.sandBorder },
+  mealItemLeft: { flexDirection: 'row', alignItems: 'center', gap: SPACE.m, flex: 1 },
+  vegDot: { width: 16, height: 16, borderRadius: RADIUS.xs, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  vegDotFill: { width: 8, height: 8, borderRadius: 4 }, // circle
+  mealItemName: { fontFamily: FONT.bodyBold, fontSize: 14, color: FUEL.ink },
+  mealItemReason: { fontFamily: FONT.body, fontSize: 11, color: FUEL.muted, marginTop: 2 },
   mealItemRight: { alignItems: 'flex-end' },
-  mealItemGrams: { fontSize: 15, fontWeight: '800', color: BK_RED },
-  mealItemPrice: { fontSize: 12, color: BK_TEXT_LIGHT, marginTop: 2 },
-  mealTotals: { backgroundColor: BK_CREAM, borderRadius: 12, padding: 14, marginTop: 14 },
-  totalRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 12 },
+  mealItemGrams: { fontFamily: FONT.bodyExtrabold, fontSize: 15, color: FUEL.ink },
+  mealItemPrice: { fontFamily: FONT.body, fontSize: 12, color: FUEL.muted, marginTop: 2 },
+  mealTotals: { backgroundColor: FUEL.sand, borderRadius: RADIUS.md, padding: SPACE.l, marginTop: SPACE.l },
+  totalRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: SPACE.m },
   totalItem: { alignItems: 'center' },
-  totalLabel: { fontSize: 10, color: BK_TEXT_LIGHT, marginBottom: 3, textTransform: 'uppercase' },
-  totalValue: { fontSize: 16, fontWeight: '800' },
-  totalPriceRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#E6E1D4', paddingTop: 10 },
-  totalPriceLabel: { fontSize: 14, fontWeight: '600', color: BK_TEXT_LIGHT },
-  totalPriceValue: { fontSize: 24, fontWeight: '800', color: BK_BROWN },
-  orderMealBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: BK_RED, borderRadius: 25, paddingVertical: 16, marginTop: 14 },
-  orderMealText: { color: BK_CREAM, fontSize: 15, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
-  mealErrorRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  mealErrorText: { flex: 1, color: BK_TEXT_LIGHT, fontSize: 13, lineHeight: 18 },
-  retryBtn: { backgroundColor: BK_ORANGE, borderRadius: 25, paddingVertical: 12, alignItems: 'center', marginTop: 14 },
-  retryText: { color: BK_BROWN, fontSize: 14, fontWeight: '800', textTransform: 'uppercase' },
-  
-  // Popular Items (ENHANCED) — compact cards
-  popularScroll: { paddingHorizontal: 12, gap: 12 },
-  popularHeaderRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', paddingRight: 16 },
-  popularHint: { fontSize: 11, fontWeight: '700', color: BK_TEXT_LIGHT, marginBottom: 16, textTransform: 'uppercase', letterSpacing: 0.3 },
-  popularGridScroll: { paddingHorizontal: 12, gap: 12, paddingBottom: 4 },
-  popularColumn: { gap: 12 },
-  popularCard: { 
-    width: 156, 
-    backgroundColor: BK_WHITE, 
-    borderRadius: 16, 
-    overflow: 'hidden', 
-    borderWidth: 2, 
-    borderColor: '#E6E1D4',
-    shadowColor: BK_BROWN,
+  totalLabel: { fontFamily: FONT.bodyMedium, fontSize: 10, color: FUEL.muted, marginBottom: 3, textTransform: 'uppercase' },
+  totalValue: { fontFamily: FONT.bodyExtrabold, fontSize: 16 },
+  totalPriceRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: FUEL.sandBorder, paddingTop: SPACE.m },
+  totalPriceLabel: { fontFamily: FONT.bodySemibold, fontSize: 14, color: FUEL.muted },
+  totalPriceValue: { fontFamily: FONT.display, fontSize: 24, color: FUEL.ink },
+  orderMealBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.s, backgroundColor: FUEL.lime, borderRadius: RADIUS.pill, paddingVertical: SPACE.l, marginTop: SPACE.l },
+  orderMealText: { color: FUEL.ink, fontFamily: FONT.display, fontSize: 15, textTransform: 'uppercase', letterSpacing: 0.5 },
+  mealErrorRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.m },
+  mealErrorText: { flex: 1, fontFamily: FONT.body, color: FUEL.muted, fontSize: 13, lineHeight: 18 },
+  retryBtn: { backgroundColor: FUEL.lime, borderRadius: RADIUS.pill, paddingVertical: SPACE.m, alignItems: 'center', marginTop: SPACE.l },
+  retryText: { color: FUEL.ink, fontFamily: FONT.display, fontSize: 14, textTransform: 'uppercase' },
+
+  // Popular Items — compact cards
+  popularScroll: { paddingHorizontal: SPACE.m, gap: SPACE.m },
+  popularHeaderRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', paddingRight: SPACE.l },
+  popularHint: { fontFamily: FONT.bodyBold, fontSize: 11, color: FUEL.muted, marginBottom: SPACE.l, textTransform: 'uppercase', letterSpacing: 0.3 },
+  popularGridScroll: { paddingHorizontal: SPACE.m, gap: SPACE.m, paddingBottom: SPACE.xs },
+  popularColumn: { gap: SPACE.m },
+  popularCard: {
+    width: 156,
+    backgroundColor: FUEL.white,
+    borderRadius: RADIUS.md,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: FUEL.sandBorder,
+    shadowColor: FUEL.ink,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.15,
     shadowRadius: 6,
     elevation: 4,
   },
-  popularImg: { width: '100%', height: 90, backgroundColor: BK_CREAM },
+  popularImg: { width: '100%', height: 90, backgroundColor: FUEL.sand },
   popularImgPlaceholder: { alignItems: 'center', justifyContent: 'center' },
   popularBadge: {
     position: 'absolute',
     top: 8,
     left: 8,
-    backgroundColor: BK_ORANGE,
+    backgroundColor: FUEL.ink,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    paddingHorizontal: 7,
-    paddingVertical: 4,
-    borderRadius: 20,
+    paddingHorizontal: SPACE.s,
+    paddingVertical: SPACE.xs,
+    borderRadius: RADIUS.lg,
   },
-  popularBadgeText: { fontSize: 8, fontWeight: '800', color: BK_WHITE, textTransform: 'uppercase', letterSpacing: 0.3 },
-  proteinBadge: { 
-    position: 'absolute', 
-    top: 8, 
-    right: 8, 
-    backgroundColor: BK_BROWN, 
-    paddingHorizontal: 8, 
-    paddingVertical: 5, 
-    borderRadius: 18,
+  popularBadgeText: { fontFamily: FONT.bodyExtrabold, fontSize: 8, color: FUEL.white, textTransform: 'uppercase', letterSpacing: 0.3 },
+  proteinBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: FUEL.ink,
+    paddingHorizontal: SPACE.s,
+    paddingVertical: SPACE.xs,
+    borderRadius: RADIUS.lg,
     alignItems: 'center',
   },
-  proteinText: { fontSize: 13, fontWeight: '800', color: BK_CREAM },
-  proteinLabel: { fontSize: 8, color: 'rgba(245,235,220,0.8)', textTransform: 'uppercase' },
-  vegBadge: { 
-    position: 'absolute', 
-    top: 66, 
-    right: 8, 
-    width: 18, 
-    height: 18, 
-    borderRadius: 4, 
-    borderWidth: 2, 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    backgroundColor: BK_WHITE 
+  proteinText: { fontFamily: FONT.bodyExtrabold, fontSize: 13, color: FUEL.lime },
+  proteinLabel: { fontFamily: FONT.bodyMedium, fontSize: 8, color: 'rgba(244,241,233,0.8)', textTransform: 'uppercase' },
+  vegBadge: {
+    position: 'absolute',
+    top: 66,
+    right: 8,
+    width: 18,
+    height: 18,
+    borderRadius: RADIUS.xs,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: FUEL.white
   },
-  vegBadgeDot: { width: 9, height: 9, borderRadius: 5 },
-  popularInfo: { padding: 9 },
-  popularName: { fontSize: 14, fontWeight: '800', color: BK_BROWN },
-  popularDesc: { fontSize: 11, color: BK_TEXT_LIGHT, marginTop: 3 },
-  popularBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 },
-  popularPrice: { fontSize: 15, fontWeight: '800', color: BK_BROWN },
-  per100: { fontSize: 9, fontWeight: '400', color: BK_TEXT_LIGHT },
-  popQtyBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: BK_RED, borderRadius: 20, paddingHorizontal: 3 },
-  popQtyBtn: { paddingHorizontal: 5, paddingVertical: 6 },
-  popQtyText: { color: BK_CREAM, fontSize: 11, fontWeight: '800', minWidth: 30, textAlign: 'center' },
-  addBtn: { backgroundColor: BK_RED, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
-  addBtnText: { color: BK_CREAM, fontSize: 12, fontWeight: '800', textTransform: 'uppercase' },
-  
-  // Floating AI Button (BK Orange)
-  floatingAiBtn: { position: 'absolute', bottom: 90, right: 20, width: 56, height: 56, borderRadius: 28, backgroundColor: BK_ORANGE, alignItems: 'center', justifyContent: 'center', shadowColor: BK_BROWN, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 10 },
-  floatingAiInner: { width: 56, height: 56, borderRadius: 28, backgroundColor: BK_ORANGE, alignItems: 'center', justifyContent: 'center' },
-  floatingAiBadge: { position: 'absolute', top: -2, right: -2, width: 20, height: 20, borderRadius: 10, backgroundColor: BK_RED, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: BK_WHITE },
+  vegBadgeDot: { width: 9, height: 9, borderRadius: RADIUS.xs },
+  popularInfo: { padding: SPACE.s },
+  popularName: { fontFamily: FONT.bodyExtrabold, fontSize: 14, color: FUEL.ink },
+  popularDesc: { fontFamily: FONT.body, fontSize: 11, color: FUEL.muted, marginTop: 3 },
+  popularBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: SPACE.s },
+  popularPrice: { fontFamily: FONT.display, fontSize: 15, color: FUEL.ink },
+  per100: { fontFamily: FONT.body, fontSize: 9, color: FUEL.muted },
+  popQtyBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: FUEL.ink, borderRadius: RADIUS.lg, paddingHorizontal: 3 },
+  popQtyBtn: { paddingHorizontal: SPACE.xs, paddingVertical: SPACE.s },
+  popQtyText: { color: FUEL.white, fontFamily: FONT.bodyExtrabold, fontSize: 11, minWidth: 30, textAlign: 'center' },
+  addBtn: { backgroundColor: FUEL.lime, paddingHorizontal: SPACE.l, paddingVertical: SPACE.s, borderRadius: RADIUS.lg },
+  addBtnText: { color: FUEL.ink, fontFamily: FONT.bodyExtrabold, fontSize: 12, textTransform: 'uppercase' },
+
+  // Floating AI Button — ink with lime accent
+  floatingAiBtn: { position: 'absolute', bottom: 90, right: 20, width: 56, height: 56, borderRadius: 28, backgroundColor: FUEL.ink, alignItems: 'center', justifyContent: 'center', shadowColor: FUEL.ink, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 10 }, // circle
+  floatingAiInner: { width: 56, height: 56, borderRadius: 28, backgroundColor: FUEL.ink, alignItems: 'center', justifyContent: 'center' }, // circle
+  floatingAiBadge: { position: 'absolute', top: -2, right: -2, width: 20, height: 20, borderRadius: 10, backgroundColor: FUEL.lime, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: FUEL.white }, // circle
 
   // Delivery Address Modal (FIX 1)
   addrOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  addrSheet: { backgroundColor: BK_CREAM, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 32 },
-  addrHandle: { alignSelf: 'center', width: 44, height: 5, borderRadius: 3, backgroundColor: '#D8D2C4', marginBottom: 14 },
-  addrHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
-  addrTitle: { fontFamily: FONT.display, fontSize: 22, color: BK_BROWN, textTransform: 'uppercase', letterSpacing: 0.5 },
-  addrCurrent: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#EAF2DD', borderRadius: 12, padding: 12, marginBottom: 14 },
-  addrCurrentText: { flex: 1, fontSize: 13, fontWeight: '600', color: BK_BROWN },
-  addrDetectBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: BK_RED, borderRadius: 16, paddingVertical: 16 },
-  addrDetectText: { color: FUEL.lime, fontSize: 15, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
-  addrErrorRow: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#F1E7E1', borderRadius: 10, padding: 10, marginTop: 12 },
-  addrErrorText: { flex: 1, fontSize: 12, color: BK_RED, fontWeight: '600' },
-  addrDividerRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 18 },
-  addrDividerLine: { flex: 1, height: 1, backgroundColor: '#E0DACB' },
-  addrDividerText: { fontSize: 10, fontWeight: '800', color: BK_TEXT_LIGHT, letterSpacing: 0.5 },
-  addrInput: { backgroundColor: BK_WHITE, borderRadius: 14, padding: 14, minHeight: 64, color: BK_BROWN, fontSize: 14, fontWeight: '600', borderWidth: 2, borderColor: '#E6E1D4', textAlignVertical: 'top' },
-  addrSaveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: FUEL.lime, borderRadius: 16, paddingVertical: 16, marginTop: 14 },
-  addrSaveText: { color: FUEL.ink, fontSize: 15, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
+  addrSheet: { backgroundColor: FUEL.sand, borderTopLeftRadius: RADIUS.lg, borderTopRightRadius: RADIUS.lg, padding: SPACE.xl, paddingBottom: SPACE.xxl },
+  addrHandle: { alignSelf: 'center', width: 44, height: 5, borderRadius: RADIUS.xs, backgroundColor: FUEL.sandBorder, marginBottom: SPACE.l },
+  addrHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACE.l },
+  addrTitle: { fontFamily: FONT.display, fontSize: 22, color: FUEL.ink, textTransform: 'uppercase', letterSpacing: 0.5 },
+  addrCurrent: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s, backgroundColor: FUEL.limeTint, borderRadius: RADIUS.md, padding: SPACE.m, marginBottom: SPACE.l },
+  addrCurrentText: { flex: 1, fontFamily: FONT.bodySemibold, fontSize: 13, color: FUEL.ink },
+  addrDetectBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.s, backgroundColor: FUEL.lime, borderRadius: RADIUS.md, paddingVertical: SPACE.l },
+  addrDetectText: { color: FUEL.ink, fontFamily: FONT.display, fontSize: 15, textTransform: 'uppercase', letterSpacing: 0.5 },
+  addrErrorRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s, backgroundColor: FUEL.proteinTint, borderRadius: RADIUS.sm, padding: SPACE.m, marginTop: SPACE.m },
+  addrErrorText: { flex: 1, fontFamily: FONT.bodySemibold, fontSize: 12, color: FUEL.error },
+  addrDividerRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.m, marginVertical: SPACE.l },
+  addrDividerLine: { flex: 1, height: 1, backgroundColor: FUEL.sandBorder },
+  addrDividerText: { fontFamily: FONT.bodyExtrabold, fontSize: 10, color: FUEL.muted, letterSpacing: 0.5 },
+  addrInput: { backgroundColor: FUEL.white, borderRadius: RADIUS.md, padding: SPACE.l, minHeight: 64, color: FUEL.ink, fontFamily: FONT.bodySemibold, fontSize: 14, borderWidth: 1.5, borderColor: FUEL.sandBorder, textAlignVertical: 'top' },
+  addrSaveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.s, backgroundColor: FUEL.lime, borderRadius: RADIUS.md, paddingVertical: SPACE.l, marginTop: SPACE.l },
+  addrSaveText: { color: FUEL.ink, fontFamily: FONT.display, fontSize: 15, textTransform: 'uppercase', letterSpacing: 0.5 },
 });

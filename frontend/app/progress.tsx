@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { apiCall } from '../utils/api';
-import { FUEL, FONT } from '../utils/theme';
+import { FUEL, FONT, RADIUS, SPACE } from '../utils/theme';
 
 // Phase 4 — Progress: weight log + simple graph + streak/points (customer app only).
 export default function ProgressScreen() {
@@ -134,33 +134,33 @@ export default function ProgressScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: FUEL.sand },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: FUEL.ink, paddingHorizontal: 12, paddingVertical: 12 },
-  backBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: FUEL.ink, paddingHorizontal: SPACE.m, paddingVertical: SPACE.m },
+  backBtn: { width: 40, height: 40, borderRadius: RADIUS.lg, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontFamily: FONT.display, fontSize: 20, color: FUEL.sand, textTransform: 'uppercase', letterSpacing: 1 },
-  content: { padding: 16 },
-  statsRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-  statCard: { flex: 1, alignItems: 'center', backgroundColor: FUEL.white, borderRadius: 14, paddingVertical: 14, borderWidth: 1, borderColor: FUEL.sandBorder, gap: 2 },
+  content: { padding: SPACE.l },
+  statsRow: { flexDirection: 'row', gap: SPACE.m, marginBottom: SPACE.l },
+  statCard: { flex: 1, alignItems: 'center', backgroundColor: FUEL.white, borderRadius: RADIUS.md, paddingVertical: SPACE.l, borderWidth: 1, borderColor: FUEL.sandBorder, gap: 2 },
   statBig: { fontFamily: FONT.display, fontSize: 26, color: FUEL.ink },
   statLbl: { fontSize: 11, color: FUEL.muted },
-  logCard: { backgroundColor: FUEL.white, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: FUEL.sandBorder, marginBottom: 18 },
-  logLabel: { fontSize: 13, fontWeight: '700', color: FUEL.ink, marginBottom: 8 },
-  logRow: { flexDirection: 'row', gap: 10 },
-  input: { flex: 1, backgroundColor: FUEL.sand, borderRadius: 10, borderWidth: 1.5, borderColor: FUEL.sandBorder, padding: 12, fontSize: 17, fontWeight: '700', color: FUEL.ink },
-  logBtn: { backgroundColor: FUEL.lime, borderRadius: 10, paddingHorizontal: 24, alignItems: 'center', justifyContent: 'center' },
+  logCard: { backgroundColor: FUEL.white, borderRadius: RADIUS.md, padding: SPACE.l, borderWidth: 1, borderColor: FUEL.sandBorder, marginBottom: SPACE.l },
+  logLabel: { fontSize: 13, fontFamily: FONT.bodyBold, color: FUEL.ink, marginBottom: SPACE.s },
+  logRow: { flexDirection: 'row', gap: SPACE.m },
+  input: { flex: 1, backgroundColor: FUEL.sand, borderRadius: RADIUS.sm, borderWidth: 1.5, borderColor: FUEL.sandBorder, padding: SPACE.m, fontSize: 17, fontFamily: FONT.bodyBold, color: FUEL.ink },
+  logBtn: { backgroundColor: FUEL.lime, borderRadius: RADIUS.sm, paddingHorizontal: SPACE.xl, alignItems: 'center', justifyContent: 'center' },
   logBtnText: { fontFamily: FONT.display, fontSize: 16, color: FUEL.ink, textTransform: 'uppercase' },
-  error: { color: FUEL.error, fontSize: 12.5, fontWeight: '600', marginTop: 8 },
-  sectionTitle: { fontFamily: FONT.display, fontSize: 18, color: FUEL.ink, textTransform: 'uppercase', marginBottom: 10 },
-  emptyGraph: { backgroundColor: FUEL.white, borderRadius: 14, padding: 24, borderWidth: 1, borderColor: FUEL.sandBorder, alignItems: 'center', marginBottom: 16 },
+  error: { color: FUEL.error, fontSize: 12.5, fontFamily: FONT.bodySemibold, marginTop: SPACE.s },
+  sectionTitle: { fontFamily: FONT.display, fontSize: 18, color: FUEL.ink, textTransform: 'uppercase', marginBottom: SPACE.m },
+  emptyGraph: { backgroundColor: FUEL.white, borderRadius: RADIUS.md, padding: SPACE.xl, borderWidth: 1, borderColor: FUEL.sandBorder, alignItems: 'center', marginBottom: SPACE.l },
   emptyText: { fontSize: 13, color: FUEL.muted },
-  graphCard: { backgroundColor: FUEL.white, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: FUEL.sandBorder, marginBottom: 16 },
+  graphCard: { backgroundColor: FUEL.white, borderRadius: RADIUS.md, padding: SPACE.l, borderWidth: 1, borderColor: FUEL.sandBorder, marginBottom: SPACE.l },
   bars: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-around', minHeight: 150 },
   barCol: { alignItems: 'center', flex: 1 },
   barVal: { fontSize: 9.5, color: FUEL.muted, marginBottom: 3 },
-  bar: { width: 14, borderRadius: 6, backgroundColor: FUEL.limeDeep },
-  barDate: { fontSize: 9, color: FUEL.muted, marginTop: 4 },
-  summaryRow: { flexDirection: 'row', gap: 10, marginBottom: 14 },
-  sumBox: { flex: 1, alignItems: 'center', backgroundColor: FUEL.ink, borderRadius: 12, paddingVertical: 12 },
+  bar: { width: 14, borderRadius: RADIUS.xs, backgroundColor: FUEL.limeDeep },
+  barDate: { fontSize: 9, color: FUEL.muted, marginTop: SPACE.xs },
+  summaryRow: { flexDirection: 'row', gap: SPACE.m, marginBottom: SPACE.l },
+  sumBox: { flex: 1, alignItems: 'center', backgroundColor: FUEL.ink, borderRadius: RADIUS.md, paddingVertical: SPACE.m },
   sumLbl: { fontSize: 11, color: FUEL.sand, opacity: 0.7 },
-  sumVal: { fontSize: 16, color: FUEL.lime, fontWeight: '800', marginTop: 2 },
+  sumVal: { fontSize: 16, color: FUEL.lime, fontFamily: FONT.bodyExtrabold, marginTop: 2 },
   disclaimer: { fontSize: 11.5, color: '#9C9883', lineHeight: 16, fontStyle: 'italic' },
 });

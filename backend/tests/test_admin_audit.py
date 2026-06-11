@@ -104,7 +104,12 @@ class TestAuditWrites:
 
 class TestAuditRead:
     def test_cashier_403(self, ctx):
-        r = run(ctx.client.get("/api/admin-audit", headers=auth(ctx.cashier_a)))
+        # The deactivate test above bumped this cashier's token_version (token
+        # revocation), so mint a token carrying the CURRENT version: the request
+        # must fail on role (403), not on a revoked token (401).
+        doc = run(server.db.users.find_one({"id": ctx.cashier_a_id}, {"_id": 0}))
+        tok = server.create_token(ctx.cashier_a_id, "cashier", doc.get("token_version", 0))
+        r = run(ctx.client.get("/api/admin-audit", headers=auth(tok)))
         assert r.status_code == 403
 
     def test_store_manager_sees_only_own_store(self, ctx):

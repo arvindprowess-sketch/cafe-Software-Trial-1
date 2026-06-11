@@ -5,8 +5,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { Image } from 'expo-image';
 import { apiCall, logout } from '../../utils/api';
-import { GOALS, getGoal } from '../../utils/theme';
+import { GOALS, getGoal, FUEL, FONT, RADIUS, SPACE } from '../../utils/theme';
 
 const { width } = Dimensions.get('window');
 const DRAWER_WIDTH = width * 0.85;
@@ -124,6 +125,7 @@ export default function SideDrawer({ visible, onClose, user }: SideDrawerProps) 
             <TouchableOpacity style={styles.closeBtn} onPress={onClose} testID="drawer-close-btn">
               <Ionicons name="arrow-back" size={24} color="#15140F" />
             </TouchableOpacity>
+            <Image source={require('../../assets/images/boraroc-monogram.png')} style={styles.headerLogo} contentFit="contain" />
             <TouchableOpacity style={styles.notifBtn}>
               <Ionicons name="notifications-outline" size={22} color="#15140F" />
             </TouchableOpacity>
@@ -194,8 +196,8 @@ export default function SideDrawer({ visible, onClose, user }: SideDrawerProps) 
                       style={[styles.goalPill, goal === g.key && { borderColor: g.color, backgroundColor: `${g.color}15` }]}
                       onPress={() => setGoal(g.key)}
                     >
-                      <Ionicons name={g.icon as any} size={15} color={goal === g.key ? g.color : '#6B6A5E'} />
-                      <Text style={[styles.goalPillText, goal === g.key && { color: g.color, fontWeight: '700' }]}>{g.shortLabel}</Text>
+                      <Ionicons name={g.icon as any} size={15} color={goal === g.key ? g.color : FUEL.muted} />
+                      <Text style={[styles.goalPillText, goal === g.key && { color: g.color, fontFamily: FONT.bodyBold }]}>{g.shortLabel}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -289,97 +291,98 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: SPACE.l,
     paddingTop: 50,
-    paddingBottom: 10,
+    paddingBottom: SPACE.m,
   },
   closeBtn: {
-    width: 40, height: 40, borderRadius: 20,
+    width: 40, height: 40, borderRadius: 20, // circle
     backgroundColor: '#FFF',
     alignItems: 'center', justifyContent: 'center',
   },
+  headerLogo: { width: 40, height: 40 },
   notifBtn: {
-    width: 40, height: 40, borderRadius: 20,
+    width: 40, height: 40, borderRadius: 20, // circle
     backgroundColor: '#FFF',
     alignItems: 'center', justifyContent: 'center',
   },
   profile: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 20, paddingVertical: 16, gap: 14,
+    paddingHorizontal: SPACE.xl, paddingVertical: SPACE.l, gap: SPACE.l,
   },
   avatar: {
-    width: 56, height: 56, borderRadius: 28,
-    backgroundColor: '#F1E7E1',
+    width: 56, height: 56, borderRadius: 28, // circle
+    backgroundColor: FUEL.proteinTint,
     alignItems: 'center', justifyContent: 'center',
   },
   userInfo: { flex: 1 },
-  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  userName: { fontSize: 20, fontWeight: '700', color: '#15140F' },
-  userPhone: { fontSize: 14, color: '#6B6A5E', marginTop: 2 },
-  editNameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s },
+  userName: { fontSize: 20, fontFamily: FONT.bodyBold, color: FUEL.ink },
+  userPhone: { fontSize: 14, color: FUEL.muted, marginTop: 2 },
+  editNameRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s },
   editNameInput: {
-    flex: 1, backgroundColor: '#FFF', borderRadius: 8,
-    paddingHorizontal: 10, paddingVertical: 6,
-    fontSize: 18, fontWeight: '700', color: '#15140F',
+    flex: 1, backgroundColor: '#FFF', borderRadius: RADIUS.sm,
+    paddingHorizontal: SPACE.m, paddingVertical: SPACE.s,
+    fontSize: 18, fontFamily: FONT.bodyBold, color: FUEL.ink,
     borderWidth: 1.5, borderColor: Z_RED,
   },
 
   goalCard: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#15140F',
-    marginHorizontal: 16, borderRadius: 14,
-    padding: 14, gap: 12,
+    backgroundColor: FUEL.ink,
+    marginHorizontal: SPACE.l, borderRadius: RADIUS.md,
+    padding: SPACE.l, gap: SPACE.m,
   },
   goalIconBox: {
-    width: 40, height: 40, borderRadius: 20,
+    width: 40, height: 40, borderRadius: 20, // circle
     backgroundColor: Z_RED,
     alignItems: 'center', justifyContent: 'center',
   },
-  goalText: { fontSize: 15, fontWeight: '700', color: '#FFF' },
+  goalText: { fontSize: 15, fontFamily: FONT.bodyBold, color: '#FFF' },
   goalSub: { fontSize: 12, color: '#CFC8B8', marginTop: 2 },
 
-  menuList: { flex: 1, marginTop: 12 },
+  menuList: { flex: 1, marginTop: SPACE.m },
 
   // Goals expandable section
-  goalsSection: { paddingHorizontal: 16, paddingTop: 8 },
-  sectionTitle: { fontSize: 14, fontWeight: '700', color: '#15140F', marginBottom: 8, marginTop: 4 },
-  goalsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
+  goalsSection: { paddingHorizontal: SPACE.l, paddingTop: SPACE.s },
+  sectionTitle: { fontSize: 14, fontFamily: FONT.bodyBold, color: FUEL.ink, marginBottom: SPACE.s, marginTop: SPACE.xs },
+  goalsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.s, marginBottom: SPACE.l },
   goalPill: {
     minWidth: '30%', flexGrow: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 5, paddingVertical: 10, paddingHorizontal: 8, borderRadius: 20,
-    backgroundColor: '#FFF', borderWidth: 1.5, borderColor: '#E8E8E8',
+    gap: SPACE.xs, paddingVertical: SPACE.m, paddingHorizontal: SPACE.s, borderRadius: RADIUS.lg,
+    backgroundColor: '#FFF', borderWidth: 1.5, borderColor: FUEL.sandBorder,
   },
-  goalPillText: { fontSize: 11, fontWeight: '600', color: '#6B6A5E' },
+  goalPillText: { fontSize: 11, fontFamily: FONT.bodySemibold, color: FUEL.muted },
 
-  targetsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 },
+  targetsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.s, marginBottom: SPACE.l },
   targetCard: {
-    width: '47%', backgroundColor: '#FFF', borderRadius: 10,
-    padding: 10, borderWidth: 1, borderColor: '#E6E1D4',
+    width: '47%', backgroundColor: '#FFF', borderRadius: RADIUS.sm,
+    padding: SPACE.m, borderWidth: 1, borderColor: FUEL.sandBorder,
   },
-  targetLabel: { fontSize: 11, fontWeight: '600', marginBottom: 4 },
-  targetInputRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  targetLabel: { fontSize: 11, fontFamily: FONT.bodySemibold, marginBottom: SPACE.xs },
+  targetInputRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.xs },
   targetInput: {
-    flex: 1, backgroundColor: '#F4F1E9', borderRadius: 6,
-    padding: 8, color: '#15140F', fontSize: 16, fontWeight: '700',
+    flex: 1, backgroundColor: FUEL.sand, borderRadius: RADIUS.xs,
+    padding: SPACE.s, color: FUEL.ink, fontSize: 16, fontFamily: FONT.bodyBold,
   },
-  targetUnit: { fontSize: 11, color: '#6B6A5E', fontWeight: '600' },
+  targetUnit: { fontSize: 11, color: FUEL.muted, fontFamily: FONT.bodySemibold },
 
   saveBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, backgroundColor: Z_RED, borderRadius: 10,
-    paddingVertical: 12, marginBottom: 8,
+    gap: SPACE.s, backgroundColor: Z_RED, borderRadius: RADIUS.sm,
+    paddingVertical: SPACE.m, marginBottom: SPACE.s,
   },
-  saveBtnText: { color: '#FFF', fontSize: 14, fontWeight: '700' },
+  saveBtnText: { color: '#FFF', fontSize: 14, fontFamily: FONT.bodyBold },
 
   menuItem: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 20, paddingVertical: 16, gap: 16,
+    paddingHorizontal: SPACE.xl, paddingVertical: SPACE.l, gap: SPACE.l,
   },
-  menuLabel: { fontSize: 16, fontWeight: '600', color: '#15140F' },
-  divider: { height: 1, backgroundColor: '#E8E8E8', marginVertical: 8, marginHorizontal: 20 },
+  menuLabel: { fontSize: 16, fontFamily: FONT.bodySemibold, color: FUEL.ink },
+  divider: { height: 1, backgroundColor: FUEL.sandBorder, marginVertical: SPACE.s, marginHorizontal: SPACE.xl },
 
   version: {
-    textAlign: 'center', color: '#B0B0B0', fontSize: 12,
-    paddingBottom: 30, paddingTop: 10,
+    textAlign: 'center', color: FUEL.muted, fontSize: 12,
+    paddingBottom: SPACE.xxl, paddingTop: SPACE.m,
   },
 });

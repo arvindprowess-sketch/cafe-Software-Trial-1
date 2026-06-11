@@ -10,7 +10,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiCall, getStoredUser } from '../utils/api';
 import { useCart, itemPrice, CartItem } from '../utils/CartContext';
 import { useStore } from '../utils/StoreContext';
-import { FUEL, FONT } from '../utils/theme';
+import { FUEL, FONT, RADIUS, SPACE } from '../utils/theme';
+import PressableScale from './components/PressableScale';
+import * as Haptics from 'expo-haptics';
+
+// PR-C: success haptic on the order-placed moment (safe no-op on web)
+const hapticSuccess = () => {
+  try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {}); } catch {}
+};
 
 const TIP_PRESETS = [10, 20, 30, 50];
 const ORDER_TYPES = [
@@ -181,6 +188,7 @@ export default function CartScreen() {
 
       const order = await apiCall('/orders', { method: 'POST', body: orderBody });
       clear();
+      hapticSuccess(); // PR-C: order-placed success moment
       Alert.alert(isScheduled ? 'Order Scheduled!' : 'Order Placed!', `₹${Math.round(fresh.grand_total)} · ${orderType}`);
       router.replace({ pathname: '/order-detail', params: { orderId: order.id } });
     } catch (e: any) {
@@ -217,9 +225,9 @@ export default function CartScreen() {
           </TouchableOpacity>
 
           {addons.length > 0 && (
-            <View style={{ marginTop: 28, width: '100%' }}>
+            <View style={{ marginTop: SPACE.xxl, width: '100%' }}>
               <Text style={styles.sectionTitle}>Popular right now</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingVertical: 8 }}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: SPACE.m, paddingVertical: SPACE.s }}>
                 {addons.map(a => <AddonCard key={a.id} a={a} onAdd={() => addItem(a)} />)}
               </ScrollView>
             </View>
@@ -263,12 +271,12 @@ export default function CartScreen() {
           <>
             <Text style={styles.sectionTitle}>Store</Text>
             {stores.length === 1 ? (
-              <View style={[styles.otBtn, styles.otBtnActive, { alignSelf: 'flex-start', paddingHorizontal: 16 }]}>
+              <View style={[styles.otBtn, styles.otBtnActive, { alignSelf: 'flex-start', paddingHorizontal: SPACE.l }]}>
                 <Ionicons name="storefront" size={18} color={FUEL.ink} />
                 <Text style={[styles.otText, styles.otTextActive]}>{stores[0].name}</Text>
               </View>
             ) : (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: SPACE.s, paddingVertical: 2 }}>
                 {stores.map(s => (
                   <TouchableOpacity key={s.store_id} testID={`store-${s.store_id}`}
                     style={[styles.otBtn, selectedStoreId === s.store_id && styles.otBtnActive]}
@@ -330,7 +338,7 @@ export default function CartScreen() {
         {nextTier && (
           <View style={styles.savingsBar} testID="savings-bar">
             <Ionicons name="pricetags" size={15} color={FUEL.limeDeep} />
-            <Text style={styles.savingsText}>Add ₹{Math.round(nextTier.threshold - subtotal)} more to unlock <Text style={{ fontWeight: '800' }}>{nextTier.label}</Text></Text>
+            <Text style={styles.savingsText}>Add ₹{Math.round(nextTier.threshold - subtotal)} more to unlock <Text style={{ fontFamily: FONT.bodyExtrabold }}>{nextTier.label}</Text></Text>
           </View>
         )}
         {q.total_savings > 0 && (
@@ -370,9 +378,9 @@ export default function CartScreen() {
 
         {/* ADD MORE carousel */}
         {addons.length > 0 && (
-          <View style={{ marginTop: 14 }}>
+          <View style={{ marginTop: SPACE.l }}>
             <Text style={styles.sectionTitle}>Forgot something? Add more</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingVertical: 8 }}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: SPACE.m, paddingVertical: SPACE.s }}>
               {addons.map(a => <AddonCard key={a.id} a={a} onAdd={() => addItem(a)} />)}
             </ScrollView>
           </View>
@@ -438,7 +446,7 @@ export default function CartScreen() {
         {gstOn && (
           <View style={styles.block}>
             <TextInput testID="gstin-input" style={styles.gstInput} value={gstin} onChangeText={setGstin} placeholder="GSTIN" placeholderTextColor={FUEL.muted} autoCapitalize="characters" />
-            <TextInput testID="business-name-input" style={[styles.gstInput, { marginTop: 8 }]} value={businessName} onChangeText={setBusinessName} placeholder="Business name" placeholderTextColor={FUEL.muted} />
+            <TextInput testID="business-name-input" style={[styles.gstInput, { marginTop: SPACE.s }]} value={businessName} onChangeText={setBusinessName} placeholder="Business name" placeholderTextColor={FUEL.muted} />
           </View>
         )}
 
@@ -478,14 +486,14 @@ export default function CartScreen() {
           <Text style={styles.bottomLabel}>To Pay</Text>
           <Text style={styles.bottomTotal}>₹{Math.round(grandTotal)}{quoting && <Text style={styles.bottomQuoting}>  …</Text>}</Text>
         </View>
-        <TouchableOpacity testID="place-order-btn" style={[styles.payBtn, placing && { opacity: 0.6 }]} disabled={placing} onPress={() => placeOrder(false)}>
+        <PressableScale haptic testID="place-order-btn" style={[styles.payBtn, placing && { opacity: 0.6 }]} disabled={placing} onPress={() => placeOrder(false)}>
           {placing ? <ActivityIndicator color={FUEL.ink} /> : (
             <>
               <Text style={styles.payBtnText}>{isScheduled ? 'Schedule Order' : 'Place Order'}</Text>
               <Ionicons name="arrow-forward" size={18} color={FUEL.ink} />
             </>
           )}
-        </TouchableOpacity>
+        </PressableScale>
       </View>
     </SafeAreaView>
   );
@@ -527,122 +535,122 @@ const AddonCard = ({ a, onAdd }: any) => {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: FUEL.sand },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: FUEL.white, borderBottomWidth: 1, borderBottomColor: FUEL.sandBorder },
-  hBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: FUEL.sand, alignItems: 'center', justifyContent: 'center' },
-  hTitle: { flex: 1, marginLeft: 12, fontFamily: FONT.display, fontSize: 22, color: FUEL.ink, textTransform: 'uppercase', letterSpacing: 0.5 },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACE.l, paddingVertical: SPACE.m, backgroundColor: FUEL.white, borderBottomWidth: 1, borderBottomColor: FUEL.sandBorder },
+  hBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: FUEL.sand, alignItems: 'center', justifyContent: 'center' }, // circle
+  hTitle: { flex: 1, marginLeft: SPACE.m, fontFamily: FONT.display, fontSize: 22, color: FUEL.ink, textTransform: 'uppercase', letterSpacing: 0.5 },
   hRight: { minWidth: 40, alignItems: 'flex-end' },
-  clearText: { color: FUEL.error, fontSize: 13, fontWeight: '800' },
+  clearText: { color: FUEL.error, fontSize: 13, fontFamily: FONT.bodyExtrabold },
 
-  scroll: { padding: 16, paddingBottom: 40 },
-  sectionTitle: { fontFamily: FONT.display, fontSize: 16, color: FUEL.ink, textTransform: 'uppercase', letterSpacing: 0.3, marginTop: 18, marginBottom: 10 },
+  scroll: { padding: SPACE.l, paddingBottom: SPACE.xxl },
+  sectionTitle: { fontFamily: FONT.display, fontSize: 16, color: FUEL.ink, textTransform: 'uppercase', letterSpacing: 0.3, marginTop: SPACE.l, marginBottom: SPACE.m },
 
   // macros
-  macroCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: FUEL.ink, borderRadius: 20, padding: 16 },
-  macroKcalBox: { alignItems: 'center', paddingRight: 14 },
+  macroCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: FUEL.ink, borderRadius: RADIUS.lg, padding: SPACE.l },
+  macroKcalBox: { alignItems: 'center', paddingRight: SPACE.l },
   macroKcal: { fontFamily: FONT.display, fontSize: 30, color: FUEL.lime },
-  macroKcalLabel: { fontSize: 10, color: 'rgba(244,241,233,0.7)', fontWeight: '800', letterSpacing: 1 },
+  macroKcalLabel: { fontSize: 10, color: 'rgba(244,241,233,0.7)', fontFamily: FONT.bodyExtrabold, letterSpacing: 1 },
   macroDivider: { width: 1, height: 46, backgroundColor: 'rgba(244,241,233,0.2)' },
-  macroRow: { flex: 1, flexDirection: 'row', justifyContent: 'space-around', marginLeft: 8 },
-  macroPill: { alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12 },
-  macroVal: { fontFamily: FONT.bodyExtrabold, fontSize: 16, fontWeight: '800' },
-  macroLbl: { fontSize: 9, color: FUEL.ink, fontWeight: '700', textTransform: 'uppercase', marginTop: 1 },
+  macroRow: { flex: 1, flexDirection: 'row', justifyContent: 'space-around', marginLeft: SPACE.s },
+  macroPill: { alignItems: 'center', paddingHorizontal: SPACE.m, paddingVertical: SPACE.s, borderRadius: RADIUS.md },
+  macroVal: { fontFamily: FONT.bodyExtrabold, fontSize: 16 },
+  macroLbl: { fontSize: 9, color: FUEL.ink, fontFamily: FONT.bodyBold, textTransform: 'uppercase', marginTop: 1 },
 
   // order type / payment
-  orderTypeRow: { flexDirection: 'row', gap: 8 },
-  otBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 14, backgroundColor: FUEL.white, borderWidth: 2, borderColor: FUEL.sandBorder },
+  orderTypeRow: { flexDirection: 'row', gap: SPACE.s },
+  otBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.s, paddingVertical: SPACE.m, borderRadius: RADIUS.md, backgroundColor: FUEL.white, borderWidth: 2, borderColor: FUEL.sandBorder },
   otBtnActive: { backgroundColor: FUEL.lime, borderColor: FUEL.lime },
-  otText: { fontSize: 12, fontWeight: '800', color: FUEL.muted, textTransform: 'uppercase' },
+  otText: { fontSize: 12, fontFamily: FONT.bodyExtrabold, color: FUEL.muted, textTransform: 'uppercase' },
   otTextActive: { color: FUEL.ink },
 
-  block: { backgroundColor: FUEL.white, borderRadius: 14, padding: 14, marginTop: 10, borderWidth: 1, borderColor: FUEL.sandBorder },
-  addrRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  addrInput: { flex: 1, fontSize: 14, color: FUEL.ink, fontWeight: '600', paddingVertical: 4 },
-  tipLabel: { fontSize: 12, fontWeight: '700', color: FUEL.muted, marginTop: 12, marginBottom: 8 },
-  tipRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-  tipChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: FUEL.sand, borderWidth: 1.5, borderColor: FUEL.sandBorder },
+  block: { backgroundColor: FUEL.white, borderRadius: RADIUS.md, padding: SPACE.l, marginTop: SPACE.m, borderWidth: 1, borderColor: FUEL.sandBorder },
+  addrRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s },
+  addrInput: { flex: 1, fontSize: 14, color: FUEL.ink, fontFamily: FONT.bodySemibold, paddingVertical: SPACE.xs },
+  tipLabel: { fontSize: 12, fontFamily: FONT.bodyBold, color: FUEL.muted, marginTop: SPACE.m, marginBottom: SPACE.s },
+  tipRow: { flexDirection: 'row', gap: SPACE.s, alignItems: 'center' },
+  tipChip: { paddingHorizontal: SPACE.l, paddingVertical: SPACE.s, borderRadius: RADIUS.lg, backgroundColor: FUEL.sand, borderWidth: 1.5, borderColor: FUEL.sandBorder },
   tipChipActive: { backgroundColor: FUEL.lime, borderColor: FUEL.lime },
-  tipChipText: { fontSize: 13, fontWeight: '800', color: FUEL.muted },
-  tipCustom: { flex: 1, backgroundColor: FUEL.sand, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8, fontSize: 13, color: FUEL.ink, borderWidth: 1.5, borderColor: FUEL.sandBorder },
+  tipChipText: { fontSize: 13, fontFamily: FONT.bodyExtrabold, color: FUEL.muted },
+  tipCustom: { flex: 1, backgroundColor: FUEL.sand, borderRadius: RADIUS.lg, paddingHorizontal: SPACE.l, paddingVertical: SPACE.s, fontSize: 13, color: FUEL.ink, borderWidth: 1.5, borderColor: FUEL.sandBorder },
 
   // savings
-  savingsBar: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: FUEL.limeTint, borderRadius: 12, padding: 12, marginTop: 12 },
-  savingsText: { flex: 1, fontSize: 12, color: FUEL.inkSoft, fontWeight: '600' },
-  savedLine: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
-  savedText: { fontSize: 12.5, color: FUEL.success, fontWeight: '700' },
+  savingsBar: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s, backgroundColor: FUEL.limeTint, borderRadius: RADIUS.md, padding: SPACE.m, marginTop: SPACE.m },
+  savingsText: { flex: 1, fontSize: 12, color: FUEL.inkSoft, fontFamily: FONT.bodySemibold },
+  savedLine: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s, marginTop: SPACE.s },
+  savedText: { fontSize: 12.5, color: FUEL.success, fontFamily: FONT.bodyBold },
 
   // items
-  itemCard: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: FUEL.white, borderRadius: 14, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: FUEL.sandBorder },
-  vegBox: { width: 16, height: 16, borderRadius: 3, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  vegDot: { width: 8, height: 8, borderRadius: 4 },
-  itemName: { fontSize: 14, fontWeight: '800', color: FUEL.ink },
+  itemCard: { flexDirection: 'row', alignItems: 'center', gap: SPACE.m, backgroundColor: FUEL.white, borderRadius: RADIUS.md, padding: SPACE.m, marginBottom: SPACE.s, borderWidth: 1, borderColor: FUEL.sandBorder },
+  vegBox: { width: 16, height: 16, borderRadius: RADIUS.xs, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  vegDot: { width: 8, height: 8, borderRadius: 4 }, // circle
+  itemName: { fontSize: 14, fontFamily: FONT.bodyExtrabold, color: FUEL.ink },
   itemMeta: { fontSize: 11, color: FUEL.muted, marginTop: 2 },
-  itemRight: { alignItems: 'flex-end', gap: 6 },
-  stepper: { flexDirection: 'row', alignItems: 'center', backgroundColor: FUEL.sand, borderRadius: 16, borderWidth: 1.5, borderColor: FUEL.sandBorder },
-  stepBtn: { paddingHorizontal: 8, paddingVertical: 6 },
-  stepVal: { fontSize: 12, fontWeight: '800', color: FUEL.ink, minWidth: 40, textAlign: 'center' },
-  itemPrice: { fontSize: 14, fontWeight: '800', color: FUEL.ink },
-  removeBtn: { padding: 4 },
+  itemRight: { alignItems: 'flex-end', gap: SPACE.s },
+  stepper: { flexDirection: 'row', alignItems: 'center', backgroundColor: FUEL.sand, borderRadius: RADIUS.md, borderWidth: 1.5, borderColor: FUEL.sandBorder },
+  stepBtn: { paddingHorizontal: SPACE.s, paddingVertical: SPACE.s },
+  stepVal: { fontSize: 12, fontFamily: FONT.bodyExtrabold, color: FUEL.ink, minWidth: 40, textAlign: 'center' },
+  itemPrice: { fontSize: 14, fontFamily: FONT.bodyExtrabold, color: FUEL.ink },
+  removeBtn: { padding: SPACE.xs },
 
   // addons
-  addonCard: { width: 130, backgroundColor: FUEL.white, borderRadius: 14, padding: 8, borderWidth: 1, borderColor: FUEL.sandBorder },
-  addonImg: { width: '100%', height: 70, borderRadius: 10, backgroundColor: FUEL.sand },
-  addonName: { fontSize: 12, fontWeight: '800', color: FUEL.ink, marginTop: 6 },
-  addonFoot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 },
-  addonPrice: { fontSize: 13, fontWeight: '800', color: FUEL.ink },
-  addonUnit: { fontSize: 9, fontWeight: '400', color: FUEL.muted },
-  addonAdd: { width: 28, height: 28, borderRadius: 14, backgroundColor: FUEL.lime, alignItems: 'center', justifyContent: 'center' },
+  addonCard: { width: 130, backgroundColor: FUEL.white, borderRadius: RADIUS.md, padding: SPACE.s, borderWidth: 1, borderColor: FUEL.sandBorder },
+  addonImg: { width: '100%', height: 70, borderRadius: RADIUS.sm, backgroundColor: FUEL.sand },
+  addonName: { fontSize: 12, fontFamily: FONT.bodyExtrabold, color: FUEL.ink, marginTop: SPACE.s },
+  addonFoot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: SPACE.s },
+  addonPrice: { fontSize: 13, fontFamily: FONT.bodyExtrabold, color: FUEL.ink },
+  addonUnit: { fontSize: 9, fontFamily: FONT.body, color: FUEL.muted },
+  addonAdd: { width: 28, height: 28, borderRadius: 14, backgroundColor: FUEL.lime, alignItems: 'center', justifyContent: 'center' }, // circle
 
   // coupon
-  couponRow: { flexDirection: 'row', gap: 8 },
-  couponInput: { flex: 1, backgroundColor: FUEL.white, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: FUEL.ink, borderWidth: 1.5, borderColor: FUEL.sandBorder, borderStyle: 'dashed' },
-  couponApply: { paddingHorizontal: 20, justifyContent: 'center', backgroundColor: FUEL.ink, borderRadius: 12 },
-  couponApplyText: { color: FUEL.lime, fontSize: 14, fontWeight: '800', textTransform: 'uppercase' },
-  couponApplied: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: FUEL.limeTint, borderRadius: 12, padding: 12, marginTop: 8 },
-  couponAppliedText: { flex: 1, fontSize: 13, fontWeight: '800', color: FUEL.ink },
-  couponError: { fontSize: 12, color: FUEL.error, fontWeight: '600', marginTop: 8 },
-  offerCard: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: FUEL.white, borderRadius: 12, padding: 12, marginTop: 8, borderWidth: 1, borderColor: FUEL.sandBorder },
-  offerTag: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  offerTitle: { fontSize: 13, fontWeight: '800', color: FUEL.ink },
+  couponRow: { flexDirection: 'row', gap: SPACE.s },
+  couponInput: { flex: 1, backgroundColor: FUEL.white, borderRadius: RADIUS.md, paddingHorizontal: SPACE.l, paddingVertical: SPACE.m, fontSize: 14, color: FUEL.ink, borderWidth: 1.5, borderColor: FUEL.sandBorder, borderStyle: 'dashed' },
+  couponApply: { paddingHorizontal: SPACE.xl, justifyContent: 'center', backgroundColor: FUEL.ink, borderRadius: RADIUS.md },
+  couponApplyText: { color: FUEL.lime, fontSize: 14, fontFamily: FONT.bodyExtrabold, textTransform: 'uppercase' },
+  couponApplied: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s, backgroundColor: FUEL.limeTint, borderRadius: RADIUS.md, padding: SPACE.m, marginTop: SPACE.s },
+  couponAppliedText: { flex: 1, fontSize: 13, fontFamily: FONT.bodyExtrabold, color: FUEL.ink },
+  couponError: { fontSize: 12, color: FUEL.error, fontFamily: FONT.bodySemibold, marginTop: SPACE.s },
+  offerCard: { flexDirection: 'row', alignItems: 'center', gap: SPACE.m, backgroundColor: FUEL.white, borderRadius: RADIUS.md, padding: SPACE.m, marginTop: SPACE.s, borderWidth: 1, borderColor: FUEL.sandBorder },
+  offerTag: { width: 30, height: 30, borderRadius: RADIUS.sm, alignItems: 'center', justifyContent: 'center' },
+  offerTitle: { fontSize: 13, fontFamily: FONT.bodyExtrabold, color: FUEL.ink },
   offerCode: { color: FUEL.limeDeep },
   offerSub: { fontSize: 11, color: FUEL.muted, marginTop: 1 },
-  offerApply: { fontSize: 12, fontWeight: '800', color: FUEL.limeDeep },
+  offerApply: { fontSize: 12, fontFamily: FONT.bodyExtrabold, color: FUEL.limeDeep },
 
   // toggles
-  toggleBlock: { flexDirection: 'row', alignItems: 'center', backgroundColor: FUEL.white, borderRadius: 14, padding: 14, marginTop: 12, borderWidth: 1, borderColor: FUEL.sandBorder },
-  toggleTitle: { fontSize: 14, fontWeight: '800', color: FUEL.ink },
+  toggleBlock: { flexDirection: 'row', alignItems: 'center', backgroundColor: FUEL.white, borderRadius: RADIUS.md, padding: SPACE.l, marginTop: SPACE.m, borderWidth: 1, borderColor: FUEL.sandBorder },
+  toggleTitle: { fontSize: 14, fontFamily: FONT.bodyExtrabold, color: FUEL.ink },
   toggleHint: { fontSize: 11, color: FUEL.muted, marginTop: 2 },
-  timeRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
-  timeInput: { width: 56, backgroundColor: FUEL.white, borderRadius: 10, paddingVertical: 10, textAlign: 'center', fontSize: 16, fontWeight: '800', color: FUEL.ink, borderWidth: 1.5, borderColor: FUEL.sandBorder },
-  timeColon: { fontSize: 18, fontWeight: '800', color: FUEL.ink },
+  timeRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s, marginTop: SPACE.s },
+  timeInput: { width: 56, backgroundColor: FUEL.white, borderRadius: RADIUS.sm, paddingVertical: SPACE.m, textAlign: 'center', fontSize: 16, fontFamily: FONT.bodyExtrabold, color: FUEL.ink, borderWidth: 1.5, borderColor: FUEL.sandBorder },
+  timeColon: { fontSize: 18, fontFamily: FONT.bodyExtrabold, color: FUEL.ink },
   timeHint: { flex: 1, fontSize: 11, color: FUEL.muted },
-  gstInput: { backgroundColor: FUEL.sand, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: FUEL.ink, borderWidth: 1.5, borderColor: FUEL.sandBorder },
+  gstInput: { backgroundColor: FUEL.sand, borderRadius: RADIUS.sm, paddingHorizontal: SPACE.m, paddingVertical: SPACE.m, fontSize: 14, color: FUEL.ink, borderWidth: 1.5, borderColor: FUEL.sandBorder },
 
   // bill
-  billCard: { backgroundColor: FUEL.white, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: FUEL.sandBorder },
-  billRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 },
-  billLabel: { fontSize: 13, color: FUEL.muted, fontWeight: '600' },
-  billValue: { fontSize: 13, color: FUEL.ink, fontWeight: '700' },
-  gstNote: { fontSize: 10, color: FUEL.muted, marginTop: 4 },
-  billDivider: { height: 1, backgroundColor: FUEL.sandBorder, marginVertical: 8 },
-  billTotalLabel: { fontSize: 15, fontWeight: '800', color: FUEL.ink },
+  billCard: { backgroundColor: FUEL.white, borderRadius: RADIUS.md, padding: SPACE.l, borderWidth: 1, borderColor: FUEL.sandBorder },
+  billRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: SPACE.xs },
+  billLabel: { fontSize: 13, color: FUEL.muted, fontFamily: FONT.bodySemibold },
+  billValue: { fontSize: 13, color: FUEL.ink, fontFamily: FONT.bodyBold },
+  gstNote: { fontSize: 10, color: FUEL.muted, marginTop: SPACE.xs },
+  billDivider: { height: 1, backgroundColor: FUEL.sandBorder, marginVertical: SPACE.s },
+  billTotalLabel: { fontSize: 15, fontFamily: FONT.bodyExtrabold, color: FUEL.ink },
   billTotalValue: { fontFamily: FONT.display, fontSize: 22, color: FUEL.ink },
-  payHint: { fontSize: 11, color: FUEL.muted, marginTop: 8 },
+  payHint: { fontSize: 11, color: FUEL.muted, marginTop: SPACE.s },
 
   // bottom bar
-  bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: FUEL.white, borderTopWidth: 1, borderTopColor: FUEL.sandBorder, padding: 16, paddingBottom: 26, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  bottomLabel: { fontSize: 11, color: FUEL.muted, fontWeight: '700', textTransform: 'uppercase' },
+  bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: FUEL.white, borderTopWidth: 1, borderTopColor: FUEL.sandBorder, padding: SPACE.l, paddingBottom: SPACE.xl, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  bottomLabel: { fontSize: 11, color: FUEL.muted, fontFamily: FONT.bodyBold, textTransform: 'uppercase' },
   bottomTotal: { fontFamily: FONT.display, fontSize: 24, color: FUEL.ink },
   bottomQuoting: { fontSize: 13, color: FUEL.muted },
-  payBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: FUEL.lime, borderRadius: 16, paddingHorizontal: 26, paddingVertical: 15 },
-  payBtnText: { fontSize: 15, fontWeight: '800', color: FUEL.ink, textTransform: 'uppercase', letterSpacing: 0.3 },
+  payBtn: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s, backgroundColor: FUEL.lime, borderRadius: RADIUS.md, paddingHorizontal: SPACE.xl, paddingVertical: SPACE.l },
+  payBtnText: { fontSize: 15, fontFamily: FONT.bodyExtrabold, color: FUEL.ink, textTransform: 'uppercase', letterSpacing: 0.3 },
 
   // empty
-  emptyWrap: { flexGrow: 1, alignItems: 'center', padding: 24, paddingTop: 50 },
-  emptyIcon: { width: 90, height: 90, borderRadius: 45, backgroundColor: FUEL.white, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: FUEL.sandBorder },
-  emptyTitle: { fontFamily: FONT.display, fontSize: 22, color: FUEL.ink, marginTop: 18, textTransform: 'uppercase' },
-  emptySub: { fontSize: 14, color: FUEL.muted, marginTop: 4 },
-  emptyAiBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: FUEL.lime, borderRadius: 16, paddingHorizontal: 22, paddingVertical: 14, marginTop: 22 },
-  emptyAiText: { fontSize: 14, fontWeight: '800', color: FUEL.ink, textTransform: 'uppercase' },
-  emptyMenuBtn: { marginTop: 12, paddingHorizontal: 22, paddingVertical: 12 },
-  emptyMenuText: { fontSize: 14, fontWeight: '800', color: FUEL.limeDeep, textTransform: 'uppercase' },
+  emptyWrap: { flexGrow: 1, alignItems: 'center', padding: SPACE.xl, paddingTop: 50 },
+  emptyIcon: { width: 90, height: 90, borderRadius: 45, backgroundColor: FUEL.white, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: FUEL.sandBorder }, // circle
+  emptyTitle: { fontFamily: FONT.display, fontSize: 22, color: FUEL.ink, marginTop: SPACE.l, textTransform: 'uppercase' },
+  emptySub: { fontSize: 14, color: FUEL.muted, marginTop: SPACE.xs },
+  emptyAiBtn: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s, backgroundColor: FUEL.lime, borderRadius: RADIUS.md, paddingHorizontal: SPACE.xl, paddingVertical: SPACE.l, marginTop: SPACE.xl },
+  emptyAiText: { fontSize: 14, fontFamily: FONT.bodyExtrabold, color: FUEL.ink, textTransform: 'uppercase' },
+  emptyMenuBtn: { marginTop: SPACE.m, paddingHorizontal: SPACE.xl, paddingVertical: SPACE.m },
+  emptyMenuText: { fontSize: 14, fontFamily: FONT.bodyExtrabold, color: FUEL.limeDeep, textTransform: 'uppercase' },
 });

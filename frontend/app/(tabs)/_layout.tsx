@@ -1,7 +1,7 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, View, Text } from 'react-native';
-import { FUEL, FONT } from '../../utils/theme';
+import { FUEL, FONT, SPACE } from '../../utils/theme';
 
 export default function TabLayout() {
   return (
@@ -53,14 +53,13 @@ const styles = StyleSheet.create({
     backgroundColor: FUEL.ink,
     borderTopWidth: 0,
     height: 66,
-    paddingBottom: 8,
-    paddingTop: 8,
+    paddingBottom: SPACE.s,
+    paddingTop: SPACE.s,
     elevation: 8,
   },
   tabLabel: {
     fontSize: 10,
     fontFamily: FONT.bodyExtrabold,
-    fontWeight: '800',
     textTransform: 'uppercase',
     letterSpacing: 0.6,
   },
@@ -68,7 +67,7 @@ const styles = StyleSheet.create({
   centerBtn: {
     width: 56,
     height: 56,
-    borderRadius: 28,
+    borderRadius: 28, // circle
     backgroundColor: FUEL.lime,
     alignItems: 'center',
     justifyContent: 'center',
@@ -85,7 +84,6 @@ const styles = StyleSheet.create({
   centerLabel: {
     fontSize: 9,
     fontFamily: FONT.bodyExtrabold,
-    fontWeight: '800',
     color: FUEL.lime,
     letterSpacing: 0.6,
     marginTop: 3,

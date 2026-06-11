@@ -8,14 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { apiCall } from '../../utils/api';
 import { useRealtime } from '../../utils/realtime';
-
-const BK_RED = '#15140F';
-const BK_ORANGE = '#15140F';
-const BK_BROWN = '#15140F';
-const BK_CREAM = '#F4F1E9';
-const BK_GREEN = '#3FA34D';
-const BK_WHITE = '#FFFFFF';
-const BK_TEXT_LIGHT = '#6B6A5E';
+import { FUEL, FONT, RADIUS, SPACE } from '../../utils/theme';
 
 export default function OrdersScreen() {
   const router = useRouter();
@@ -40,7 +33,7 @@ export default function OrdersScreen() {
   const loadOrders = useCallback(async () => {
     try {
       const allOrders = await apiCall('/orders');
-      
+
       // Recent orders: Last 7 days
       const now = new Date();
       const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -48,17 +41,17 @@ export default function OrdersScreen() {
         const orderDate = new Date(order.created_at);
         return orderDate >= sevenDaysAgo;
       }).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-      
+
       // Monthly orders: Current month
       const thisMonth = allOrders.filter((order: any) => {
         const orderDate = new Date(order.created_at);
         return orderDate.getMonth() === now.getMonth() && orderDate.getFullYear() === now.getFullYear();
       }).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-      
+
       // Favorite orders
       const favorites = allOrders.filter((order: any) => order.is_favorite === true)
         .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-      
+
       setRecentOrders(recent);
       setMonthlyOrders(thisMonth);
       setFavoriteOrders(favorites);
@@ -72,12 +65,12 @@ export default function OrdersScreen() {
   const toggleFavorite = async (orderId: string, currentFavorite: boolean) => {
     try {
       // Update local state immediately for better UX
-      const updateOrderFavorite = (order: any) => 
+      const updateOrderFavorite = (order: any) =>
         order.id === orderId ? { ...order, is_favorite: !currentFavorite } : order;
-      
+
       setRecentOrders(prev => prev.map(updateOrderFavorite));
       setMonthlyOrders(prev => prev.map(updateOrderFavorite));
-      
+
       if (!currentFavorite) {
         // Added to favorites
         const order = [...recentOrders, ...monthlyOrders].find(o => o.id === orderId);
@@ -88,7 +81,7 @@ export default function OrdersScreen() {
         // Removed from favorites
         setFavoriteOrders(prev => prev.filter(o => o.id !== orderId));
       }
-      
+
       // Try to update backend (optional - will fail silently if endpoint doesn't exist)
       await apiCall(`/orders/${orderId}/favorite`, {
         method: 'POST',
@@ -110,14 +103,14 @@ export default function OrdersScreen() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'completed': return BK_GREEN;
-      case 'ready': return BK_GREEN;
-      case 'pending': return BK_ORANGE;
-      case 'accepted': return '#5E97B8';
-      case 'preparing': return BK_ORANGE;
-      case 'cancelled': return BK_RED;
-      case 'scheduled': return '#D69A35';
-      default: return BK_TEXT_LIGHT;
+      case 'completed': return FUEL.success;
+      case 'ready': return FUEL.success;
+      case 'pending': return FUEL.warning;
+      case 'accepted': return FUEL.fat;
+      case 'preparing': return FUEL.warning;
+      case 'cancelled': return FUEL.error;
+      case 'scheduled': return FUEL.fat;
+      default: return FUEL.muted;
     }
   };
 
@@ -141,7 +134,7 @@ export default function OrdersScreen() {
     const statusIcon = getStatusIcon(item.status);
 
     return (
-      <TouchableOpacity 
+      <TouchableOpacity
         style={styles.orderCard}
         onPress={() => router.push({ pathname: '/order-detail', params: { orderId: item.id } })}
         activeOpacity={0.9}
@@ -161,10 +154,10 @@ export default function OrdersScreen() {
           {/* Order Type Icon - Moved to Right */}
           {item.order_type && (
             <View style={styles.orderTypeIconBadge}>
-              <Ionicons 
-                name={item.order_type === 'delivery' ? 'bicycle' : item.order_type === 'dine-in' ? 'restaurant' : 'bag-handle'} 
-                size={20} 
-                color={BK_RED} 
+              <Ionicons
+                name={item.order_type === 'delivery' ? 'bicycle' : item.order_type === 'dine-in' ? 'restaurant' : 'bag-handle'}
+                size={20}
+                color={FUEL.ink}
               />
             </View>
           )}
@@ -177,7 +170,7 @@ export default function OrdersScreen() {
               <Text style={styles.statusText}>{item.status.toUpperCase()}</Text>
             </View>
           </View>
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={(e) => {
               e.stopPropagation();
               toggleFavorite(item.id, item.is_favorite);
@@ -186,10 +179,10 @@ export default function OrdersScreen() {
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             testID={`favorite-btn-${item.id}`}
           >
-            <Ionicons 
-              name={item.is_favorite ? "heart" : "heart-outline"} 
-              size={22} 
-              color={item.is_favorite ? BK_RED : BK_TEXT_LIGHT} 
+            <Ionicons
+              name={item.is_favorite ? "heart" : "heart-outline"}
+              size={22}
+              color={item.is_favorite ? FUEL.limeDeep : FUEL.muted}
             />
           </TouchableOpacity>
         </View>
@@ -197,8 +190,8 @@ export default function OrdersScreen() {
         <View style={styles.orderItems}>
           {item.items?.slice(0, 3).map((orderItem: any, idx: number) => (
             <View key={idx} style={styles.itemRow}>
-              <View style={[styles.dietDot, { borderColor: orderItem.diet_type === 'non-veg' ? BK_RED : BK_GREEN }]}>
-                <View style={[styles.dietDotFill, { backgroundColor: orderItem.diet_type === 'non-veg' ? BK_RED : BK_GREEN }]} />
+              <View style={[styles.dietDot, { borderColor: orderItem.diet_type === 'non-veg' ? FUEL.nonVeg : FUEL.veg }]}>
+                <View style={[styles.dietDotFill, { backgroundColor: orderItem.diet_type === 'non-veg' ? FUEL.nonVeg : FUEL.veg }]} />
               </View>
               <Text style={styles.itemName} numberOfLines={1}>
                 {orderItem.name || orderItem.product_name || 'Item'} ({orderItem.grams || orderItem.quantity || 0}g)
@@ -212,9 +205,9 @@ export default function OrdersScreen() {
 
         <View style={styles.orderFooter}>
           <View style={styles.orderStats}>
-            <Ionicons name="restaurant" size={14} color={BK_TEXT_LIGHT} />
+            <Ionicons name="restaurant" size={14} color={FUEL.muted} />
             <Text style={styles.statsText}>{item.items?.length || 0} items</Text>
-            <Ionicons name="flame" size={14} color={BK_ORANGE} style={{ marginLeft: 12 }} />
+            <Ionicons name="flame" size={14} color={FUEL.warning} style={{ marginLeft: SPACE.m }} />
             <Text style={styles.statsText}>{Math.round(item.total_calories || 0)} cal</Text>
           </View>
           <Text style={styles.orderTotal}>₹{Math.round(item.total_price || 0)}</Text>
@@ -229,7 +222,7 @@ export default function OrdersScreen() {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.center}>
-          <ActivityIndicator size="large" color={BK_RED} />
+          <ActivityIndicator size="large" color={FUEL.ink} />
         </View>
       </SafeAreaView>
     );
@@ -248,11 +241,11 @@ export default function OrdersScreen() {
           style={[styles.tab, activeTab === 'recent' && styles.tabActive]}
           onPress={() => setActiveTab('recent')}
         >
-          <Ionicons name="time" size={16} color={activeTab === 'recent' ? BK_CREAM : BK_TEXT_LIGHT} />
+          <Ionicons name="time" size={16} color={activeTab === 'recent' ? FUEL.ink : FUEL.muted} />
           <Text style={[styles.tabText, activeTab === 'recent' && styles.tabTextActive]}>Recent</Text>
           {recentOrders.length > 0 && (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>{recentOrders.length}</Text>
+            <View style={[styles.badge, activeTab === 'recent' && styles.badgeActive]}>
+              <Text style={[styles.badgeText, activeTab === 'recent' && styles.badgeTextActive]}>{recentOrders.length}</Text>
             </View>
           )}
         </TouchableOpacity>
@@ -261,11 +254,11 @@ export default function OrdersScreen() {
           style={[styles.tab, activeTab === 'monthly' && styles.tabActive]}
           onPress={() => setActiveTab('monthly')}
         >
-          <Ionicons name="calendar" size={16} color={activeTab === 'monthly' ? BK_CREAM : BK_TEXT_LIGHT} />
+          <Ionicons name="calendar" size={16} color={activeTab === 'monthly' ? FUEL.ink : FUEL.muted} />
           <Text style={[styles.tabText, activeTab === 'monthly' && styles.tabTextActive]}>Monthly</Text>
           {monthlyOrders.length > 0 && (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>{monthlyOrders.length}</Text>
+            <View style={[styles.badge, activeTab === 'monthly' && styles.badgeActive]}>
+              <Text style={[styles.badgeText, activeTab === 'monthly' && styles.badgeTextActive]}>{monthlyOrders.length}</Text>
             </View>
           )}
         </TouchableOpacity>
@@ -274,11 +267,11 @@ export default function OrdersScreen() {
           style={[styles.tab, activeTab === 'favorites' && styles.tabActive]}
           onPress={() => setActiveTab('favorites')}
         >
-          <Ionicons name="heart" size={16} color={activeTab === 'favorites' ? BK_CREAM : BK_TEXT_LIGHT} />
+          <Ionicons name="heart" size={16} color={activeTab === 'favorites' ? FUEL.ink : FUEL.muted} />
           <Text style={[styles.tabText, activeTab === 'favorites' && styles.tabTextActive]}>Favorites</Text>
           {favoriteOrders.length > 0 && (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>{favoriteOrders.length}</Text>
+            <View style={[styles.badge, activeTab === 'favorites' && styles.badgeActive]}>
+              <Text style={[styles.badgeText, activeTab === 'favorites' && styles.badgeTextActive]}>{favoriteOrders.length}</Text>
             </View>
           )}
         </TouchableOpacity>
@@ -314,15 +307,15 @@ export default function OrdersScreen() {
         keyExtractor={item => item.id}
         renderItem={renderOrder}
         contentContainerStyle={styles.listContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={BK_RED} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={FUEL.ink} />}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Ionicons name="receipt-outline" size={64} color="#D0D0D0" />
+            <Ionicons name="receipt-outline" size={64} color={FUEL.sandBorder} />
             <Text style={styles.emptyTitle}>No Orders Yet</Text>
             <Text style={styles.emptyText}>
-              {activeTab === 'recent' 
-                ? 'You haven\'t placed any orders in the last 7 days' 
+              {activeTab === 'recent'
+                ? 'You haven\'t placed any orders in the last 7 days'
                 : activeTab === 'monthly'
                 ? 'No orders this month'
                 : 'No favorite orders yet. Tap the ❤️ icon on any order to add it to favorites!'}
@@ -338,153 +331,157 @@ export default function OrdersScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: BK_CREAM },
+  safe: { flex: 1, backgroundColor: FUEL.sand },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  
+
   header: {
-    backgroundColor: BK_BROWN,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    backgroundColor: FUEL.ink,
+    paddingHorizontal: SPACE.l,
+    paddingVertical: SPACE.l,
   },
-  headerTitle: { fontSize: 22, fontWeight: '800', color: BK_CREAM, textTransform: 'uppercase', letterSpacing: 0.5 },
-  
+  headerTitle: { fontFamily: FONT.display, fontSize: 22, color: FUEL.sand, textTransform: 'uppercase', letterSpacing: 0.5 },
+
   tabContainer: {
     flexDirection: 'row',
-    backgroundColor: BK_BROWN,
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    gap: 8,
+    backgroundColor: FUEL.ink,
+    paddingHorizontal: SPACE.l,
+    paddingBottom: SPACE.m,
+    gap: SPACE.s,
   },
   tab: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    borderRadius: 25,
-    backgroundColor: 'rgba(245,235,220,0.1)',
+    gap: SPACE.xs,
+    paddingVertical: SPACE.m,
+    paddingHorizontal: SPACE.s,
+    borderRadius: RADIUS.pill,
+    backgroundColor: FUEL.inkSoft,
   },
   tabActive: {
-    backgroundColor: BK_RED,
+    backgroundColor: FUEL.lime,
   },
   tabText: {
+    fontFamily: FONT.bodyBold,
     fontSize: 11,
-    fontWeight: '700',
-    color: BK_TEXT_LIGHT,
+    color: FUEL.muted,
     textTransform: 'uppercase',
   },
   tabTextActive: {
-    color: BK_CREAM,
-    fontWeight: '800',
+    color: FUEL.ink,
+    fontFamily: FONT.bodyExtrabold,
   },
   badge: {
-    backgroundColor: BK_ORANGE,
-    paddingHorizontal: 8,
+    backgroundColor: FUEL.lime,
+    paddingHorizontal: SPACE.s,
     paddingVertical: 2,
-    borderRadius: 10,
+    borderRadius: RADIUS.sm,
     minWidth: 24,
     alignItems: 'center',
   },
-  badgeText: { fontSize: 11, fontWeight: '800', color: BK_WHITE },
-  
+  badgeActive: {
+    backgroundColor: FUEL.ink,
+  },
+  badgeText: { fontFamily: FONT.bodyExtrabold, fontSize: 11, color: FUEL.ink },
+  badgeTextActive: { color: FUEL.lime },
+
   summaryCard: {
     flexDirection: 'row',
-    backgroundColor: BK_WHITE,
-    marginHorizontal: 16,
-    marginTop: 16,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 2,
-    borderColor: '#E6E1D4',
+    backgroundColor: FUEL.white,
+    marginHorizontal: SPACE.l,
+    marginTop: SPACE.l,
+    borderRadius: RADIUS.md,
+    padding: SPACE.l,
+    borderWidth: 1,
+    borderColor: FUEL.sandBorder,
   },
   summaryItem: { flex: 1, alignItems: 'center' },
-  summaryValue: { fontSize: 20, fontWeight: '800', color: BK_BROWN },
-  summaryLabel: { fontSize: 11, color: BK_TEXT_LIGHT, marginTop: 4, textTransform: 'uppercase' },
-  summaryDivider: { width: 1, backgroundColor: '#E6E1D4', marginHorizontal: 8 },
-  
+  summaryValue: { fontFamily: FONT.display, fontSize: 20, color: FUEL.ink },
+  summaryLabel: { fontFamily: FONT.bodyMedium, fontSize: 11, color: FUEL.muted, marginTop: SPACE.xs, textTransform: 'uppercase' },
+  summaryDivider: { width: 1, backgroundColor: FUEL.sandBorder, marginHorizontal: SPACE.s },
+
   orderCard: {
-    backgroundColor: BK_WHITE,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 2,
-    borderColor: '#E6E1D4',
+    backgroundColor: FUEL.white,
+    borderRadius: RADIUS.md,
+    padding: SPACE.l,
+    marginBottom: SPACE.m,
+    borderWidth: 1,
+    borderColor: FUEL.sandBorder,
   },
   orderHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: SPACE.m,
   },
-  orderHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+  orderHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: SPACE.m, flex: 1 },
   orderInfo: { flex: 1 },
-  orderId: { fontSize: 16, fontWeight: '800', color: BK_BROWN },
-  orderDate: { fontSize: 12, color: BK_TEXT_LIGHT, marginTop: 2 },
+  orderId: { fontFamily: FONT.bodyExtrabold, fontSize: 16, color: FUEL.ink },
+  orderDate: { fontFamily: FONT.body, fontSize: 12, color: FUEL.muted, marginTop: 2 },
   orderTypeIconBadge: {
     width: 44,
     height: 44,
-    borderRadius: 12,
-    backgroundColor: '#F1E7E1',
+    borderRadius: RADIUS.md,
+    backgroundColor: FUEL.limeTint,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  
+
   orderMetaRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: SPACE.m,
   },
   badgesContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: SPACE.s,
     flex: 1,
-    marginRight: 12,
+    marginRight: SPACE.m,
   },
   statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
+    paddingHorizontal: SPACE.m,
+    paddingVertical: SPACE.xs,
+    borderRadius: RADIUS.lg,
   },
-  statusText: { fontSize: 9, fontWeight: '800', color: BK_WHITE },
-  favoriteBtn: { padding: 4, marginLeft: 8 },
-  
-  listContent: { padding: 16, paddingBottom: 100 },
-  
-  orderItems: { marginBottom: 12 },
-  itemRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
-  dietDot: { width: 14, height: 14, borderRadius: 2, borderWidth: 2, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  dietDotFill: { width: 7, height: 7, borderRadius: 4 },
-  itemName: { flex: 1, fontSize: 14, color: BK_BROWN, fontWeight: '600' },
-  moreItems: { fontSize: 12, color: BK_TEXT_LIGHT, fontStyle: 'italic', marginTop: 4 },
-  
+  statusText: { fontFamily: FONT.bodyExtrabold, fontSize: 9, color: FUEL.white },
+  favoriteBtn: { padding: SPACE.xs, marginLeft: SPACE.s },
+
+  listContent: { padding: SPACE.l, paddingBottom: 100 },
+
+  orderItems: { marginBottom: SPACE.m },
+  itemRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s, marginBottom: SPACE.s },
+  dietDot: { width: 14, height: 14, borderRadius: RADIUS.xs, borderWidth: 2, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  dietDotFill: { width: 7, height: 7, borderRadius: RADIUS.xs },
+  itemName: { flex: 1, fontFamily: FONT.bodySemibold, fontSize: 14, color: FUEL.ink },
+  moreItems: { fontFamily: FONT.body, fontSize: 12, color: FUEL.muted, fontStyle: 'italic', marginTop: SPACE.xs },
+
   orderFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 12,
+    paddingTop: SPACE.m,
     borderTopWidth: 1,
-    borderTopColor: '#E6E1D4',
+    borderTopColor: FUEL.sandBorder,
   },
-  orderStats: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  statsText: { fontSize: 12, color: BK_TEXT_LIGHT },
-  orderTotal: { fontSize: 20, fontWeight: '800', color: BK_RED },
-  
+  orderStats: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s },
+  statsText: { fontFamily: FONT.body, fontSize: 12, color: FUEL.muted },
+  orderTotal: { fontFamily: FONT.display, fontSize: 20, color: FUEL.ink },
+
   emptyState: {
     alignItems: 'center',
     paddingVertical: 60,
   },
-  emptyTitle: { fontSize: 18, fontWeight: '800', color: BK_BROWN, marginTop: 16 },
-  emptyText: { fontSize: 14, color: BK_TEXT_LIGHT, textAlign: 'center', marginTop: 8, paddingHorizontal: 40 },
+  emptyTitle: { fontFamily: FONT.display, fontSize: 18, color: FUEL.ink, marginTop: SPACE.l, textTransform: 'uppercase' },
+  emptyText: { fontFamily: FONT.body, fontSize: 14, color: FUEL.muted, textAlign: 'center', marginTop: SPACE.s, paddingHorizontal: SPACE.xxl },
   emptyBtn: {
-    backgroundColor: BK_RED,
-    paddingHorizontal: 32,
-    paddingVertical: 14,
-    borderRadius: 25,
-    marginTop: 24,
+    backgroundColor: FUEL.lime,
+    paddingHorizontal: SPACE.xxl,
+    paddingVertical: SPACE.l,
+    borderRadius: RADIUS.pill,
+    marginTop: SPACE.xl,
   },
-  emptyBtnText: { fontSize: 15, fontWeight: '800', color: BK_CREAM, textTransform: 'uppercase' },
+  emptyBtnText: { fontFamily: FONT.display, fontSize: 15, color: FUEL.ink, textTransform: 'uppercase' },
 });

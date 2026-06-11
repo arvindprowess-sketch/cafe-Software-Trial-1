@@ -6,16 +6,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiCall } from '../utils/api';
-import { FUEL, FONT } from '../utils/theme';
-
-const Z_RED = '#15140F';
-const GREEN = '#3FA34D';
-const BK_BROWN = '#15140F';
-const BK_CREAM = '#F4F1E9';
-const BK_ORANGE = '#15140F';
-const BK_TEXT_LIGHT = '#6B6A5E';
+import { FUEL, FONT, RADIUS, SPACE } from '../utils/theme';
 
 type Step = 'phone' | 'otp' | 'name';
 
@@ -30,7 +24,7 @@ export default function AuthScreen() {
   const [demoOtp, setDemoOtp] = useState('');
   const [countdown, setCountdown] = useState(0);
   const [isNewUser, setIsNewUser] = useState(false);
-  
+
   const otpRefs = useRef<(TextInput | null)[]>([]);
 
   // Countdown timer for resend
@@ -44,7 +38,7 @@ export default function AuthScreen() {
   const handleSendOtp = async () => {
     setError('');
     const cleanPhone = phone.replace(/\D/g, '');
-    
+
     if (cleanPhone.length !== 10) {
       setError('Please enter a valid 10-digit phone number');
       return;
@@ -56,12 +50,12 @@ export default function AuthScreen() {
         method: 'POST',
         body: { phone: cleanPhone }
       });
-      
+
       // DEV-ONLY: backend returns dev_otp only when no SMS provider (MSG91) is configured
       if (result.dev_otp) {
         setDemoOtp(result.dev_otp);
       }
-      
+
       setStep('otp');
       setCountdown(30); // 30 seconds before resend
     } catch (e: any) {
@@ -105,7 +99,7 @@ export default function AuthScreen() {
   const handleVerifyOtp = async () => {
     setError('');
     const otpString = otp.join('');
-    
+
     if (otpString.length !== 6) {
       setError('Please enter complete 6-digit OTP');
       return;
@@ -115,17 +109,17 @@ export default function AuthScreen() {
     try {
       const result = await apiCall('/auth/otp/verify', {
         method: 'POST',
-        body: { 
-          phone: phone.replace(/\D/g, ''), 
+        body: {
+          phone: phone.replace(/\D/g, ''),
           otp: otpString,
           name: name || undefined
         }
       });
-      
+
       // Save token (must match keys in api.ts)
       await AsyncStorage.setItem('auth_token', result.token);
       await AsyncStorage.setItem('user_data', JSON.stringify(result.user));
-      
+
       // Check if new user needs to enter name
       if (result.is_new_user && !name) {
         setIsNewUser(true);
@@ -146,7 +140,7 @@ export default function AuthScreen() {
       setError('Please enter your name');
       return;
     }
-    
+
     // Name already sent during OTP verify, just navigate
     router.replace('/(tabs)/home');
   };
@@ -168,10 +162,10 @@ export default function AuthScreen() {
     <>
       <View style={styles.iconContainer}>
         <View style={styles.phoneBg}>
-          <Ionicons name="phone-portrait" size={40} color={Z_RED} />
+          <Ionicons name="phone-portrait" size={40} color={FUEL.limeDeep} />
         </View>
       </View>
-      
+
       <Text style={styles.title}>Enter your mobile number</Text>
       <Text style={styles.subtitle}>We'll send you an OTP to verify</Text>
 
@@ -185,7 +179,7 @@ export default function AuthScreen() {
           value={phone}
           onChangeText={setPhone}
           placeholder="9876543210"
-          placeholderTextColor="#B0B0B0"
+          placeholderTextColor={FUEL.muted}
           keyboardType="phone-pad"
           maxLength={10}
           autoFocus
@@ -194,17 +188,17 @@ export default function AuthScreen() {
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
-      <TouchableOpacity 
-        style={[styles.primaryBtn, phone.replace(/\D/g, '').length !== 10 && styles.primaryBtnDisabled]} 
-        onPress={handleSendOtp} 
+      <TouchableOpacity
+        style={[styles.primaryBtn, phone.replace(/\D/g, '').length !== 10 && styles.primaryBtnDisabled]}
+        onPress={handleSendOtp}
         disabled={loading || phone.replace(/\D/g, '').length !== 10}
       >
         {loading ? (
-          <ActivityIndicator color="#FFF" />
+          <ActivityIndicator color={FUEL.ink} />
         ) : (
           <>
             <Text style={styles.primaryBtnText}>Get OTP</Text>
-            <Ionicons name="arrow-forward" size={20} color="#FFF" />
+            <Ionicons name="arrow-forward" size={20} color={FUEL.ink} />
           </>
         )}
       </TouchableOpacity>
@@ -216,7 +210,7 @@ export default function AuthScreen() {
       </View>
 
       <TouchableOpacity style={styles.adminBtn} onPress={handleAdminLogin}>
-        <Ionicons name="storefront" size={18} color={Z_RED} />
+        <Ionicons name="storefront" size={18} color={FUEL.ink} />
         <Text style={styles.adminBtnText}>Cafe Owner? Use Web Panel</Text>
       </TouchableOpacity>
     </>
@@ -226,22 +220,22 @@ export default function AuthScreen() {
   const renderOtpStep = () => (
     <>
       <TouchableOpacity style={styles.backBtn} onPress={() => { setStep('phone'); setOtp(['', '', '', '', '', '']); setError(''); }}>
-        <Ionicons name="arrow-back" size={24} color="#15140F" />
+        <Ionicons name="arrow-back" size={24} color={FUEL.ink} />
       </TouchableOpacity>
 
       <View style={styles.iconContainer}>
         <View style={styles.otpBg}>
-          <Ionicons name="shield-checkmark" size={40} color={GREEN} />
+          <Ionicons name="shield-checkmark" size={40} color={FUEL.success} />
         </View>
       </View>
-      
+
       <Text style={styles.title}>Verify OTP</Text>
       <Text style={styles.subtitle}>Enter the 6-digit code sent to +91 {phone}</Text>
 
       {/* Demo OTP Display */}
       {demoOtp && (
         <View style={styles.demoOtpBox}>
-          <Ionicons name="information-circle" size={16} color="#D69A35" />
+          <Ionicons name="information-circle" size={16} color={FUEL.warning} />
           <Text style={styles.demoOtpText}>Demo OTP: <Text style={styles.demoOtpCode}>{demoOtp}</Text></Text>
         </View>
       )}
@@ -250,7 +244,7 @@ export default function AuthScreen() {
         {otp.map((digit, index) => (
           <TextInput
             key={index}
-            ref={ref => otpRefs.current[index] = ref}
+            ref={ref => { otpRefs.current[index] = ref; }}
             style={[styles.otpInput, digit && styles.otpInputFilled]}
             value={digit}
             onChangeText={(value) => handleOtpChange(value, index)}
@@ -264,28 +258,28 @@ export default function AuthScreen() {
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
-      <TouchableOpacity 
-        style={[styles.primaryBtn, otp.join('').length !== 6 && styles.primaryBtnDisabled]} 
-        onPress={handleVerifyOtp} 
+      <TouchableOpacity
+        style={[styles.primaryBtn, otp.join('').length !== 6 && styles.primaryBtnDisabled]}
+        onPress={handleVerifyOtp}
         disabled={loading || otp.join('').length !== 6}
       >
         {loading ? (
-          <ActivityIndicator color="#FFF" />
+          <ActivityIndicator color={FUEL.ink} />
         ) : (
           <>
             <Text style={styles.primaryBtnText}>Verify & Continue</Text>
-            <Ionicons name="checkmark-circle" size={20} color="#FFF" />
+            <Ionicons name="checkmark-circle" size={20} color={FUEL.ink} />
           </>
         )}
       </TouchableOpacity>
 
-      <TouchableOpacity 
-        style={styles.resendBtn} 
+      <TouchableOpacity
+        style={styles.resendBtn}
         onPress={handleResendOtp}
         disabled={countdown > 0}
       >
-        <Ionicons name="refresh" size={16} color={countdown > 0 ? '#B0B0B0' : Z_RED} />
-        <Text style={[styles.resendText, countdown > 0 && { color: '#B0B0B0' }]}>
+        <Ionicons name="refresh" size={16} color={countdown > 0 ? FUEL.muted : FUEL.limeDeep} />
+        <Text style={[styles.resendText, countdown > 0 && { color: FUEL.muted }]}>
           {countdown > 0 ? `Resend OTP in ${countdown}s` : 'Resend OTP'}
         </Text>
       </TouchableOpacity>
@@ -297,10 +291,10 @@ export default function AuthScreen() {
     <>
       <View style={styles.iconContainer}>
         <View style={styles.nameBg}>
-          <Ionicons name="person" size={40} color="#5E97B8" />
+          <Ionicons name="person" size={40} color={FUEL.fat} />
         </View>
       </View>
-      
+
       <Text style={styles.title}>What's your name?</Text>
       <Text style={styles.subtitle}>Let us know what to call you</Text>
 
@@ -309,20 +303,20 @@ export default function AuthScreen() {
         value={name}
         onChangeText={setName}
         placeholder="Enter your name"
-        placeholderTextColor="#B0B0B0"
+        placeholderTextColor={FUEL.muted}
         autoCapitalize="words"
         autoFocus
       />
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
-      <TouchableOpacity 
-        style={[styles.primaryBtn, !name.trim() && styles.primaryBtnDisabled]} 
-        onPress={handleSaveName} 
+      <TouchableOpacity
+        style={[styles.primaryBtn, !name.trim() && styles.primaryBtnDisabled]}
+        onPress={handleSaveName}
         disabled={!name.trim()}
       >
         <Text style={styles.primaryBtnText}>Continue</Text>
-        <Ionicons name="arrow-forward" size={20} color="#FFF" />
+        <Ionicons name="arrow-forward" size={20} color={FUEL.ink} />
       </TouchableOpacity>
     </>
   );
@@ -333,9 +327,7 @@ export default function AuthScreen() {
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           {/* Logo */}
           <View style={styles.logoSection}>
-            <View style={styles.logoBg}>
-              <Ionicons name="restaurant" size={32} color={FUEL.ink} />
-            </View>
+            <Image source={require('../assets/images/boraroc-monogram.png')} style={styles.logoImg} contentFit="contain" />
             <Text style={styles.brand}>BORAROC</Text>
           </View>
 
@@ -355,74 +347,74 @@ export default function AuthScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: BK_BROWN },
-  scroll: { flexGrow: 1, justifyContent: 'center', padding: 24 },
-  
+  safe: { flex: 1, backgroundColor: FUEL.ink },
+  scroll: { flexGrow: 1, justifyContent: 'center', padding: SPACE.xl },
+
   // Logo
-  logoSection: { alignItems: 'center', marginBottom: 32 },
-  logoBg: { width: 68, height: 68, borderRadius: 16, backgroundColor: FUEL.lime, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
-  brand: { fontFamily: FONT.display, fontSize: 40, fontWeight: '800', color: BK_CREAM, textTransform: 'uppercase', letterSpacing: 1 },
-  
+  logoSection: { alignItems: 'center', marginBottom: SPACE.xxl },
+  logoImg: { width: 96, height: 96, marginBottom: SPACE.l },
+  brand: { fontFamily: FONT.display, fontSize: 40, color: FUEL.sand, textTransform: 'uppercase', letterSpacing: 1 },
+
   // Form Card
-  formCard: { backgroundColor: '#FFF', borderRadius: 20, padding: 28, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 20, elevation: 6 },
-  
+  formCard: { backgroundColor: FUEL.white, borderRadius: RADIUS.lg, padding: SPACE.xxl, shadowColor: FUEL.ink, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 20, elevation: 6 },
+
   // Back button
-  backBtn: { position: 'absolute', top: 16, left: 16, width: 40, height: 40, borderRadius: 20, backgroundColor: BK_CREAM, alignItems: 'center', justifyContent: 'center', zIndex: 10 },
-  
+  backBtn: { position: 'absolute', top: 16, left: 16, width: 40, height: 40, borderRadius: 20, backgroundColor: FUEL.sand, alignItems: 'center', justifyContent: 'center', zIndex: 10 }, // circle
+
   // Icon containers
-  iconContainer: { alignItems: 'center', marginBottom: 20, marginTop: 8 },
-  phoneBg: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#F1E7E1', alignItems: 'center', justifyContent: 'center' },
-  otpBg: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#EAF2DD', alignItems: 'center', justifyContent: 'center' },
-  nameBg: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#F2EEE0', alignItems: 'center', justifyContent: 'center' },
-  
+  iconContainer: { alignItems: 'center', marginBottom: SPACE.xl, marginTop: SPACE.s },
+  phoneBg: { width: 80, height: 80, borderRadius: 40, backgroundColor: FUEL.limeTint, alignItems: 'center', justifyContent: 'center' }, // circle
+  otpBg: { width: 80, height: 80, borderRadius: 40, backgroundColor: FUEL.limeTint, alignItems: 'center', justifyContent: 'center' }, // circle
+  nameBg: { width: 80, height: 80, borderRadius: 40, backgroundColor: FUEL.fatTint, alignItems: 'center', justifyContent: 'center' }, // circle
+
   // Titles
-  title: { fontSize: 24, fontWeight: '800', color: BK_BROWN, textAlign: 'center', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.3 },
-  subtitle: { fontSize: 14, color: BK_TEXT_LIGHT, textAlign: 'center', marginBottom: 24 },
-  
+  title: { fontFamily: FONT.display, fontSize: 24, color: FUEL.ink, textAlign: 'center', marginBottom: SPACE.s, textTransform: 'uppercase', letterSpacing: 0.3 },
+  subtitle: { fontFamily: FONT.body, fontSize: 14, color: FUEL.muted, textAlign: 'center', marginBottom: SPACE.xl },
+
   // Phone input
-  phoneInputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: BK_CREAM, borderRadius: 14, overflow: 'hidden', marginBottom: 16, borderWidth: 2, borderColor: '#E6E1D4' },
-  countryCode: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 14, backgroundColor: '#E6E1D4', gap: 6 },
+  phoneInputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: FUEL.sand, borderRadius: RADIUS.md, overflow: 'hidden', marginBottom: SPACE.l, borderWidth: 1.5, borderColor: FUEL.sandBorder },
+  countryCode: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACE.l, paddingVertical: SPACE.l, backgroundColor: FUEL.sandBorder, gap: SPACE.s },
   flag: { fontSize: 18 },
-  countryText: { fontSize: 16, fontWeight: '700', color: BK_BROWN },
-  phoneInput: { flex: 1, fontSize: 18, fontWeight: '600', color: BK_BROWN, paddingHorizontal: 14, paddingVertical: 14, letterSpacing: 1 },
-  
+  countryText: { fontFamily: FONT.bodyBold, fontSize: 16, color: FUEL.ink },
+  phoneInput: { flex: 1, fontFamily: FONT.bodySemibold, fontSize: 18, color: FUEL.ink, paddingHorizontal: SPACE.l, paddingVertical: SPACE.l, letterSpacing: 1 },
+
   // OTP input
-  otpContainer: { flexDirection: 'row', justifyContent: 'center', gap: 10, marginBottom: 20 },
-  otpInput: { width: 48, height: 56, borderRadius: 12, backgroundColor: BK_CREAM, borderWidth: 2, borderColor: '#E6E1D4', textAlign: 'center', fontSize: 22, fontWeight: '800', color: BK_BROWN },
-  otpInputFilled: { borderColor: GREEN, backgroundColor: '#EAF2DD' },
-  
+  otpContainer: { flexDirection: 'row', justifyContent: 'center', gap: SPACE.m, marginBottom: SPACE.xl },
+  otpInput: { width: 48, height: 56, borderRadius: RADIUS.md, backgroundColor: FUEL.sand, borderWidth: 1.5, borderColor: FUEL.sandBorder, textAlign: 'center', fontFamily: FONT.bodyExtrabold, fontSize: 22, color: FUEL.ink },
+  otpInputFilled: { borderColor: FUEL.limeDeep, backgroundColor: FUEL.limeTint },
+
   // Demo OTP box
-  demoOtpBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#F2EEE0', borderRadius: 12, padding: 12, marginBottom: 16 },
-  demoOtpText: { fontSize: 13, color: BK_ORANGE },
-  demoOtpCode: { fontWeight: '800', fontSize: 16, letterSpacing: 2, color: BK_BROWN },
-  
+  demoOtpBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.s, backgroundColor: FUEL.sand, borderRadius: RADIUS.md, padding: SPACE.m, marginBottom: SPACE.l },
+  demoOtpText: { fontFamily: FONT.body, fontSize: 13, color: FUEL.muted },
+  demoOtpCode: { fontFamily: FONT.bodyExtrabold, fontSize: 16, letterSpacing: 2, color: FUEL.ink },
+
   // Name input
-  nameInput: { backgroundColor: BK_CREAM, borderRadius: 14, padding: 16, fontSize: 18, fontWeight: '600', color: BK_BROWN, marginBottom: 16, textAlign: 'center', borderWidth: 2, borderColor: '#E6E1D4' },
-  
-  // Buttons (BK pill style)
-  primaryBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Z_RED, borderRadius: 28, paddingVertical: 16, marginBottom: 12 },
-  primaryBtnDisabled: { backgroundColor: '#CFCBBE' },
-  primaryBtnText: { color: FUEL.lime, fontSize: 16, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
-  
-  resendBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12 },
-  resendText: { fontSize: 14, fontWeight: '700', color: BK_ORANGE },
-  
+  nameInput: { backgroundColor: FUEL.sand, borderRadius: RADIUS.md, padding: SPACE.l, fontFamily: FONT.bodySemibold, fontSize: 18, color: FUEL.ink, marginBottom: SPACE.l, textAlign: 'center', borderWidth: 1.5, borderColor: FUEL.sandBorder },
+
+  // Buttons (lime pill CTA)
+  primaryBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.s, backgroundColor: FUEL.lime, borderRadius: RADIUS.pill, paddingVertical: SPACE.l, marginBottom: SPACE.m },
+  primaryBtnDisabled: { backgroundColor: FUEL.sandBorder },
+  primaryBtnText: { color: FUEL.ink, fontFamily: FONT.display, fontSize: 16, textTransform: 'uppercase', letterSpacing: 0.5 },
+
+  resendBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.s, paddingVertical: SPACE.m },
+  resendText: { fontFamily: FONT.bodyBold, fontSize: 14, color: FUEL.limeDeep },
+
   // Divider
-  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 20 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: '#E6E1D4' },
-  dividerText: { paddingHorizontal: 16, fontSize: 13, color: BK_TEXT_LIGHT },
-  
+  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: SPACE.xl },
+  dividerLine: { flex: 1, height: 1, backgroundColor: FUEL.sandBorder },
+  dividerText: { paddingHorizontal: SPACE.l, fontFamily: FONT.body, fontSize: 13, color: FUEL.muted },
+
   // Admin button
-  adminBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#F1E7E1', borderRadius: 14, paddingVertical: 14 },
-  adminBtnText: { fontSize: 14, fontWeight: '700', color: Z_RED },
-  
+  adminBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.s, backgroundColor: FUEL.limeTint, borderRadius: RADIUS.md, paddingVertical: SPACE.l },
+  adminBtnText: { fontFamily: FONT.bodyBold, fontSize: 14, color: FUEL.ink },
+
   // Staff button
-  staffBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: BK_CREAM, borderRadius: 14, paddingVertical: 14, marginTop: 10 },
-  staffBtnText: { fontSize: 14, fontWeight: '700', color: BK_BROWN },
-  
+  staffBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.s, backgroundColor: FUEL.sand, borderRadius: RADIUS.md, paddingVertical: SPACE.l, marginTop: SPACE.m },
+  staffBtnText: { fontFamily: FONT.bodyBold, fontSize: 14, color: FUEL.ink },
+
   // Error
-  error: { color: Z_RED, fontSize: 13, textAlign: 'center', marginBottom: 12, fontWeight: '600' },
-  
+  error: { color: FUEL.error, fontFamily: FONT.bodySemibold, fontSize: 13, textAlign: 'center', marginBottom: SPACE.m },
+
   // Terms
-  terms: { fontSize: 11, color: 'rgba(245,235,220,0.5)', textAlign: 'center', marginTop: 24 },
+  terms: { fontFamily: FONT.body, fontSize: 11, color: 'rgba(244,241,233,0.5)', textAlign: 'center', marginTop: SPACE.xl },
 });

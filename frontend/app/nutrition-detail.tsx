@@ -6,14 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { apiCall } from '../utils/api';
-
-const BK_RED = '#15140F';
-const BK_ORANGE = '#15140F';
-const BK_BROWN = '#15140F';
-const BK_CREAM = '#F4F1E9';
-const BK_GREEN = '#3FA34D';
-const BK_WHITE = '#FFFFFF';
-const BK_TEXT_LIGHT = '#6B6A5E';
+import { FUEL, FONT, RADIUS, SPACE } from '../utils/theme';
 
 export default function NutritionDetailScreen() {
   const router = useRouter();
@@ -36,7 +29,7 @@ export default function NutritionDetailScreen() {
       ]);
       setSummary(summaryData);
       setOrders(ordersData);
-      
+
       // Get AI suggestion for remaining calories
       if (summaryData) {
         getAiSuggestion(summaryData);
@@ -62,7 +55,7 @@ export default function NutritionDetailScreen() {
 
       // Get available menu items
       const products = await apiCall('/products');
-      
+
       // Generate suggestion message
       let suggestion = '';
       if (remaining.calories <= 0) {
@@ -71,7 +64,7 @@ export default function NutritionDetailScreen() {
         suggestion = `✨ You're almost there! Only ${Math.round(remaining.calories)} calories remaining. Consider a light snack to complete your goals.`;
       } else {
         suggestion = `📊 You have ${Math.round(remaining.calories)} calories remaining for today.\n\n`;
-        
+
         if (remaining.protein > 20) {
           suggestion += `💪 Focus on protein-rich foods (${Math.round(remaining.protein)}g protein needed).\n`;
         }
@@ -81,19 +74,19 @@ export default function NutritionDetailScreen() {
         if (remaining.fat > 10) {
           suggestion += `🥑 Include healthy fats (${Math.round(remaining.fat)}g remaining).\n`;
         }
-        
+
         suggestion += `\n👇 Here are some items from our menu that can help:`;
       }
-      
+
       setAiSuggestion(suggestion);
-      
+
       // Smart recommendation: Find items that match remaining macros
-      const availableProducts = products.filter((p: any) => 
+      const availableProducts = products.filter((p: any) =>
         p.available_qty_grams > 0 || p.product_type === 'ready_made'
       );
-      
+
       let recommended = [];
-      
+
       // If high protein needed, prioritize protein items
       if (remaining.protein > 20) {
         const proteinItems = availableProducts
@@ -106,7 +99,7 @@ export default function NutritionDetailScreen() {
           reason: `High protein (${p.protein_per_100g}g per 100g)`
         })));
       }
-      
+
       // Add a carb source if needed
       if (remaining.carbs > 30 && recommended.length < 3) {
         const carbItems = availableProducts
@@ -119,7 +112,7 @@ export default function NutritionDetailScreen() {
           reason: `Good carb source (${p.carbs_per_100g}g per 100g)`
         })));
       }
-      
+
       // Fill remaining slots with balanced items
       if (recommended.length < 3) {
         const balanced = availableProducts
@@ -136,9 +129,9 @@ export default function NutritionDetailScreen() {
           reason: 'Balanced nutrition'
         })));
       }
-      
+
       setRecommendedItems(recommended.slice(0, 3));
-      
+
     } catch (e) {
       console.error('Error generating suggestion:', e);
       setAiSuggestion('Focus on balanced meals with adequate protein, carbs, and healthy fats to reach your goals!');
@@ -152,7 +145,7 @@ export default function NutritionDetailScreen() {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.center}>
-          <ActivityIndicator size="large" color={BK_RED} />
+          <ActivityIndicator size="large" color={FUEL.ink} />
         </View>
       </SafeAreaView>
     );
@@ -172,7 +165,7 @@ export default function NutritionDetailScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color={BK_CREAM} />
+          <Ionicons name="arrow-back" size={24} color={FUEL.sand} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Today's Nutrition</Text>
         <View style={{ width: 40 }} />
@@ -184,10 +177,10 @@ export default function NutritionDetailScreen() {
           <Text style={styles.cardTitle}>Today's Intake</Text>
           <View style={styles.statsRow}>
             {[
-              { label: 'Calories', consumed: consumed.calories || 0, goal: goals.daily_calories || 2000, color: BK_RED },
-              { label: 'Protein', consumed: consumed.protein || 0, goal: goals.daily_protein || 150, color: BK_RED, unit: 'g' },
-              { label: 'Carbs', consumed: consumed.carbs || 0, goal: goals.daily_carbs || 200, color: '#D69A35', unit: 'g' },
-              { label: 'Fat', consumed: consumed.fat || 0, goal: goals.daily_fat || 60, color: BK_ORANGE, unit: 'g' }
+              { label: 'Calories', consumed: consumed.calories || 0, goal: goals.daily_calories || 2000, color: FUEL.ink },
+              { label: 'Protein', consumed: consumed.protein || 0, goal: goals.daily_protein || 150, color: FUEL.protein, unit: 'g' },
+              { label: 'Carbs', consumed: consumed.carbs || 0, goal: goals.daily_carbs || 200, color: FUEL.carbs, unit: 'g' },
+              { label: 'Fat', consumed: consumed.fat || 0, goal: goals.daily_fat || 60, color: FUEL.fat, unit: 'g' }
             ].map(stat => (
               <View key={stat.label} style={styles.statBox}>
                 <Text style={styles.statLabel}>{stat.label}</Text>
@@ -208,7 +201,7 @@ export default function NutritionDetailScreen() {
             orders.map((order, idx) => (
               <View key={order.id || idx} style={styles.mealItem}>
                 <View style={styles.mealHeader}>
-                  <Ionicons name="restaurant" size={18} color={BK_BROWN} />
+                  <Ionicons name="restaurant" size={18} color={FUEL.ink} />
                   <Text style={styles.mealTitle}>Meal {idx + 1}</Text>
                   <Text style={styles.mealTime}>{new Date(order.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</Text>
                 </View>
@@ -234,10 +227,10 @@ export default function NutritionDetailScreen() {
           <Text style={styles.cardTitle}>Remaining Goals</Text>
           <View style={styles.remainingGrid}>
             {[
-              { label: 'Calories', value: remaining.calories, icon: 'flame', color: BK_RED },
-              { label: 'Protein', value: remaining.protein, icon: 'barbell', color: BK_RED, unit: 'g' },
-              { label: 'Carbs', value: remaining.carbs, icon: 'leaf', color: '#D69A35', unit: 'g' },
-              { label: 'Fat', value: remaining.fat, icon: 'water', color: BK_ORANGE, unit: 'g' }
+              { label: 'Calories', value: remaining.calories, icon: 'flame', color: FUEL.ink },
+              { label: 'Protein', value: remaining.protein, icon: 'barbell', color: FUEL.protein, unit: 'g' },
+              { label: 'Carbs', value: remaining.carbs, icon: 'leaf', color: FUEL.carbs, unit: 'g' },
+              { label: 'Fat', value: remaining.fat, icon: 'water', color: FUEL.fat, unit: 'g' }
             ].map(rem => (
               <View key={rem.label} style={styles.remainingBox}>
                 <Ionicons name={rem.icon as any} size={24} color={rem.color} />
@@ -251,18 +244,18 @@ export default function NutritionDetailScreen() {
         {/* AI Suggestions */}
         <View style={[styles.card, styles.aiCard]}>
           <View style={styles.aiHeader}>
-            <Ionicons name="sparkles" size={20} color={BK_ORANGE} />
+            <Ionicons name="sparkles" size={20} color={FUEL.limeDeep} />
             <Text style={styles.cardTitle}>AI Nutrition Coach</Text>
           </View>
           {aiLoading ? (
             <View style={styles.aiLoading}>
-              <ActivityIndicator color={BK_ORANGE} />
+              <ActivityIndicator color={FUEL.limeDeep} />
               <Text style={styles.aiLoadingText}>Analyzing your nutrition...</Text>
             </View>
           ) : (
             <>
               <Text style={styles.aiSuggestion}>{aiSuggestion}</Text>
-              
+
               {/* Recommended Menu Items */}
               {recommendedItems.length > 0 && (
                 <View style={styles.recommendedSection}>
@@ -270,10 +263,10 @@ export default function NutritionDetailScreen() {
                   {recommendedItems.map((item, idx) => {
                     const itemCals = Math.round((item.calories_per_100g * (item.suggested_grams || 100)) / 100);
                     const itemProtein = Math.round((item.protein_per_100g * (item.suggested_grams || 100)) / 100);
-                    
+
                     return (
-                      <TouchableOpacity 
-                        key={item.id} 
+                      <TouchableOpacity
+                        key={item.id}
                         style={styles.recommendedItem}
                         onPress={() => {
                           router.back();
@@ -282,8 +275,8 @@ export default function NutritionDetailScreen() {
                         activeOpacity={0.8}
                       >
                         <View style={styles.recommendedLeft}>
-                          <View style={[styles.dietDot, { borderColor: item.diet_type === 'non-veg' ? BK_RED : BK_GREEN }]}>
-                            <View style={[styles.dietDotFill, { backgroundColor: item.diet_type === 'non-veg' ? BK_RED : BK_GREEN }]} />
+                          <View style={[styles.dietDot, { borderColor: item.diet_type === 'non-veg' ? FUEL.nonVeg : FUEL.veg }]}>
+                            <View style={[styles.dietDotFill, { backgroundColor: item.diet_type === 'non-veg' ? FUEL.nonVeg : FUEL.veg }]} />
                           </View>
                           <View style={{ flex: 1 }}>
                             <Text style={styles.recommendedName}>{item.name}</Text>
@@ -294,12 +287,12 @@ export default function NutritionDetailScreen() {
                           </View>
                         </View>
                         <View style={styles.recommendedRight}>
-                          <Ionicons name="add-circle" size={32} color={BK_GREEN} />
+                          <Ionicons name="add-circle" size={32} color={FUEL.success} />
                         </View>
                       </TouchableOpacity>
                     );
                   })}
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.goToMenuBtn}
                     onPress={() => {
                       router.back();
@@ -307,7 +300,7 @@ export default function NutritionDetailScreen() {
                     }}
                   >
                     <Text style={styles.goToMenuText}>Browse Full Menu</Text>
-                    <Ionicons name="arrow-forward" size={18} color={BK_WHITE} />
+                    <Ionicons name="arrow-forward" size={18} color={FUEL.ink} />
                   </TouchableOpacity>
                 </View>
               )}
@@ -322,83 +315,83 @@ export default function NutritionDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: BK_CREAM },
+  safe: { flex: 1, backgroundColor: FUEL.sand },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  
+
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: BK_BROWN,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    backgroundColor: FUEL.ink,
+    paddingHorizontal: SPACE.l,
+    paddingVertical: SPACE.l,
   },
-  backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(245,235,220,0.15)', alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { fontSize: 18, fontWeight: '800', color: BK_CREAM, textTransform: 'uppercase' },
-  
-  summaryCard: { backgroundColor: BK_WHITE, margin: 16, borderRadius: 16, padding: 18, borderWidth: 2, borderColor: '#E6E1D4' },
-  card: { backgroundColor: BK_WHITE, marginHorizontal: 16, marginBottom: 16, borderRadius: 16, padding: 18, borderWidth: 2, borderColor: '#E6E1D4' },
-  cardTitle: { fontSize: 18, fontWeight: '800', color: BK_BROWN, marginBottom: 14, textTransform: 'uppercase' },
-  
-  statsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
+  backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: FUEL.inkSoft, alignItems: 'center', justifyContent: 'center' }, // circle
+  headerTitle: { fontFamily: FONT.display, fontSize: 18, color: FUEL.sand, textTransform: 'uppercase' },
+
+  summaryCard: { backgroundColor: FUEL.white, margin: SPACE.l, borderRadius: RADIUS.md, padding: SPACE.l, borderWidth: 1, borderColor: FUEL.sandBorder },
+  card: { backgroundColor: FUEL.white, marginHorizontal: SPACE.l, marginBottom: SPACE.l, borderRadius: RADIUS.md, padding: SPACE.l, borderWidth: 1, borderColor: FUEL.sandBorder },
+  cardTitle: { fontFamily: FONT.display, fontSize: 18, color: FUEL.ink, marginBottom: SPACE.l, textTransform: 'uppercase' },
+
+  statsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: SPACE.m },
   statBox: { alignItems: 'center' },
-  statLabel: { fontSize: 10, color: BK_TEXT_LIGHT, textTransform: 'uppercase', marginBottom: 4 },
-  statValue: { fontSize: 24, fontWeight: '800' },
-  statGoal: { fontSize: 11, color: BK_TEXT_LIGHT, marginTop: 2 },
-  mealsCount: { fontSize: 13, color: BK_TEXT_LIGHT, textAlign: 'center', marginTop: 8 },
-  
-  mealItem: { backgroundColor: BK_CREAM, borderRadius: 12, padding: 14, marginBottom: 12 },
-  mealHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
-  mealTitle: { flex: 1, fontSize: 16, fontWeight: '800', color: BK_BROWN },
-  mealTime: { fontSize: 12, color: BK_TEXT_LIGHT },
-  itemRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },
-  itemName: { flex: 1, fontSize: 13, color: BK_BROWN },
-  itemCals: { fontSize: 13, fontWeight: '700', color: BK_RED },
-  mealTotal: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#E6E1D4' },
-  mealTotalLabel: { fontSize: 14, fontWeight: '700', color: BK_BROWN },
-  mealTotalValue: { fontSize: 16, fontWeight: '800', color: BK_RED },
-  
-  remainingGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  remainingBox: { width: '47%', backgroundColor: BK_CREAM, borderRadius: 12, padding: 16, alignItems: 'center' },
-  remainingValue: { fontSize: 28, fontWeight: '800', color: BK_BROWN, marginTop: 8 },
-  remainingLabel: { fontSize: 11, color: BK_TEXT_LIGHT, textTransform: 'uppercase', marginTop: 4 },
-  
-  aiCard: { backgroundColor: '#F7F4EC', borderColor: BK_ORANGE },
-  aiHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
-  aiSuggestion: { fontSize: 14, lineHeight: 22, color: BK_BROWN, marginBottom: 16 },
-  aiLoading: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  aiLoadingText: { fontSize: 14, color: BK_TEXT_LIGHT },
-  
-  recommendedSection: { marginTop: 8 },
-  recommendedTitle: { fontSize: 14, fontWeight: '800', color: BK_BROWN, marginBottom: 12 },
-  recommendedItem: { 
-    flexDirection: 'row', 
-    backgroundColor: BK_WHITE, 
-    borderRadius: 12, 
-    padding: 14, 
-    marginBottom: 10,
-    borderWidth: 2,
-    borderColor: BK_GREEN,
+  statLabel: { fontFamily: FONT.bodyMedium, fontSize: 10, color: FUEL.muted, textTransform: 'uppercase', marginBottom: SPACE.xs },
+  statValue: { fontFamily: FONT.display, fontSize: 24 },
+  statGoal: { fontFamily: FONT.body, fontSize: 11, color: FUEL.muted, marginTop: 2 },
+  mealsCount: { fontFamily: FONT.body, fontSize: 13, color: FUEL.muted, textAlign: 'center', marginTop: SPACE.s },
+
+  mealItem: { backgroundColor: FUEL.sand, borderRadius: RADIUS.md, padding: SPACE.l, marginBottom: SPACE.m },
+  mealHeader: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s, marginBottom: SPACE.m },
+  mealTitle: { flex: 1, fontFamily: FONT.bodyExtrabold, fontSize: 16, color: FUEL.ink },
+  mealTime: { fontFamily: FONT.body, fontSize: 12, color: FUEL.muted },
+  itemRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: SPACE.xs },
+  itemName: { flex: 1, fontFamily: FONT.body, fontSize: 13, color: FUEL.ink },
+  itemCals: { fontFamily: FONT.bodyBold, fontSize: 13, color: FUEL.ink },
+  mealTotal: { flexDirection: 'row', justifyContent: 'space-between', marginTop: SPACE.s, paddingTop: SPACE.s, borderTopWidth: 1, borderTopColor: FUEL.sandBorder },
+  mealTotalLabel: { fontFamily: FONT.bodyBold, fontSize: 14, color: FUEL.ink },
+  mealTotalValue: { fontFamily: FONT.display, fontSize: 16, color: FUEL.ink },
+
+  remainingGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.m },
+  remainingBox: { width: '47%', backgroundColor: FUEL.sand, borderRadius: RADIUS.md, padding: SPACE.l, alignItems: 'center' },
+  remainingValue: { fontFamily: FONT.display, fontSize: 28, color: FUEL.ink, marginTop: SPACE.s },
+  remainingLabel: { fontFamily: FONT.bodyMedium, fontSize: 11, color: FUEL.muted, textTransform: 'uppercase', marginTop: SPACE.xs },
+
+  aiCard: { backgroundColor: FUEL.limeTint, borderColor: FUEL.limeDeep },
+  aiHeader: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s, marginBottom: SPACE.l },
+  aiSuggestion: { fontFamily: FONT.body, fontSize: 14, lineHeight: 22, color: FUEL.ink, marginBottom: SPACE.l },
+  aiLoading: { flexDirection: 'row', alignItems: 'center', gap: SPACE.m },
+  aiLoadingText: { fontFamily: FONT.body, fontSize: 14, color: FUEL.muted },
+
+  recommendedSection: { marginTop: SPACE.s },
+  recommendedTitle: { fontFamily: FONT.bodyExtrabold, fontSize: 14, color: FUEL.ink, marginBottom: SPACE.m },
+  recommendedItem: {
+    flexDirection: 'row',
+    backgroundColor: FUEL.white,
+    borderRadius: RADIUS.md,
+    padding: SPACE.l,
+    marginBottom: SPACE.m,
+    borderWidth: 1,
+    borderColor: FUEL.sandBorder,
     alignItems: 'center'
   },
-  recommendedLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
-  dietDot: { width: 16, height: 16, borderRadius: 2, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
-  dietDotFill: { width: 8, height: 8, borderRadius: 4 },
-  recommendedName: { fontSize: 15, fontWeight: '800', color: BK_BROWN, marginBottom: 2 },
-  recommendedReason: { fontSize: 12, color: BK_TEXT_LIGHT, fontStyle: 'italic', marginBottom: 4 },
-  recommendedNutrition: { fontSize: 11, color: BK_GREEN, fontWeight: '700' },
+  recommendedLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: SPACE.m },
+  dietDot: { width: 16, height: 16, borderRadius: RADIUS.xs, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  dietDotFill: { width: 8, height: 8, borderRadius: 4 }, // circle
+  recommendedName: { fontFamily: FONT.bodyExtrabold, fontSize: 15, color: FUEL.ink, marginBottom: 2 },
+  recommendedReason: { fontFamily: FONT.body, fontSize: 12, color: FUEL.muted, fontStyle: 'italic', marginBottom: SPACE.xs },
+  recommendedNutrition: { fontFamily: FONT.bodyBold, fontSize: 11, color: FUEL.success },
   recommendedRight: {},
   goToMenuBtn: {
-    backgroundColor: BK_RED,
+    backgroundColor: FUEL.lime,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 14,
-    borderRadius: 25,
-    marginTop: 8
+    gap: SPACE.s,
+    paddingVertical: SPACE.l,
+    borderRadius: RADIUS.pill,
+    marginTop: SPACE.s
   },
-  goToMenuText: { fontSize: 15, fontWeight: '800', color: BK_WHITE, textTransform: 'uppercase' },
-  
-  emptyText: { fontSize: 14, color: BK_TEXT_LIGHT, textAlign: 'center', paddingVertical: 20 },
+  goToMenuText: { fontFamily: FONT.display, fontSize: 15, color: FUEL.ink, textTransform: 'uppercase' },
+
+  emptyText: { fontFamily: FONT.body, fontSize: 14, color: FUEL.muted, textAlign: 'center', paddingVertical: SPACE.xl },
 });
