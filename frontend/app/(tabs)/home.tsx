@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Image,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput,
   RefreshControl, FlatList, Dimensions, ActivityIndicator, Alert, Modal
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
@@ -12,9 +13,10 @@ import { apiCall, getStoredUser } from '../../utils/api';
 import SideDrawer from '../components/SideDrawer';
 import CartPill from '../components/CartPill';
 import { useCart } from '../../utils/CartContext';
-import { FUEL, FONT, GOALS as FUEL_GOALS, RADIUS, SPACE } from '../../utils/theme';
+import { FUEL, FONT, GOALS as FUEL_GOALS, IMG_PLACEHOLDER, RADIUS, SPACE } from '../../utils/theme';
 import { DIET_TAGS, DIET_LABEL, toggleDietTag } from '../../utils/diet';
 import PressableScale from '../components/PressableScale';
+import Skeleton from '../components/Skeleton';
 import * as Haptics from 'expo-haptics';
 
 // PR-C: success haptic on add-to-cart (safe no-op on web)
@@ -45,6 +47,7 @@ export default function HomeScreen() {
   const [banners, setBanners] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const bannerRef = useRef<FlatList>(null);
   const [bannerIdx, setBannerIdx] = useState(0);
 
@@ -86,6 +89,7 @@ export default function HomeScreen() {
 
   const loadData = useCallback(async () => {
     try {
+      setLoadError(false);
       const [u, s, best, b] = await Promise.all([
         getStoredUser(),
         apiCall('/user/nutrition-summary').catch(() => null),
@@ -94,7 +98,7 @@ export default function HomeScreen() {
       ]);
       setUser(u); setSummary(s); setProducts(best); setBanners(b);
       loadTarget();
-    } catch (e) {} finally { setLoading(false); }
+    } catch (e) { setLoadError(true); } finally { setLoading(false); }
   }, [loadTarget]);
 
   useEffect(() => { loadData(); }, []);
@@ -151,7 +155,7 @@ export default function HomeScreen() {
         onPress={() => router.push('/(tabs)/menu')} activeOpacity={0.9}
       >
         {item.image_url ? (
-          <Image source={{ uri: item.image_url }} style={styles.popularImg} resizeMode="cover" />
+          <Image source={{ uri: item.image_url }} style={styles.popularImg} contentFit="cover" cachePolicy="memory-disk" transition={200} placeholder={IMG_PLACEHOLDER} />
         ) : (
           <View style={[styles.popularImg, styles.popularImgPlaceholder]}>
             <Ionicons name="restaurant" size={28} color={FUEL.sandBorder} />
@@ -309,7 +313,69 @@ export default function HomeScreen() {
     }
   };
 
-  if (loading) return <SafeAreaView style={styles.safe}><View style={styles.center}><ActivityIndicator size="large" color={FUEL.ink} /></View></SafeAreaView>;
+  // PR-D: skeleton layout while loading (mirrors the real screen structure)
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']} testID="home-skeleton">
+        {/* Header band */}
+        <View style={styles.header}>
+          <Skeleton width={44} height={44} />
+          <Skeleton width={170} height={36} borderRadius={RADIUS.pill} />
+          <Skeleton width={36} height={36} borderRadius={18} />
+        </View>
+        <View style={{ paddingHorizontal: SPACE.l }}>
+          {/* Goal chips row */}
+          <Skeleton width={180} height={22} style={{ marginTop: SPACE.l, marginBottom: SPACE.m }} />
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.m }}>
+            {[0, 1, 2, 3].map(i => (
+              <Skeleton key={i} height={54} style={{ flexGrow: 1, minWidth: '46%' }} />
+            ))}
+          </View>
+          {/* Banner card */}
+          <Skeleton height={160} borderRadius={RADIUS.lg} style={{ marginTop: SPACE.l }} />
+          {/* Category tiles */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: SPACE.xl }}>
+            {[0, 1, 2, 3].map(i => (
+              <View key={i} style={{ alignItems: 'center', gap: SPACE.s }}>
+                <Skeleton width={60} height={60} />
+                <Skeleton width={56} height={10} borderRadius={RADIUS.xs} />
+              </View>
+            ))}
+          </View>
+          {/* Popular cards */}
+          <View style={{ flexDirection: 'row', gap: SPACE.m, marginTop: SPACE.xl }}>
+            {[0, 1, 2].map(i => (
+              <View key={i} style={{ width: 156, gap: SPACE.s }}>
+                <Skeleton width={156} height={90} />
+                <Skeleton width={120} height={14} borderRadius={RADIUS.xs} />
+                <Skeleton width={80} height={12} borderRadius={RADIUS.xs} />
+              </View>
+            ))}
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // PR-D: fetch failed — message + retry
+  if (loadError) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <View style={styles.center}>
+          <Ionicons name="cloud-offline-outline" size={44} color={FUEL.muted} />
+          <Text style={styles.stateText}>Couldn't load the menu</Text>
+          <TouchableOpacity
+            testID="home-error-retry"
+            style={styles.stateBtn}
+            onPress={() => { setLoading(true); loadData(); }}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.stateBtnText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -510,7 +576,7 @@ export default function HomeScreen() {
               activeOpacity={0.8}
             >
               {cat.image ? (
-                <Image source={{ uri: cat.image }} style={styles.categoryImage} />
+                <Image source={{ uri: cat.image }} style={styles.categoryImage} cachePolicy="memory-disk" transition={200} placeholder={IMG_PLACEHOLDER} />
               ) : (
                 <View style={[styles.categoryImage, styles.categoryIconBg, { backgroundColor: cat.color }]}>
                   <Ionicons name={cat.icon as any} size={32} color={cat.key === 'ai' ? FUEL.lime : FUEL.white} />
@@ -793,18 +859,34 @@ export default function HomeScreen() {
           <Text style={styles.sectionTitle}>Popular Items</Text>
           <Text style={styles.popularHint}>Best sellers • swipe →</Text>
         </View>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.popularGridScroll}
-          removeClippedSubviews={true}
-        >
-          {popularColumns.map((col, ci) => (
-            <View key={ci} style={styles.popularColumn}>
-              {col.map((item, ri) => renderPopularCard(item, ci * POPULAR_ROWS + ri))}
-            </View>
-          ))}
-        </ScrollView>
+        {popularProducts.length === 0 ? (
+          /* PR-D: inline empty block when no products came back */
+          <View style={styles.homeEmpty} testID="home-empty">
+            <Ionicons name="restaurant-outline" size={36} color={FUEL.muted} />
+            <Text style={styles.stateText}>Menu is being set up</Text>
+            <TouchableOpacity
+              testID="home-empty-refresh"
+              style={styles.stateBtn}
+              onPress={() => { setLoading(true); loadData(); }}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.stateBtnText}>Refresh</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.popularGridScroll}
+            removeClippedSubviews={true}
+          >
+            {popularColumns.map((col, ci) => (
+              <View key={ci} style={styles.popularColumn}>
+                {col.map((item, ri) => renderPopularCard(item, ci * POPULAR_ROWS + ri))}
+              </View>
+            ))}
+          </ScrollView>
+        )}
 
         <View style={{ height: 100 }} />
       </ScrollView>
@@ -888,6 +970,12 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: FUEL.sand },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+
+  // PR-D: empty / error states
+  homeEmpty: { alignItems: 'center', paddingVertical: SPACE.xl, marginHorizontal: SPACE.l },
+  stateText: { fontFamily: FONT.bodySemibold, fontSize: 14, color: FUEL.muted, marginTop: SPACE.m, textAlign: 'center' },
+  stateBtn: { backgroundColor: FUEL.lime, borderRadius: RADIUS.pill, paddingHorizontal: SPACE.xl, paddingVertical: SPACE.m, marginTop: SPACE.l },
+  stateBtnText: { fontFamily: FONT.bodyExtrabold, fontSize: 13, color: FUEL.ink },
 
   // Goal-first ordering
   goalSelector: { paddingHorizontal: SPACE.l, marginTop: SPACE.l },

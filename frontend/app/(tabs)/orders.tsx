@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl,
-  ActivityIndicator
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,6 +8,7 @@ import { useRouter } from 'expo-router';
 import { apiCall } from '../../utils/api';
 import { useRealtime } from '../../utils/realtime';
 import { FUEL, FONT, RADIUS, SPACE } from '../../utils/theme';
+import Skeleton from '../components/Skeleton';
 
 export default function OrdersScreen() {
   const router = useRouter();
@@ -17,6 +17,7 @@ export default function OrdersScreen() {
   const [monthlyOrders, setMonthlyOrders] = useState<any[]>([]);
   const [favoriteOrders, setFavoriteOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
@@ -32,6 +33,7 @@ export default function OrdersScreen() {
 
   const loadOrders = useCallback(async () => {
     try {
+      setLoadError(false);
       const allOrders = await apiCall('/orders');
 
       // Recent orders: Last 7 days
@@ -57,6 +59,7 @@ export default function OrdersScreen() {
       setFavoriteOrders(favorites);
     } catch (e) {
       console.error('Error loading orders:', e);
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -218,11 +221,44 @@ export default function OrdersScreen() {
 
   const displayOrders = activeTab === 'recent' ? recentOrders : activeTab === 'monthly' ? monthlyOrders : favoriteOrders;
 
+  // PR-D: skeleton layout while loading (header band + order-row stack)
   if (loading) {
     return (
-      <SafeAreaView style={styles.safe}>
+      <SafeAreaView style={styles.safe} edges={['top']} testID="orders-skeleton">
+        <View style={styles.header}>
+          <Skeleton width={140} height={24} borderRadius={RADIUS.sm} />
+        </View>
+        <View style={{ padding: SPACE.l, gap: SPACE.m }}>
+          {[0, 1, 2, 3, 4].map(i => (
+            <View key={i} style={styles.skeletonCard}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Skeleton width="45%" height={16} borderRadius={RADIUS.xs} />
+                <Skeleton width={44} height={44} />
+              </View>
+              <Skeleton width="65%" height={12} borderRadius={RADIUS.xs} style={{ marginTop: SPACE.m }} />
+              <Skeleton width="40%" height={12} borderRadius={RADIUS.xs} style={{ marginTop: SPACE.s }} />
+            </View>
+          ))}
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // PR-D: fetch failed — message + retry
+  if (loadError) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
         <View style={styles.center}>
-          <ActivityIndicator size="large" color={FUEL.ink} />
+          <Ionicons name="cloud-offline-outline" size={44} color={FUEL.muted} />
+          <Text style={styles.stateText}>Couldn't load your orders</Text>
+          <TouchableOpacity
+            testID="orders-error-retry"
+            style={styles.stateBtn}
+            onPress={() => { setLoading(true); loadOrders(); }}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.stateBtnText}>Retry</Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
@@ -310,18 +346,17 @@ export default function OrdersScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={FUEL.ink} />}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Ionicons name="receipt-outline" size={64} color={FUEL.sandBorder} />
-            <Text style={styles.emptyTitle}>No Orders Yet</Text>
-            <Text style={styles.emptyText}>
-              {activeTab === 'recent'
-                ? 'You haven\'t placed any orders in the last 7 days'
-                : activeTab === 'monthly'
-                ? 'No orders this month'
-                : 'No favorite orders yet. Tap the ❤️ icon on any order to add it to favorites!'}
-            </Text>
-            <TouchableOpacity style={styles.emptyBtn} onPress={() => router.push('/(tabs)/menu')}>
-              <Text style={styles.emptyBtnText}>Browse Menu</Text>
+          /* PR-D: lean empty state — one line + one action */
+          <View style={styles.emptyState} testID="orders-empty">
+            <Ionicons name="receipt-outline" size={48} color={FUEL.muted} />
+            <Text style={styles.stateText}>No orders yet</Text>
+            <TouchableOpacity
+              testID="orders-empty-browse"
+              style={styles.stateBtn}
+              onPress={() => router.push('/(tabs)/menu')}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.stateBtnText}>Browse menu</Text>
             </TouchableOpacity>
           </View>
         }
@@ -474,14 +509,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 60,
   },
-  emptyTitle: { fontFamily: FONT.display, fontSize: 18, color: FUEL.ink, marginTop: SPACE.l, textTransform: 'uppercase' },
-  emptyText: { fontFamily: FONT.body, fontSize: 14, color: FUEL.muted, textAlign: 'center', marginTop: SPACE.s, paddingHorizontal: SPACE.xxl },
-  emptyBtn: {
-    backgroundColor: FUEL.lime,
-    paddingHorizontal: SPACE.xxl,
-    paddingVertical: SPACE.l,
-    borderRadius: RADIUS.pill,
-    marginTop: SPACE.xl,
+
+  // PR-D: skeleton + empty / error states
+  skeletonCard: {
+    backgroundColor: FUEL.white,
+    borderRadius: RADIUS.md,
+    padding: SPACE.l,
+    borderWidth: 1,
+    borderColor: FUEL.sandBorder,
   },
-  emptyBtnText: { fontFamily: FONT.display, fontSize: 15, color: FUEL.ink, textTransform: 'uppercase' },
+  stateText: { fontFamily: FONT.bodySemibold, fontSize: 14, color: FUEL.muted, marginTop: SPACE.m, textAlign: 'center' },
+  stateBtn: { backgroundColor: FUEL.lime, borderRadius: RADIUS.pill, paddingHorizontal: SPACE.xl, paddingVertical: SPACE.m, marginTop: SPACE.l },
+  stateBtnText: { fontFamily: FONT.bodyExtrabold, fontSize: 13, color: FUEL.ink },
 });

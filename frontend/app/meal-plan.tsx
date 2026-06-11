@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Image,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity,
   ActivityIndicator, RefreshControl, Modal,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { apiCall } from '../utils/api';
-import { FUEL, FONT, getGoal, RADIUS, SPACE } from '../utils/theme';
+import { FUEL, FONT, getGoal, IMG_PLACEHOLDER, RADIUS, SPACE } from '../utils/theme';
 import { useCart } from '../utils/CartContext';
 import { DIET_TAGS, DIET_LABEL, toggleDietTag } from '../utils/diet';
 
@@ -110,7 +111,7 @@ export default function MealPlanScreen() {
 
   const renderDish = (d: any, key: string) => (
     <View key={key} style={styles.dishCard} testID={`mealplan-dish-${d.id}`}>
-      {d.image_url ? <Image source={{ uri: d.image_url }} style={styles.dishImg} /> :
+      {d.image_url ? <Image source={{ uri: d.image_url }} style={styles.dishImg} cachePolicy="memory-disk" transition={200} placeholder={IMG_PLACEHOLDER} /> :
         <View style={[styles.dishImg, styles.dishImgPh]}><Ionicons name="restaurant" size={20} color="#CFC9B6" /></View>}
       <View style={{ flex: 1 }}>
         <Text style={styles.dishName} numberOfLines={1}>{d.name}</Text>
@@ -301,7 +302,7 @@ export default function MealPlanScreen() {
                       </View>
                       {(m.items || []).map((it: any, i: number) => (
                         <View key={`${m.index}-${it.id}-${i}`} style={styles.dayItem}>
-                          {it.image_url ? <Image source={{ uri: it.image_url }} style={styles.dayItemImg} /> :
+                          {it.image_url ? <Image source={{ uri: it.image_url }} style={styles.dayItemImg} cachePolicy="memory-disk" transition={200} placeholder={IMG_PLACEHOLDER} /> :
                             <View style={[styles.dayItemImg, styles.dishImgPh]}><Ionicons name="restaurant" size={16} color="#CFC9B6" /></View>}
                           <View style={{ flex: 1 }}>
                             <Text style={styles.dayItemName}>{it.name}</Text>

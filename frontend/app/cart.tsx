@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Image,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput,
   ActivityIndicator, Alert, Switch,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -10,7 +11,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiCall, getStoredUser } from '../utils/api';
 import { useCart, itemPrice, CartItem } from '../utils/CartContext';
 import { useStore } from '../utils/StoreContext';
-import { FUEL, FONT, RADIUS, SPACE } from '../utils/theme';
+import { FUEL, FONT, IMG_PLACEHOLDER, RADIUS, SPACE } from '../utils/theme';
 import PressableScale from './components/PressableScale';
 import * as Haptics from 'expo-haptics';
 
@@ -523,7 +524,7 @@ const AddonCard = ({ a, onAdd }: any) => {
   const price = a.product_type === 'ready_made' ? (a.fixed_price || Math.round(a.cost_per_100g * (a.serving_grams || 300) / 100)) : a.cost_per_100g;
   return (
     <View style={styles.addonCard} testID={`addon-${a.id}`}>
-      {a.image_url ? <Image source={{ uri: a.image_url }} style={styles.addonImg} /> : <View style={[styles.addonImg, { alignItems: 'center', justifyContent: 'center' }]}><Ionicons name="fast-food" size={22} color="#D0D0D0" /></View>}
+      {a.image_url ? <Image source={{ uri: a.image_url }} style={styles.addonImg} cachePolicy="memory-disk" transition={200} placeholder={IMG_PLACEHOLDER} /> : <View style={[styles.addonImg, { alignItems: 'center', justifyContent: 'center' }]}><Ionicons name="fast-food" size={22} color="#D0D0D0" /></View>}
       <Text style={styles.addonName} numberOfLines={1}>{a.name}</Text>
       <View style={styles.addonFoot}>
         <Text style={styles.addonPrice}>₹{price}{a.product_type !== 'ready_made' && <Text style={styles.addonUnit}>/100g</Text>}</Text>

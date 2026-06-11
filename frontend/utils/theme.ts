@@ -36,6 +36,9 @@ export const FUEL = {
   fatTint: '#E4EEF4',
 } as const;
 
+// Neutral sand-grey blurhash placeholder for remote food/product photos (expo-image).
+export const IMG_PLACEHOLDER = { blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' } as const;
+
 // Radii — snap every borderRadius to one of these (true circles excepted).
 export const RADIUS = { xs: 6, sm: 10, md: 14, lg: 20, pill: 999 } as const;
 

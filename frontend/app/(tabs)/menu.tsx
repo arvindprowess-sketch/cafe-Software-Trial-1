@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, TouchableOpacity, Image, RefreshControl,
-  Alert, ActivityIndicator, ScrollView, TextInput, Dimensions
+  View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl,
+  Alert, ScrollView, TextInput, Dimensions
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -10,12 +11,13 @@ import { apiCall } from '../../utils/api';
 import SideDrawer from '../components/SideDrawer';
 import { getStoredUser } from '../../utils/api';
 import { useRealtime } from '../../utils/realtime';
-import { FUEL, FONT, RADIUS, SPACE } from '../../utils/theme';
+import { FUEL, FONT, IMG_PLACEHOLDER, RADIUS, SPACE } from '../../utils/theme';
 import { useCart } from '../../utils/CartContext';
-import { DIET_TAGS, DIET_LABEL, matchesDiet, matchesAnyDiet, toggleDietTag } from '../../utils/diet';
+import { DIET_TAGS, DIET_LABEL, matchesDiet, toggleDietTag } from '../../utils/diet';
 import { goalFitForProduct, sortByGoalFit } from '../../utils/goalFit';
 import CartPill from '../components/CartPill';
 import PressableScale from '../components/PressableScale';
+import Skeleton, { SkeletonRow } from '../components/Skeleton';
 import * as Haptics from 'expo-haptics';
 
 // PR-C: success haptic on add-to-cart (safe no-op on web)
@@ -70,6 +72,7 @@ export default function MenuScreen() {
   const [categories, setCategories] = useState<any[]>(DEFAULT_CATS);
   const { addItem, incItem, decItem, getItem, count: cartCount, subtotal: cartSubtotal } = useCart();
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [orderType, setOrderType] = useState('dine-in');
   const [selectedCat, setSelectedCat] = useState('');
@@ -97,6 +100,7 @@ export default function MenuScreen() {
 
   const loadProducts = useCallback(async () => {
     try {
+      setLoadError(false);
       const [data, u, cats, target, summary] = await Promise.all([
         apiCall('/products'),
         getStoredUser(),
@@ -116,7 +120,7 @@ export default function MenuScreen() {
         setCategories(cats);
       }
     }
-    catch (e) {} finally { setLoading(false); }
+    catch (e) { setLoadError(true); } finally { setLoading(false); }
   }, []);
 
   useEffect(() => { loadProducts(); }, []);
@@ -179,11 +183,8 @@ export default function MenuScreen() {
     return out;
   }, [filtered, search]);
 
-  // Nearest options when a multi-tag AND combo returns nothing (e.g. Vegan+Keto)
-  const nearest = useMemo(() => {
-    if (dietFilter.length < 2) return [];
-    return products.filter(p => matchesAnyDiet(p, dietFilter)).slice(0, 6);
-  }, [products, dietFilter]);
+  // PR-D: any filter currently narrowing the list (drives the empty state copy)
+  const hasActiveFilters = dietFilter.length > 0 || budgetCap != null || !!selectedCat || !!search;
 
   // Today's best protein value — CLIENT-SIDE pick: in-stock product with the
   // minimum price-per-gram-protein (products state already excludes out-of-stock).
@@ -269,7 +270,7 @@ export default function MenuScreen() {
         {/* Photo (72px, rounded) with ₹/g-protein badge */}
         <View style={styles.productImageWrapper}>
           {item.image_url ? (
-            <Image source={{ uri: item.image_url }} style={styles.productImage} />
+            <Image source={{ uri: item.image_url }} style={styles.productImage} cachePolicy="memory-disk" transition={200} placeholder={IMG_PLACEHOLDER} />
           ) : (
             <View style={[styles.productImage, styles.productImagePlaceholder]}>
               <Ionicons name={isReadyMade ? 'fast-food' : 'restaurant'} size={26} color={FUEL.sandBorder} />
@@ -342,7 +343,39 @@ export default function MenuScreen() {
     );
   };
 
-  if (loading) return <SafeAreaView style={styles.safe}><View style={styles.center}><ActivityIndicator size="large" color={FUEL.ink} /></View></SafeAreaView>;
+  // PR-D: skeleton layout while loading (hero band + product-row placeholders)
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']} testID="menu-skeleton">
+        <Skeleton width="100%" height={150} borderRadius={0} />
+        <View style={{ paddingHorizontal: SPACE.l, paddingTop: SPACE.l, gap: SPACE.l }}>
+          {[0, 1, 2, 3, 4, 5].map(i => (
+            <SkeletonRow key={i} />
+          ))}
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // PR-D: fetch failed — message + retry
+  if (loadError) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <View style={styles.center}>
+          <Ionicons name="cloud-offline-outline" size={44} color={FUEL.muted} />
+          <Text style={styles.stateText}>Couldn't load the menu</Text>
+          <TouchableOpacity
+            testID="menu-error-retry"
+            style={styles.stateBtn}
+            onPress={() => { setLoading(true); loadProducts(); }}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.stateBtnText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   // ===== Scrolling header: hero + diet chips + category wall + best-value card =====
   const listHeader = (
@@ -507,28 +540,21 @@ export default function MenuScreen() {
         initialNumToRender={8}
         keyboardShouldPersistTaps="handled"
         ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Ionicons name="restaurant-outline" size={44} color={FUEL.sandBorder} />
+          /* PR-D: lean empty state — one line + one action */
+          <View style={styles.emptyState} testID="menu-empty">
+            <Ionicons name="restaurant-outline" size={44} color={FUEL.muted} />
             <Text style={styles.emptyText}>
-              {dietFilter.length
-                ? `No items match ${dietFilter.map(t => DIET_LABEL[t]).join(' + ')}`
-                : 'No items found'}
+              {hasActiveFilters ? 'Nothing matches these filters' : 'No items found'}
             </Text>
-            {dietFilter.length > 0 && (
-              <>
-                <Text style={styles.emptySub}>Try removing a filter. Closest picks:</Text>
-                <View style={styles.nearestWrap}>
-                  {nearest.map(np => (
-                    <TouchableOpacity key={np.id} testID={`nearest-${np.id}`} style={styles.nearestChip} onPress={() => addItem(np)} activeOpacity={0.8}>
-                      <Text style={styles.nearestChipText} numberOfLines={1}>{np.name}</Text>
-                      <Ionicons name="add-circle" size={16} color={FUEL.veg} />
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                <TouchableOpacity testID="clear-diet-filters" style={styles.clearFiltersBtn} onPress={() => setDietFilter([])} activeOpacity={0.8}>
-                  <Text style={styles.clearFiltersText}>Clear diet filters</Text>
-                </TouchableOpacity>
-              </>
+            {hasActiveFilters && (
+              <TouchableOpacity
+                testID="clear-diet-filters"
+                style={styles.stateBtn}
+                onPress={() => { setDietFilter([]); setBudgetCap(null); setSelectedCat(''); setSearch(''); }}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.stateBtnText}>Clear filters</Text>
+              </TouchableOpacity>
             )}
           </View>
         }
@@ -884,12 +910,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: SPACE.xl,
   },
-  emptySub: { fontFamily: FONT.body, fontSize: 12, color: FUEL.muted, marginTop: SPACE.m, marginBottom: SPACE.s },
-  nearestWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.s, justifyContent: 'center', paddingHorizontal: SPACE.l },
-  nearestChip: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s, backgroundColor: FUEL.white, borderWidth: 1, borderColor: FUEL.sandBorder, borderRadius: RADIUS.lg, paddingVertical: SPACE.s, paddingHorizontal: SPACE.m, maxWidth: 150 },
-  nearestChipText: { fontFamily: FONT.bodyBold, fontSize: 12, color: FUEL.ink },
-  clearFiltersBtn: { marginTop: SPACE.l, backgroundColor: FUEL.ink, borderRadius: RADIUS.lg, paddingVertical: SPACE.m, paddingHorizontal: SPACE.xl },
-  clearFiltersText: { color: FUEL.lime, fontFamily: FONT.bodyExtrabold, fontSize: 13 },
+  // PR-D: empty / error state actions
+  stateText: { fontFamily: FONT.bodySemibold, fontSize: 14, color: FUEL.muted, marginTop: SPACE.m, textAlign: 'center' },
+  stateBtn: { backgroundColor: FUEL.lime, borderRadius: RADIUS.pill, paddingHorizontal: SPACE.xl, paddingVertical: SPACE.m, marginTop: SPACE.l },
+  stateBtnText: { fontFamily: FONT.bodyExtrabold, fontSize: 13, color: FUEL.ink },
 
   // Cart Bar (lime CTA)
   cartBar: {
