@@ -79,16 +79,19 @@ export default function AIChatScreen() {
     })));
   };
 
-  const sendMessage = async () => {
-    if (!input.trim() || loading) return;
-    
+  // PR-E: optional `textOverride` lets the empty-state chips send through this
+  // exact same pipeline as the send button.
+  const sendMessage = async (textOverride?: string) => {
+    const text = (textOverride ?? input).trim();
+    if (!text || loading) return;
+
     const userMsg: Message = {
       id: Date.now().toString(),
-      text: input.trim(),
+      text,
       isUser: true,
       timestamp: new Date(),
     };
-    
+
     setMessages(prev => [...prev, userMsg]);
     setInput('');
     Keyboard.dismiss();
@@ -98,7 +101,7 @@ export default function AIChatScreen() {
       const result = await apiCall('/ai/chat', {
         method: 'POST',
         body: {
-          message: input.trim(),
+          message: text,
           budget: parseFloat(budget) || 200,
           goal,
           diet_preference: dietPref,
@@ -138,11 +141,13 @@ export default function AIChatScreen() {
 
   const removeFromCart = (id?: string) => { if (id) removeItem(id); };
 
-  const quickPrompts = [
-    "Build me a high protein meal under ₹150",
-    "I want to lose weight, suggest something",
-    "What's good for muscle gain?",
-    "Show me veg options only",
+  // PR-E: empty-state suggestion chips — tapping one sends it as a user
+  // message through the same send pipeline; hidden once history is non-empty.
+  const suggestionChips = [
+    "₹300 me high-protein meal?",
+    "What fits my goal today?",
+    "Best veg protein here?",
+    "Plan my full day",
   ];
 
   return (
@@ -276,19 +281,24 @@ export default function AIChatScreen() {
             </View>
           )}
 
-          {/* Quick Prompts (show at start) */}
+          {/* PR-E: suggestion chips (empty history only) — tap sends directly */}
           {messages.length === 1 && (
-            <View style={styles.quickPrompts}>
+            <View style={styles.chipWrap}>
               <Text style={styles.quickPromptsLabel}>Try asking:</Text>
-              {quickPrompts.map((prompt, i) => (
-                <TouchableOpacity 
-                  key={i} 
-                  style={styles.promptChip}
-                  onPress={() => setInput(prompt)}
-                >
-                  <Text style={styles.promptText}>{prompt}</Text>
-                </TouchableOpacity>
-              ))}
+              <View style={styles.chipRow}>
+                {suggestionChips.map((prompt, i) => (
+                  <TouchableOpacity
+                    key={i}
+                    testID={`chat-chip-${i}`}
+                    style={styles.suggestionChip}
+                    onPress={() => sendMessage(prompt)}
+                    disabled={loading}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.suggestionChipText}>{prompt}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
           )}
         </ScrollView>
@@ -308,7 +318,7 @@ export default function AIChatScreen() {
           <TouchableOpacity 
             testID="ai-send-btn"
             style={[styles.sendBtn, !input.trim() && styles.sendBtnDisabled]}
-            onPress={sendMessage}
+            onPress={() => sendMessage()}
             disabled={!input.trim() || loading}
           >
             <Ionicons name="send" size={20} color="#FFF" />
@@ -391,11 +401,12 @@ const styles = StyleSheet.create({
   aiAddBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.s, backgroundColor: '#D9F26E', borderRadius: RADIUS.md, paddingVertical: SPACE.m, marginTop: SPACE.s },
   aiAddText: { fontSize: 13, fontFamily: FONT.bodyExtrabold, color: FUEL.ink, textTransform: 'uppercase', letterSpacing: 0.3 },
   
-  // Quick prompts
-  quickPrompts: { marginTop: SPACE.m, padding: SPACE.m, backgroundColor: '#FFF', borderRadius: RADIUS.md, borderWidth: 1, borderColor: FUEL.sandBorder },
+  // PR-E: empty-state suggestion chips (FUEL: white / sandBorder / ink)
+  chipWrap: { marginTop: SPACE.m },
   quickPromptsLabel: { fontSize: 12, color: FUEL.muted, marginBottom: SPACE.s },
-  promptChip: { backgroundColor: FUEL.sand, borderRadius: RADIUS.lg, paddingHorizontal: SPACE.l, paddingVertical: SPACE.s, marginBottom: SPACE.s },
-  promptText: { fontSize: 13, color: PURPLE, fontFamily: FONT.bodyMedium },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.s },
+  suggestionChip: { backgroundColor: FUEL.white, borderWidth: 1, borderColor: FUEL.sandBorder, borderRadius: RADIUS.pill, paddingHorizontal: SPACE.l, paddingVertical: SPACE.m },
+  suggestionChipText: { fontSize: 13, color: FUEL.ink, fontFamily: FONT.bodySemibold },
   
   // Input
   inputContainer: { flexDirection: 'row', alignItems: 'flex-end', padding: SPACE.m, backgroundColor: '#FFF', borderTopWidth: 1, borderTopColor: FUEL.sandBorder },

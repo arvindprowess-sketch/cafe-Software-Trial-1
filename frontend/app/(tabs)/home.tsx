@@ -76,6 +76,63 @@ export default function HomeScreen() {
   // Phase 2/3/4: personalized daily target + coach nudge (from body stats)
   const [dailyTarget, setDailyTarget] = useState<any>(null);
   const [coachNudge, setCoachNudge] = useState<any>(null);
+
+  // PR-E: "Your Usual" — most-repeated item combo (same set of product ids)
+  // across the user's last 10 orders. Read-only fetch of the same /orders
+  // endpoint the Orders tab uses. Hidden unless a combo appears ≥2 times.
+  const [usualOrder, setUsualOrder] = useState<any>(null);
+  const [reordering, setReordering] = useState(false);
+  const loadUsual = useCallback(async () => {
+    try {
+      const orders = await apiCall('/orders');
+      if (!Array.isArray(orders)) { setUsualOrder(null); return; }
+      const recent = [...orders]
+        .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .slice(0, 10);
+      // Group orders by combo key = sorted set of product ids
+      const groups: Record<string, any[]> = {};
+      recent.forEach((o: any) => {
+        const ids = (o.items || [])
+          .map((it: any) => it.product_id || it.id)
+          .filter(Boolean);
+        if (!ids.length) return;
+        const key = Array.from(new Set(ids)).sort().join('|');
+        (groups[key] = groups[key] || []).push(o);
+      });
+      let best: any[] | null = null;
+      Object.values(groups).forEach(g => {
+        if (g.length >= 2 && (!best || g.length > (best as any[]).length)) best = g;
+      });
+      // Groups keep recency order, so [0] is the most recent order of the combo
+      setUsualOrder(best ? (best as any[])[0] : null);
+    } catch { setUsualOrder(null); }
+  }, []);
+
+  // PR-E: reorder "your usual" — same flow as order-detail's Reorder button:
+  // backend /reorder guard (drops/flags unavailable or price-changed items),
+  // then cart-context replaceCart + setOrderType → /cart.
+  const reorderUsual = async () => {
+    if (!usualOrder || reordering) return;
+    setReordering(true);
+    try {
+      const res = await apiCall(`/orders/${usualOrder.id}/reorder`, { method: 'POST' });
+      if (!res.cart_items?.length) {
+        Alert.alert('Items unavailable', 'None of these items are available right now.');
+        return;
+      }
+      cartCtx.replaceCart(res.cart_items);
+      if (res.order_type) cartCtx.setOrderType(res.order_type);
+      if (res.unavailable?.length) {
+        Alert.alert('Some items skipped', `No longer available: ${res.unavailable.join(', ')}. The rest are in your cart.`);
+      }
+      hapticSuccess();
+      router.push('/cart');
+    } catch (e: any) {
+      Alert.alert('Could not reorder', e?.message || 'Please try again.');
+    } finally {
+      setReordering(false);
+    }
+  };
   const loadTarget = useCallback(async () => {
     try {
       const [t, n] = await Promise.all([
@@ -98,8 +155,9 @@ export default function HomeScreen() {
       ]);
       setUser(u); setSummary(s); setProducts(best); setBanners(b);
       loadTarget();
+      loadUsual();
     } catch (e) { setLoadError(true); } finally { setLoading(false); }
-  }, [loadTarget]);
+  }, [loadTarget, loadUsual]);
 
   useEffect(() => { loadData(); }, []);
   // Refresh the personalized target whenever Home regains focus (e.g. after goal-setup)
@@ -854,6 +912,43 @@ export default function HomeScreen() {
           </View>
         )}
 
+        {/* ===== PR-E: YOUR USUAL — most-repeated combo from recent orders ===== */}
+        {usualOrder && (
+          <View style={styles.usualCard} testID="your-usual-card">
+            <View style={styles.usualHeader}>
+              <Ionicons name="repeat" size={18} color={FUEL.limeDeep} />
+              <Text style={styles.usualTitle}>YOUR USUAL</Text>
+            </View>
+            {(usualOrder.items || []).map((it: any, i: number) => (
+              <View key={i} style={styles.usualItemRow}>
+                <Text style={styles.usualItemName} numberOfLines={1}>{it.name || it.product_name || 'Item'}</Text>
+                <Text style={styles.usualItemQty}>
+                  {it.product_type === 'ready_made' ? `x${it.quantity || 1}` : `${it.grams || it.quantity || 0}g`}
+                </Text>
+              </View>
+            ))}
+            <View style={styles.usualBottom}>
+              <Text style={styles.usualPrice}>₹{Math.round(usualOrder.total_price || 0)}</Text>
+              <TouchableOpacity
+                testID="your-usual-reorder"
+                style={styles.usualReorderBtn}
+                onPress={reorderUsual}
+                disabled={reordering}
+                activeOpacity={0.85}
+              >
+                {reordering ? (
+                  <ActivityIndicator size="small" color={FUEL.ink} />
+                ) : (
+                  <>
+                    <Ionicons name="cart" size={15} color={FUEL.ink} />
+                    <Text style={styles.usualReorderText}>REORDER</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
         {/* ===== POPULAR ITEMS — best sellers, 5-row horizontal grid (Swiggy-style) ===== */}
         <View style={styles.popularHeaderRow}>
           <Text style={styles.sectionTitle}>Popular Items</Text>
@@ -1314,6 +1409,18 @@ const styles = StyleSheet.create({
   mealErrorText: { flex: 1, fontFamily: FONT.body, color: FUEL.muted, fontSize: 13, lineHeight: 18 },
   retryBtn: { backgroundColor: FUEL.lime, borderRadius: RADIUS.pill, paddingVertical: SPACE.m, alignItems: 'center', marginTop: SPACE.l },
   retryText: { color: FUEL.ink, fontFamily: FONT.display, fontSize: 14, textTransform: 'uppercase' },
+
+  // PR-E: Your Usual card — white, sandBorder, Anton title, lime REORDER
+  usualCard: { backgroundColor: FUEL.white, marginHorizontal: SPACE.l, marginTop: SPACE.xl, borderRadius: RADIUS.md, padding: SPACE.l, borderWidth: 1, borderColor: FUEL.sandBorder },
+  usualHeader: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s, marginBottom: SPACE.m },
+  usualTitle: { fontFamily: FONT.display, fontSize: 18, color: FUEL.ink, textTransform: 'uppercase', letterSpacing: 0.3 },
+  usualItemRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: SPACE.xs },
+  usualItemName: { flex: 1, fontFamily: FONT.bodySemibold, fontSize: 13.5, color: FUEL.ink, marginRight: SPACE.m },
+  usualItemQty: { fontFamily: FONT.bodyExtrabold, fontSize: 12.5, color: FUEL.muted },
+  usualBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: FUEL.sandBorder, paddingTop: SPACE.m, marginTop: SPACE.m },
+  usualPrice: { fontFamily: FONT.display, fontSize: 20, color: FUEL.ink },
+  usualReorderBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.s, backgroundColor: FUEL.lime, borderRadius: RADIUS.pill, paddingHorizontal: SPACE.xl, paddingVertical: SPACE.m, minWidth: 120 },
+  usualReorderText: { color: FUEL.ink, fontFamily: FONT.display, fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.5 },
 
   // Popular Items — compact cards
   popularScroll: { paddingHorizontal: SPACE.m, gap: SPACE.m },
