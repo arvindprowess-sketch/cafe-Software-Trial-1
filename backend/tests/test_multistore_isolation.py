@@ -261,14 +261,18 @@ def test_tables_scoped_by_store(ctx):
 
 def test_payment_scoped_to_order_store(ctx):
     async def go():
+        # Gateway payments are only allowed against unpaid orders (walk-in cash
+        # orders are saved as paid), so reset order B for this test.
+        await server.db.orders.update_one(
+            {"id": ctx.order_b["id"]}, {"$set": {"payment_status": "unpaid"}})
         # Cashier A cannot create a payment against Store B's order
         r = await ctx.client.post("/api/payments/create-order",
-                                  json={"order_id": ctx.order_b["id"], "amount": 50},
+                                  json={"order_id": ctx.order_b["id"]},
                                   headers=auth(ctx.cashier_a))
         assert r.status_code == 403
         # Cashier B can, and the payment inherits store B
         r2 = await ctx.client.post("/api/payments/create-order",
-                                   json={"order_id": ctx.order_b["id"], "amount": 50},
+                                   json={"order_id": ctx.order_b["id"]},
                                    headers=auth(ctx.cashier_b))
         assert r2.status_code == 200, r2.text
         pay = await server.db.payments.find_one({"order_id": ctx.order_b["id"]}, {"_id": 0})
