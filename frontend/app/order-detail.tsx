@@ -7,14 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { apiCall } from '../utils/api';
 import { useCart } from '../utils/CartContext';
-
-const BK_RED = '#15140F';
-const BK_ORANGE = '#15140F';
-const BK_BROWN = '#15140F';
-const BK_CREAM = '#F4F1E9';
-const BK_GREEN = '#3FA34D';
-const BK_WHITE = '#FFFFFF';
-const BK_TEXT_LIGHT = '#6B6A5E';
+import { FUEL, FONT } from '../utils/theme';
 
 export default function OrderDetailScreen() {
   const router = useRouter();
@@ -61,13 +54,13 @@ export default function OrderDetailScreen() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'completed': return BK_GREEN;
-      case 'ready': return '#D69A35';
-      case 'preparing': return BK_ORANGE;
-      case 'pending': return BK_RED;
-      case 'cancelled': return '#888';
-      case 'scheduled': return '#5E97B8';
-      default: return BK_TEXT_LIGHT;
+      case 'completed': return FUEL.success;
+      case 'ready': return FUEL.success;
+      case 'preparing': return FUEL.warning;
+      case 'pending': return FUEL.warning;
+      case 'cancelled': return FUEL.error;
+      case 'scheduled': return FUEL.fat;
+      default: return FUEL.muted;
     }
   };
 
@@ -87,7 +80,7 @@ export default function OrderDetailScreen() {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.center}>
-          <ActivityIndicator size="large" color={BK_RED} />
+          <ActivityIndicator size="large" color={FUEL.ink} />
         </View>
       </SafeAreaView>
     );
@@ -97,7 +90,7 @@ export default function OrderDetailScreen() {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.center}>
-          <Ionicons name="receipt-outline" size={64} color="#D0D0D0" />
+          <Ionicons name="receipt-outline" size={64} color={FUEL.sandBorder} />
           <Text style={styles.emptyTitle}>Order Not Found</Text>
           <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
             <Text style={styles.backBtnText}>Go Back</Text>
@@ -121,12 +114,12 @@ export default function OrderDetailScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.headerBackBtn} 
+        <TouchableOpacity
+          style={styles.headerBackBtn}
           onPress={() => router.back()}
           testID="back-button"
         >
-          <Ionicons name="arrow-back" size={24} color={BK_CREAM} />
+          <Ionicons name="arrow-back" size={24} color={FUEL.sand} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Order Details</Text>
         <View style={{ width: 40 }} />
@@ -141,13 +134,13 @@ export default function OrderDetailScreen() {
               <View>
                 <Text style={styles.orderId}>Order #{order.id}</Text>
                 <Text style={styles.orderDate}>
-                  {orderDate.toLocaleDateString('en-US', { 
-                    year: 'numeric', 
-                    month: 'long', 
-                    day: 'numeric' 
-                  })} • {orderDate.toLocaleTimeString('en-US', { 
-                    hour: '2-digit', 
-                    minute: '2-digit' 
+                  {orderDate.toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                  })} • {orderDate.toLocaleTimeString('en-US', {
+                    hour: '2-digit',
+                    minute: '2-digit'
                   })}
                 </Text>
               </View>
@@ -159,16 +152,16 @@ export default function OrderDetailScreen() {
 
           <View style={styles.orderTypeRow}>
             <View style={styles.orderTypeBadge}>
-              <Ionicons 
-                name={order.order_type === 'delivery' ? 'bicycle' : order.order_type === 'dine-in' ? 'restaurant' : 'bag-handle'} 
-                size={16} 
-                color={BK_RED} 
+              <Ionicons
+                name={order.order_type === 'delivery' ? 'bicycle' : order.order_type === 'dine-in' ? 'restaurant' : 'bag-handle'}
+                size={16}
+                color={FUEL.ink}
               />
               <Text style={styles.orderTypeText}>{order.order_type?.toUpperCase() || 'DINE-IN'}</Text>
             </View>
             {order.payment_mode && (
               <View style={styles.paymentBadge}>
-                <Ionicons name="card" size={14} color={BK_GREEN} />
+                <Ionicons name="card" size={14} color={FUEL.success} />
                 <Text style={styles.paymentText}>{order.payment_mode.toUpperCase()}</Text>
               </View>
             )}
@@ -182,8 +175,8 @@ export default function OrderDetailScreen() {
             {order.items?.map((item: any, idx: number) => (
               <View key={idx} style={styles.itemRow}>
                 <View style={styles.itemLeft}>
-                  <View style={[styles.dietDot, { borderColor: item.diet_type === 'non-veg' ? BK_RED : BK_GREEN }]}>
-                    <View style={[styles.dietDotFill, { backgroundColor: item.diet_type === 'non-veg' ? BK_RED : BK_GREEN }]} />
+                  <View style={[styles.dietDot, { borderColor: item.diet_type === 'non-veg' ? FUEL.nonVeg : FUEL.veg }]}>
+                    <View style={[styles.dietDotFill, { backgroundColor: item.diet_type === 'non-veg' ? FUEL.nonVeg : FUEL.veg }]} />
                   </View>
                   <View style={styles.itemInfo}>
                     <Text style={styles.itemName}>{item.name || item.product_name}</Text>
@@ -191,9 +184,9 @@ export default function OrderDetailScreen() {
                       {item.grams}g • {Math.round(item.calories || 0)} cal
                     </Text>
                     <View style={styles.macroRow}>
-                      <Text style={styles.macroText}>P: {Math.round(item.protein || 0)}g</Text>
-                      <Text style={styles.macroText}>C: {Math.round(item.carbs || 0)}g</Text>
-                      <Text style={styles.macroText}>F: {Math.round(item.fat || 0)}g</Text>
+                      <Text style={[styles.macroText, { color: FUEL.protein }]}>P: {Math.round(item.protein || 0)}g</Text>
+                      <Text style={[styles.macroText, { color: FUEL.carbs }]}>C: {Math.round(item.carbs || 0)}g</Text>
+                      <Text style={[styles.macroText, { color: FUEL.fat }]}>F: {Math.round(item.fat || 0)}g</Text>
                     </View>
                   </View>
                 </View>
@@ -209,22 +202,22 @@ export default function OrderDetailScreen() {
           <View style={styles.nutritionCard}>
             <View style={styles.nutritionGrid}>
               <View style={styles.nutritionItem}>
-                <Ionicons name="flame" size={20} color={BK_RED} />
+                <Ionicons name="flame" size={20} color={FUEL.ink} />
                 <Text style={styles.nutritionValue}>{Math.round(order.total_calories || 0)}</Text>
                 <Text style={styles.nutritionLabel}>Calories</Text>
               </View>
               <View style={styles.nutritionItem}>
-                <Ionicons name="barbell" size={20} color={BK_RED} />
+                <Ionicons name="barbell" size={20} color={FUEL.protein} />
                 <Text style={styles.nutritionValue}>{Math.round(order.total_protein || 0)}g</Text>
                 <Text style={styles.nutritionLabel}>Protein</Text>
               </View>
               <View style={styles.nutritionItem}>
-                <Ionicons name="leaf" size={20} color="#D69A35" />
+                <Ionicons name="leaf" size={20} color={FUEL.carbs} />
                 <Text style={styles.nutritionValue}>{Math.round(order.total_carbs || 0)}g</Text>
                 <Text style={styles.nutritionLabel}>Carbs</Text>
               </View>
               <View style={styles.nutritionItem}>
-                <Ionicons name="water" size={20} color={BK_ORANGE} />
+                <Ionicons name="water" size={20} color={FUEL.fat} />
                 <Text style={styles.nutritionValue}>{Math.round(order.total_fat || 0)}g</Text>
                 <Text style={styles.nutritionLabel}>Fat</Text>
               </View>
@@ -240,7 +233,7 @@ export default function OrderDetailScreen() {
               <Text style={styles.invoiceLabel}>Base Amount</Text>
               <Text style={styles.invoiceValue}>₹{baseAmount.toFixed(2)}</Text>
             </View>
-            
+
             {order.extra_charge > 0 && (
               <View style={styles.invoiceRow}>
                 <Text style={styles.invoiceLabel}>
@@ -252,10 +245,10 @@ export default function OrderDetailScreen() {
 
             {order.discount > 0 && (
               <View style={styles.invoiceRow}>
-                <Text style={[styles.invoiceLabel, { color: BK_GREEN }]}>
+                <Text style={[styles.invoiceLabel, { color: FUEL.success }]}>
                   Discount {order.coupon_code ? `(${order.coupon_code})` : ''}
                 </Text>
-                <Text style={[styles.invoiceValue, { color: BK_GREEN }]}>-₹{order.discount.toFixed(2)}</Text>
+                <Text style={[styles.invoiceValue, { color: FUEL.success }]}>-₹{order.discount.toFixed(2)}</Text>
               </View>
             )}
 
@@ -290,13 +283,13 @@ export default function OrderDetailScreen() {
             </View>
 
             <View style={styles.paymentStatusRow}>
-              <Ionicons 
-                name={order.payment_status === 'paid' ? 'checkmark-circle' : 'time'} 
-                size={16} 
-                color={order.payment_status === 'paid' ? BK_GREEN : BK_ORANGE} 
+              <Ionicons
+                name={order.payment_status === 'paid' ? 'checkmark-circle' : 'time'}
+                size={16}
+                color={order.payment_status === 'paid' ? FUEL.success : FUEL.warning}
               />
-              <Text style={[styles.paymentStatusText, { 
-                color: order.payment_status === 'paid' ? BK_GREEN : BK_ORANGE 
+              <Text style={[styles.paymentStatusText, {
+                color: order.payment_status === 'paid' ? FUEL.success : FUEL.warning
               }]}>
                 Payment {order.payment_status === 'paid' ? 'Completed' : 'Pending'}
               </Text>
@@ -310,12 +303,12 @@ export default function OrderDetailScreen() {
             <Text style={styles.sectionTitle}>Customer Details</Text>
             <View style={styles.infoCard}>
               <View style={styles.infoRow}>
-                <Ionicons name="person" size={16} color={BK_TEXT_LIGHT} />
+                <Ionicons name="person" size={16} color={FUEL.muted} />
                 <Text style={styles.infoText}>{order.customer_name}</Text>
               </View>
               {order.user_name && order.user_name !== order.customer_name && (
                 <View style={styles.infoRow}>
-                  <Ionicons name="call" size={16} color={BK_TEXT_LIGHT} />
+                  <Ionicons name="call" size={16} color={FUEL.muted} />
                   <Text style={styles.infoText}>Ordered by: {order.user_name}</Text>
                 </View>
               )}
@@ -328,12 +321,12 @@ export default function OrderDetailScreen() {
 
       {/* Reorder Button */}
       <View style={styles.bottomBar}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.reorderBtn}
           onPress={handleReorder}
           testID="reorder-button"
         >
-          <Ionicons name="repeat" size={20} color={BK_WHITE} />
+          <Ionicons name="repeat" size={20} color={FUEL.ink} />
           <Text style={styles.reorderBtnText}>Reorder</Text>
         </TouchableOpacity>
       </View>
@@ -342,14 +335,14 @@ export default function OrderDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: BK_CREAM },
+  safe: { flex: 1, backgroundColor: FUEL.sand },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  
+
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: BK_BROWN,
+    backgroundColor: FUEL.ink,
     paddingHorizontal: 16,
     paddingVertical: 16,
   },
@@ -357,39 +350,39 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(245,235,220,0.15)',
+    backgroundColor: FUEL.inkSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerTitle: { 
-    fontSize: 20, 
-    fontWeight: '800', 
-    color: BK_CREAM, 
-    textTransform: 'uppercase', 
-    letterSpacing: 0.5 
+  headerTitle: {
+    fontFamily: FONT.display,
+    fontSize: 20,
+    color: FUEL.sand,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5
   },
-  
+
   content: { flex: 1 },
-  
+
   section: { marginTop: 16 },
-  sectionTitle: { 
-    fontSize: 14, 
-    fontWeight: '800', 
-    color: BK_BROWN, 
-    marginHorizontal: 16, 
+  sectionTitle: {
+    fontFamily: FONT.display,
+    fontSize: 14,
+    color: FUEL.ink,
+    marginHorizontal: 16,
     marginBottom: 10,
     textTransform: 'uppercase',
     letterSpacing: 0.5
   },
-  
+
   orderHeaderCard: {
-    backgroundColor: BK_WHITE,
+    backgroundColor: FUEL.white,
     marginHorizontal: 16,
     marginTop: 16,
     borderRadius: 16,
     padding: 18,
-    borderWidth: 2,
-    borderColor: '#E6E1D4',
+    borderWidth: 1,
+    borderColor: FUEL.sandBorder,
   },
   orderIdRow: {
     flexDirection: 'row',
@@ -398,15 +391,15 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   orderIdLeft: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, flex: 1 },
-  orderId: { fontSize: 18, fontWeight: '800', color: BK_BROWN },
-  orderDate: { fontSize: 12, color: BK_TEXT_LIGHT, marginTop: 4 },
+  orderId: { fontFamily: FONT.bodyExtrabold, fontSize: 18, color: FUEL.ink },
+  orderDate: { fontFamily: FONT.body, fontSize: 12, color: FUEL.muted, marginTop: 4 },
   statusBadge: {
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
   },
-  statusText: { fontSize: 10, fontWeight: '800', color: BK_WHITE },
-  
+  statusText: { fontFamily: FONT.bodyExtrabold, fontSize: 10, color: FUEL.white },
+
   orderTypeRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -416,30 +409,30 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#F1E7E1',
+    backgroundColor: FUEL.limeTint,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 20,
   },
-  orderTypeText: { fontSize: 12, fontWeight: '700', color: BK_RED },
+  orderTypeText: { fontFamily: FONT.bodyBold, fontSize: 12, color: FUEL.ink },
   paymentBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#EAF2DD',
+    backgroundColor: FUEL.limeTint,
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 20,
   },
-  paymentText: { fontSize: 11, fontWeight: '700', color: BK_GREEN },
-  
+  paymentText: { fontFamily: FONT.bodyBold, fontSize: 11, color: FUEL.success },
+
   itemsCard: {
-    backgroundColor: BK_WHITE,
+    backgroundColor: FUEL.white,
     marginHorizontal: 16,
     borderRadius: 16,
     padding: 16,
-    borderWidth: 2,
-    borderColor: '#E6E1D4',
+    borderWidth: 1,
+    borderColor: FUEL.sandBorder,
   },
   itemRow: {
     flexDirection: 'row',
@@ -447,49 +440,49 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#E6E1D4',
+    borderBottomColor: FUEL.sandBorder,
   },
   itemLeft: { flexDirection: 'row', gap: 12, flex: 1 },
-  dietDot: { 
-    width: 18, 
-    height: 18, 
-    borderRadius: 3, 
-    borderWidth: 2, 
-    alignItems: 'center', 
+  dietDot: {
+    width: 18,
+    height: 18,
+    borderRadius: 3,
+    borderWidth: 2,
+    alignItems: 'center',
     justifyContent: 'center',
     marginTop: 2,
   },
   dietDotFill: { width: 9, height: 9, borderRadius: 5 },
   itemInfo: { flex: 1 },
-  itemName: { fontSize: 15, fontWeight: '700', color: BK_BROWN, marginBottom: 4 },
-  itemDetails: { fontSize: 12, color: BK_TEXT_LIGHT, marginBottom: 4 },
+  itemName: { fontFamily: FONT.bodyBold, fontSize: 15, color: FUEL.ink, marginBottom: 4 },
+  itemDetails: { fontFamily: FONT.body, fontSize: 12, color: FUEL.muted, marginBottom: 4 },
   macroRow: { flexDirection: 'row', gap: 12 },
-  macroText: { fontSize: 11, color: BK_TEXT_LIGHT, fontWeight: '600' },
-  itemPrice: { fontSize: 16, fontWeight: '800', color: BK_RED, marginLeft: 12 },
-  
+  macroText: { fontFamily: FONT.bodySemibold, fontSize: 11, color: FUEL.muted },
+  itemPrice: { fontFamily: FONT.display, fontSize: 16, color: FUEL.ink, marginLeft: 12 },
+
   nutritionCard: {
-    backgroundColor: BK_WHITE,
+    backgroundColor: FUEL.white,
     marginHorizontal: 16,
     borderRadius: 16,
     padding: 16,
-    borderWidth: 2,
-    borderColor: '#E6E1D4',
+    borderWidth: 1,
+    borderColor: FUEL.sandBorder,
   },
   nutritionGrid: {
     flexDirection: 'row',
     justifyContent: 'space-around',
   },
   nutritionItem: { alignItems: 'center' },
-  nutritionValue: { fontSize: 18, fontWeight: '800', color: BK_BROWN, marginTop: 6 },
-  nutritionLabel: { fontSize: 10, color: BK_TEXT_LIGHT, marginTop: 4, textTransform: 'uppercase' },
-  
+  nutritionValue: { fontFamily: FONT.bodyExtrabold, fontSize: 18, color: FUEL.ink, marginTop: 6 },
+  nutritionLabel: { fontFamily: FONT.bodyMedium, fontSize: 10, color: FUEL.muted, marginTop: 4, textTransform: 'uppercase' },
+
   invoiceCard: {
-    backgroundColor: BK_WHITE,
+    backgroundColor: FUEL.white,
     marginHorizontal: 16,
     borderRadius: 16,
     padding: 18,
-    borderWidth: 2,
-    borderColor: '#E6E1D4',
+    borderWidth: 1,
+    borderColor: FUEL.sandBorder,
   },
   invoiceRow: {
     flexDirection: 'row',
@@ -497,25 +490,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 8,
   },
-  invoiceLabel: { fontSize: 14, color: BK_TEXT_LIGHT },
-  invoiceValue: { fontSize: 14, fontWeight: '600', color: BK_BROWN },
+  invoiceLabel: { fontFamily: FONT.body, fontSize: 14, color: FUEL.muted },
+  invoiceValue: { fontFamily: FONT.bodySemibold, fontSize: 14, color: FUEL.ink },
   taxSection: {
-    backgroundColor: BK_CREAM,
+    backgroundColor: FUEL.sand,
     padding: 12,
     borderRadius: 12,
     marginVertical: 8,
   },
-  taxHeader: { fontSize: 13, fontWeight: '700', color: BK_BROWN, marginBottom: 8 },
-  taxLabel: { fontSize: 13, color: BK_TEXT_LIGHT, paddingLeft: 12 },
-  divider: { height: 1, backgroundColor: '#E6E1D4', marginVertical: 8 },
+  taxHeader: { fontFamily: FONT.bodyBold, fontSize: 13, color: FUEL.ink, marginBottom: 8 },
+  taxLabel: { fontFamily: FONT.body, fontSize: 13, color: FUEL.muted, paddingLeft: 12 },
+  divider: { height: 1, backgroundColor: FUEL.sandBorder, marginVertical: 8 },
   totalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingTop: 12,
   },
-  totalLabel: { fontSize: 16, fontWeight: '800', color: BK_BROWN, textTransform: 'uppercase' },
-  totalValue: { fontSize: 24, fontWeight: '800', color: BK_RED },
+  totalLabel: { fontFamily: FONT.display, fontSize: 16, color: FUEL.ink, textTransform: 'uppercase' },
+  totalValue: { fontFamily: FONT.display, fontSize: 24, color: FUEL.ink },
   paymentStatusRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -523,52 +516,52 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#E6E1D4',
+    borderTopColor: FUEL.sandBorder,
   },
-  paymentStatusText: { fontSize: 13, fontWeight: '700' },
-  
+  paymentStatusText: { fontFamily: FONT.bodyBold, fontSize: 13 },
+
   infoCard: {
-    backgroundColor: BK_WHITE,
+    backgroundColor: FUEL.white,
     marginHorizontal: 16,
     borderRadius: 16,
     padding: 16,
-    borderWidth: 2,
-    borderColor: '#E6E1D4',
+    borderWidth: 1,
+    borderColor: FUEL.sandBorder,
   },
   infoRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
-  infoText: { fontSize: 14, color: BK_BROWN, fontWeight: '600' },
-  
+  infoText: { fontFamily: FONT.bodySemibold, fontSize: 14, color: FUEL.ink },
+
   bottomBar: {
-    backgroundColor: BK_WHITE,
+    backgroundColor: FUEL.white,
     paddingHorizontal: 16,
     paddingVertical: 16,
-    borderTopWidth: 2,
-    borderTopColor: '#E6E1D4',
+    borderTopWidth: 1,
+    borderTopColor: FUEL.sandBorder,
   },
   reorderBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: BK_RED,
+    backgroundColor: FUEL.lime,
     paddingVertical: 16,
     borderRadius: 28,
   },
-  reorderBtnText: { 
-    fontSize: 16, 
-    fontWeight: '800', 
-    color: BK_WHITE, 
+  reorderBtnText: {
+    fontFamily: FONT.display,
+    fontSize: 16,
+    color: FUEL.ink,
     textTransform: 'uppercase',
     letterSpacing: 0.5
   },
-  
-  emptyTitle: { fontSize: 18, fontWeight: '800', color: BK_BROWN, marginTop: 16 },
+
+  emptyTitle: { fontFamily: FONT.display, fontSize: 18, color: FUEL.ink, marginTop: 16, textTransform: 'uppercase' },
   backBtn: {
-    backgroundColor: BK_RED,
+    backgroundColor: FUEL.lime,
     paddingHorizontal: 32,
     paddingVertical: 14,
     borderRadius: 25,
     marginTop: 24,
   },
-  backBtnText: { fontSize: 15, fontWeight: '800', color: BK_CREAM, textTransform: 'uppercase' },
+  backBtnText: { fontFamily: FONT.display, fontSize: 15, color: FUEL.ink, textTransform: 'uppercase' },
 });
