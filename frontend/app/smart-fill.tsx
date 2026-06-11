@@ -7,10 +7,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { apiCall } from '../utils/api';
 import { useCart } from '../utils/CartContext';
-import { FUEL, FONT, getGoal } from '../utils/theme';
+import { FUEL, FONT, getGoal, RADIUS, SPACE } from '../utils/theme';
 import { DIET_LABEL } from '../utils/diet';
 
-const Z_RED = '#15140F';
+const Z_RED = FUEL.ink;
 const GREEN = '#3FA34D';
 
 export default function SmartFillScreen() {
@@ -245,7 +245,7 @@ export default function SmartFillScreen() {
                     <View style={styles.dishRight}>
                       <Text style={styles.dishPrice}>₹{Math.round(item.price || 0)}</Text>
                       <View style={[styles.toggleCircle, selected && styles.toggleCircleActive]}>
-                        <Ionicons name={selected ? 'checkmark' : 'add'} size={18} color={selected ? FUEL.ink : '#9C9C9C'} />
+                        <Ionicons name={selected ? 'checkmark' : 'add'} size={18} color={selected ? FUEL.ink : FUEL.muted} />
                       </View>
                     </View>
                   </TouchableOpacity>
@@ -307,57 +307,57 @@ export default function SmartFillScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: FUEL.sand },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E6E1D4' },
-  backBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: FUEL.sand, alignItems: 'center', justifyContent: 'center' },
+  header: { flexDirection: 'row', alignItems: 'center', gap: SPACE.m, paddingHorizontal: SPACE.l, paddingVertical: SPACE.m, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: FUEL.sandBorder },
+  backBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: FUEL.sand, alignItems: 'center', justifyContent: 'center' }, // circle
   headerCenter: { flex: 1 },
   headerTitle: { fontFamily: FONT.display, fontSize: 20, color: FUEL.ink, textTransform: 'uppercase', letterSpacing: 0.5 },
-  headerSub: { fontSize: 12, color: '#6B6A5E', marginTop: 2, fontWeight: '600' },
+  headerSub: { fontSize: 12, color: FUEL.muted, marginTop: 2, fontFamily: FONT.bodySemibold },
 
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, gap: 14 },
-  loadingText: { fontSize: 14, color: '#6B6A5E', fontWeight: '600' },
-  errorText: { fontSize: 14, color: '#6B6A5E', textAlign: 'center', lineHeight: 20 },
-  changeBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: FUEL.lime, borderRadius: 14, paddingHorizontal: 18, paddingVertical: 12, marginTop: 6 },
-  changeBtnText: { fontSize: 14, fontWeight: '800', color: FUEL.ink },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: SPACE.xl, gap: SPACE.l },
+  loadingText: { fontSize: 14, color: FUEL.muted, fontFamily: FONT.bodySemibold },
+  errorText: { fontSize: 14, color: FUEL.muted, textAlign: 'center', lineHeight: 20 },
+  changeBtn: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s, backgroundColor: FUEL.lime, borderRadius: RADIUS.md, paddingHorizontal: SPACE.l, paddingVertical: SPACE.m, marginTop: SPACE.s },
+  changeBtnText: { fontSize: 14, fontFamily: FONT.bodyExtrabold, color: FUEL.ink },
 
-  scroll: { padding: 16 },
-  summaryCard: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#FFF', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#E6E1D4', marginBottom: 16 },
-  summaryText: { flex: 1, fontSize: 13, color: '#15140F', lineHeight: 18, fontWeight: '600' },
+  scroll: { padding: SPACE.l },
+  summaryCard: { flexDirection: 'row', alignItems: 'center', gap: SPACE.m, backgroundColor: '#FFF', borderRadius: RADIUS.md, padding: SPACE.l, borderWidth: 1, borderColor: FUEL.sandBorder, marginBottom: SPACE.l },
+  summaryText: { flex: 1, fontSize: 13, color: FUEL.ink, lineHeight: 18, fontFamily: FONT.bodySemibold },
   sectionTitle: { fontFamily: FONT.display, fontSize: 18, color: FUEL.ink, textTransform: 'uppercase', letterSpacing: 0.3 },
-  sectionHint: { fontSize: 12, color: '#6B6A5E', marginTop: 2, marginBottom: 12 },
+  sectionHint: { fontSize: 12, color: FUEL.muted, marginTop: 2, marginBottom: SPACE.m },
 
-  dishCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#FFF', borderRadius: 16, padding: 12, marginBottom: 0, borderWidth: 2, borderColor: '#E6E1D4' },
-  dishWrap: { marginBottom: 10 },
+  dishCard: { flexDirection: 'row', alignItems: 'center', gap: SPACE.m, backgroundColor: '#FFF', borderRadius: RADIUS.md, padding: SPACE.m, marginBottom: 0, borderWidth: 2, borderColor: FUEL.sandBorder },
+  dishWrap: { marginBottom: SPACE.m },
   dishCardActive: { borderColor: FUEL.lime, backgroundColor: '#FCFEF6' },
-  dishImg: { width: 56, height: 56, borderRadius: 12, backgroundColor: FUEL.sand },
+  dishImg: { width: 56, height: 56, borderRadius: RADIUS.md, backgroundColor: FUEL.sand },
   dishImgPlaceholder: { alignItems: 'center', justifyContent: 'center' },
   dishInfo: { flex: 1 },
-  dishNameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  vegBox: { width: 14, height: 14, borderRadius: 2, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  vegDot: { width: 7, height: 7, borderRadius: 4 },
-  dishName: { flex: 1, fontSize: 15, fontWeight: '800', color: '#15140F' },
+  dishNameRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s },
+  vegBox: { width: 14, height: 14, borderRadius: RADIUS.xs, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  vegDot: { width: 7, height: 7, borderRadius: RADIUS.xs },
+  dishName: { flex: 1, fontSize: 15, fontFamily: FONT.bodyExtrabold, color: FUEL.ink },
   dishReason: { fontSize: 11, color: '#8E6FB8', marginTop: 3, lineHeight: 15 },
-  dishMeta: { fontSize: 11, color: '#6B6A5E', marginTop: 3 },
-  dishRight: { alignItems: 'flex-end', gap: 8 },
-  dishPrice: { fontSize: 16, fontWeight: '800', color: '#15140F' },
-  toggleCircle: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#F4F1E9', borderWidth: 1.5, borderColor: '#E0DACB', alignItems: 'center', justifyContent: 'center' },
+  dishMeta: { fontSize: 11, color: FUEL.muted, marginTop: 3 },
+  dishRight: { alignItems: 'flex-end', gap: SPACE.s },
+  dishPrice: { fontSize: 16, fontFamily: FONT.bodyExtrabold, color: FUEL.ink },
+  toggleCircle: { width: 32, height: 32, borderRadius: 16, backgroundColor: FUEL.sand, borderWidth: 1.5, borderColor: '#E0DACB', alignItems: 'center', justifyContent: 'center' }, // circle
   toggleCircleActive: { backgroundColor: FUEL.lime, borderColor: FUEL.lime },
 
   // Swap alternatives
-  altWrap: { backgroundColor: '#F4F1E9', borderBottomLeftRadius: 14, borderBottomRightRadius: 14, marginHorizontal: 8, marginTop: -2, paddingTop: 10, paddingBottom: 10 },
-  altLabel: { fontSize: 11, fontWeight: '800', color: '#6B6A5E', textTransform: 'uppercase', letterSpacing: 0.4, paddingHorizontal: 12, marginBottom: 8 },
-  altScroll: { paddingHorizontal: 12, gap: 8 },
-  altChip: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFF', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 8, borderWidth: 1, borderColor: '#E6E1D4', maxWidth: 210 },
-  vegBoxSm: { width: 12, height: 12, borderRadius: 2, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  vegDotSm: { width: 6, height: 6, borderRadius: 3 },
+  altWrap: { backgroundColor: FUEL.sand, borderBottomLeftRadius: RADIUS.md, borderBottomRightRadius: RADIUS.md, marginHorizontal: SPACE.s, marginTop: -2, paddingTop: SPACE.m, paddingBottom: SPACE.m },
+  altLabel: { fontSize: 11, fontFamily: FONT.bodyExtrabold, color: FUEL.muted, textTransform: 'uppercase', letterSpacing: 0.4, paddingHorizontal: SPACE.m, marginBottom: SPACE.s },
+  altScroll: { paddingHorizontal: SPACE.m, gap: SPACE.s },
+  altChip: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s, backgroundColor: '#FFF', borderRadius: RADIUS.md, paddingHorizontal: SPACE.m, paddingVertical: SPACE.s, borderWidth: 1, borderColor: FUEL.sandBorder, maxWidth: 210 },
+  vegBoxSm: { width: 12, height: 12, borderRadius: RADIUS.xs, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  vegDotSm: { width: 6, height: 6, borderRadius: 3 }, // circle
   altText: { flexShrink: 1 },
-  altName: { fontSize: 13, fontWeight: '700', color: '#15140F' },
-  altMeta: { fontSize: 10, color: '#6B6A5E', marginTop: 1 },
+  altName: { fontSize: 13, fontFamily: FONT.bodyBold, color: FUEL.ink },
+  altMeta: { fontSize: 10, color: FUEL.muted, marginTop: 1 },
 
-  bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#FFF', borderTopWidth: 1, borderTopColor: '#E6E1D4', padding: 16, paddingBottom: 28, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#FFF', borderTopWidth: 1, borderTopColor: FUEL.sandBorder, padding: SPACE.l, paddingBottom: SPACE.xxl, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   bottomLeft: {},
-  bottomTotal: { fontSize: 22, fontWeight: '800', color: '#15140F' },
-  bottomItems: { fontSize: 11, color: '#6B6A5E', marginTop: 2 },
-  reviewBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: FUEL.lime, borderRadius: 14, paddingHorizontal: 24, paddingVertical: 14 },
+  bottomTotal: { fontSize: 22, fontFamily: FONT.bodyExtrabold, color: FUEL.ink },
+  bottomItems: { fontSize: 11, color: FUEL.muted, marginTop: 2 },
+  reviewBtn: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s, backgroundColor: FUEL.lime, borderRadius: RADIUS.md, paddingHorizontal: SPACE.xl, paddingVertical: SPACE.l },
   reviewBtnDisabled: { backgroundColor: '#E0DACB' },
-  reviewText: { fontSize: 15, fontWeight: '800', color: FUEL.ink, textTransform: 'uppercase', letterSpacing: 0.3 },
+  reviewText: { fontSize: 15, fontFamily: FONT.bodyExtrabold, color: FUEL.ink, textTransform: 'uppercase', letterSpacing: 0.3 },
 });

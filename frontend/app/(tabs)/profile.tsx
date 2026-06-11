@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { apiCall, getStoredUser, logout } from '../../utils/api';
-import { GOALS as FUEL_GOALS } from '../../utils/theme';
+import { GOALS as FUEL_GOALS, FUEL, FONT, RADIUS, SPACE } from '../../utils/theme';
 
 // UPDATED: 2026-06-05 - Profile goals now use the canonical shared GOALS (theme.ts)
 // so the value sent to the backend matches GOAL_CAL_FACTOR / GOAL_PROTEIN_PER_KG keys.
@@ -71,10 +71,10 @@ export default function ProfileScreen() {
           <View style={styles.goalsRow}>
             {GOALS.map(g => (
               <TouchableOpacity key={g.key} testID={`goal-${g.key}`} style={[styles.goalCard, goal === g.key && { borderColor: g.color, backgroundColor: `${g.color}10` }]} onPress={() => setGoal(g.key)}>
-                <View style={[styles.goalIcon, { backgroundColor: goal === g.key ? g.color : '#F4F1E9' }]}>
-                  <Ionicons name={g.icon as any} size={20} color={goal === g.key ? '#FFF' : '#6B6A5E'} />
+                <View style={[styles.goalIcon, { backgroundColor: goal === g.key ? g.color : FUEL.sand }]}>
+                  <Ionicons name={g.icon as any} size={20} color={goal === g.key ? '#FFF' : FUEL.muted} />
                 </View>
-                <Text style={[styles.goalLabel, goal === g.key && { color: g.color, fontWeight: '700' }]}>{g.label}</Text>
+                <Text style={[styles.goalLabel, goal === g.key && { color: g.color, fontFamily: FONT.bodyBold }]}>{g.label}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -117,7 +117,7 @@ export default function ProfileScreen() {
               { label: 'Calories (kcal)', val: calories, set: setCalories, color: Z_RED },
               { label: 'Protein (g)', val: protein, set: setProtein, color: Z_RED },
               { label: 'Carbs (g)', val: carbs, set: setCarbs, color: '#D69A35' },
-              { label: 'Fat (g)', val: fat, set: setFat, color: '#15140F' },
+              { label: 'Fat (g)', val: fat, set: setFat, color: FUEL.ink },
             ].map(t => (
               <View key={t.label} style={styles.targetCard}>
                 <Text style={[styles.targetLabel, { color: t.color }]}>{t.label}</Text>
@@ -137,37 +137,37 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F4F1E9' },
-  content: { padding: 16 },
-  title: { fontSize: 24, fontWeight: '800', color: '#15140F', marginBottom: 16, marginTop: 8 },
-  userCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#FFF', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#E6E1D4', marginBottom: 20 },
-  avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#F1E7E1', alignItems: 'center', justifyContent: 'center' },
-  userName: { fontSize: 17, fontWeight: '700', color: '#15140F' },
-  userEmail: { fontSize: 13, color: '#6B6A5E', marginTop: 2 },
-  logoutBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F1E7E1', alignItems: 'center', justifyContent: 'center' },
-  section: { fontSize: 17, fontWeight: '700', color: '#15140F', marginBottom: 10 },
-  subLabel: { fontSize: 12.5, color: '#6B6A5E', marginBottom: 12, marginTop: -4 },
-  targetHero: { backgroundColor: '#15140F', borderRadius: 16, padding: 16, marginBottom: 14 },
+  safe: { flex: 1, backgroundColor: FUEL.sand },
+  content: { padding: SPACE.l },
+  title: { fontSize: 24, fontFamily: FONT.bodyExtrabold, color: FUEL.ink, marginBottom: SPACE.l, marginTop: SPACE.s },
+  userCard: { flexDirection: 'row', alignItems: 'center', gap: SPACE.m, backgroundColor: '#FFF', borderRadius: RADIUS.md, padding: SPACE.l, borderWidth: 1, borderColor: FUEL.sandBorder, marginBottom: SPACE.xl },
+  avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: FUEL.proteinTint, alignItems: 'center', justifyContent: 'center' }, // circle
+  userName: { fontSize: 17, fontFamily: FONT.bodyBold, color: FUEL.ink },
+  userEmail: { fontSize: 13, color: FUEL.muted, marginTop: 2 },
+  logoutBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: FUEL.proteinTint, alignItems: 'center', justifyContent: 'center' }, // circle
+  section: { fontSize: 17, fontFamily: FONT.bodyBold, color: FUEL.ink, marginBottom: SPACE.m },
+  subLabel: { fontSize: 12.5, color: FUEL.muted, marginBottom: SPACE.m, marginTop: -4 },
+  targetHero: { backgroundColor: FUEL.ink, borderRadius: RADIUS.md, padding: SPACE.l, marginBottom: SPACE.l },
   targetHeroRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
-  targetHeroLabel: { fontSize: 10.5, color: '#F4F1E9', opacity: 0.7, letterSpacing: 1, fontWeight: '700' },
-  targetHeroValue: { fontSize: 18, color: '#C7F24E', fontWeight: '800', marginTop: 4 },
-  targetHeroSub: { fontSize: 11.5, color: '#F4F1E9', opacity: 0.6, marginTop: 4 },
-  editStatsBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#C7F24E', borderRadius: 18, paddingHorizontal: 12, paddingVertical: 7 },
-  editStatsText: { fontSize: 12.5, fontWeight: '800', color: '#15140F' },
-  planMealsBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#C7F24E', borderRadius: 12, paddingVertical: 11, marginTop: 14 },
-  planMealsText: { fontSize: 14, fontWeight: '800', color: '#15140F' },
-  setupTargetBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#FFF', borderRadius: 14, padding: 14, borderWidth: 1.5, borderColor: '#E6E1D4', marginBottom: 14 },
-  setupTargetText: { flex: 1, fontSize: 13.5, fontWeight: '700', color: '#15140F' },
-  progressRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#FFF', borderRadius: 14, padding: 14, borderWidth: 1.5, borderColor: '#E6E1D4', marginBottom: 14 },
-  progressRowText: { flex: 1, fontSize: 14, fontWeight: '700', color: '#15140F' },
-  goalsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20, justifyContent: 'flex-start' },
-  goalCard: { width: '30.5%', alignItems: 'center', gap: 8, backgroundColor: '#FFF', borderRadius: 12, padding: 14, borderWidth: 1.5, borderColor: '#E6E1D4' },
-  goalIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  goalLabel: { fontSize: 12, fontWeight: '600', color: '#6B6A5E' },
-  targetsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 },
-  targetCard: { width: '48%', backgroundColor: '#FFF', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#E6E1D4' },
-  targetLabel: { fontSize: 12, fontWeight: '600', marginBottom: 6 },
-  targetInput: { backgroundColor: '#F4F1E9', borderRadius: 8, padding: 10, color: '#15140F', fontSize: 18, fontWeight: '700' },
-  saveBtn: { backgroundColor: Z_RED, borderRadius: 12, paddingVertical: 15, alignItems: 'center' },
-  saveBtnText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
+  targetHeroLabel: { fontSize: 10.5, color: FUEL.sand, opacity: 0.7, letterSpacing: 1, fontFamily: FONT.bodyBold },
+  targetHeroValue: { fontSize: 18, color: FUEL.lime, fontFamily: FONT.bodyExtrabold, marginTop: SPACE.xs },
+  targetHeroSub: { fontSize: 11.5, color: FUEL.sand, opacity: 0.6, marginTop: SPACE.xs },
+  editStatsBtn: { flexDirection: 'row', alignItems: 'center', gap: SPACE.xs, backgroundColor: FUEL.lime, borderRadius: RADIUS.lg, paddingHorizontal: SPACE.m, paddingVertical: SPACE.s },
+  editStatsText: { fontSize: 12.5, fontFamily: FONT.bodyExtrabold, color: FUEL.ink },
+  planMealsBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.s, backgroundColor: FUEL.lime, borderRadius: RADIUS.md, paddingVertical: SPACE.m, marginTop: SPACE.l },
+  planMealsText: { fontSize: 14, fontFamily: FONT.bodyExtrabold, color: FUEL.ink },
+  setupTargetBtn: { flexDirection: 'row', alignItems: 'center', gap: SPACE.m, backgroundColor: '#FFF', borderRadius: RADIUS.md, padding: SPACE.l, borderWidth: 1.5, borderColor: FUEL.sandBorder, marginBottom: SPACE.l },
+  setupTargetText: { flex: 1, fontSize: 13.5, fontFamily: FONT.bodyBold, color: FUEL.ink },
+  progressRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.m, backgroundColor: '#FFF', borderRadius: RADIUS.md, padding: SPACE.l, borderWidth: 1.5, borderColor: FUEL.sandBorder, marginBottom: SPACE.l },
+  progressRowText: { flex: 1, fontSize: 14, fontFamily: FONT.bodyBold, color: FUEL.ink },
+  goalsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.m, marginBottom: SPACE.xl, justifyContent: 'flex-start' },
+  goalCard: { width: '30.5%', alignItems: 'center', gap: SPACE.s, backgroundColor: '#FFF', borderRadius: RADIUS.md, padding: SPACE.l, borderWidth: 1.5, borderColor: FUEL.sandBorder },
+  goalIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' }, // circle
+  goalLabel: { fontSize: 12, fontFamily: FONT.bodySemibold, color: FUEL.muted },
+  targetsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.m, marginBottom: SPACE.xl },
+  targetCard: { width: '48%', backgroundColor: '#FFF', borderRadius: RADIUS.md, padding: SPACE.l, borderWidth: 1, borderColor: FUEL.sandBorder },
+  targetLabel: { fontSize: 12, fontFamily: FONT.bodySemibold, marginBottom: SPACE.s },
+  targetInput: { backgroundColor: FUEL.sand, borderRadius: RADIUS.sm, padding: SPACE.m, color: FUEL.ink, fontSize: 18, fontFamily: FONT.bodyBold },
+  saveBtn: { backgroundColor: Z_RED, borderRadius: RADIUS.md, paddingVertical: SPACE.l, alignItems: 'center' },
+  saveBtnText: { color: '#FFF', fontSize: 16, fontFamily: FONT.bodyBold },
 });

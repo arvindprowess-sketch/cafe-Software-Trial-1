@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { apiCall } from '../utils/api';
-import { FUEL, FONT, getGoal } from '../utils/theme';
+import { FUEL, FONT, getGoal, RADIUS, SPACE } from '../utils/theme';
 import { useCart } from '../utils/CartContext';
 import { DIET_TAGS, DIET_LABEL, toggleDietTag } from '../utils/diet';
 
@@ -232,7 +232,7 @@ export default function MealPlanScreen() {
             <Ionicons name="chevron-forward" size={16} color={FUEL.muted} />
           </TouchableOpacity>
 
-          {planning ? <ActivityIndicator color={FUEL.ink} style={{ marginVertical: 20 }} /> : (
+          {planning ? <ActivityIndicator color={FUEL.ink} style={{ marginVertical: SPACE.xl }} /> : (
             <>
               {/* Per-meal targets + goal-fit suggestions */}
               {(plan?.meals || []).map((m: any) => (
@@ -282,7 +282,7 @@ export default function MealPlanScreen() {
               </TouchableOpacity>
             </View>
             {dayPlanLoading ? (
-              <View style={{ paddingVertical: 40 }}><ActivityIndicator size="large" color={FUEL.ink} /></View>
+              <View style={{ paddingVertical: SPACE.xxl }}><ActivityIndicator size="large" color={FUEL.ink} /></View>
             ) : dayPlan ? (
               <>
                 <View style={styles.dayTotals} testID="dayplan-totals">
@@ -332,78 +332,78 @@ export default function MealPlanScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: FUEL.sand },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: FUEL.ink, paddingHorizontal: 12, paddingVertical: 12 },
-  backBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: FUEL.ink, paddingHorizontal: SPACE.m, paddingVertical: SPACE.m },
+  backBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' }, // circle
   headerTitle: { fontFamily: FONT.display, fontSize: 20, color: FUEL.sand, textTransform: 'uppercase', letterSpacing: 1 },
-  content: { padding: 16 },
-  emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 30, gap: 12 },
+  content: { padding: SPACE.l },
+  emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: SPACE.xxl, gap: SPACE.m },
   emptyTitle: { fontFamily: FONT.display, fontSize: 24, color: FUEL.ink, textTransform: 'uppercase' },
   emptySub: { fontSize: 14, color: FUEL.muted, textAlign: 'center', lineHeight: 20 },
-  goalPill: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1.5, marginBottom: 14 },
-  goalPillText: { fontSize: 12.5, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
-  remainCard: { backgroundColor: FUEL.ink, borderRadius: 18, padding: 18, marginBottom: 18 },
-  remainTitle: { fontSize: 13, color: FUEL.sand, opacity: 0.8, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 },
+  goalPill: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: SPACE.s, paddingHorizontal: SPACE.m, paddingVertical: SPACE.s, borderRadius: RADIUS.lg, borderWidth: 1.5, marginBottom: SPACE.l },
+  goalPillText: { fontSize: 12.5, fontFamily: FONT.bodyExtrabold, textTransform: 'uppercase', letterSpacing: 0.5 },
+  remainCard: { backgroundColor: FUEL.ink, borderRadius: RADIUS.lg, padding: SPACE.l, marginBottom: SPACE.l },
+  remainTitle: { fontSize: 13, color: FUEL.sand, opacity: 0.8, textTransform: 'uppercase', letterSpacing: 1, marginBottom: SPACE.m },
   remainRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   remainBox: { flex: 1, alignItems: 'center' },
   remainDivider: { width: 1, height: 40, backgroundColor: '#2C2B22' },
   remainBig: { fontFamily: FONT.display, fontSize: 38, color: FUEL.lime, lineHeight: 40 },
   remainLbl: { fontSize: 12, color: FUEL.sand, opacity: 0.7, marginTop: 2 },
-  progressTrack: { height: 7, borderRadius: 4, backgroundColor: '#2C2B22', marginTop: 14, overflow: 'hidden' },
-  progressFill: { height: 7, borderRadius: 4, backgroundColor: FUEL.lime },
-  remainSub: { fontSize: 11.5, color: FUEL.sand, opacity: 0.6, marginTop: 8, textAlign: 'center' },
-  sectionTitle: { fontFamily: FONT.display, fontSize: 18, color: FUEL.ink, textTransform: 'uppercase', marginBottom: 10 },
-  countRow: { flexDirection: 'row', gap: 10, marginBottom: 18 },
-  countChip: { flex: 1, alignItems: 'center', paddingVertical: 14, borderRadius: 12, backgroundColor: FUEL.white, borderWidth: 1.5, borderColor: FUEL.sandBorder },
+  progressTrack: { height: 7, borderRadius: RADIUS.xs, backgroundColor: '#2C2B22', marginTop: SPACE.l, overflow: 'hidden' },
+  progressFill: { height: 7, borderRadius: RADIUS.xs, backgroundColor: FUEL.lime },
+  remainSub: { fontSize: 11.5, color: FUEL.sand, opacity: 0.6, marginTop: SPACE.s, textAlign: 'center' },
+  sectionTitle: { fontFamily: FONT.display, fontSize: 18, color: FUEL.ink, textTransform: 'uppercase', marginBottom: SPACE.m },
+  countRow: { flexDirection: 'row', gap: SPACE.m, marginBottom: SPACE.l },
+  countChip: { flex: 1, alignItems: 'center', paddingVertical: SPACE.l, borderRadius: RADIUS.md, backgroundColor: FUEL.white, borderWidth: 1.5, borderColor: FUEL.sandBorder },
   countChipActive: { backgroundColor: FUEL.lime, borderColor: FUEL.lime },
   countText: { fontFamily: FONT.display, fontSize: 22, color: FUEL.muted },
   countTextActive: { color: FUEL.ink },
-  mealCard: { backgroundColor: FUEL.white, borderRadius: 16, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: FUEL.sandBorder },
+  mealCard: { backgroundColor: FUEL.white, borderRadius: RADIUS.md, padding: SPACE.l, marginBottom: SPACE.m, borderWidth: 1, borderColor: FUEL.sandBorder },
   mealHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  mealLabel: { fontSize: 16, fontWeight: '800', color: FUEL.ink },
-  mealTarget: { fontSize: 13, fontWeight: '700', color: FUEL.limeDeep },
-  mealSubMacro: { fontSize: 12, color: FUEL.muted, marginTop: 2, marginBottom: 10 },
-  dishCard: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderTopWidth: 1, borderTopColor: '#F0ECE0' },
-  dishImg: { width: 44, height: 44, borderRadius: 10 },
-  dishImgPh: { backgroundColor: '#F4F1E9', alignItems: 'center', justifyContent: 'center' },
-  dishName: { fontSize: 14, fontWeight: '700', color: FUEL.ink },
+  mealLabel: { fontSize: 16, fontFamily: FONT.bodyExtrabold, color: FUEL.ink },
+  mealTarget: { fontSize: 13, fontFamily: FONT.bodyBold, color: FUEL.limeDeep },
+  mealSubMacro: { fontSize: 12, color: FUEL.muted, marginTop: 2, marginBottom: SPACE.m },
+  dishCard: { flexDirection: 'row', alignItems: 'center', gap: SPACE.m, paddingVertical: SPACE.s, borderTopWidth: 1, borderTopColor: '#F0ECE0' },
+  dishImg: { width: 44, height: 44, borderRadius: RADIUS.sm },
+  dishImgPh: { backgroundColor: FUEL.sand, alignItems: 'center', justifyContent: 'center' },
+  dishName: { fontSize: 14, fontFamily: FONT.bodyBold, color: FUEL.ink },
   dishMacro: { fontSize: 12, color: FUEL.muted, marginTop: 1 },
-  fitPill: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 4, alignSelf: 'flex-start', backgroundColor: FUEL.limeTint, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10 },
-  fitPillText: { fontSize: 10.5, fontWeight: '800', color: '#4F5A2E' },
-  dishRight: { alignItems: 'center', gap: 6 },
-  dishPrice: { fontSize: 13, fontWeight: '800', color: FUEL.ink },
-  dishAdd: { width: 30, height: 30, borderRadius: 15, backgroundColor: FUEL.lime, alignItems: 'center', justifyContent: 'center' },
-  disclaimer: { fontSize: 11.5, color: '#9C9883', lineHeight: 16, fontStyle: 'italic', marginTop: 6, marginBottom: 14 },
-  cta: { backgroundColor: FUEL.lime, borderRadius: 14, paddingVertical: 15, paddingHorizontal: 30, alignItems: 'center', marginTop: 10 },
+  fitPill: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: SPACE.xs, alignSelf: 'flex-start', backgroundColor: FUEL.limeTint, paddingHorizontal: SPACE.s, paddingVertical: 2, borderRadius: RADIUS.sm },
+  fitPillText: { fontSize: 10.5, fontFamily: FONT.bodyExtrabold, color: '#4F5A2E' },
+  dishRight: { alignItems: 'center', gap: SPACE.s },
+  dishPrice: { fontSize: 13, fontFamily: FONT.bodyExtrabold, color: FUEL.ink },
+  dishAdd: { width: 30, height: 30, borderRadius: 15, backgroundColor: FUEL.lime, alignItems: 'center', justifyContent: 'center' }, // circle
+  disclaimer: { fontSize: 11.5, color: '#9C9883', lineHeight: 16, fontStyle: 'italic', marginTop: SPACE.s, marginBottom: SPACE.l },
+  cta: { backgroundColor: FUEL.lime, borderRadius: RADIUS.md, paddingVertical: SPACE.l, paddingHorizontal: SPACE.xxl, alignItems: 'center', marginTop: SPACE.m },
   ctaText: { fontFamily: FONT.display, fontSize: 17, color: FUEL.ink, textTransform: 'uppercase', letterSpacing: 1 },
-  secondaryCta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12 },
-  secondaryCtaText: { fontSize: 14, fontWeight: '700', color: FUEL.muted },
+  secondaryCta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.s, paddingVertical: SPACE.m },
+  secondaryCtaText: { fontSize: 14, fontFamily: FONT.bodyBold, color: FUEL.muted },
   // Phase 4
-  nudgeCard: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: FUEL.limeTint, borderRadius: 12, padding: 12, marginBottom: 14 },
-  nudgeText: { flex: 1, fontSize: 13, fontWeight: '600', color: '#4F5A2E', lineHeight: 18 },
-  dayPlanBox: { backgroundColor: FUEL.white, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: FUEL.sandBorder, marginBottom: 12 },
-  dayPlanTitle: { fontSize: 16, fontWeight: '800', color: FUEL.ink },
-  dayPlanSub: { fontSize: 12.5, color: FUEL.muted, marginTop: 3, marginBottom: 10 },
-  dietChipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginBottom: 12 },
-  dietChip: { paddingHorizontal: 11, paddingVertical: 6, borderRadius: 16, backgroundColor: FUEL.sand, borderWidth: 1, borderColor: FUEL.sandBorder },
+  nudgeCard: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACE.s, backgroundColor: FUEL.limeTint, borderRadius: RADIUS.md, padding: SPACE.m, marginBottom: SPACE.l },
+  nudgeText: { flex: 1, fontSize: 13, fontFamily: FONT.bodySemibold, color: '#4F5A2E', lineHeight: 18 },
+  dayPlanBox: { backgroundColor: FUEL.white, borderRadius: RADIUS.md, padding: SPACE.l, borderWidth: 1, borderColor: FUEL.sandBorder, marginBottom: SPACE.m },
+  dayPlanTitle: { fontSize: 16, fontFamily: FONT.bodyExtrabold, color: FUEL.ink },
+  dayPlanSub: { fontSize: 12.5, color: FUEL.muted, marginTop: 3, marginBottom: SPACE.m },
+  dietChipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.s, marginBottom: SPACE.m },
+  dietChip: { paddingHorizontal: SPACE.m, paddingVertical: SPACE.s, borderRadius: RADIUS.md, backgroundColor: FUEL.sand, borderWidth: 1, borderColor: FUEL.sandBorder },
   dietChipActive: { backgroundColor: FUEL.ink, borderColor: FUEL.ink },
-  dietChipText: { fontSize: 11.5, fontWeight: '700', color: FUEL.muted },
+  dietChipText: { fontSize: 11.5, fontFamily: FONT.bodyBold, color: FUEL.muted },
   dietChipTextActive: { color: FUEL.sand },
-  dayPlanCta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: FUEL.lime, borderRadius: 12, paddingVertical: 14, marginTop: 4 },
+  dayPlanCta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.s, backgroundColor: FUEL.lime, borderRadius: RADIUS.md, paddingVertical: SPACE.l, marginTop: SPACE.xs },
   dayPlanCtaText: { fontFamily: FONT.display, fontSize: 16, color: FUEL.ink, textTransform: 'uppercase', letterSpacing: 0.5 },
-  progressLink: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: FUEL.white, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: FUEL.sandBorder, marginBottom: 18 },
-  progressLinkText: { flex: 1, fontSize: 14, fontWeight: '700', color: FUEL.ink },
+  progressLink: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s, backgroundColor: FUEL.white, borderRadius: RADIUS.md, padding: SPACE.l, borderWidth: 1, borderColor: FUEL.sandBorder, marginBottom: SPACE.l },
+  progressLinkText: { flex: 1, fontSize: 14, fontFamily: FONT.bodyBold, color: FUEL.ink },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
-  modalSheet: { backgroundColor: FUEL.sand, borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 18, paddingBottom: 28 },
-  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  modalSheet: { backgroundColor: FUEL.sand, borderTopLeftRadius: RADIUS.lg, borderTopRightRadius: RADIUS.lg, padding: SPACE.l, paddingBottom: SPACE.xxl },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACE.m },
   modalTitle: { fontFamily: FONT.display, fontSize: 24, color: FUEL.ink, textTransform: 'uppercase' },
-  dayTotals: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: FUEL.ink, borderRadius: 12, padding: 12, marginBottom: 12 },
-  dayTotalsText: { flex: 1, fontSize: 14, fontWeight: '800', color: FUEL.lime },
-  dayTotalsTarget: { fontSize: 11.5, color: FUEL.sand, opacity: 0.7, fontWeight: '600' },
-  dayTotalsPrice: { fontSize: 16, fontWeight: '800', color: FUEL.lime },
-  dayMeal: { backgroundColor: FUEL.white, borderRadius: 12, padding: 12, marginBottom: 10, borderWidth: 1, borderColor: FUEL.sandBorder },
-  dayItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingTop: 8 },
-  dayItemImg: { width: 38, height: 38, borderRadius: 9 },
-  dayItemName: { fontSize: 13.5, fontWeight: '700', color: FUEL.ink },
+  dayTotals: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: FUEL.ink, borderRadius: RADIUS.md, padding: SPACE.m, marginBottom: SPACE.m },
+  dayTotalsText: { flex: 1, fontSize: 14, fontFamily: FONT.bodyExtrabold, color: FUEL.lime },
+  dayTotalsTarget: { fontSize: 11.5, color: FUEL.sand, opacity: 0.7, fontFamily: FONT.bodySemibold },
+  dayTotalsPrice: { fontSize: 16, fontFamily: FONT.bodyExtrabold, color: FUEL.lime },
+  dayMeal: { backgroundColor: FUEL.white, borderRadius: RADIUS.md, padding: SPACE.m, marginBottom: SPACE.m, borderWidth: 1, borderColor: FUEL.sandBorder },
+  dayItem: { flexDirection: 'row', alignItems: 'center', gap: SPACE.m, paddingTop: SPACE.s },
+  dayItemImg: { width: 38, height: 38, borderRadius: RADIUS.sm },
+  dayItemName: { fontSize: 13.5, fontFamily: FONT.bodyBold, color: FUEL.ink },
   dayItemMacro: { fontSize: 11.5, color: FUEL.muted, marginTop: 1 },
-  dayItemPrice: { fontSize: 13, fontWeight: '800', color: FUEL.ink },
+  dayItemPrice: { fontSize: 13, fontFamily: FONT.bodyExtrabold, color: FUEL.ink },
 });

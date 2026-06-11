@@ -9,7 +9,8 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { apiCall } from '../utils/api';
 import { useRealtime } from '../utils/realtime';
 
-const Z_RED = '#15140F';
+import { FUEL, FONT, RADIUS, SPACE } from '../utils/theme';
+const Z_RED = FUEL.ink;
 const GREEN = '#3FA34D';
 const PURPLE = '#15140F';
 const { width, height } = Dimensions.get('window');
@@ -193,7 +194,7 @@ export default function DeliveryTrackingScreen() {
                     <Ionicons 
                       name={step.icon as any} 
                       size={16} 
-                      color={isCompleted ? '#FFF' : '#D0D0D0'} 
+                      color={isCompleted ? '#FFF' : FUEL.muted} 
                     />
                   </View>
                   {index < DELIVERY_STEPS.length - 1 && showStep && (
@@ -255,73 +256,73 @@ export default function DeliveryTrackingScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F4F1E9' },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
-  errorText: { fontSize: 14, color: '#6B6A5E', textAlign: 'center', marginTop: 16 },
-  retryBtn: { backgroundColor: Z_RED, borderRadius: 10, paddingHorizontal: 24, paddingVertical: 12, marginTop: 16 },
-  retryBtnText: { color: '#FFF', fontSize: 14, fontWeight: '700' },
+  safe: { flex: 1, backgroundColor: FUEL.sand },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: SPACE.xxl },
+  errorText: { fontSize: 14, color: FUEL.muted, textAlign: 'center', marginTop: SPACE.l },
+  retryBtn: { backgroundColor: Z_RED, borderRadius: RADIUS.sm, paddingHorizontal: SPACE.xl, paddingVertical: SPACE.m, marginTop: SPACE.l },
+  retryBtnText: { color: '#FFF', fontSize: 14, fontFamily: FONT.bodyBold },
   
   // Header
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#FFF', paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#E6E1D4' },
-  backBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#15140F' },
-  refreshBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#FFF', paddingHorizontal: SPACE.m, paddingVertical: SPACE.m, borderBottomWidth: 1, borderBottomColor: FUEL.sandBorder },
+  backBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' }, // circle
+  headerTitle: { fontSize: 18, fontFamily: FONT.bodyBold, color: FUEL.ink },
+  refreshBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' }, // circle
   
   scroll: { flex: 1 },
   
   // Map
-  mapContainer: { height: 200, backgroundColor: '#E8E8E8', marginHorizontal: 16, marginTop: 16, borderRadius: 16, overflow: 'hidden' },
-  mapPlaceholder: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#EEF1EC' },
-  mapText: { fontSize: 14, color: '#6B6A5E', marginTop: 12, textAlign: 'center', paddingHorizontal: 20 },
-  openMapBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Z_RED, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10, marginTop: 12 },
-  openMapBtnText: { color: '#FFF', fontSize: 14, fontWeight: '600' },
+  mapContainer: { height: 200, backgroundColor: FUEL.sandBorder, marginHorizontal: SPACE.l, marginTop: SPACE.l, borderRadius: RADIUS.md, overflow: 'hidden' },
+  mapPlaceholder: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: FUEL.limeTint },
+  mapText: { fontSize: 14, color: FUEL.muted, marginTop: SPACE.m, textAlign: 'center', paddingHorizontal: SPACE.xl },
+  openMapBtn: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s, backgroundColor: Z_RED, borderRadius: RADIUS.sm, paddingHorizontal: SPACE.l, paddingVertical: SPACE.m, marginTop: SPACE.m },
+  openMapBtnText: { color: '#FFF', fontSize: 14, fontFamily: FONT.bodySemibold },
   
   // Driver
-  driverCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', marginHorizontal: 16, marginTop: 12, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#E6E1D4' },
-  driverAvatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: GREEN, alignItems: 'center', justifyContent: 'center' },
-  driverInfo: { flex: 1, marginLeft: 12 },
-  driverName: { fontSize: 16, fontWeight: '700', color: '#15140F' },
-  driverLabel: { fontSize: 12, color: '#6B6A5E', marginTop: 2 },
-  driverActions: { flexDirection: 'row', gap: 8 },
-  driverBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#F4F1E9', alignItems: 'center', justifyContent: 'center' },
+  driverCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', marginHorizontal: SPACE.l, marginTop: SPACE.m, borderRadius: RADIUS.md, padding: SPACE.l, borderWidth: 1, borderColor: FUEL.sandBorder },
+  driverAvatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: GREEN, alignItems: 'center', justifyContent: 'center' }, // circle
+  driverInfo: { flex: 1, marginLeft: SPACE.m },
+  driverName: { fontSize: 16, fontFamily: FONT.bodyBold, color: FUEL.ink },
+  driverLabel: { fontSize: 12, color: FUEL.muted, marginTop: 2 },
+  driverActions: { flexDirection: 'row', gap: SPACE.s },
+  driverBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: FUEL.sand, alignItems: 'center', justifyContent: 'center' }, // circle
   
   // ETA
-  etaCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#FFF', marginHorizontal: 16, marginTop: 12, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#E6E1D4' },
+  etaCard: { flexDirection: 'row', alignItems: 'center', gap: SPACE.m, backgroundColor: '#FFF', marginHorizontal: SPACE.l, marginTop: SPACE.m, borderRadius: RADIUS.md, padding: SPACE.l, borderWidth: 1, borderColor: FUEL.sandBorder },
   etaInfo: { flex: 1 },
-  etaLabel: { fontSize: 12, color: '#6B6A5E' },
-  etaValue: { fontSize: 20, fontWeight: '800', color: '#15140F', marginTop: 2 },
+  etaLabel: { fontSize: 12, color: FUEL.muted },
+  etaValue: { fontSize: 20, fontFamily: FONT.bodyExtrabold, color: FUEL.ink, marginTop: 2 },
   
   // Timeline
-  timelineCard: { backgroundColor: '#FFF', marginHorizontal: 16, marginTop: 12, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#E6E1D4' },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#15140F', marginBottom: 16 },
+  timelineCard: { backgroundColor: '#FFF', marginHorizontal: SPACE.l, marginTop: SPACE.m, borderRadius: RADIUS.md, padding: SPACE.l, borderWidth: 1, borderColor: FUEL.sandBorder },
+  sectionTitle: { fontSize: 16, fontFamily: FONT.bodyBold, color: FUEL.ink, marginBottom: SPACE.l },
   timelineItem: { flexDirection: 'row', marginBottom: 0 },
   timelineLeft: { width: 40, alignItems: 'center' },
-  timelineDot: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#E6E1D4', alignItems: 'center', justifyContent: 'center' },
+  timelineDot: { width: 36, height: 36, borderRadius: 18, backgroundColor: FUEL.sandBorder, alignItems: 'center', justifyContent: 'center' }, // circle
   timelineDotCompleted: { backgroundColor: GREEN },
   timelineDotCurrent: { backgroundColor: Z_RED },
-  timelineLine: { width: 2, height: 30, backgroundColor: '#E8E8E8', marginVertical: 4 },
+  timelineLine: { width: 2, height: 30, backgroundColor: FUEL.sandBorder, marginVertical: SPACE.xs },
   timelineLineCompleted: { backgroundColor: GREEN },
-  timelineRight: { flex: 1, paddingLeft: 12, paddingBottom: 20 },
-  timelineLabel: { fontSize: 14, color: '#6B6A5E', fontWeight: '500' },
-  timelineLabelCompleted: { color: '#15140F' },
-  timelineLabelCurrent: { color: Z_RED, fontWeight: '700' },
-  currentBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
-  pulsingDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Z_RED },
-  currentBadgeText: { fontSize: 11, color: Z_RED, fontWeight: '600' },
+  timelineRight: { flex: 1, paddingLeft: SPACE.m, paddingBottom: SPACE.xl },
+  timelineLabel: { fontSize: 14, color: FUEL.muted, fontFamily: FONT.bodyMedium },
+  timelineLabelCompleted: { color: FUEL.ink },
+  timelineLabelCurrent: { color: Z_RED, fontFamily: FONT.bodyBold },
+  currentBadge: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s, marginTop: SPACE.xs },
+  pulsingDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Z_RED }, // circle
+  currentBadgeText: { fontSize: 11, color: Z_RED, fontFamily: FONT.bodySemibold },
   
   // Address
-  addressCard: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, backgroundColor: '#FFF', marginHorizontal: 16, marginTop: 12, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#E6E1D4' },
+  addressCard: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACE.m, backgroundColor: '#FFF', marginHorizontal: SPACE.l, marginTop: SPACE.m, borderRadius: RADIUS.md, padding: SPACE.l, borderWidth: 1, borderColor: FUEL.sandBorder },
   addressInfo: { flex: 1 },
-  addressLabel: { fontSize: 12, color: '#6B6A5E' },
-  addressText: { fontSize: 14, color: '#15140F', marginTop: 4, lineHeight: 20 },
+  addressLabel: { fontSize: 12, color: FUEL.muted },
+  addressText: { fontSize: 14, color: FUEL.ink, marginTop: SPACE.xs, lineHeight: 20 },
   
   // Order ID
-  orderIdCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F4F1E9', marginHorizontal: 16, marginTop: 12, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12 },
-  orderIdLabel: { fontSize: 12, color: '#6B6A5E' },
-  orderIdValue: { fontSize: 12, color: '#6B6A5E', fontWeight: '600' },
+  orderIdCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: FUEL.sand, marginHorizontal: SPACE.l, marginTop: SPACE.m, borderRadius: RADIUS.sm, paddingHorizontal: SPACE.l, paddingVertical: SPACE.m },
+  orderIdLabel: { fontSize: 12, color: FUEL.muted },
+  orderIdValue: { fontSize: 12, color: FUEL.muted, fontFamily: FONT.bodySemibold },
   
   // Help
-  helpBar: { backgroundColor: '#FFF', paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: 1, borderTopColor: '#E6E1D4' },
-  helpBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#EEF1EC', borderRadius: 10, paddingVertical: 12 },
-  helpBtnText: { color: PURPLE, fontSize: 14, fontWeight: '600' },
+  helpBar: { backgroundColor: '#FFF', paddingHorizontal: SPACE.l, paddingVertical: SPACE.m, borderTopWidth: 1, borderTopColor: FUEL.sandBorder },
+  helpBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.s, backgroundColor: FUEL.limeTint, borderRadius: RADIUS.sm, paddingVertical: SPACE.m },
+  helpBtnText: { color: PURPLE, fontSize: 14, fontFamily: FONT.bodySemibold },
 });

@@ -5,10 +5,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { FUEL, GOALS } from '../../utils/theme';
+import { FUEL, GOALS, FONT, RADIUS, SPACE } from '../../utils/theme';
 import { DIET_TAGS, DIET_LABEL, toggleDietTag } from '../../utils/diet';
 
-const Z_RED = '#15140F';
+const Z_RED = FUEL.ink;
 const GREEN = '#3FA34D';
 
 export default function BudgetMealScreen() {
@@ -95,10 +95,10 @@ export default function BudgetMealScreen() {
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
             <TouchableOpacity
               testID="budget-diet-all"
-              style={[styles.filterChip, dietPref.length === 0 && { backgroundColor: '#15140F', borderColor: '#15140F' }]}
+              style={[styles.filterChip, dietPref.length === 0 && { backgroundColor: FUEL.ink, borderColor: FUEL.ink }]}
               onPress={() => setDietPref([])}
             >
-              <Ionicons name="apps" size={14} color={dietPref.length === 0 ? '#FFF' : '#6B6A5E'} />
+              <Ionicons name="apps" size={14} color={dietPref.length === 0 ? '#FFF' : FUEL.muted} />
               <Text style={[styles.filterText, dietPref.length === 0 && { color: '#FFF' }]}>All</Text>
             </TouchableOpacity>
             {DIET_TAGS.map(tag => {
@@ -152,52 +152,52 @@ export default function BudgetMealScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F4F1E9' },
+  safe: { flex: 1, backgroundColor: FUEL.sand },
 
   // Header
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FFF', paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12 },
-  title: { fontSize: 22, fontWeight: '800', color: '#15140F' },
-  subtitle: { fontSize: 12, color: '#6B6A5E', marginTop: 2 },
-  aiHelpBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 12, backgroundColor: '#15140F', paddingHorizontal: 12, paddingVertical: 10 },
-  aiHelpText: { fontSize: 11, fontWeight: '700', color: '#FFF', textTransform: 'uppercase' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FFF', paddingHorizontal: SPACE.l, paddingTop: SPACE.s, paddingBottom: SPACE.m },
+  title: { fontSize: 22, fontFamily: FONT.bodyExtrabold, color: FUEL.ink },
+  subtitle: { fontSize: 12, color: FUEL.muted, marginTop: 2 },
+  aiHelpBtn: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s, borderRadius: RADIUS.md, backgroundColor: FUEL.ink, paddingHorizontal: SPACE.m, paddingVertical: SPACE.m },
+  aiHelpText: { fontSize: 11, fontFamily: FONT.bodyBold, color: '#FFF', textTransform: 'uppercase' },
 
   scroll: { flex: 1 },
-  scrollContent: { paddingBottom: 40 },
+  scrollContent: { paddingBottom: SPACE.xxl },
 
   // Budget Section
-  budgetSection: { backgroundColor: '#FFF', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#E6E1D4' },
-  budgetInputRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  budgetLabel: { fontSize: 16, fontWeight: '700', color: '#15140F' },
-  budgetInputBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F4F1E9', borderRadius: 12, paddingHorizontal: 12, borderWidth: 2, borderColor: Z_RED, width: 132 },
-  rupeeSign: { fontSize: 18, fontWeight: '800', color: Z_RED },
-  budgetInput: { flex: 1, minWidth: 0, fontSize: 20, fontWeight: '800', color: '#15140F', textAlign: 'center', paddingVertical: 8 },
-  presetsRow: { flexDirection: 'row', gap: 8, marginBottom: 12, flexWrap: 'wrap' },
-  presetBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: '#F4F1E9', borderWidth: 1, borderColor: '#E6E1D4' },
+  budgetSection: { backgroundColor: '#FFF', paddingHorizontal: SPACE.l, paddingVertical: SPACE.l, borderBottomWidth: 1, borderBottomColor: FUEL.sandBorder },
+  budgetInputRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACE.m },
+  budgetLabel: { fontSize: 16, fontFamily: FONT.bodyBold, color: FUEL.ink },
+  budgetInputBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: FUEL.sand, borderRadius: RADIUS.md, paddingHorizontal: SPACE.m, borderWidth: 2, borderColor: Z_RED, width: 132 },
+  rupeeSign: { fontSize: 18, fontFamily: FONT.bodyExtrabold, color: Z_RED },
+  budgetInput: { flex: 1, minWidth: 0, fontSize: 20, fontFamily: FONT.bodyExtrabold, color: FUEL.ink, textAlign: 'center', paddingVertical: SPACE.s },
+  presetsRow: { flexDirection: 'row', gap: SPACE.s, marginBottom: SPACE.m, flexWrap: 'wrap' },
+  presetBtn: { paddingHorizontal: SPACE.l, paddingVertical: SPACE.s, borderRadius: RADIUS.lg, backgroundColor: FUEL.sand, borderWidth: 1, borderColor: FUEL.sandBorder },
   presetBtnActive: { backgroundColor: Z_RED, borderColor: Z_RED },
-  presetText: { fontSize: 12, fontWeight: '700', color: '#6B6A5E' },
+  presetText: { fontSize: 12, fontFamily: FONT.bodyBold, color: FUEL.muted },
   presetTextActive: { color: '#FFF' },
   budgetProgress: {},
-  progressBar: { height: 8, backgroundColor: '#E6E1D4', borderRadius: 4, overflow: 'hidden' },
-  progressFill: { height: '100%', backgroundColor: GREEN, borderRadius: 4 },
-  budgetStats: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
-  budgetSpent: { fontSize: 12, color: '#6B6A5E' },
-  budgetRemaining: { fontSize: 14, fontWeight: '700', color: GREEN },
+  progressBar: { height: 8, backgroundColor: FUEL.sandBorder, borderRadius: RADIUS.xs, overflow: 'hidden' },
+  progressFill: { height: '100%', backgroundColor: GREEN, borderRadius: RADIUS.xs },
+  budgetStats: { flexDirection: 'row', justifyContent: 'space-between', marginTop: SPACE.s },
+  budgetSpent: { fontSize: 12, color: FUEL.muted },
+  budgetRemaining: { fontSize: 14, fontFamily: FONT.bodyBold, color: GREEN },
 
   // Filters
-  filterRow: { backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E6E1D4' },
-  filterScroll: { paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
-  filterChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, backgroundColor: '#F4F1E9', borderWidth: 1, borderColor: '#E8E8E8' },
-  filterText: { fontSize: 12, fontWeight: '600', color: '#6B6A5E' },
-  vegDotSmall: { width: 10, height: 10, borderRadius: 5 },
+  filterRow: { backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: FUEL.sandBorder },
+  filterScroll: { paddingHorizontal: SPACE.l, paddingVertical: SPACE.m, gap: SPACE.s },
+  filterChip: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s, paddingHorizontal: SPACE.m, paddingVertical: SPACE.s, borderRadius: RADIUS.lg, backgroundColor: FUEL.sand, borderWidth: 1, borderColor: FUEL.sandBorder },
+  filterText: { fontSize: 12, fontFamily: FONT.bodySemibold, color: FUEL.muted },
+  vegDotSmall: { width: 10, height: 10, borderRadius: RADIUS.xs },
 
   // Goal selector (fixed wrap — no horizontal scroll)
-  goalSection: { backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E6E1D4', paddingHorizontal: 16, paddingVertical: 12 },
-  goalFilterLabel: { fontSize: 12, fontWeight: '800', color: '#15140F', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 },
-  goalWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  goalFilterChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, backgroundColor: '#F4F1E9', borderWidth: 1.5, borderColor: '#E8E8E8' },
+  goalSection: { backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: FUEL.sandBorder, paddingHorizontal: SPACE.l, paddingVertical: SPACE.m },
+  goalFilterLabel: { fontSize: 12, fontFamily: FONT.bodyExtrabold, color: FUEL.ink, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: SPACE.m },
+  goalWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.s },
+  goalFilterChip: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s, paddingHorizontal: SPACE.m, paddingVertical: SPACE.s, borderRadius: RADIUS.lg, backgroundColor: FUEL.sand, borderWidth: 1.5, borderColor: FUEL.sandBorder },
 
   // Smart Fill CTA
-  smartFillCta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: FUEL.lime, marginHorizontal: 16, marginTop: 24, borderRadius: 16, paddingVertical: 18 },
-  smartFillCtaText: { fontSize: 16, fontWeight: '900', color: FUEL.ink, textTransform: 'uppercase', letterSpacing: 0.5 },
-  ctaHint: { fontSize: 12, color: '#6B6A5E', textAlign: 'center', marginHorizontal: 28, marginTop: 12, lineHeight: 18 },
+  smartFillCta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.m, backgroundColor: FUEL.lime, marginHorizontal: SPACE.l, marginTop: SPACE.xl, borderRadius: RADIUS.md, paddingVertical: SPACE.l },
+  smartFillCtaText: { fontSize: 16, fontFamily: FONT.bodyExtrabold, color: FUEL.ink, textTransform: 'uppercase', letterSpacing: 0.5 },
+  ctaHint: { fontSize: 12, color: FUEL.muted, textAlign: 'center', marginHorizontal: SPACE.xxl, marginTop: SPACE.m, lineHeight: 18 },
 });

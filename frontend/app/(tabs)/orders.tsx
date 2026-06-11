@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { apiCall } from '../../utils/api';
 import { useRealtime } from '../../utils/realtime';
-import { FUEL, FONT } from '../../utils/theme';
+import { FUEL, FONT, RADIUS, SPACE } from '../../utils/theme';
 
 export default function OrdersScreen() {
   const router = useRouter();
@@ -207,7 +207,7 @@ export default function OrdersScreen() {
           <View style={styles.orderStats}>
             <Ionicons name="restaurant" size={14} color={FUEL.muted} />
             <Text style={styles.statsText}>{item.items?.length || 0} items</Text>
-            <Ionicons name="flame" size={14} color={FUEL.warning} style={{ marginLeft: 12 }} />
+            <Ionicons name="flame" size={14} color={FUEL.warning} style={{ marginLeft: SPACE.m }} />
             <Text style={styles.statsText}>{Math.round(item.total_calories || 0)} cal</Text>
           </View>
           <Text style={styles.orderTotal}>₹{Math.round(item.total_price || 0)}</Text>
@@ -336,27 +336,27 @@ const styles = StyleSheet.create({
 
   header: {
     backgroundColor: FUEL.ink,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingHorizontal: SPACE.l,
+    paddingVertical: SPACE.l,
   },
   headerTitle: { fontFamily: FONT.display, fontSize: 22, color: FUEL.sand, textTransform: 'uppercase', letterSpacing: 0.5 },
 
   tabContainer: {
     flexDirection: 'row',
     backgroundColor: FUEL.ink,
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    gap: 8,
+    paddingHorizontal: SPACE.l,
+    paddingBottom: SPACE.m,
+    gap: SPACE.s,
   },
   tab: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    borderRadius: 25,
+    gap: SPACE.xs,
+    paddingVertical: SPACE.m,
+    paddingHorizontal: SPACE.s,
+    borderRadius: RADIUS.pill,
     backgroundColor: FUEL.inkSoft,
   },
   tabActive: {
@@ -374,9 +374,9 @@ const styles = StyleSheet.create({
   },
   badge: {
     backgroundColor: FUEL.lime,
-    paddingHorizontal: 8,
+    paddingHorizontal: SPACE.s,
     paddingVertical: 2,
-    borderRadius: 10,
+    borderRadius: RADIUS.sm,
     minWidth: 24,
     alignItems: 'center',
   },
@@ -389,23 +389,23 @@ const styles = StyleSheet.create({
   summaryCard: {
     flexDirection: 'row',
     backgroundColor: FUEL.white,
-    marginHorizontal: 16,
-    marginTop: 16,
-    borderRadius: 16,
-    padding: 16,
+    marginHorizontal: SPACE.l,
+    marginTop: SPACE.l,
+    borderRadius: RADIUS.md,
+    padding: SPACE.l,
     borderWidth: 1,
     borderColor: FUEL.sandBorder,
   },
   summaryItem: { flex: 1, alignItems: 'center' },
   summaryValue: { fontFamily: FONT.display, fontSize: 20, color: FUEL.ink },
-  summaryLabel: { fontFamily: FONT.bodyMedium, fontSize: 11, color: FUEL.muted, marginTop: 4, textTransform: 'uppercase' },
-  summaryDivider: { width: 1, backgroundColor: FUEL.sandBorder, marginHorizontal: 8 },
+  summaryLabel: { fontFamily: FONT.bodyMedium, fontSize: 11, color: FUEL.muted, marginTop: SPACE.xs, textTransform: 'uppercase' },
+  summaryDivider: { width: 1, backgroundColor: FUEL.sandBorder, marginHorizontal: SPACE.s },
 
   orderCard: {
     backgroundColor: FUEL.white,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: RADIUS.md,
+    padding: SPACE.l,
+    marginBottom: SPACE.m,
     borderWidth: 1,
     borderColor: FUEL.sandBorder,
   },
@@ -413,16 +413,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: SPACE.m,
   },
-  orderHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+  orderHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: SPACE.m, flex: 1 },
   orderInfo: { flex: 1 },
   orderId: { fontFamily: FONT.bodyExtrabold, fontSize: 16, color: FUEL.ink },
   orderDate: { fontFamily: FONT.body, fontSize: 12, color: FUEL.muted, marginTop: 2 },
   orderTypeIconBadge: {
     width: 44,
     height: 44,
-    borderRadius: 12,
+    borderRadius: RADIUS.md,
     backgroundColor: FUEL.limeTint,
     alignItems: 'center',
     justifyContent: 'center',
@@ -432,41 +432,41 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: SPACE.m,
   },
   badgesContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: SPACE.s,
     flex: 1,
-    marginRight: 12,
+    marginRight: SPACE.m,
   },
   statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
+    paddingHorizontal: SPACE.m,
+    paddingVertical: SPACE.xs,
+    borderRadius: RADIUS.lg,
   },
   statusText: { fontFamily: FONT.bodyExtrabold, fontSize: 9, color: FUEL.white },
-  favoriteBtn: { padding: 4, marginLeft: 8 },
+  favoriteBtn: { padding: SPACE.xs, marginLeft: SPACE.s },
 
-  listContent: { padding: 16, paddingBottom: 100 },
+  listContent: { padding: SPACE.l, paddingBottom: 100 },
 
-  orderItems: { marginBottom: 12 },
-  itemRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
-  dietDot: { width: 14, height: 14, borderRadius: 2, borderWidth: 2, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  dietDotFill: { width: 7, height: 7, borderRadius: 4 },
+  orderItems: { marginBottom: SPACE.m },
+  itemRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s, marginBottom: SPACE.s },
+  dietDot: { width: 14, height: 14, borderRadius: RADIUS.xs, borderWidth: 2, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  dietDotFill: { width: 7, height: 7, borderRadius: RADIUS.xs },
   itemName: { flex: 1, fontFamily: FONT.bodySemibold, fontSize: 14, color: FUEL.ink },
-  moreItems: { fontFamily: FONT.body, fontSize: 12, color: FUEL.muted, fontStyle: 'italic', marginTop: 4 },
+  moreItems: { fontFamily: FONT.body, fontSize: 12, color: FUEL.muted, fontStyle: 'italic', marginTop: SPACE.xs },
 
   orderFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 12,
+    paddingTop: SPACE.m,
     borderTopWidth: 1,
     borderTopColor: FUEL.sandBorder,
   },
-  orderStats: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  orderStats: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s },
   statsText: { fontFamily: FONT.body, fontSize: 12, color: FUEL.muted },
   orderTotal: { fontFamily: FONT.display, fontSize: 20, color: FUEL.ink },
 
@@ -474,14 +474,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 60,
   },
-  emptyTitle: { fontFamily: FONT.display, fontSize: 18, color: FUEL.ink, marginTop: 16, textTransform: 'uppercase' },
-  emptyText: { fontFamily: FONT.body, fontSize: 14, color: FUEL.muted, textAlign: 'center', marginTop: 8, paddingHorizontal: 40 },
+  emptyTitle: { fontFamily: FONT.display, fontSize: 18, color: FUEL.ink, marginTop: SPACE.l, textTransform: 'uppercase' },
+  emptyText: { fontFamily: FONT.body, fontSize: 14, color: FUEL.muted, textAlign: 'center', marginTop: SPACE.s, paddingHorizontal: SPACE.xxl },
   emptyBtn: {
     backgroundColor: FUEL.lime,
-    paddingHorizontal: 32,
-    paddingVertical: 14,
-    borderRadius: 25,
-    marginTop: 24,
+    paddingHorizontal: SPACE.xxl,
+    paddingVertical: SPACE.l,
+    borderRadius: RADIUS.pill,
+    marginTop: SPACE.xl,
   },
   emptyBtnText: { fontFamily: FONT.display, fontSize: 15, color: FUEL.ink, textTransform: 'uppercase' },
 });
