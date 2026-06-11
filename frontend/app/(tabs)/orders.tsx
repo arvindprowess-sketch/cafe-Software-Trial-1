@@ -169,6 +169,13 @@ export default function OrdersScreen() {
             <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
               <Text style={styles.statusText}>{item.status.toUpperCase()}</Text>
             </View>
+            {/* P7: rated badge */}
+            {item.rating?.stars ? (
+              <View style={styles.ratedBadge} testID={`order-rating-badge-${item.id}`}>
+                <Ionicons name="star" size={10} color={FUEL.ink} />
+                <Text style={styles.ratedBadgeText}>{item.rating.stars}</Text>
+              </View>
+            ) : null}
           </View>
           <TouchableOpacity
             onPress={(e) => {
@@ -447,6 +454,9 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.lg,
   },
   statusText: { fontFamily: FONT.bodyExtrabold, fontSize: 9, color: FUEL.white },
+  // P7: rated badge — lime chip "★ 4"
+  ratedBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: FUEL.lime, paddingHorizontal: SPACE.m, paddingVertical: SPACE.xs, borderRadius: RADIUS.lg },
+  ratedBadgeText: { fontFamily: FONT.bodyExtrabold, fontSize: 10, color: FUEL.ink },
   favoriteBtn: { padding: SPACE.xs, marginLeft: SPACE.s },
 
   listContent: { padding: SPACE.l, paddingBottom: 100 },

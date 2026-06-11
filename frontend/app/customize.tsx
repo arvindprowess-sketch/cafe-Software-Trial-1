@@ -66,6 +66,11 @@ export default function CustomizeScreen() {
   const [aiAdjusting, setAiAdjusting] = useState(false);
   const [adjustedItems, setAdjustedItems] = useState<any>(null);
 
+  // P7: save the composed build as a reusable "My Meal"
+  const [showSaveMeal, setShowSaveMeal] = useState(false);
+  const [saveMealName, setSaveMealName] = useState('');
+  const [savingMeal, setSavingMeal] = useState(false);
+
   useEffect(() => {
     loadUserGoals();
     AsyncStorage.getItem('delivery_address').then(a => { if (a) setDeliveryAddress(a); }).catch(() => {});
@@ -287,6 +292,70 @@ export default function CustomizeScreen() {
     setItems(newItems);
     setShowCalorieWarning(false);
     setAdjustedItems(null);
+  };
+
+  // P7: persist the current composition (items + macros + price, computed the
+  // same way the totals bar displays them) as a saved meal.
+  const saveAsMyMeal = async () => {
+    const name = saveMealName.trim();
+    if (!name) { Alert.alert('Name it', 'Give your meal a name first'); return; }
+    if (name.length > 60) { Alert.alert('Too long', 'Keep the name under 60 characters'); return; }
+    const activeItems = items.filter(i => i.grams > 0 || (i.quantity || 0) > 0);
+    if (activeItems.length === 0) { Alert.alert('Empty', 'Add items with quantities first'); return; }
+    setSavingMeal(true);
+    try {
+      const savedItems = activeItems.map(i => {
+        const isReady = i.product_type === 'ready_made';
+        const qty = i.quantity || 1;
+        const f = i.grams / 100;
+        return {
+          product_id: i.id || i.product_id,
+          product_name: i.name,
+          name: i.name,
+          product_type: isReady ? 'ready_made' : 'single',
+          quantity: isReady ? qty : 1,
+          grams: isReady ? (i.serving_grams || 300) * qty : i.grams,
+          price: isReady
+            ? (i.fixed_price || (i.cost_per_100g * (i.serving_grams || 300) / 100)) * qty
+            : f * i.cost_per_100g,
+          calories: isReady ? (i.total_calories_per_serving || i.calories_per_100g || 0) * qty : f * (i.calories_per_100g || 0),
+          protein: isReady ? (i.total_protein_per_serving || i.protein_per_100g || 0) * qty : f * (i.protein_per_100g || 0),
+          carbs: isReady ? (i.total_carbs_per_serving || i.carbs_per_100g || 0) * qty : f * (i.carbs_per_100g || 0),
+          fat: isReady ? (i.total_fat_per_serving || i.fat_per_100g || 0) * qty : f * (i.fat_per_100g || 0),
+          // cart-rebuild fields so Home can re-add via the unified cart
+          cost_per_100g: i.cost_per_100g || 0,
+          calories_per_100g: i.calories_per_100g || 0,
+          protein_per_100g: i.protein_per_100g || 0,
+          carbs_per_100g: i.carbs_per_100g || 0,
+          fat_per_100g: i.fat_per_100g || 0,
+          serving_grams: i.serving_grams,
+          fixed_price: i.fixed_price,
+          diet_type: i.diet_type || 'veg',
+          category: i.category || '',
+        };
+      });
+      await apiCall('/saved-meals', {
+        method: 'POST',
+        body: {
+          name,
+          items: savedItems,
+          macros: {
+            calories: Math.round(totals.calories),
+            protein: Math.round(totals.protein),
+            carbs: Math.round(totals.carbs),
+            fat: Math.round(totals.fat),
+          },
+          price_estimate: Math.round(totals.price),
+        },
+      });
+      setShowSaveMeal(false);
+      setSaveMealName('');
+      Alert.alert('Saved!', `"${name}" added to My Meals on Home`);
+    } catch (e: any) {
+      Alert.alert('Could not save', e?.message || 'Please try again.');
+    } finally {
+      setSavingMeal(false);
+    }
   };
 
   const confirmOrder = async () => {
@@ -682,10 +751,18 @@ export default function CustomizeScreen() {
           )}
 
           <Text style={styles.section}>Your Items</Text>
-          {items.map(item => 
-            item.product_type === 'ready_made' 
-              ? renderReadyMadeDish(item) 
+          {items.map(item =>
+            item.product_type === 'ready_made'
+              ? renderReadyMadeDish(item)
               : renderSingleProduct(item)
+          )}
+
+          {/* P7: save this build as a reusable meal (shows on Home → My Meals) */}
+          {items.length > 0 && (
+            <TouchableOpacity testID="save-meal-btn" style={styles.saveMealBtn} onPress={() => setShowSaveMeal(true)} activeOpacity={0.85}>
+              <Ionicons name="bookmark" size={16} color={FUEL.ink} />
+              <Text style={styles.saveMealBtnText}>SAVE AS MY MEAL</Text>
+            </TouchableOpacity>
           )}
 
           <TouchableOpacity testID="ai-suggest-btn" style={styles.aiBtn} onPress={getAiSuggestion} disabled={aiLoading}>
@@ -822,6 +899,39 @@ export default function CustomizeScreen() {
                 <Text style={styles.modalContinueText}>Continue & Place Order</Text>
               </TouchableOpacity>
               <Text style={styles.modalNote}>Your choice, always. Calorie goals are here to guide, not restrict.</Text>
+            </View>
+          </View>
+        </Modal>
+
+        {/* P7: Save-as-my-meal modal */}
+        <Modal visible={showSaveMeal} transparent animationType="fade" onRequestClose={() => setShowSaveMeal(false)}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.saveMealCard}>
+              <Text style={styles.saveMealTitle}>SAVE AS MY MEAL</Text>
+              <Text style={styles.saveMealSub}>
+                {Math.round(totals.calories)} kcal · {Math.round(totals.protein)}g protein · ₹{Math.round(totals.price)}
+              </Text>
+              <TextInput
+                testID="save-meal-name-input"
+                style={styles.saveMealInput}
+                value={saveMealName}
+                onChangeText={setSaveMealName}
+                placeholder="Name it — e.g. Leg-day fuel"
+                placeholderTextColor="#B0B0B0"
+                maxLength={60}
+              />
+              <TouchableOpacity
+                testID="save-meal-confirm-btn"
+                style={styles.saveMealConfirmBtn}
+                onPress={saveAsMyMeal}
+                disabled={savingMeal}
+                activeOpacity={0.85}
+              >
+                {savingMeal ? <ActivityIndicator color={FUEL.ink} /> : <Text style={styles.saveMealConfirmText}>SAVE MEAL</Text>}
+              </TouchableOpacity>
+              <TouchableOpacity testID="save-meal-cancel-btn" onPress={() => setShowSaveMeal(false)}>
+                <Text style={styles.saveMealCancelText}>Cancel</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </Modal>
@@ -1000,4 +1110,15 @@ const styles = StyleSheet.create({
   alertInfoText: { fontSize: 12, color: FUEL.ink, fontFamily: FONT.bodyMedium, flex: 1 },
   scheduledBadgeBottom: { fontSize: 11, color: FUEL.ink, fontFamily: FONT.bodyBold, marginLeft: SPACE.s },
   orderBtnScheduled: { backgroundColor: FUEL.ink },
+
+  // P7: save-as-my-meal
+  saveMealBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.s, backgroundColor: FUEL.limeTint, borderRadius: RADIUS.md, paddingVertical: SPACE.l, marginTop: SPACE.xs, borderWidth: 1.5, borderColor: FUEL.lime },
+  saveMealBtnText: { color: FUEL.ink, fontSize: 13, fontFamily: FONT.bodyExtrabold, letterSpacing: 0.5 },
+  saveMealCard: { backgroundColor: '#FFF', borderRadius: RADIUS.lg, padding: SPACE.xl, width: '100%', maxWidth: 360, alignItems: 'center' },
+  saveMealTitle: { fontFamily: FONT.display, fontSize: 20, color: FUEL.ink, textTransform: 'uppercase', letterSpacing: 0.5 },
+  saveMealSub: { fontSize: 12, color: FUEL.muted, fontFamily: FONT.bodySemibold, marginTop: SPACE.s, marginBottom: SPACE.l },
+  saveMealInput: { width: '100%', backgroundColor: FUEL.sand, borderRadius: RADIUS.sm, padding: SPACE.l, color: FUEL.ink, fontSize: 15, fontFamily: FONT.bodySemibold, borderWidth: 1, borderColor: FUEL.sandBorder, marginBottom: SPACE.l },
+  saveMealConfirmBtn: { backgroundColor: FUEL.lime, borderRadius: RADIUS.md, paddingVertical: SPACE.l, width: '100%', alignItems: 'center', marginBottom: SPACE.m },
+  saveMealConfirmText: { color: FUEL.ink, fontSize: 14, fontFamily: FONT.bodyExtrabold, letterSpacing: 0.5 },
+  saveMealCancelText: { color: FUEL.muted, fontSize: 13, fontFamily: FONT.bodySemibold },
 });

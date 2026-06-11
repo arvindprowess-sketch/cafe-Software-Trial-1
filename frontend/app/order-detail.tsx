@@ -15,6 +15,21 @@ export default function OrderDetailScreen() {
   const { replaceCart, setOrderType } = useCart();
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  // P7: one-tap order rating (completed orders, once only)
+  const [ratingSubmitting, setRatingSubmitting] = useState(false);
+
+  const submitRating = async (stars: number) => {
+    if (!order || ratingSubmitting) return;
+    setRatingSubmitting(true);
+    try {
+      const res = await apiCall(`/orders/${order.id}/rating`, { method: 'POST', body: { stars } });
+      setOrder((prev: any) => ({ ...prev, rating: res.rating || { stars } }));
+    } catch (e: any) {
+      Alert.alert('Could not rate', e?.message || 'Please try again.');
+    } finally {
+      setRatingSubmitting(false);
+    }
+  };
 
   // Reorder via backend guard (drops/flags unavailable or price-changed items), then → cart.
   const handleReorder = async () => {
@@ -104,6 +119,10 @@ export default function OrderDetailScreen() {
   const statusColor = getStatusColor(order.status);
   const statusIcon = getStatusIcon(order.status);
 
+  // P7: "completed" is the terminal success status — the only rateable one.
+  const isRateable = order.status === 'completed';
+  const ratedStars = order.rating?.stars || 0;
+
   // Calculate base amount (without GST)
   const baseAmount = order.base_amount || Math.round((order.total_price * 100) / 105);
   const gstAmount = order.gst_amount || Math.round(order.total_price - baseAmount);
@@ -167,6 +186,49 @@ export default function OrderDetailScreen() {
             )}
           </View>
         </View>
+
+        {/* P7: Order rating — stars row when rateable, static stars once rated */}
+        {(isRateable || ratedStars > 0) && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>{ratedStars > 0 ? 'Your Rating' : 'Rate Your Order'}</Text>
+            <View style={styles.ratingCard} testID="order-rating-card">
+              {ratedStars > 0 ? (
+                <>
+                  <View style={styles.starsRow}>
+                    {[1, 2, 3, 4, 5].map(n => (
+                      <Ionicons
+                        key={n}
+                        name={n <= ratedStars ? 'star' : 'star-outline'}
+                        size={28}
+                        color={n <= ratedStars ? FUEL.limeDeep : FUEL.sandBorder}
+                      />
+                    ))}
+                  </View>
+                  <Text style={styles.ratedText} testID="order-rated-text">
+                    You rated {'★'.repeat(ratedStars)}
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <View style={styles.starsRow}>
+                    {[1, 2, 3, 4, 5].map(n => (
+                      <TouchableOpacity
+                        key={n}
+                        testID={`rate-star-${n}`}
+                        onPress={() => submitRating(n)}
+                        disabled={ratingSubmitting}
+                        hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                      >
+                        <Ionicons name="star-outline" size={32} color={ratingSubmitting ? FUEL.sandBorder : FUEL.limeDeep} />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <Text style={styles.rateHint}>Tap a star to rate this order</Text>
+                </>
+              )}
+            </View>
+          </View>
+        )}
 
         {/* Items Section */}
         <View style={styles.section}>
@@ -425,6 +487,20 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.lg,
   },
   paymentText: { fontFamily: FONT.bodyBold, fontSize: 11, color: FUEL.success },
+
+  // P7: order rating
+  ratingCard: {
+    backgroundColor: FUEL.white,
+    marginHorizontal: SPACE.l,
+    borderRadius: RADIUS.md,
+    padding: SPACE.l,
+    borderWidth: 1,
+    borderColor: FUEL.sandBorder,
+    alignItems: 'center',
+  },
+  starsRow: { flexDirection: 'row', gap: SPACE.m },
+  rateHint: { fontFamily: FONT.bodySemibold, fontSize: 12, color: FUEL.muted, marginTop: SPACE.m },
+  ratedText: { fontFamily: FONT.bodyBold, fontSize: 13, color: FUEL.ink, marginTop: SPACE.m },
 
   itemsCard: {
     backgroundColor: FUEL.white,
