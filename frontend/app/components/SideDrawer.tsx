@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { Image } from 'expo-image';
 import { apiCall, logout } from '../../utils/api';
 import { GOALS, getGoal, FUEL, FONT, RADIUS, SPACE } from '../../utils/theme';
 
@@ -124,6 +125,7 @@ export default function SideDrawer({ visible, onClose, user }: SideDrawerProps) 
             <TouchableOpacity style={styles.closeBtn} onPress={onClose} testID="drawer-close-btn">
               <Ionicons name="arrow-back" size={24} color="#15140F" />
             </TouchableOpacity>
+            <Image source={require('../../assets/images/boraroc-monogram.png')} style={styles.headerLogo} contentFit="contain" />
             <TouchableOpacity style={styles.notifBtn}>
               <Ionicons name="notifications-outline" size={22} color="#15140F" />
             </TouchableOpacity>
@@ -298,6 +300,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF',
     alignItems: 'center', justifyContent: 'center',
   },
+  headerLogo: { width: 40, height: 40 },
   notifBtn: {
     width: 40, height: 40, borderRadius: 20, // circle
     backgroundColor: '#FFF',

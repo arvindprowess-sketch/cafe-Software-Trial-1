@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { apiCall, getStoredUser, logout } from '../../utils/api';
 import { GOALS as FUEL_GOALS, FUEL, FONT, RADIUS, SPACE } from '../../utils/theme';
@@ -54,7 +55,10 @@ export default function ProfileScreen() {
     <SafeAreaView style={styles.safe}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView contentContainerStyle={styles.content}>
-          <Text style={styles.title}>Profile</Text>
+          <View style={styles.titleRow}>
+            <Image source={require('../../assets/images/boraroc-monogram.png')} style={styles.titleLogo} contentFit="contain" />
+            <Text style={styles.title}>Profile</Text>
+          </View>
 
           <View style={styles.userCard}>
             <View style={styles.avatar}><Ionicons name="person" size={24} color={Z_RED} /></View>
@@ -139,7 +143,9 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: FUEL.sand },
   content: { padding: SPACE.l },
-  title: { fontSize: 24, fontFamily: FONT.bodyExtrabold, color: FUEL.ink, marginBottom: SPACE.l, marginTop: SPACE.s },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s, marginBottom: SPACE.l, marginTop: SPACE.s },
+  titleLogo: { width: 28, height: 28 },
+  title: { fontSize: 24, fontFamily: FONT.bodyExtrabold, color: FUEL.ink },
   userCard: { flexDirection: 'row', alignItems: 'center', gap: SPACE.m, backgroundColor: '#FFF', borderRadius: RADIUS.md, padding: SPACE.l, borderWidth: 1, borderColor: FUEL.sandBorder, marginBottom: SPACE.xl },
   avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: FUEL.proteinTint, alignItems: 'center', justifyContent: 'center' }, // circle
   userName: { fontSize: 17, fontFamily: FONT.bodyBold, color: FUEL.ink },
