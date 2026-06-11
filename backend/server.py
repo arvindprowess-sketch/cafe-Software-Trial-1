@@ -1063,8 +1063,10 @@ async def verify_otp(request: Request, data: OTPVerifyRequest):
 
     await db.otp_codes.delete_one({"phone": phone})
 
-    # Check if user exists
-    user = await db.users.find_one({"phone": phone}, {"_id": 0})
+    # Check if user exists. P8 compliance: deleted (anonymized) accounts must NEVER
+    # be resurrected — filter them out so the same phone re-registers as a brand-new
+    # account with a fresh id (the old anonymized doc keeps the order/GST link).
+    user = await db.users.find_one({"phone": phone, "deleted": {"$ne": True}}, {"_id": 0})
 
     if user:
         # Existing user - login
@@ -1142,7 +1144,9 @@ async def resend_otp(request: Request, data: OTPSendRequest):
 # Keep existing email/password login for admin
 @api_router.post("/auth/register")
 async def register(data: UserRegister):
-    existing = await db.users.find_one({"email": data.email}, {"_id": 0})
+    # P8 compliance: ignore deleted (anonymized) docs so the email can re-register
+    # as a brand-new account — the old doc is never reactivated.
+    existing = await db.users.find_one({"email": data.email, "deleted": {"$ne": True}}, {"_id": 0})
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
     # Public self-registration ALWAYS creates a customer. Staff (store-bound
@@ -1178,8 +1182,9 @@ async def register(data: UserRegister):
 @api_router.post("/auth/login")
 @limiter.limit("10/15minutes")
 async def login(request: Request, data: UserLogin):
-    user = await db.users.find_one({"email": data.email}, {"_id": 0})
-    if not user or not verify_password(data.password, user["password_hash"]):
+    # P8 compliance: deleted (anonymized) accounts can never log back in.
+    user = await db.users.find_one({"email": data.email, "deleted": {"$ne": True}}, {"_id": 0})
+    if not user or not user.get("password_hash") or not verify_password(data.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     token = create_token(user["id"], user["role"], user.get("token_version", 0))
     return {
@@ -3245,6 +3250,63 @@ async def update_profile(data: dict = Body(...), user=Depends(get_current_user))
         raise HTTPException(400, "No valid fields to update")
     await db.users.update_one({"id": user["id"]}, {"$set": allowed})
     return {"message": "Profile updated", **allowed}
+
+# ---------- P8 STORE COMPLIANCE: customer self-service account deletion ----------
+# PII fields anonymized/removed on the user doc. ORDERS ARE KEPT (financial/GST
+# record): anonymization is IN PLACE with the SAME id, so order.user_id keeps
+# pointing at the now-anonymized doc — nothing on orders/payments is touched.
+ACCOUNT_DELETE_UNSET_FIELDS = (
+    "email", "password_hash",
+    # Body stats / goal personalization (saved by /user/daily-target & /user/goals)
+    "height_cm", "weight_kg", "age", "gender", "activity_level",
+    "target_weight_kg", "fitness_goal", "meals_per_day",
+    "daily_calories", "daily_protein", "daily_carbs", "daily_fat",
+    # Push tokens: P6 multi-device array + legacy single-token fields
+    "push_tokens", "expo_push_token", "device_type",
+)
+
+@api_router.delete("/users/me")
+async def delete_my_account(user=Depends(get_current_user)):
+    """CUSTOMER-only self-service account deletion (store compliance).
+
+    - Anonymizes PII in place (same id): phone -> irreversible sha256 stub,
+      name -> "Deleted User", email/password/body-stats/push-tokens removed.
+    - Purges saved meals, meal history, meal plans and weight logs.
+    - token_version++ revokes EVERY outstanding token immediately (401).
+    - Login flows filter `deleted: {$ne: true}`, so the same phone/email can
+      re-register as a brand-new account; this doc is never reactivated.
+    - Staff accounts are refused (403) — they are managed by HQ, not self-deleted.
+    """
+    if normalize_role(user) != "customer":
+        raise HTTPException(status_code=403, detail="Only customer accounts can be deleted from the app")
+    if user.get("deleted") is True:
+        raise HTTPException(status_code=404, detail="Account already deleted")
+    user_id = user["id"]
+
+    # Purge user-data collections (orders/payments are KEPT for tax/GST records).
+    for coll in (db.saved_meals, db.meal_history, db.meal_plans, db.weight_logs):
+        await coll.delete_many({"user_id": user_id})
+
+    # Anonymize PII in place. The hashed phone stub is irreversible and keeps the
+    # field non-null without ever colliding with a real 10-digit number.
+    anonymized = {
+        "name": "Deleted User",
+        "deleted": True,
+        "deleted_at": datetime.now(timezone.utc).isoformat(),
+    }
+    if user.get("phone"):
+        anonymized["phone"] = "deleted:" + hashlib.sha256(str(user["phone"]).encode()).hexdigest()[:16]
+    await db.users.update_one(
+        {"id": user_id},
+        {
+            "$set": anonymized,
+            "$unset": {f: "" for f in ACCOUNT_DELETE_UNSET_FIELDS},
+            # Revoke every outstanding JWT instantly (tv claim check in get_current_user).
+            "$inc": {"token_version": 1},
+        },
+    )
+    logger.info(f"[compliance] account {user_id} deleted: PII anonymized, personal data purged, tokens revoked")
+    return {"message": "Account deleted. Your personal data has been removed; order records are retained for tax purposes.", "deleted": True}
 
 # ---------- Phase 2/3: Goal personalization (CUSTOMER APP ONLY) ----------
 class DailyTargetRequest(BaseModel):
