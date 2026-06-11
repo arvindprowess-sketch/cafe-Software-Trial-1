@@ -31,6 +31,21 @@ load_dotenv(ROOT_DIR / '.env')
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+# ========== SENTRY (crash reporting) ==========
+# Env-gated: no SENTRY_DSN -> skip silently (never blocks boot).
+_SENTRY_DSN = os.environ.get("SENTRY_DSN", "").strip()
+if _SENTRY_DSN:
+    try:
+        import sentry_sdk
+        sentry_sdk.init(
+            dsn=_SENTRY_DSN,
+            traces_sample_rate=0.1,
+            environment=os.environ.get("APP_ENV", "development"),
+        )
+        logger.info("[sentry] initialized")
+    except Exception as e:
+        logger.warning(f"[sentry] init failed (continuing without it): {e}")
+
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
@@ -581,6 +596,47 @@ def assert_store_allowed(user, store_id):
         return
     if not store_id or store_id not in scope:
         raise HTTPException(status_code=403, detail="Store outside your scope")
+
+# ========== ADMIN AUDIT TRAIL ==========
+# admin_audit is APPEND-ONLY by design: rows are inserted by the explicit
+# log_admin_audit() calls in the mutation endpoints below and are NEVER updated
+# or deleted — no mutation endpoints exist for this collection.
+_AUDIT_STRIP_KEYS = {"_id", "pin_hash", "pin_token", "password_hash"}
+
+def _audit_trim(before, after):
+    """Strip _id/secrets; when both sides exist, keep only the changed keys."""
+    b = {k: v for k, v in (before or {}).items() if k not in _AUDIT_STRIP_KEYS}
+    a = {k: v for k, v in (after or {}).items() if k not in _AUDIT_STRIP_KEYS}
+    if b and a:
+        changed = sorted(k for k in set(b) | set(a) if b.get(k) != a.get(k))
+        return ({k: b.get(k) for k in changed if k in b},
+                {k: a.get(k) for k in changed if k in a})
+    return (b or None, a or None)
+
+async def log_admin_audit(actor_user, action: str, entity: str, entity_id: str,
+                          before: Optional[dict], after: Optional[dict],
+                          store_id: Optional[str] = None):
+    """Insert one append-only admin_audit row. Failures are logged, never raised —
+    auditing must not break the mutation it records."""
+    try:
+        b, a = _audit_trim(before, after)
+        doc = {
+            "id": str(uuid.uuid4()),
+            "actor_id": (actor_user or {}).get("id"),
+            "actor_role": normalize_role(actor_user),
+            "action": action,
+            "entity": entity,
+            "entity_id": entity_id,
+            "before": b,
+            "after": a,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        sid = store_id or (after or {}).get("store_id") or (before or {}).get("store_id")
+        if sid:
+            doc["store_id"] = sid
+        await db.admin_audit.insert_one(doc)
+    except Exception as e:
+        logger.error(f"[admin_audit] insert failed for {entity}/{entity_id}: {e}")
 
 async def resolve_order_store_id(user, requested_store_id):
     """Decide which store a new order belongs to, based on the caller's role.
@@ -1139,6 +1195,7 @@ async def create_product(data: ProductCreate, user=Depends(get_current_user)):
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.products.insert_one(product)
+    await log_admin_audit(user, "create", "product", product_id, None, product)
     await broadcast_event("menu_update", {"action": "created", "product_id": product_id})
     return {k: v for k, v in product.items() if k != "_id"}
 
@@ -1178,6 +1235,7 @@ async def list_all_products(user=Depends(get_current_user)):
 async def update_product(product_id: str, data: ProductUpdate, user=Depends(get_current_user)):
     if not is_hq(user):
         raise HTTPException(status_code=403, detail="HQ only")
+    audit_before = await db.products.find_one({"id": product_id}, {"_id": 0})  # admin_audit snapshot
     update_data = {k: v for k, v in data.dict().items() if v is not None}
     # Diet tags (multi): normalize + keep legacy diet_type in sync
     if "diet_types" in update_data:
@@ -1204,6 +1262,7 @@ async def update_product(product_id: str, data: ProductUpdate, user=Depends(get_
     product = await db.products.find_one({"id": product_id}, {"_id": 0})
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
+    await log_admin_audit(user, "update", "product", product_id, audit_before, product)
     await broadcast_event("menu_update", {"action": "updated", "product_id": product_id})
     return product
 
@@ -1211,9 +1270,11 @@ async def update_product(product_id: str, data: ProductUpdate, user=Depends(get_
 async def delete_product(product_id: str, user=Depends(get_current_user)):
     if not is_hq(user):
         raise HTTPException(status_code=403, detail="HQ only")
+    audit_before = await db.products.find_one({"id": product_id}, {"_id": 0})  # admin_audit snapshot
     result = await db.products.delete_one({"id": product_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Product not found")
+    await log_admin_audit(user, "delete", "product", product_id, audit_before, None)
     await broadcast_event("menu_update", {"action": "deleted", "product_id": product_id})
     return {"message": "Product deleted"}
 
@@ -1302,6 +1363,8 @@ async def set_product_override(store_id: str, product_id: str, data: ProductOver
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
+    audit_before = await db.product_overrides.find_one(
+        {"store_id": store_id, "product_id": product_id}, {"_id": 0})  # admin_audit snapshot
     set_fields = {"store_id": store_id, "product_id": product_id,
                   "updated_by": user["id"], "updated_at": datetime.now(timezone.utc).isoformat()}
     if data.selling_price is not None:
@@ -1314,6 +1377,8 @@ async def set_product_override(store_id: str, product_id: str, data: ProductOver
         upsert=True,
     )
     ov = await db.product_overrides.find_one({"store_id": store_id, "product_id": product_id}, {"_id": 0})
+    await log_admin_audit(user, "update" if audit_before else "create", "product_override",
+                          product_id, audit_before, ov, store_id=store_id)
     await broadcast_event("menu_update", {"action": "override", "product_id": product_id}, store_id=store_id)
     return ov
 
@@ -1774,6 +1839,7 @@ async def create_single_product(data: SingleProductCreate, user=Depends(get_curr
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.products.insert_one(product)
+    await log_admin_audit(user, "create", "product", product_id, None, product)
     await broadcast_event("menu_update", {"action": "created", "product_id": product_id})
     return {k: v for k, v in product.items() if k != "_id"}
 
@@ -1863,6 +1929,7 @@ async def create_ready_made_meal(data: ReadyMadeMealCreate, user=Depends(get_cur
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.products.insert_one(product)
+    await log_admin_audit(user, "create", "product", product_id, None, product)
     await broadcast_event("menu_update", {"action": "created", "product_id": product_id})
     return {k: v for k, v in product.items() if k != "_id"}
 
@@ -3699,6 +3766,7 @@ async def create_offer(data: OfferCreate, user=Depends(get_current_user)):
         "created_by": user["id"],
     }
     await db.offers.insert_one(offer)
+    await log_admin_audit(user, "create", "offer", offer["id"], None, offer)
     return {k: v for k, v in offer.items() if k != "_id"}
 
 @api_router.put("/offers/{offer_id}")
@@ -3718,9 +3786,11 @@ async def update_offer(offer_id: str, data: OfferUpdate, user=Depends(get_curren
         update_data["cluster_owner_id"] = new_owner
     if "scope" in update_data or "store_ids" in update_data:
         assert_offer_manage_allowed(user, new_scope, new_stores, new_owner)
+    audit_before = dict(offer)  # admin_audit snapshot (pre-update doc loaded above)
     if update_data:
         await db.offers.update_one({"id": offer_id}, {"$set": update_data})
     offer = await db.offers.find_one({"id": offer_id}, {"_id": 0})
+    await log_admin_audit(user, "update", "offer", offer_id, audit_before, offer)
     return offer
 
 @api_router.delete("/offers/{offer_id}")
@@ -3730,6 +3800,7 @@ async def delete_offer(offer_id: str, user=Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Offer not found")
     assert_offer_manage_allowed(user, offer.get("scope", "all"), offer.get("store_ids") or [], offer.get("cluster_owner_id"))
     await db.offers.delete_one({"id": offer_id})
+    await log_admin_audit(user, "delete", "offer", offer_id, offer, None)
     return {"message": "Offer deleted"}
 
 @api_router.get("/offers/{offer_id}/products")
@@ -4810,6 +4881,7 @@ async def create_store(data: StoreCreate, user=Depends(get_current_user)):
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.stores.insert_one(store)
+    await log_admin_audit(user, "create", "store", store_id, None, store, store_id=store_id)
     return _clean_store(store)
 
 @api_router.get("/stores")
@@ -4837,6 +4909,7 @@ async def update_store(store_id: str, data: StoreUpdate, user=Depends(get_curren
     """HQ: update a store."""
     if not is_hq(user):
         raise HTTPException(status_code=403, detail="HQ only")
+    audit_before = await db.stores.find_one({"store_id": store_id}, {"_id": 0})  # admin_audit snapshot
     updates = {k: v for k, v in data.dict().items() if v is not None}
     if "lat" in updates or "lng" in updates:
         existing = await db.stores.find_one({"store_id": store_id}, {"_id": 0}) or {}
@@ -4848,6 +4921,7 @@ async def update_store(store_id: str, data: StoreUpdate, user=Depends(get_curren
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Store not found")
     store = await db.stores.find_one({"store_id": store_id}, {"_id": 0})
+    await log_admin_audit(user, "update", "store", store_id, audit_before, store, store_id=store_id)
     return store
 
 @api_router.delete("/stores/{store_id}")
@@ -5060,6 +5134,7 @@ async def create_staff(data: StaffCreate, user=Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="This PIN is already in use")
 
     await db.users.insert_one(staff_doc)
+    await log_admin_audit(user, "create", "staff", staff_doc["id"], None, staff_doc)
     return {
         "id": staff_doc["id"], "name": data.name, "role": data.role, "pin": data.pin,
         "store_id": staff_doc["store_id"], "cluster_store_ids": staff_doc["cluster_store_ids"],
@@ -5121,6 +5196,10 @@ async def update_staff(staff_id: str, data: StaffUpdate, user=Depends(get_curren
     if not update_data:
         raise HTTPException(status_code=400, detail="No updates provided")
     await db.users.update_one({"id": staff_id}, {"$set": update_data})
+    audit_after = await db.users.find_one({"id": staff_id}, {"_id": 0})
+    # Covers update / role-change / deactivate (is_active=false) in one place.
+    await log_admin_audit(user, "deactivate" if data.is_active is False else "update",
+                          "staff", staff_id, target, audit_after)
     return {"message": "Staff updated"}
 
 @api_router.delete("/staff/{staff_id}")
@@ -5137,7 +5216,38 @@ async def delete_staff(staff_id: str, user=Depends(get_current_user)):
     if target.get("store_id"):
         assert_store_allowed(user, target.get("store_id"))
     await db.users.delete_one({"id": staff_id})
+    await log_admin_audit(user, "delete", "staff", staff_id, target, None)
     return {"message": "Staff deleted"}
+
+@api_router.get("/admin-audit")
+async def list_admin_audit(limit: int = 50, before: Optional[str] = None,
+                           entity: Optional[str] = None, user=Depends(get_current_user)):
+    """Read the append-only admin audit trail (no update/delete endpoints exist).
+
+    HQ: all rows. area_manager: rows for stores in their cluster OR actions by
+    staff of their cluster. store_manager: own store's rows. cashier/kitchen: 403.
+    Paginated: limit <= 100, `before` = created_at cursor (exclusive)."""
+    role = normalize_role(user)
+    if role not in ("super_admin", "area_manager", "store_manager"):
+        raise HTTPException(status_code=403, detail="Managers only")
+    q: Dict[str, Any] = {}
+    if role == "area_manager":
+        cluster = list(user.get("cluster_store_ids") or [])
+        cluster_staff = await db.users.find(
+            {"$or": [{"store_id": {"$in": cluster}}, {"cluster_store_ids": {"$in": cluster}}]},
+            {"_id": 0, "id": 1}).to_list(1000)
+        q["$or"] = [{"store_id": {"$in": cluster}},
+                    {"actor_id": {"$in": [s["id"] for s in cluster_staff]}}]
+    elif role == "store_manager":
+        q["store_id"] = user.get("store_id")
+    if entity:
+        q["entity"] = entity
+    if before:
+        q["created_at"] = {"$lt": before}
+    limit = max(1, min(int(limit), 100))
+    rows = await db.admin_audit.find(q, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
+    return {"entries": rows,
+            "next_before": rows[-1]["created_at"] if len(rows) == limit else None}
 
 @api_router.post("/auth/pin-login")
 async def pin_login(data: PinLogin, request: Request):
@@ -7699,6 +7809,13 @@ async def on_startup():
         except Exception as e:
             logger.error(f"[startup] {coll} index error: {e}")
     logger.info("[startup] store/time indexes ensured")
+    # admin_audit (append-only): newest-first reads + entity history lookups
+    try:
+        await db.admin_audit.create_index([("created_at", -1)])
+        await db.admin_audit.create_index([("entity", 1), ("entity_id", 1)])
+        logger.info("[startup] admin_audit indexes ensured")
+    except Exception as e:
+        logger.error(f"[startup] admin_audit index error: {e}")
     # One-time cleanup: remove plaintext PINs from all existing user docs (idempotent).
     try:
         result = await db.users.update_many(
