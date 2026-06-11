@@ -10,11 +10,18 @@ import {
   HankenGrotesk_700Bold,
   HankenGrotesk_800ExtraBold,
 } from '@expo-google-fonts/hanken-grotesk';
+import * as Sentry from '@sentry/react-native';
 import { FUEL } from '../utils/theme';
 import { CartProvider } from '../utils/CartContext';
 import { StoreProvider } from '../utils/StoreContext';
 
-export default function RootLayout() {
+// Crash reporting — env-gated: no EXPO_PUBLIC_SENTRY_DSN -> skip entirely.
+const sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
+if (sentryDsn) {
+  Sentry.init({ dsn: sentryDsn, tracesSampleRate: 0.1 });
+}
+
+function RootLayout() {
   // FUEL typography: Anton (display) + Hanken Grotesk (body).
   // We don't block rendering on font load so the app stays functional;
   // fonts apply automatically once ready.
@@ -49,6 +56,9 @@ export default function RootLayout() {
     </View>
   );
 }
+
+// Per Sentry Expo docs: wrap the root component (no-op profiler when DSN unset).
+export default Sentry.wrap(RootLayout);
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: FUEL.sand },

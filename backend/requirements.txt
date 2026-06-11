@@ -108,6 +108,7 @@ rich==14.3.2
 rpds-py==0.30.0
 rsa==4.9.1
 s3transfer==0.16.0
+sentry-sdk[fastapi]==2.41.0
 s5cmd==0.2.0
 shellingham==1.5.4
 simple-websocket==1.1.0
