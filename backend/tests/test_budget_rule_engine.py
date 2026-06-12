@@ -112,8 +112,14 @@ class TestResponseContract:
         seed_menu(MENU)
         for budget in (200.0, 300.0, 500.0):
             body = quick_meal(ctx, goal="maintenance", budget=budget).json()
-            # gap-close target is <₹0.50; totals are display-rounded to 1 decimal
-            assert abs(budget - body["totals"]["price"]) <= 0.55, (budget, body["totals"])
+            totals = body["totals"]
+            # never overspends; the gap only stays open when the kcal ceiling or
+            # the per-item portion caps bind (budget is no longer force-stuffed)
+            assert totals["price"] <= budget + 0.55, (budget, totals)
+            assert body["budget_unspent"] >= 0
+            if budget - totals["price"] > 0.55:
+                capped = all(it["grams"] >= 250 for it in body["meal_items"])
+                assert totals["calories"] >= body["kcal_ceiling"] * 0.9 or capped, (budget, body)
 
 
 class TestGoalRules:
@@ -159,3 +165,86 @@ class TestStockAndDegraded:
         seed_menu([])
         body = quick_meal(ctx).json()
         assert body == {"meal_items": [], "summary": "No products available for your preference.", "totals": {}}
+
+
+class TestKcalCeilingHelper:
+    """Unit tests for _meal_kcal_ceiling — pure parsing, no LLM, no HTTP."""
+
+    def test_parses_upper_bound_of_band_string(self):
+        assert server._meal_kcal_ceiling("700-1000 kcal per meal") == 1000.0
+
+    def test_goal_key_lookup(self):
+        assert server._meal_kcal_ceiling("muscle_gain") == 1000.0
+        assert server._meal_kcal_ceiling("fat_loss") == 600.0
+        assert server._meal_kcal_ceiling("lean_bulk") == 850.0
+
+    def test_missing_goal_falls_back_to_maintenance(self):
+        assert server._meal_kcal_ceiling("no_such_goal") == server._meal_kcal_ceiling("maintenance") == 700.0
+        assert server._meal_kcal_ceiling(None) == 700.0
+
+    def test_unparseable_band_defaults_900(self, monkeypatch):
+        monkeypatch.setitem(server.GOAL_GUIDELINES, "weird", {"target_calories": "ad libitum"})
+        assert server._meal_kcal_ceiling("weird") == 900.0
+
+
+class TestPortionAndKcalCaps:
+    """Per-meal kcal ceiling + per-item gram caps + cap-aware budget fill."""
+
+    GLOBAL_GRAM_CAP = max(server.GRAM_CAP.values())  # 300 — no slot can exceed this
+
+    def test_muscle_gain_cheap_base_capped(self, ctx):
+        # Cheap, high-stock base must not balloon; ceiling(=1000) and budget hold.
+        seed_menu(MENU + [product("White Rice", "veg", 10, 130, 2.5, 28, 0.5, stock=100000)])
+        for _ in range(5):
+            body = quick_meal(ctx, goal="muscle_gain", budget=500.0).json()
+            assert body["meal_items"]
+            for it in body["meal_items"]:
+                assert it["grams"] <= self.GLOBAL_GRAM_CAP, it
+            assert body["kcal_ceiling"] == 1000.0
+            assert body["totals"]["calories"] <= 1000.0, body["totals"]
+            assert body["totals"]["price"] <= 500.0 + 0.55, body["totals"]
+
+    def test_fat_loss_ceiling_beats_budget(self, ctx):
+        seed_menu(MENU)
+        for _ in range(5):
+            body = quick_meal(ctx, goal="fat_loss", budget=500.0).json()
+            assert body["meal_items"]
+            assert body["kcal_ceiling"] == 600.0
+            assert body["totals"]["calories"] <= 600.0, body["totals"]
+            assert body["budget_unspent"] > 0, body  # budget NOT force-spent
+
+    def test_lean_bulk_ceiling_parses_850(self, ctx):
+        seed_menu(MENU)
+        body = quick_meal(ctx, goal="lean_bulk", budget=800.0).json()
+        assert body["kcal_ceiling"] == 850.0
+        assert body["totals"]["calories"] <= 850.0, body["totals"]
+
+    def test_veg_only_caps_applied(self, ctx):
+        seed_menu(MENU)
+        for _ in range(5):
+            body = quick_meal(ctx, goal="muscle_gain", budget=500.0, diet="veg").json()
+            assert len(body["meal_items"]) >= 1
+            for it in body["meal_items"]:
+                assert it["diet_type"] != "non-veg", it["product_name"]
+                # protein-slot cap is 300g and no slot allows more
+                assert it["grams"] <= self.GLOBAL_GRAM_CAP, it
+            assert body["totals"]["calories"] <= body["kcal_ceiling"]
+
+    def test_tiny_budget_still_valid(self, ctx):
+        # Budget so low only one item really fits — min 10g, no crash.
+        seed_menu([product("Grilled Chicken", "non-veg", 60, 150, 27, 0, 4)])
+        body = quick_meal(ctx, goal="maintenance", budget=15.0).json()
+        assert len(body["meal_items"]) >= 1
+        for it in body["meal_items"]:
+            assert it["grams"] >= 10, it
+        assert "budget_unspent" in body and body["budget_unspent"] >= 0
+
+    def test_response_keeps_contract_and_no_slot_leak(self, ctx):
+        seed_menu(MENU)
+        body = quick_meal(ctx, goal="muscle_gain", budget=400.0).json()
+        assert TOP_KEYS <= set(body.keys())
+        assert {"kcal_ceiling", "budget_unspent"} <= set(body.keys())
+        for it in body["meal_items"]:
+            assert ITEM_KEYS <= set(it.keys())
+            assert "slot" not in it  # internal field stripped
+            assert it["reason"]  # AI disabled -> template language layer still fills it
