@@ -14,7 +14,7 @@ const GREEN = '#3FA34D';
 export default function BudgetMealScreen() {
   const router = useRouter();
   const [budget, setBudget] = useState('200');
-  const [dietPref, setDietPref] = useState('both');
+  const [dietPref, setDietPref] = useState<string[]>([]);
   const [goal, setGoal] = useState('maintenance');
   const orderType = 'dine-in';
 
