@@ -9,9 +9,32 @@ import { useRouter } from 'expo-router';
 import { apiCall } from '../../utils/api';
 import { useRealtime } from '../../utils/realtime';
 import { FUEL, FONT, RADIUS, SPACE } from '../../utils/theme';
+import { useCart } from '../../utils/CartContext';
+
+// F6: 4-step progress tracker config per order type.
+const TRACKER_STEPS: Record<string, string[]> = {
+  'dine-in': ['Placed', 'Accepted', 'Ready', 'Served'],
+  'delivery': ['Placed', 'Preparing', 'Picked up', 'Delivered'],
+  'takeaway': ['Placed', 'Preparing', 'Ready', 'Collected'],
+};
+
+// Map an order status to the current step index (0-3) for the given order type.
+const trackerStepIndex = (orderType: string, status: string): number => {
+  if (status === 'completed') return 3;
+  if (orderType === 'delivery') {
+    if (status === 'out_for_delivery') return 2;
+    if (status === 'preparing' || status === 'accepted' || status === 'ready') return 1;
+    return 0;
+  }
+  // dine-in / takeaway
+  if (status === 'ready') return 2;
+  if (status === 'preparing' || status === 'accepted') return 1;
+  return 0; // pending / scheduled
+};
 
 export default function OrdersScreen() {
   const router = useRouter();
+  const { replaceCart } = useCart();
   const [activeTab, setActiveTab] = useState<'recent' | 'monthly' | 'favorites'>('recent');
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
   const [monthlyOrders, setMonthlyOrders] = useState<any[]>([]);
@@ -127,11 +150,30 @@ export default function OrdersScreen() {
     }
   };
 
+  // F6: re-seed the cart from a past order and jump to checkout.
+  const handleReorder = (order: any) => {
+    if (!order.items?.length) { Alert.alert('Nothing to reorder', 'This order has no items.'); return; }
+    replaceCart(order.items);
+    router.push('/cart');
+  };
+
+  // F6: minutes until ready, when the order carries an ETA field; else null.
+  const etaMinutes = (order: any): number | null => {
+    const raw = order.estimated_ready_at || order.scheduled_ready_time;
+    if (!raw) return null;
+    const mins = Math.round((new Date(raw).getTime() - Date.now()) / 60000);
+    return mins > 0 ? mins : null;
+  };
+
   const renderOrder = ({ item }: { item: any }) => {
     const orderDate = new Date(item.created_at);
     const isToday = orderDate.toDateString() === new Date().toDateString();
     const statusColor = getStatusColor(item.status);
     const statusIcon = getStatusIcon(item.status);
+    const isCancelled = item.status === 'cancelled';
+    const steps = TRACKER_STEPS[item.order_type] || TRACKER_STEPS['dine-in'];
+    const curStep = trackerStepIndex(item.order_type, item.status);
+    const eta = etaMinutes(item);
 
     return (
       <TouchableOpacity
@@ -210,6 +252,25 @@ export default function OrdersScreen() {
           )}
         </View>
 
+        {/* F6: 4-step progress tracker (hidden for cancelled orders) */}
+        {!isCancelled && (
+          <View style={styles.tracker} testID={`order-tracker-${item.id}`}>
+            {steps.map((label, i) => {
+              const done = i <= curStep;
+              return (
+                <View key={label} style={styles.trackStep}>
+                  <View style={styles.trackDotRow}>
+                    {i > 0 && <View style={[styles.trackLine, i <= curStep && styles.trackLineActive]} />}
+                    <View style={[styles.trackDot, done && styles.trackDotActive]} />
+                    {i < steps.length - 1 && <View style={[styles.trackLine, i < curStep && styles.trackLineActive]} />}
+                  </View>
+                  <Text style={[styles.trackLabel, done && styles.trackLabelActive]} numberOfLines={1}>{label}</Text>
+                </View>
+              );
+            })}
+          </View>
+        )}
+
         <View style={styles.orderFooter}>
           <View style={styles.orderStats}>
             <Ionicons name="restaurant" size={14} color={FUEL.muted} />
@@ -218,6 +279,36 @@ export default function OrdersScreen() {
             <Text style={styles.statsText}>{Math.round(item.total_calories || 0)} cal</Text>
           </View>
           <Text style={styles.orderTotal}>₹{Math.round(item.total_price || 0)}</Text>
+        </View>
+
+        {/* F6: ETA (conditional) + Reorder + Track (delivery only) */}
+        {eta != null && (
+          <View style={styles.etaRow}>
+            <Ionicons name="time" size={13} color={FUEL.limeDeep} />
+            <Text style={styles.etaText}>Ready in ~{eta} min</Text>
+          </View>
+        )}
+        <View style={styles.actionRow}>
+          <TouchableOpacity
+            style={styles.reorderBtn}
+            onPress={(e) => { e.stopPropagation(); handleReorder(item); }}
+            testID={`order-reorder-${item.id}`}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="repeat" size={15} color={FUEL.ink} />
+            <Text style={styles.reorderBtnText}>Reorder</Text>
+          </TouchableOpacity>
+          {item.order_type === 'delivery' && (
+            <TouchableOpacity
+              style={styles.trackBtn}
+              onPress={(e) => { e.stopPropagation(); router.push({ pathname: '/delivery-tracking', params: { id: item.id } }); }}
+              testID={`order-track-${item.id}`}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="navigate" size={15} color={FUEL.lime} />
+              <Text style={styles.trackBtnText}>Track</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </TouchableOpacity>
     );
@@ -479,6 +570,26 @@ const styles = StyleSheet.create({
   orderStats: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s },
   statsText: { fontFamily: FONT.body, fontSize: 12, color: FUEL.muted },
   orderTotal: { fontFamily: FONT.display, fontSize: 20, color: FUEL.ink },
+
+  // F6: progress tracker
+  tracker: { flexDirection: 'row', marginBottom: SPACE.m },
+  trackStep: { flex: 1, alignItems: 'center' },
+  trackDotRow: { flexDirection: 'row', alignItems: 'center', width: '100%', justifyContent: 'center' },
+  trackDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: FUEL.sandBorder },
+  trackDotActive: { backgroundColor: FUEL.limeDeep },
+  trackLine: { flex: 1, height: 2, backgroundColor: FUEL.sandBorder },
+  trackLineActive: { backgroundColor: FUEL.limeDeep },
+  trackLabel: { fontFamily: FONT.bodyBold, fontSize: 9, color: FUEL.muted, marginTop: SPACE.xs, textTransform: 'uppercase', letterSpacing: 0.2 },
+  trackLabelActive: { color: FUEL.ink },
+
+  // F6: ETA + action buttons
+  etaRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.xs, marginTop: SPACE.m },
+  etaText: { fontFamily: FONT.bodyExtrabold, fontSize: 12, color: FUEL.limeDeep },
+  actionRow: { flexDirection: 'row', gap: SPACE.s, marginTop: SPACE.m },
+  reorderBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.xs, paddingVertical: SPACE.m, borderRadius: RADIUS.pill, backgroundColor: FUEL.lime },
+  reorderBtnText: { fontFamily: FONT.bodyExtrabold, fontSize: 13, color: FUEL.ink, textTransform: 'uppercase', letterSpacing: 0.3 },
+  trackBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.xs, paddingVertical: SPACE.m, borderRadius: RADIUS.pill, backgroundColor: FUEL.ink },
+  trackBtnText: { fontFamily: FONT.bodyExtrabold, fontSize: 13, color: FUEL.lime, textTransform: 'uppercase', letterSpacing: 0.3 },
 
   emptyState: {
     alignItems: 'center',

@@ -490,6 +490,8 @@ class CategoryCreate(BaseModel):
     description: Optional[str] = None
     sort_order: int = 0
     font_style: Optional[str] = "default"  # default, bold, italic, mono
+    parent_group: Optional[str] = None  # "meals" | "drinks" | "desserts"
+    is_signature: Optional[bool] = False
 
 class CategoryUpdate(BaseModel):
     name: Optional[str] = None
@@ -502,6 +504,8 @@ class CategoryUpdate(BaseModel):
     sort_order: Optional[int] = None
     is_active: Optional[bool] = None
     font_style: Optional[str] = None
+    parent_group: Optional[str] = None
+    is_signature: Optional[bool] = None
 
 # ========== AUTH UTILS ==========
 def hash_password(password: str) -> str:
@@ -1604,6 +1608,8 @@ async def create_category(category: CategoryCreate, user=Depends(get_current_use
         "description": category.description,
         "sort_order": category.sort_order,
         "font_style": category.font_style or "default",
+        "parent_group": category.parent_group,
+        "is_signature": bool(category.is_signature),
         "is_active": True,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "created_by": user["id"]
@@ -1647,37 +1653,82 @@ async def delete_category(category_id: str, user=Depends(get_current_user)):
     return {"message": "Category deleted"}
 
 @api_router.post("/categories/seed-defaults")
-async def seed_default_categories(user=Depends(get_current_user)):
-    """Admin: Seed default categories if none exist"""
+async def seed_default_categories(user=Depends(get_current_user), force: bool = False):
+    """Admin: Seed the BORAROC 13-category taxonomy if none exist.
+
+    Pass ?force=true to re-seed in dev. Also auto-migrates legacy-seed envs
+    (old {Protein, Carb, Fat, Meal, veg, non-veg} keys with no parent_group)
+    by soft-deleting the old cats before inserting the new taxonomy.
+    """
     if not is_hq(user):
         raise HTTPException(status_code=403, detail="HQ only")
-    
-    count = await db.categories.count_documents({})
-    if count > 0:
-        return {"message": f"{count} categories already exist", "seeded": 0}
-    
+
+    # B1.5 migration: detect a legacy-only seed and soft-delete it so the new
+    # taxonomy can be inserted even on already-seeded DBs.
+    OLD_KEYS = {"Protein", "Carb", "Fat", "Meal", "veg", "non-veg"}
+    existing = await db.categories.find({}, {"_id": 0, "key": 1, "parent_group": 1}).to_list(500)
+    if existing and not force:
+        keys = {c.get("key") for c in existing}
+        any_grouped = any(c.get("parent_group") for c in existing)
+        is_legacy_seed = keys.issubset(OLD_KEYS) and not any_grouped
+        if is_legacy_seed:
+            await db.categories.update_many(
+                {"key": {"$in": list(OLD_KEYS)}},
+                {"$set": {"is_active": False, "deleted_at": datetime.now(timezone.utc).isoformat()}}
+            )
+        else:
+            return {"message": f"{len(existing)} categories already exist", "seeded": 0}
+    elif existing and force:
+        # Explicit dev re-seed: soft-delete current cats so the new taxonomy is clean.
+        await db.categories.update_many(
+            {"is_active": {"$ne": False}},
+            {"$set": {"is_active": False, "deleted_at": datetime.now(timezone.utc).isoformat()}}
+        )
+
+    # 13-category BORAROC taxonomy. parent_group ∈ meals|drinks|desserts.
+    # is_signature true ONLY for Build Your Meal + ROC Signature Meals.
     default_categories = [
-        {"name": "Protein", "key": "Protein", "label": "High Protein", "icon": "barbell", "color": "#E2603F", 
-         "image_url": "https://images.unsplash.com/photo-1532550907401-a500c9a57435?w=400&h=400&fit=crop&q=80", "sort_order": 1},
-        {"name": "Carb", "key": "Carb", "label": "Healthy Carbs", "icon": "leaf", "color": "#D69A35",
-         "image_url": "https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&h=400&fit=crop&q=80", "sort_order": 2},
-        {"name": "Fat", "key": "Fat", "label": "Good Fats", "icon": "water", "color": "#5E97B8",
-         "image_url": "https://images.unsplash.com/photo-1523049673857-eb18f1d7b578?w=400&h=400&fit=crop&q=80", "sort_order": 3},
-        {"name": "Meal", "key": "Meal", "label": "Ready Meals", "icon": "fast-food", "color": "#15140F",
-         "image_url": "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400&h=400&fit=crop&q=80", "sort_order": 4},
-        {"name": "Veg", "key": "veg", "label": "Veg Only", "icon": "nutrition", "color": "#3FA34D",
-         "image_url": "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400&h=400&fit=crop&q=80", "sort_order": 5},
-        {"name": "Non-Veg", "key": "non-veg", "label": "Non-Veg", "icon": "flame", "color": "#C0392B",
-         "image_url": "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400&h=400&fit=crop&q=80", "sort_order": 6},
+        # ── MEALS ──
+        {"name": "Build Your Meal", "icon": "construct", "color": "#15140F", "parent_group": "meals", "is_signature": True,
+         "image_url": "https://images.unsplash.com/photo-1543339308-43e59d6b73a6?w=400&h=400&fit=crop&q=80", "sort_order": 1},
+        {"name": "ROC Signature Meals", "icon": "ribbon", "color": "#A6D62E", "parent_group": "meals", "is_signature": True,
+         "image_url": "https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=400&h=400&fit=crop&q=80", "sort_order": 2},
+        {"name": "Macro Bowls", "icon": "nutrition", "color": "#A6D62E", "parent_group": "meals", "is_signature": False,
+         "image_url": "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400&h=400&fit=crop&q=80", "sort_order": 3},
+        {"name": "Power Plates", "icon": "barbell", "color": "#E2603F", "parent_group": "meals", "is_signature": False,
+         "image_url": "https://images.unsplash.com/photo-1432139555190-58524dae6a55?w=400&h=400&fit=crop&q=80", "sort_order": 4},
+        {"name": "Smart Wraps", "icon": "fast-food", "color": "#D69A35", "parent_group": "meals", "is_signature": False,
+         "image_url": "https://images.unsplash.com/photo-1626700051175-6818013e1d4f?w=400&h=400&fit=crop&q=80", "sort_order": 5},
+        {"name": "Smart Burgers", "icon": "fast-food", "color": "#E2603F", "parent_group": "meals", "is_signature": False,
+         "image_url": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400&h=400&fit=crop&q=80", "sort_order": 6},
+        {"name": "Protein Sandwiches", "icon": "fast-food", "color": "#D69A35", "parent_group": "meals", "is_signature": False,
+         "image_url": "https://images.unsplash.com/photo-1528735602780-2552fd46c7af?w=400&h=400&fit=crop&q=80", "sort_order": 7},
+        {"name": "Loaded Toasts", "icon": "cafe", "color": "#D69A35", "parent_group": "meals", "is_signature": False,
+         "image_url": "https://images.unsplash.com/photo-1525351484163-7529414344d8?w=400&h=400&fit=crop&q=80", "sort_order": 8},
+        {"name": "Breakfast", "icon": "egg", "color": "#D69A35", "parent_group": "meals", "is_signature": False,
+         "image_url": "https://images.unsplash.com/photo-1525351484163-7529414344d8?w=400&h=400&fit=crop&q=80", "sort_order": 9},
+        # ── DRINKS ──
+        {"name": "Smoothie Lab", "icon": "nutrition", "color": "#5E97B8", "parent_group": "drinks", "is_signature": False,
+         "image_url": "https://images.unsplash.com/photo-1505252585461-04db1eb84625?w=400&h=400&fit=crop&q=80", "sort_order": 10},
+        {"name": "Protein Shakes", "icon": "fitness", "color": "#5E97B8", "parent_group": "drinks", "is_signature": False,
+         "image_url": "https://images.unsplash.com/photo-1553530666-ba11a7da3888?w=400&h=400&fit=crop&q=80", "sort_order": 11},
+        {"name": "Coffee & Functional Beverages", "icon": "cafe", "color": "#15140F", "parent_group": "drinks", "is_signature": False,
+         "image_url": "https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=400&h=400&fit=crop&q=80", "sort_order": 12},
+        # ── DESSERTS ──
+        {"name": "Healthy Desserts", "icon": "ice-cream", "color": "#E2603F", "parent_group": "desserts", "is_signature": False,
+         "image_url": "https://images.unsplash.com/photo-1488477181946-6428a0291777?w=400&h=400&fit=crop&q=80", "sort_order": 13},
     ]
-    
+
     for cat in default_categories:
         cat["id"] = str(uuid.uuid4())
+        cat["key"] = cat["name"].replace(" ", "_").replace("&", "AND").upper()
+        cat["label"] = cat["name"]
+        cat["font_style"] = "default"
         cat["is_active"] = True
         cat["created_at"] = datetime.now(timezone.utc).isoformat()
-    
+
     await db.categories.insert_many(default_categories)
-    return {"message": "Default categories seeded", "seeded": len(default_categories)}
+    return {"message": "BORAROC taxonomy seeded", "seeded": len(default_categories)}
 
 @api_router.get("/admin/dashboard-stats")
 async def admin_dashboard_stats(user=Depends(get_current_user)):
@@ -3634,9 +3685,25 @@ async def coach_nudge(user=Depends(get_current_user)):
         nudge, ntype, suggestion = ("A bit over today — totally okay. Tomorrow's a clean slate and every day counts.", "over", None)
     else:
         nudge, ntype, suggestion = ("Nicely balanced today — you're right on track. Keep it up!", "ontrack", None)
+
+    # streak_days: consecutive days (ending today) with a logged meal_history entry.
+    recent = await db.meal_history.find(
+        {"user_id": user["id"]}, {"_id": 0, "date": 1, "meals": 1, "total_calories": 1}
+    ).sort("date", -1).to_list(60)
+    logged_dates = {
+        r["date"] for r in recent
+        if r.get("meals") or (r.get("total_calories", 0) or 0) > 0
+    }
+    streak_days = 0
+    cursor = datetime.now(timezone.utc).date()
+    while cursor.strftime("%Y-%m-%d") in logged_dates:
+        streak_days += 1
+        cursor -= timedelta(days=1)
+
     return {"nudge": nudge, "type": ntype, "suggestion": suggestion,
             "remaining_calories": rem_cal, "remaining_protein": rem_pro,
-            "daily_calories": dc, "daily_protein": dp}
+            "daily_calories": dc, "daily_protein": dp,
+            "streak_days": streak_days, "protein_left_today": rem_pro}
 
 
 
