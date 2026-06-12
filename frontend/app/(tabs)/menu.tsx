@@ -238,23 +238,24 @@ export default function MenuScreen() {
   const renderWallTile = (cat: any, index: number) => {
     const catValue = catValueOf(cat);
     const isActive = selectedCat === catValue;
-    const isFirst = index === 0;
+    // F4: signature cats get the dark ink+lime fill (fallback: first tile dark).
+    const isDark = !!cat.is_signature || (index === 0 && !cat.parent_group);
     const fontStyleProp = cat.font_style === 'italic' ? { fontStyle: 'italic' as const } : cat.font_style === 'mono' ? { fontFamily: 'monospace' } : {};
     return (
       <TouchableOpacity
         key={cat.id || catValue}
         testID={`sidebar-cat-${catValue}`}
-        style={[styles.wallTile, isFirst && styles.wallTileFirst, isActive && styles.wallTileActive]}
+        style={[styles.wallTile, isDark && styles.wallTileFirst, isActive && styles.wallTileActive]}
         onPress={() => setSelectedCat(prev => prev === catValue ? '' : catValue)}
         activeOpacity={0.85}
       >
         <View style={styles.wallTileTop}>
-          <Text style={[styles.wallTileTitle, isFirst && styles.wallTileTitleFirst, fontStyleProp]} numberOfLines={2}>
+          <Text style={[styles.wallTileTitle, isDark && styles.wallTileTitleFirst, fontStyleProp]} numberOfLines={2}>
             {cat.label || cat.name}
           </Text>
-          {isActive && <Ionicons name="checkmark-circle" size={18} color={isFirst ? FUEL.lime : FUEL.limeDeep} />}
+          {isActive && <Ionicons name="checkmark-circle" size={18} color={isDark ? FUEL.lime : FUEL.limeDeep} />}
         </View>
-        <Text style={[styles.wallTileCount, isFirst && styles.wallTileCountFirst]}>{countFor(cat)} ITEMS</Text>
+        <Text style={[styles.wallTileCount, isDark && styles.wallTileCountFirst]}>{countFor(cat)} ITEMS</Text>
       </TouchableOpacity>
     );
   };
@@ -367,7 +368,7 @@ export default function MenuScreen() {
       {/* HERO — ink, rounded bottom */}
       <View style={styles.hero}>
         <Text style={styles.heroLine1}>FIT YOUR BUDGET.</Text>
-        <Text style={styles.heroLine2}>FUEL YOUR GOAL.</Text>
+        <Text style={styles.heroLine2}>EAT FOR YOUR GOAL.</Text>
 
         {proteinLeft != null && (
           <View style={styles.proteinStrip} testID="protein-left-strip">
@@ -425,9 +426,30 @@ export default function MenuScreen() {
         </ScrollView>
       </View>
 
-      {/* CATEGORY WALL — 2-column display-type grid */}
+      {/* CATEGORY WALL — grouped by parent_group, 2-column display-type grid */}
       <View style={styles.wallGrid}>
-        {visibleCats.map(renderWallTile)}
+        {(() => {
+          const GROUP_LABEL: Record<string, string> = { meals: 'MEALS', drinks: 'DRINKS', desserts: 'DESSERTS' };
+          const GROUP_ORDER = ['meals', 'drinks', 'desserts'];
+          const buckets: Record<string, any[]> = {};
+          const seen: string[] = [];
+          visibleCats.forEach((cat: any) => {
+            const g = cat.parent_group || '_';
+            if (!buckets[g]) { buckets[g] = []; seen.push(g); }
+            buckets[g].push(cat);
+          });
+          const groups = [
+            ...GROUP_ORDER.filter(g => buckets[g]),
+            ...seen.filter(g => !GROUP_ORDER.includes(g)),
+          ];
+          let idx = 0;
+          return groups.map(g => (
+            <React.Fragment key={g}>
+              {GROUP_LABEL[g] ? <Text style={styles.wallSectionLabel}>{GROUP_LABEL[g]}</Text> : null}
+              {buckets[g].map((cat: any) => renderWallTile(cat, idx++))}
+            </React.Fragment>
+          ));
+        })()}
         {showAllTile && !wallExpanded && (
           <TouchableOpacity
             testID="category-wall-all"
@@ -738,6 +760,7 @@ const styles = StyleSheet.create({
   wallTileCount: { fontFamily: FONT.bodyBold, fontSize: 10, color: FUEL.muted, letterSpacing: 0.6, marginTop: SPACE.s },
   wallTileCountFirst: { color: 'rgba(244,241,233,0.6)' },
   wallTileAllText: { fontFamily: FONT.display, fontSize: 14, color: FUEL.ink, textTransform: 'uppercase', letterSpacing: 0.4 },
+  wallSectionLabel: { width: '100%', fontFamily: FONT.display, fontSize: 14, color: FUEL.muted, textTransform: 'uppercase', letterSpacing: 1, marginTop: SPACE.s, marginBottom: SPACE.xs, paddingHorizontal: SPACE.xs },
 
   // Best protein value card — dark hero
   bestValueCard: {

@@ -42,6 +42,7 @@ export default function HomeScreen() {
   const [user, setUser] = useState<any>(null);
   const [summary, setSummary] = useState<any>(null);
   const [products, setProducts] = useState<any[]>([]);
+  const [menuCats, setMenuCats] = useState<any[]>([]);  // F2: DB taxonomy (fallback: MENU_CATEGORIES)
   const [banners, setBanners] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -92,13 +93,15 @@ export default function HomeScreen() {
 
   const loadData = useCallback(async () => {
     try {
-      const [u, s, best, b] = await Promise.all([
+      const [u, s, best, b, cats] = await Promise.all([
         getStoredUser(),
         apiCall('/user/nutrition-summary').catch(() => null),
         apiCall('/products/best-sellers').catch(() => apiCall('/products')).catch(() => []),
         apiCall('/banners'),
+        apiCall('/categories').catch(() => []),
       ]);
       setUser(u); setSummary(s); setProducts(best); setBanners(b);
+      setMenuCats(Array.isArray(cats) && cats.length ? cats : []);
       loadTarget();
       loadSavedMeals();
     } catch (e) {} finally { setLoading(false); }
@@ -339,7 +342,9 @@ export default function HomeScreen() {
     } else if (cat.key === 'veg' || cat.key === 'non-veg') {
       router.push({ pathname: '/(tabs)/menu', params: { dietFilter: cat.key } });
     } else {
-      router.push({ pathname: '/(tabs)/menu', params: { category: cat.key } });
+      // Menu filters/highlights by category name (falls back to key for the
+      // hardcoded list, which has no name). Pass the same value menu matches on.
+      router.push({ pathname: '/(tabs)/menu', params: { category: cat.name || cat.key } });
     }
   };
 
@@ -429,7 +434,7 @@ export default function HomeScreen() {
         {/* ===== GOAL-FIRST ORDERING ===== */}
         <View style={styles.goalSelector}>
           <Text style={styles.goalSelectorTitle}>What's your goal?</Text>
-          <View style={styles.goalSelectorRow}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.goalSelectorRow}>
             {FUEL_GOALS.map((g) => {
               const active = mealGoal === g.key;
               return (
@@ -439,12 +444,12 @@ export default function HomeScreen() {
                   style={[styles.goalSelectorChip, active && styles.goalSelectorChipActive]}
                   onPress={() => handleGoalTap(g.key)}
                 >
-                  <Ionicons name={g.icon as any} size={20} color={active ? FUEL.ink : FUEL.limeDeep} />
+                  <Ionicons name={g.icon as any} size={18} color={active ? FUEL.lime : FUEL.ink} />
                   <Text style={[styles.goalSelectorLabel, active && styles.goalSelectorLabelActive]}>{g.label}</Text>
                 </PressableScale>
               );
             })}
-          </View>
+          </ScrollView>
 
           {/* Phase 2/3: personalized daily target + plan entry */}
           {dailyTarget?.has_body_stats ? (
@@ -467,11 +472,16 @@ export default function HomeScreen() {
             </TouchableOpacity>
           )}
 
-          {/* Phase 4: gentle coach nudge */}
-          {coachNudge?.nudge ? (
+          {/* Phase 4 / B4: gentle coach nudge — hidden when no nudge or goal unset */}
+          {coachNudge?.nudge && user?.fitness_goal ? (
             <TouchableOpacity testID="home-coach-nudge" style={styles.nudgeBanner} activeOpacity={0.9} onPress={() => router.push('/meal-plan')}>
-              <Ionicons name="megaphone" size={15} color="#4F5A2E" />
+              <Text style={styles.nudgeBannerEmoji}>🏆</Text>
               <Text style={styles.nudgeBannerText}>{coachNudge.nudge}</Text>
+              {coachNudge.streak_days > 0 ? (
+                <View style={styles.nudgeStreakChip}>
+                  <Text style={styles.nudgeStreakText}>{coachNudge.streak_days}-day streak</Text>
+                </View>
+              ) : null}
             </TouchableOpacity>
           ) : null}
         </View>
@@ -532,28 +542,40 @@ export default function HomeScreen() {
           ))}
         </View>
 
-        {/* ===== CATEGORY GRID ===== */}
+        {/* ===== CATEGORY CHIPS (DB taxonomy + synthetic AI Picks) ===== */}
         <Text style={styles.sectionTitle}>Our Menu</Text>
-        <View style={styles.categoryGrid}>
-          {MENU_CATEGORIES.map((cat) => (
-            <TouchableOpacity
-              key={cat.key}
-              testID={`cat-grid-${cat.key}`}
-              style={styles.categoryCard}
-              onPress={() => handleCategoryPress(cat)}
-              activeOpacity={0.8}
-            >
-              {cat.image ? (
-                <Image source={{ uri: cat.image }} style={styles.categoryImage} />
-              ) : (
-                <View style={[styles.categoryImage, styles.categoryIconBg, { backgroundColor: cat.color }]}>
-                  <Ionicons name={cat.icon as any} size={32} color={cat.key === 'ai' ? FUEL.lime : FUEL.white} />
-                </View>
-              )}
-              <Text style={styles.categoryLabel} numberOfLines={2}>{cat.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryChipRow}>
+          {[
+            { key: 'ai', label: 'AI Picks', icon: 'sparkles', synthetic: true },
+            ...(menuCats.length ? menuCats : MENU_CATEGORIES),
+          ].map((cat: any) => {
+            const img = cat.image_url || cat.image;
+            return (
+              <TouchableOpacity
+                key={cat.key || cat.id}
+                testID={`cat-chip-${cat.key}`}
+                style={styles.categoryChip}
+                onPress={() => handleCategoryPress(cat)}
+                activeOpacity={0.85}
+              >
+                {cat.synthetic ? (
+                  <View style={[styles.categoryChipThumb, styles.categoryChipThumbAi]}>
+                    <Ionicons name="sparkles" size={18} color={FUEL.lime} />
+                  </View>
+                ) : img ? (
+                  <Image source={{ uri: img }} style={styles.categoryChipThumb} />
+                ) : (
+                  <View style={[styles.categoryChipThumb, styles.categoryChipThumbAi, { backgroundColor: cat.color || FUEL.ink }]}>
+                    <Ionicons name={(cat.icon as any) || 'grid'} size={18} color={FUEL.white} />
+                  </View>
+                )}
+                <Text style={styles.categoryChipLabel} numberOfLines={1}>
+                  {cat.synthetic ? '✨ AI Picks' : (cat.label || cat.name)}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
 
         {/* ===== TODAY'S NUTRITION CARD (CLICKABLE) ===== */}
         <TouchableOpacity
@@ -975,11 +997,11 @@ const styles = StyleSheet.create({
   // Goal-first ordering
   goalSelector: { paddingHorizontal: SPACE.l, marginTop: SPACE.l },
   goalSelectorTitle: { fontFamily: FONT.display, fontSize: 22, color: FUEL.ink, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: SPACE.m },
-  goalSelectorRow: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.m },
-  goalSelectorChip: { flexGrow: 1, minWidth: '46%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.s, paddingVertical: SPACE.l, paddingHorizontal: SPACE.l, borderRadius: RADIUS.md, backgroundColor: FUEL.white, borderWidth: 1.5, borderColor: FUEL.sandBorder },
-  goalSelectorChipActive: { backgroundColor: FUEL.lime, borderColor: FUEL.lime },
-  goalSelectorLabel: { fontFamily: FONT.bodyExtrabold, fontSize: 13, color: FUEL.muted, textTransform: 'uppercase', letterSpacing: 0.3 },
-  goalSelectorLabelActive: { color: FUEL.ink },
+  goalSelectorRow: { flexDirection: 'row', gap: SPACE.s, paddingRight: SPACE.l },
+  goalSelectorChip: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s, paddingVertical: SPACE.m, paddingHorizontal: SPACE.l, borderRadius: 999, backgroundColor: FUEL.white, borderWidth: 1.5, borderColor: FUEL.sandBorder },
+  goalSelectorChipActive: { backgroundColor: FUEL.ink, borderColor: FUEL.ink },
+  goalSelectorLabel: { fontFamily: FONT.bodyExtrabold, fontSize: 13, color: FUEL.ink, textTransform: 'uppercase', letterSpacing: 0.3 },
+  goalSelectorLabelActive: { color: FUEL.lime },
 
   // Phase 2/3: personalized daily target banner
   targetBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: FUEL.ink, borderRadius: RADIUS.md, paddingVertical: SPACE.m, paddingHorizontal: SPACE.l, marginTop: SPACE.m },
@@ -990,8 +1012,11 @@ const styles = StyleSheet.create({
   targetBannerCtaText: { fontFamily: FONT.bodyExtrabold, fontSize: 11.5, color: FUEL.ink, letterSpacing: 0.5 },
   targetSetup: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s, backgroundColor: FUEL.limeTint, borderRadius: RADIUS.md, paddingVertical: SPACE.m, paddingHorizontal: SPACE.l, marginTop: SPACE.m },
   targetSetupText: { flex: 1, fontFamily: FONT.bodySemibold, fontSize: 13, color: '#4F5A2E' },
-  nudgeBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACE.s, backgroundColor: FUEL.limeTint, borderRadius: RADIUS.md, paddingVertical: SPACE.m, paddingHorizontal: SPACE.m, marginTop: SPACE.m },
+  nudgeBanner: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s, backgroundColor: FUEL.limeTint, borderRadius: RADIUS.md, paddingVertical: SPACE.m, paddingHorizontal: SPACE.m, marginTop: SPACE.m },
+  nudgeBannerEmoji: { fontSize: 16 },
   nudgeBannerText: { flex: 1, fontFamily: FONT.bodySemibold, fontSize: 12.5, color: '#4F5A2E', lineHeight: 17 },
+  nudgeStreakChip: { backgroundColor: FUEL.ink, borderRadius: 999, paddingHorizontal: SPACE.s, paddingVertical: 3 },
+  nudgeStreakText: { fontFamily: FONT.bodyExtrabold, fontSize: 10, color: FUEL.lime, letterSpacing: 0.3 },
 
   // Header (ink)
   header: {
@@ -1154,33 +1179,32 @@ const styles = StyleSheet.create({
 
   // Category Grid
   sectionTitle: { fontFamily: FONT.display, fontSize: 24, color: FUEL.ink, paddingHorizontal: SPACE.l, marginTop: SPACE.xl, marginBottom: SPACE.l, letterSpacing: 0.3, textTransform: 'uppercase' },
-  categoryGrid: {
+  categoryChipRow: { flexDirection: 'row', gap: SPACE.s, paddingHorizontal: SPACE.l, paddingRight: SPACE.xl },
+  categoryChip: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: SPACE.s,
+    paddingVertical: SPACE.s,
     paddingHorizontal: SPACE.m,
-    gap: SPACE.m
+    borderRadius: 999,
+    backgroundColor: FUEL.white,
+    borderWidth: 1.5,
+    borderColor: FUEL.sandBorder,
   },
-  categoryCard: {
-    width: (width - 60) / 4,
+  categoryChipThumb: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+  },
+  categoryChipThumbAi: {
+    backgroundColor: FUEL.ink,
     alignItems: 'center',
-    backgroundColor: 'transparent',
-    padding: SPACE.s,
+    justifyContent: 'center',
   },
-  categoryImage: {
-    width: 60,
-    height: 60,
-    borderRadius: RADIUS.md,
-    marginBottom: SPACE.s
-  },
-  categoryIconBg: {
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  categoryLabel: {
+  categoryChipLabel: {
     fontFamily: FONT.bodyExtrabold,
-    fontSize: 11,
+    fontSize: 12,
     color: FUEL.ink,
-    textAlign: 'center',
     textTransform: 'uppercase',
     letterSpacing: 0.3,
   },
