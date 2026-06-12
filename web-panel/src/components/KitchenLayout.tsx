@@ -8,7 +8,7 @@ export default function KitchenLayout() {
     <div>
       <div className="top-nav">
         <div className="top-nav-brand">
-          <img src="/boraroc-logo.png" alt="BORAROC" style={{ width: 24, height: 24, borderRadius: 6, objectFit: 'cover' }} />
+          <img src="/boraroc-logo.png?v=2" alt="BORAROC" style={{ width: 24, height: 24, borderRadius: 6, objectFit: 'cover' }} />
           <h2>Kitchen Display</h2>
         </div>
         <div className="top-nav-links">

@@ -45,7 +45,7 @@ export default function HqLayout() {
     <div className="layout">
       <aside className="sidebar">
         <div className="sidebar-brand">
-          <img src="/boraroc-logo.png" alt="BORAROC" style={{ width: 36, height: 36, borderRadius: 10, objectFit: 'cover' }} />
+          <img src="/boraroc-logo.png?v=2" alt="BORAROC" style={{ width: 36, height: 36, borderRadius: 10, objectFit: 'cover' }} />
           <span>BORAROC · HQ</span>
         </div>
         <nav className="sidebar-nav">
