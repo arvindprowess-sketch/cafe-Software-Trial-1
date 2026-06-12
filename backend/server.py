@@ -2678,6 +2678,22 @@ def _protein_share_pct(goal: str) -> float:
         return 40.0
     return (int(m.group(1)) + int(m.group(2))) / 2.0
 
+# Per-item portion safety net (grams) keyed by the rule-engine slot. The kcal
+# ceiling below is the primary cap; this only stops single cheap items ballooning.
+GRAM_CAP = {"protein": 300, "base": 300, "veg": 250}
+
+def _meal_kcal_ceiling(goal: str) -> float:
+    """Upper bound of the goal's per-meal calorie band, parsed from
+    GOAL_GUIDELINES target_calories ("700-1000 kcal per meal" -> 1000.0).
+    Accepts either a goal key (unknown goals fall back to maintenance) or a raw
+    band string; 900.0 when no X-Y band can be parsed."""
+    band = re.compile(r"(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)")
+    m = band.search(goal if isinstance(goal, str) else "")
+    if not m:
+        text = GOAL_GUIDELINES.get(goal, GOAL_GUIDELINES["maintenance"]).get("target_calories") or ""
+        m = band.search(text)
+    return float(m.group(2)) if m else 900.0
+
 def rule_engine_pick(products: list, goal: str, budget: float, prefs) -> list:
     """Deterministic replacement for the old STEP-1 LLM item selection.
 
@@ -2757,6 +2773,7 @@ def rule_engine_pick(products: list, goal: str, budget: float, prefs) -> list:
         result.append({
             "product": p,
             "share": shares[p["id"]],
+            "slot": slots.get(p["id"], "protein"),
             "reason_slots": {
                 "slot": slots.get(p["id"], "protein"),
                 "protein_per_100g": p.get("protein_per_100g"),
@@ -2840,6 +2857,7 @@ async def ai_quick_meal(data: QuickMealRequest, user=Depends(get_current_user)):
         enriched_items = []
         for m in matched:
             p = m["product"]
+            slot = m.get("slot") or m.get("reason_slots", {}).get("slot", "protein")
             budget_for_item = budget * m["share"] / 100
             # Calculate grams from budget: grams = (budget_for_item / cost_per_100g) * 100
             raw_grams = (budget_for_item / p["cost_per_100g"]) * 100
@@ -2848,6 +2866,8 @@ async def ai_quick_meal(data: QuickMealRequest, user=Depends(get_current_user)):
             capped_grams = min(raw_grams, max_stock - 10)  # leave 10g buffer
             # Round to nearest 5g for clean portions
             final_grams = max(10, round(capped_grams / 5) * 5)
+            # Per-item portion cap by slot (safety net under the kcal ceiling)
+            final_grams = max(10, min(final_grams, GRAM_CAP.get(slot, 300)))
 
             factor = final_grams / 100
             enriched_items.append({
@@ -2869,6 +2889,7 @@ async def ai_quick_meal(data: QuickMealRequest, user=Depends(get_current_user)):
                 "fat_per_100g": p["fat_per_100g"],
                 "category": p.get("category", ""),
                 "max_stock": int(max_stock),
+                "slot": slot,  # internal — stripped before the response
             })
 
         # HYBRID STEP 4: Precise budget adjustment — close the gap exactly
@@ -2889,24 +2910,38 @@ async def ai_quick_meal(data: QuickMealRequest, user=Depends(get_current_user)):
             return {k: round(v, 2) for k, v in t.items()}
 
         totals = calc_total(enriched_items)
+        kcal_ceiling = _meal_kcal_ceiling(data.goal)
 
-        # Iterative adjustment: distribute remaining budget across items
+        def grow_cap(item: dict) -> int:
+            # An item may only grow up to BOTH its stock headroom and slot gram cap
+            return min(item.get("max_stock", 9999) - 20, GRAM_CAP.get(item.get("slot"), 300))
+
+        # Iterative adjustment: distribute remaining budget across items, but only
+        # while the per-item caps and the goal's kcal ceiling allow — remaining
+        # budget is left UNSPENT rather than force-stuffed into cheap items.
         for _round in range(5):
             gap = round(budget - totals["price"], 2)
             if abs(gap) < 0.50:
                 break
-            # Pick cheapest per-gram item with stock headroom to adjust
-            adjustable = [it for it in enriched_items if it["grams"] < it.get("max_stock", 9999) - 20]
-            if not adjustable and gap > 0:
-                adjustable = enriched_items  # fallback
-            if gap > 0 and adjustable:
-                # Under budget: add grams to the item with most stock headroom
-                adj = max(adjustable, key=lambda x: x.get("max_stock", 9999) - x["grams"])
+            if gap > 0:
+                if totals["calories"] >= kcal_ceiling:
+                    break
+                adjustable = [it for it in enriched_items if it["grams"] < grow_cap(it)]
+                if not adjustable:
+                    break
+                # Under budget: add grams to the item with most cap headroom
+                adj = max(adjustable, key=lambda x: grow_cap(x) - x["grams"])
                 extra_g = round(gap / adj["cost_per_100g"] * 100)
-                new_g = min(adj["grams"] + extra_g, adj.get("max_stock", 9999) - 5)
+                if adj["calories_per_100g"] > 0:
+                    kcal_room = kcal_ceiling - totals["calories"]
+                    extra_g = min(extra_g, int(kcal_room / adj["calories_per_100g"] * 100))
+                new_g = min(adj["grams"] + extra_g, adj.get("max_stock", 9999) - 5,
+                            GRAM_CAP.get(adj.get("slot"), 300))
                 new_g = max(10, round(new_g))
+                if new_g <= adj["grams"]:
+                    break
                 recalc_item(adj, new_g)
-            elif gap < 0 and enriched_items:
+            elif enriched_items:
                 # Over budget: trim from most expensive item
                 adj = max(enriched_items, key=lambda x: x["price"])
                 trim_g = max(1, round(abs(gap) / adj["cost_per_100g"] * 100) + 1)
@@ -2921,6 +2956,24 @@ async def ai_quick_meal(data: QuickMealRequest, user=Depends(get_current_user)):
             trim_g = max(1, round(over / adj["cost_per_100g"] * 100) + 1)
             recalc_item(adj, max(10, adj["grams"] - trim_g))
             totals = calc_total(enriched_items)
+
+        # Final guard: if the plate still exceeds the kcal ceiling, shrink every
+        # item proportionally (nearest 5g, min 10g) so macro balance is preserved,
+        # then absorb any 5g-rounding overshoot with small trims.
+        if totals["calories"] > kcal_ceiling:
+            factor = kcal_ceiling / totals["calories"]
+            for it in enriched_items:
+                recalc_item(it, max(10, round(it["grams"] * factor / 5) * 5))
+            totals = calc_total(enriched_items)
+            for _ in range(20):
+                if totals["calories"] <= kcal_ceiling:
+                    break
+                adj = max((it for it in enriched_items if it["grams"] > 10),
+                          key=lambda x: x["calories"], default=None)
+                if adj is None:
+                    break
+                recalc_item(adj, max(10, adj["grams"] - 5))
+                totals = calc_total(enriched_items)
 
         # Round totals for display
         totals = {k: round(v, 1) for k, v in totals.items()}
@@ -2968,6 +3021,9 @@ async def ai_quick_meal(data: QuickMealRequest, user=Depends(get_current_user)):
                 it["reason"] = reason_templates[i % len(reason_templates)]
             summary = QUICKMEAL_SUMMARY_TEMPLATES.get(data.goal, QUICKMEAL_SUMMARY_TEMPLATES["maintenance"])
 
+        for it in enriched_items:
+            it.pop("slot", None)  # internal field — not part of the response contract
+
         return {
             "meal_items": enriched_items,
             "summary": summary,
@@ -2976,7 +3032,9 @@ async def ai_quick_meal(data: QuickMealRequest, user=Depends(get_current_user)):
             "goal": data.goal,
             "warnings": warnings,
             "meal_percentage": meal_percentage,
-            "user_daily_targets": user_goals
+            "user_daily_targets": user_goals,
+            "kcal_ceiling": kcal_ceiling,
+            "budget_unspent": max(0.0, round(budget - totals["price"], 2))
         }
     except Exception as e:
         logger.error(f"AI quick-meal error: {e}")
