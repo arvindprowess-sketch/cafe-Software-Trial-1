@@ -46,6 +46,172 @@ type Exception = {
 const SEV_COLOR: Record<number, string> = { 3: 'var(--error)', 2: 'var(--warning)', 1: 'var(--muted)' };
 const ACTION_LABEL: Record<Exception['action'], string> = { review: 'Review', assign: 'Assign', open: 'Open' };
 
+// ── HQ Command Center — Strip 4 Intelligence (6 tabs) ──
+type IntelRange = 'today' | 'week' | 'month';
+const INTEL_TABS = [
+  { key: 'product', label: 'Product' }, { key: 'build', label: 'Build-Your-Meal' },
+  { key: 'goals', label: 'Goals' }, { key: 'customer', label: 'Customer' },
+  { key: 'ratings', label: 'Ratings' }, { key: 'ai', label: 'AI Usage' },
+] as const;
+const MACRO_COLORS = ['#E2603F', '#D69A35', '#5E97B8']; // protein / carbs / fat
+const prettyGoal = (g: string) => (g || 'unset').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+const rangeFrom = (r: IntelRange) => {
+  const d = new Date(); const days = r === 'today' ? 0 : r === 'week' ? 6 : 29;
+  d.setDate(d.getDate() - days); return d.toISOString().slice(0, 10);
+};
+function Bar({ pct, color }: { pct: number; color: string }) {
+  return (
+    <div style={{ height: 8, background: 'var(--border)', borderRadius: 999, overflow: 'hidden', flex: 1 }}>
+      <div style={{ width: `${Math.max(2, Math.min(100, pct))}%`, height: '100%', background: color, borderRadius: 999 }} />
+    </div>
+  );
+}
+function Row({ label, value, pct, color }: { label: string; value: string; pct: number; color: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+      <span style={{ width: 150, fontSize: 13, color: 'var(--ink)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+      <Bar pct={pct} color={color} />
+      <span style={{ width: 90, textAlign: 'right', fontSize: 12.5, color: 'var(--muted)', fontWeight: 700 }}>{value}</span>
+    </div>
+  );
+}
+
+function IntelStrip({ range }: { range: IntelRange }) {
+  const [tab, setTab] = useState<typeof INTEL_TABS[number]['key']>('product');
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [nonce, setNonce] = useState(0);
+
+  useEffect(() => {
+    if (tab === 'ai') { setData(null); setError(''); setLoading(false); return; }
+    let cancelled = false;
+    (async () => {
+      setLoading(true); setError(''); setData(null);
+      try {
+        let res;
+        if (tab === 'product') res = await api(`/reports/items?from=${rangeFrom(range)}`);
+        else if (tab === 'build') res = await api(`/hq/intel/ingredients?range=${range}`);
+        else if (tab === 'goals') res = await api(`/hq/intel/goals?range=${range}`);
+        else if (tab === 'customer') res = await api(`/hq/intel/customers?range=${range}`);
+        else res = await api(`/hq/intel/ratings?range=${range}`);
+        if (!cancelled) setData(res);
+      } catch (e: any) { if (!cancelled) setError(e?.message || 'Failed'); }
+      finally { if (!cancelled) setLoading(false); }
+    })();
+    return () => { cancelled = true; };
+  }, [tab, range, nonce]);
+
+  const empty = (msg: string) => <div style={{ textAlign: 'center', color: 'var(--muted)', padding: 24, fontWeight: 600 }}>{msg}</div>;
+
+  const renderTab = () => {
+    if (tab === 'ai') return (
+      <div data-testid="intel-ai-empty" style={{ textAlign: 'center', color: 'var(--muted)', padding: 28 }}>
+        <div style={{ fontSize: 30, marginBottom: 8 }}>🤖</div>
+        <strong style={{ color: 'var(--ink)' }}>AI usage tracking not enabled yet</strong>
+        <div style={{ fontSize: 12.5, marginTop: 6 }}>TODO: instrument ai_pick / combo_builder events, then surface real counts here.</div>
+      </div>
+    );
+    if (loading) return <div style={{ color: 'var(--muted)', padding: 24 }}>Loading…</div>;
+    if (error) return (
+      <div style={{ padding: 24, textAlign: 'center' }}>
+        <span style={{ color: 'var(--error)', fontWeight: 600 }}>Couldn't load. </span>
+        <button onClick={() => setNonce((n) => n + 1)} style={{ marginLeft: 8, padding: '6px 14px', borderRadius: 'var(--radius-pill)', border: 'none', background: 'var(--lime)', color: 'var(--ink)', fontWeight: 700, cursor: 'pointer' }}>Retry</button>
+      </div>
+    );
+    if (!data) return null;
+
+    if (tab === 'product') {
+      const items: any[] = data.items || [];
+      if (items.length === 0) return empty('No sales in this range.');
+      const maxRev = Math.max(...items.map((i) => i.revenue), 1);
+      const top = items.slice(0, 6);
+      const bottom = items.filter((i) => i.qty > 0).slice(-6).reverse();
+      return (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 28 }}>
+          <div><h4 style={{ margin: '0 0 12px', fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--muted)' }}>Top sellers</h4>
+            {top.map((i) => <Row key={i.product_id} label={i.name} value={`₹${Math.round(i.revenue).toLocaleString('en-IN')}`} pct={i.revenue / maxRev * 100} color="var(--success)" />)}</div>
+          <div><h4 style={{ margin: '0 0 12px', fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--muted)' }}>Bottom sellers</h4>
+            {bottom.map((i) => <Row key={i.product_id} label={i.name} value={`₹${Math.round(i.revenue).toLocaleString('en-IN')}`} pct={i.revenue / maxRev * 100} color="var(--warning)" />)}</div>
+        </div>
+      );
+    }
+    if (tab === 'build') {
+      const groups = data.groups || {};
+      const keys = Object.keys(groups);
+      if (keys.length === 0 || (data.customized_orders || 0) === 0) return empty('No Build-Your-Meal customizations in this range.');
+      const ORDER = ['Protein', 'Base', 'Sauce', 'Veggies', 'Toppings', 'Other'];
+      const sortedKeys = [...ORDER.filter((k) => groups[k]), ...keys.filter((k) => !ORDER.includes(k))];
+      return (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 28 }}>
+          {sortedKeys.map((k) => (
+            <div key={k}><h4 style={{ margin: '0 0 12px', fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--muted)' }}>{k}</h4>
+              {groups[k].map((it: any) => <Row key={it.name} label={it.name} value={`${it.pct}% · ${it.count}`} pct={it.pct} color="var(--lime-deep)" />)}</div>
+          ))}
+        </div>
+      );
+    }
+    if (tab === 'goals') {
+      const dist: any[] = data.distribution || [];
+      if (dist.length === 0) return empty('No orders with a goal in this range.');
+      return (
+        <div>
+          <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 14 }}>
+            Revenue this period: <strong style={{ color: 'var(--ink)' }}>₹{Math.round(data.revenue_total || 0).toLocaleString('en-IN')}</strong>{' '}
+            <Delta pct={data.revenue_delta_pct} suffix="vs prev period" />
+          </div>
+          {dist.map((g, i) => (
+            <Row key={g.goal} label={prettyGoal(g.goal)} value={`${g.pct}% · ₹${Math.round(g.revenue).toLocaleString('en-IN')}`} pct={g.pct} color={MACRO_COLORS[i % MACRO_COLORS.length]} />
+          ))}
+        </div>
+      );
+    }
+    if (tab === 'customer') {
+      const o = data.overall || { new: 0, repeat: 0, new_pct: 0, repeat_pct: 0, repeat_rate: 0 };
+      if ((o.new + o.repeat) === 0) return empty('No customers in this range.');
+      return (
+        <div>
+          <Row label="New customers" value={`${o.new_pct}% · ${o.new}`} pct={o.new_pct} color="var(--lime-deep)" />
+          <Row label="Repeat customers" value={`${o.repeat_pct}% · ${o.repeat}`} pct={o.repeat_pct} color="var(--success)" />
+          <h4 style={{ margin: '18px 0 12px', fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--muted)' }}>Repeat rate by store</h4>
+          {(data.by_store || []).map((s: any) => <Row key={s.store_id} label={s.name} value={`${s.repeat_rate}% (${s.customers})`} pct={s.repeat_rate} color="var(--success)" />)}
+        </div>
+      );
+    }
+    // ratings
+    const byStore: any[] = data.by_store || [];
+    if (byStore.length === 0) return empty('No ratings in this range.');
+    return (
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 28 }}>
+        <div><h4 style={{ margin: '0 0 12px', fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--muted)' }}>Avg rating by store</h4>
+          {byStore.map((s) => <Row key={s.store_id} label={s.name} value={`★ ${s.avg_rating} (${s.rated_orders})`} pct={s.avg_rating / 5 * 100} color="var(--warning)" />)}</div>
+        <div><h4 style={{ margin: '0 0 12px', fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--muted)' }}>Lowest-rated items</h4>
+          {(data.lowest_items || []).length === 0 ? <div style={{ color: 'var(--muted)', fontSize: 13 }}>Not enough rated items yet.</div>
+            : data.lowest_items.map((it: any) => <Row key={it.product_id} label={it.name} value={`★ ${it.avg_rating} (${it.n})`} pct={it.avg_rating / 5 * 100} color="var(--error)" />)}</div>
+      </div>
+    );
+  };
+
+  return (
+    <>
+      <h2 style={{ fontSize: 16, fontWeight: 700, margin: '28px 0 12px' }}>Intelligence</h2>
+      <div className="stat-card" data-testid="intel-strip" style={{ padding: 0, marginBottom: 28 }}>
+        <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--border)', padding: 8, flexWrap: 'wrap' }}>
+          {INTEL_TABS.map((t) => (
+            <button
+              key={t.key}
+              data-testid={`intel-tab-${t.key}`}
+              onClick={() => setTab(t.key)}
+              style={{ padding: '8px 14px', borderRadius: 'var(--radius-pill)', border: 'none', background: tab === t.key ? 'var(--ink)' : 'transparent', color: tab === t.key ? 'var(--white)' : 'var(--muted)', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
+            >{t.label}</button>
+          ))}
+        </div>
+        <div style={{ padding: 18 }}>{renderTab()}</div>
+      </div>
+    </>
+  );
+}
+
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const [range, setRange] = useState<Pulse['range']>('today');
@@ -276,6 +442,9 @@ export default function AdminDashboard() {
           </div>
         );
       })()}
+
+      {/* HQ Command Center — Strip 4 Intelligence (6 tabs) */}
+      <IntelStrip range={range} />
 
       <div className="stats-grid" data-testid="stats-grid">
         {[

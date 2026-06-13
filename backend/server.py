@@ -2112,6 +2112,134 @@ async def hq_exceptions(user=Depends(get_current_user)):
     exceptions.sort(key=lambda x: -x["severity"])
     return exceptions
 
+# ── Strip 4 Intelligence (HQ) — live aggregates over real collections ──
+def _intel_range(range_: str):
+    rng = range_ if range_ in ("today", "week", "month") else "month"
+    cur_s, cur_e, prev_s, prev_e = _pulse_range_bounds(rng)
+    return rng, cur_s, cur_e, prev_s, prev_e
+
+@api_router.get("/hq/intel/ingredients")
+async def hq_intel_ingredients(range_: str = Query("month", alias="range"), user=Depends(get_current_user)):
+    """Build-Your-Meal: most-chosen ingredients from orders.customized_ingredients,
+    grouped by subcategory (Base/Protein/Veggies/Sauce/Toppings)."""
+    if not role_in(user, "super_admin", "admin"):
+        raise HTTPException(status_code=403, detail="HQ only")
+    rng, cur_s, cur_e, _, _ = _intel_range(range_)
+    prods = await db.products.find({}, {"_id": 0, "id": 1, "subcategory": 1}).to_list(5000)
+    subcat_by_pid = {p["id"]: (p.get("subcategory") or "Other") for p in prods}
+
+    counts: dict = {}  # subcat -> {name: count}
+    customized_orders = 0
+    async for o in db.orders.find(
+        {"created_at": {"$gte": cur_s, "$lt": cur_e}, "status": {"$ne": "cancelled"}}, {"_id": 0, "items": 1}):
+        touched = False
+        for it in o.get("items", []):
+            ings = it.get("customized_ingredients")
+            if not ings:
+                continue
+            touched = True
+            for ing in ings:
+                if float(ing.get("grams_per_serving", 0) or 0) <= 0:
+                    continue
+                sub = subcat_by_pid.get(ing.get("product_id"), "Other")
+                name = ing.get("name") or "Unknown"
+                counts.setdefault(sub, {})[name] = counts.setdefault(sub, {}).get(name, 0) + 1
+        if touched:
+            customized_orders += 1
+
+    groups = {}
+    for sub, names in counts.items():
+        total = sum(names.values()) or 1
+        groups[sub] = sorted(
+            [{"name": n, "count": c, "pct": round(c / total * 100, 1)} for n, c in names.items()],
+            key=lambda x: -x["count"])[:8]
+    return {"range": rng, "customized_orders": customized_orders, "groups": groups}
+
+@api_router.get("/hq/intel/goals")
+async def hq_intel_goals(range_: str = Query("month", alias="range"), user=Depends(get_current_user)):
+    """Goal distribution + revenue per goal (paid) + overall revenue delta vs prev period."""
+    if not role_in(user, "super_admin", "admin"):
+        raise HTTPException(status_code=403, detail="HQ only")
+    rng, cur_s, cur_e, prev_s, prev_e = _intel_range(range_)
+
+    async def by_goal(start, end):
+        pipeline = [
+            {"$match": {"created_at": {"$gte": start, "$lt": end}, "status": {"$ne": "cancelled"}}},
+            {"$group": {"_id": {"$ifNull": ["$fitness_goal", "unset"]}, "count": {"$sum": 1},
+                        "revenue": {"$sum": {"$cond": [{"$eq": ["$payment_status", "paid"]}, "$total_price", 0]}}}},
+        ]
+        return await db.orders.aggregate(pipeline).to_list(100)
+
+    cur = await by_goal(cur_s, cur_e)
+    total_orders = sum(r["count"] for r in cur) or 1
+    cur_rev = round(sum(r["revenue"] for r in cur), 2)
+    prev = await by_goal(prev_s, prev_e)
+    prev_rev = round(sum(r["revenue"] for r in prev), 2)
+    distribution = sorted([
+        {"goal": r["_id"], "count": r["count"], "pct": round(r["count"] / total_orders * 100, 1),
+         "revenue": round(r["revenue"], 2)} for r in cur
+    ], key=lambda x: -x["count"])
+    return {"range": rng, "distribution": distribution, "revenue_total": cur_rev,
+            "revenue_delta_pct": _pulse_pct_delta(cur_rev, prev_rev)}
+
+@api_router.get("/hq/intel/customers")
+async def hq_intel_customers(range_: str = Query("month", alias="range"), user=Depends(get_current_user)):
+    """New vs repeat customers (a user is 'repeat' if they ordered before this period),
+    overall + repeat_rate per store. Cohorts/LTV = V2."""
+    if not role_in(user, "super_admin", "admin"):
+        raise HTTPException(status_code=403, detail="HQ only")
+    rng, cur_s, cur_e, _, _ = _intel_range(range_)
+    prior_users = set(await db.orders.distinct("user_id", {"created_at": {"$lt": cur_s}, "status": {"$ne": "cancelled"}}))
+    range_users = set(await db.orders.distinct("user_id", {"created_at": {"$gte": cur_s, "$lt": cur_e}, "status": {"$ne": "cancelled"}}))
+    repeat = len(range_users & prior_users)
+    new = len(range_users - prior_users)
+    tot = (repeat + new) or 1
+    overall = {"new": new, "repeat": repeat, "new_pct": round(new / tot * 100, 1),
+               "repeat_pct": round(repeat / tot * 100, 1), "repeat_rate": round(repeat / tot * 100, 1)}
+
+    by_store = []
+    stores = await db.stores.find({"status": "active"}, {"_id": 0, "store_id": 1, "name": 1}).to_list(500)
+    for s in stores:
+        sid = s["store_id"]
+        prior_s = set(await db.orders.distinct("user_id", {"store_id": sid, "created_at": {"$lt": cur_s}, "status": {"$ne": "cancelled"}}))
+        range_s = set(await db.orders.distinct("user_id", {"store_id": sid, "created_at": {"$gte": cur_s, "$lt": cur_e}, "status": {"$ne": "cancelled"}}))
+        rep = len(range_s & prior_s)
+        n = len(range_s)
+        by_store.append({"store_id": sid, "name": s.get("name"), "customers": n,
+                         "repeat_rate": round(rep / n * 100, 1) if n else 0.0})
+    by_store.sort(key=lambda x: -x["repeat_rate"])
+    return {"range": rng, "overall": overall, "by_store": by_store}
+
+@api_router.get("/hq/intel/ratings")
+async def hq_intel_ratings(range_: str = Query("month", alias="range"), user=Depends(get_current_user)):
+    """Avg order rating per store + lowest-rated items (order rating attributed to items)."""
+    if not role_in(user, "super_admin", "admin"):
+        raise HTTPException(status_code=403, detail="HQ only")
+    rng, cur_s, cur_e, _, _ = _intel_range(range_)
+    match = {"rating.stars": {"$exists": True}, "created_at": {"$gte": cur_s, "$lt": cur_e}, "status": {"$ne": "cancelled"}}
+
+    store_rows = await db.orders.aggregate([
+        {"$match": match},
+        {"$group": {"_id": "$store_id", "avg": {"$avg": "$rating.stars"}, "n": {"$sum": 1}}},
+    ]).to_list(500)
+    stores = await db.stores.find({}, {"_id": 0, "store_id": 1, "name": 1}).to_list(2000)
+    name_by_sid = {s["store_id"]: s.get("name") for s in stores}
+    by_store = sorted([
+        {"store_id": r["_id"], "name": name_by_sid.get(r["_id"], r["_id"]),
+         "avg_rating": round(float(r["avg"] or 0), 2), "rated_orders": int(r["n"])} for r in store_rows
+    ], key=lambda x: x["avg_rating"])
+
+    item_rows = await db.orders.aggregate([
+        {"$match": match},
+        {"$unwind": "$items"},
+        {"$group": {"_id": "$items.product_id", "name": {"$first": "$items.product_name"},
+                    "avg": {"$avg": "$rating.stars"}, "n": {"$sum": 1}}},
+        {"$match": {"n": {"$gte": 3}}},
+        {"$sort": {"avg": 1}}, {"$limit": 5},
+    ]).to_list(5)
+    lowest_items = [{"product_id": r["_id"], "name": r.get("name"), "avg_rating": round(float(r["avg"] or 0), 2), "n": int(r["n"])} for r in item_rows]
+    return {"range": rng, "by_store": by_store, "lowest_items": lowest_items}
+
 @api_router.get("/admin/staff-accounts")
 async def admin_staff_accounts(user=Depends(get_current_user)):
     """Admin: list kitchen & cashier accounts"""
