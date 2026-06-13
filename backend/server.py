@@ -1730,6 +1730,103 @@ async def seed_default_categories(user=Depends(get_current_user), force: bool = 
     await db.categories.insert_many(default_categories)
     return {"message": "BORAROC taxonomy seeded", "seeded": len(default_categories)}
 
+# ─────────────────────────────────────────────────────────────────────────────
+# DEV-ONLY MIGRATION — Disable/remove before production.
+# One-time HQ utility to map legacy/unmapped products onto the active 13-category
+# taxonomy. Never auto-triggered: not called from startup, seed_data(), any
+# lifespan/event hook, or scheduler. Runs ONLY on an explicit manual HQ request.
+# Idempotent + non-destructive: products that already carry a category_id pointing
+# at an active category are SKIPPED, so human-set categories are never overwritten.
+# dry_run defaults to TRUE; writing requires dry_run=false AND body {"confirm": true}.
+# ─────────────────────────────────────────────────────────────────────────────
+class AutoMapConfirm(BaseModel):
+    confirm: bool = False
+
+# ready_made name keyword → category name. First match wins (order matters).
+_READY_MADE_KEYWORD_MAP = [
+    (["wrap"], "Smart Wraps"),
+    (["burger"], "Smart Burgers"),
+    (["sandwich"], "Protein Sandwiches"),
+    (["toast"], "Loaded Toasts"),
+    (["bowl"], "Macro Bowls"),
+    (["shake", "whey"], "Protein Shakes"),
+    (["smoothie"], "Smoothie Lab"),
+    (["coffee", "latte", "brew", "espresso", "cappuccino", "americano"], "Coffee & Functional Beverages"),
+    (["dessert", "brownie", "pudding", "cake", "cookie", "ice cream"], "Healthy Desserts"),
+    (["breakfast", "poha", "upma", "pancake", "omelette", "egg", "oats"], "Breakfast"),
+    (["signature", "special"], "ROC Signature Meals"),
+]
+# legacy single-product category → Build-Your-Meal subcategory
+_SINGLE_SUBCATEGORY_MAP = {"Protein": "Protein", "Carb": "Base", "Fat": "Toppings"}
+
+@api_router.post("/admin/products/auto-map-categories")
+async def auto_map_product_categories(
+    body: AutoMapConfirm = AutoMapConfirm(),
+    dry_run: bool = True,
+    user=Depends(get_current_user),
+):
+    """DEV-ONLY one-time migration: map legacy/unmapped products to the active
+    13-category taxonomy. dry_run=true (default) previews; dry_run=false + body
+    {"confirm": true} applies. Skips products already mapped to an active category."""
+    if not is_hq(user):
+        raise HTTPException(status_code=403, detail="HQ only")
+
+    # Gate writes BEFORE touching any data: applying requires explicit confirm.
+    if not dry_run and not body.confirm:
+        raise HTTPException(status_code=400, detail="Refusing to write: set dry_run=false AND body {\"confirm\": true}")
+
+    # Active categories: {name: id}. Only ever map to names in this active set.
+    active_cats = await db.categories.find({"is_active": {"$ne": False}}, {"_id": 0, "id": 1, "name": 1}).to_list(100)
+    name_to_id = {c["name"]: c["id"] for c in active_cats}
+    active_ids = set(name_to_id.values())
+
+    def target_for(product: dict):
+        if product.get("product_type") == "ready_made":
+            name = (product.get("name") or "").lower()
+            # Word-boundary match so e.g. "latte" doesn't match "platter",
+            # nor "egg" match "veggies".
+            for keywords, cat_name in _READY_MADE_KEYWORD_MAP:
+                if any(re.search(r"\b" + re.escape(kw) + r"\b", name) for kw in keywords):
+                    return cat_name, None, False
+            return "Power Plates", None, True  # default + flag for review
+        # single (default): Build Your Meal, subcategory from legacy category
+        sub = _SINGLE_SUBCATEGORY_MAP.get(product.get("category"))
+        return "Build Your Meal", sub, False
+
+    proposed = []
+    needs_review = []
+    updated = 0
+    skipped = 0
+
+    products = await db.products.find({}, {"_id": 0}).to_list(5000)
+    for p in products:
+        # Skip products already mapped to an active category (don't overwrite human-set values).
+        if p.get("category_id") and p["category_id"] in active_ids:
+            skipped += 1
+            continue
+        to_name, sub, review = target_for(p)
+        # Only map to names that exist in the active taxonomy.
+        if to_name not in name_to_id:
+            skipped += 1
+            continue
+        to_id = name_to_id[to_name]
+        proposed.append({"id": p.get("id"), "name": p.get("name"),
+                         "product_type": p.get("product_type", "single"),
+                         "from": p.get("category"), "to": to_name})
+        if review:
+            needs_review.append({"id": p.get("id"), "name": p.get("name"), "to": to_name})
+        if not dry_run:
+            set_fields = {"category": to_name, "category_id": to_id}
+            if sub is not None:
+                set_fields["subcategory"] = sub
+            await db.products.update_one({"id": p["id"]}, {"$set": set_fields})
+            updated += 1
+
+    if dry_run:
+        return {"dry_run": True, "proposed_count": len(proposed),
+                "proposed": proposed, "needs_review": needs_review}
+    return {"dry_run": False, "updated": updated, "skipped": skipped, "needs_review": needs_review}
+
 @api_router.get("/admin/dashboard-stats")
 async def admin_dashboard_stats(user=Depends(get_current_user)):
     """Admin dashboard: aggregated stats"""
