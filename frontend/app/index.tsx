@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator, Alert, Linking
+  KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator, Alert, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -12,6 +12,12 @@ import { apiCall } from '../utils/api';
 import { FUEL, FONT, RADIUS, SPACE } from '../utils/theme';
 
 type Step = 'phone' | 'otp' | 'name';
+
+// Brand hero: render full-width at the artwork's natural aspect (no fixed tall
+// height, no letterbox). Ratio matches brand-hero.png (989x1023) — update if the
+// asset's dimensions change.
+const HERO_SRC = require('../assets/images/brand-hero.png');
+const HERO_ASPECT = 989 / 1023;
 
 // P8 compliance: legal links shown under the primary CTA. Env-overridable per build.
 const PRIVACY_URL = process.env.EXPO_PUBLIC_PRIVACY_URL || 'https://boraroc.in/privacy';
@@ -398,8 +404,8 @@ export default function AuthScreen() {
               contains the logo, wordmark, tagline and ROC strip. */}
           <Image
             testID="brand-hero"
-            source={require('../assets/images/brand-hero.png')}
-            style={styles.heroImg}
+            source={HERO_SRC}
+            style={[styles.heroImg, { aspectRatio: HERO_ASPECT }]}
             contentFit="contain"
           />
 
@@ -446,11 +452,11 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: FUEL.sand },
   scroll: { flexGrow: 1, paddingBottom: SPACE.xl },
 
-  // HERO — full-width brand lockup (edge-to-edge, natural aspect, never cropped)
-  heroImg: { width: '100%', aspectRatio: 1122 / 1402 },
+  // HERO — full-width brand lockup at natural aspect (aspectRatio applied inline)
+  heroImg: { width: '100%' },
 
   // LOGIN / SIGN UP segmented tabs
-  tabRow: { flexDirection: 'row', marginHorizontal: SPACE.xl, marginTop: SPACE.s, marginBottom: SPACE.l, backgroundColor: FUEL.white, borderRadius: RADIUS.pill, padding: 4, borderWidth: 1.5, borderColor: FUEL.sandBorder },
+  tabRow: { flexDirection: 'row', marginHorizontal: SPACE.xl, marginTop: SPACE.l, marginBottom: SPACE.l, backgroundColor: FUEL.white, borderRadius: RADIUS.pill, padding: 4, borderWidth: 1.5, borderColor: FUEL.sandBorder },
   tab: { flex: 1, alignItems: 'center', paddingVertical: SPACE.m, borderRadius: RADIUS.pill },
   tabActive: { backgroundColor: FUEL.ink },
   tabText: { fontFamily: FONT.display, fontSize: 15, color: FUEL.muted, letterSpacing: 0.5 },
