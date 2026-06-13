@@ -7994,6 +7994,208 @@ async def get_business_day(store_id: str, business_date: str, user=Depends(get_c
         raise HTTPException(status_code=404, detail="No business day for that date")
     return _strip_day_for_cashier(day) if role == "cashier" else day
 
+# ==========================================================================
+# AREA DASHBOARD (Phase 5) — cluster-scoped command center for area_manager.
+# READ-ONLY aggregation + an approval inbox that deep-links into the EXISTING
+# discard/transfer approve+reject flows (NO new approve endpoints are added).
+# Strictly cluster-scoped: an area_manager only ever sees their own
+# cluster_store_ids; super_admin sees all stores (for QA). No cross-cluster leak.
+# ==========================================================================
+def _variance_status(v: Optional[float]) -> str:
+    """Classify a day's cash variance for the recon card."""
+    if v is None:
+        return "no_data"
+    if abs(v) <= 1:
+        return "balanced"
+    return "short" if v < 0 else "over"
+
+@api_router.get("/area/dashboard")
+async def area_dashboard(
+    user=Depends(get_current_user),
+    date_from: Optional[str] = Query(None, alias="from"),
+    date_to: Optional[str] = Query(None, alias="to"),
+):
+    """Cluster command center for an area manager (super_admin = all stores, QA).
+    Returns an approval inbox (pending discards + transfers, high-value flagged),
+    cluster pulse, store comparison, discard pattern, cash recon and compliance —
+    all limited to the caller's cluster. Time-bounded metrics default to today
+    (UTC); pass ?from=&to= (YYYY-MM-DD) to widen the window."""
+    if not role_in(user, "area_manager", "super_admin"):
+        raise HTTPException(status_code=403, detail="Area managers or HQ only")
+
+    # ---- Resolve cluster scope (the ONLY store ids this response may touch) ----
+    scope = staff_store_scope(user)  # None => super_admin (all stores)
+    if scope is None:
+        rows = await db.stores.find({}, {"_id": 0, "store_id": 1}).to_list(2000)
+        store_ids = [r["store_id"] for r in rows]
+    else:
+        store_ids = list(scope)
+    stores = await db.stores.find({"store_id": {"$in": store_ids}}, {"_id": 0}).to_list(2000)
+    name_of = {s["store_id"]: (s.get("name") or s["store_id"]) for s in stores}
+    is_area = normalize_role(user) == "area_manager"
+    cluster_set = set(store_ids)
+
+    # Default the metric window to "today" (UTC) unless overridden.
+    today = datetime.now(timezone.utc).date().isoformat()
+    win_from = date_from or today
+    win_to = date_to or today
+    orng = _created_range(win_from, win_to)
+
+    # ---- Approval inbox: pending discards + transfers (deeplink to existing UI) ----
+    inbox = []
+    if store_ids:
+        pend_discards = await db.discards.find(
+            {"store_id": {"$in": store_ids}, "status": {"$in": ["pending", "pending_hq"]}},
+            {"_id": 0}).sort("raised_at", 1).to_list(1000)
+        for d in pend_discards:
+            # area_manager finalizes only plain 'pending'; 'pending_hq' is HQ-only.
+            if is_area:
+                can_decide = d["status"] == "pending" and d.get("raised_by") != user["id"]
+            else:
+                can_decide = d.get("raised_by") != user["id"]
+            inbox.append({
+                "id": d["id"], "kind": "discard",
+                "store_id": d["store_id"], "store_name": name_of.get(d["store_id"], d["store_id"]),
+                "title": f"Discard · {d.get('target_type', '')}".strip(),
+                "subtitle": d.get("reason") or "",
+                "value": round(float(d.get("value", 0) or 0)),
+                "high_value": bool(d.get("hq_required")),
+                "status": d["status"],
+                "at": d.get("raised_at"),
+                "endpoint": f"/discards/{d['id']}/decide",
+                "deeplink": "/hq/discards",
+                "can_decide": can_decide,
+            })
+        pend_transfers = await db.transfers.find(
+            {"$or": [{"from_store_id": {"$in": store_ids}}, {"to_store_id": {"$in": store_ids}}],
+             "status": "requested"},
+            {"_id": 0}).sort("requested_at", 1).to_list(1000)
+        for t in pend_transfers:
+            both_in = {t.get("from_store_id"), t.get("to_store_id")} <= cluster_set
+            can_decide = both_in if is_area else True  # cross-cluster -> HQ only
+            store_id = t.get("from_store_id")
+            inbox.append({
+                "id": t["id"], "kind": "transfer",
+                "store_id": store_id, "store_name": name_of.get(store_id, store_id),
+                "title": "Transfer request",
+                "subtitle": f"{name_of.get(t.get('from_store_id'), t.get('from_store_id'))} → "
+                            f"{name_of.get(t.get('to_store_id'), t.get('to_store_id'))} · qty {t.get('qty')}",
+                "value": None,
+                "high_value": not both_in,  # cross-cluster flagged as an escalation
+                "status": t["status"],
+                "at": t.get("requested_at"),
+                "endpoint": f"/transfers/{t['id']}/decide",
+                "deeplink": "/hq/transfers",
+                "can_decide": can_decide,
+            })
+    # Most urgent first: high-value / escalations, then oldest.
+    inbox.sort(key=lambda i: (not i["high_value"], i.get("at") or ""))
+
+    # ---- Orders metrics (revenue/orders) per store within window ----
+    omatch = {"store_id": {"$in": store_ids}, "status": {"$ne": "cancelled"}}
+    if orng:
+        omatch["created_at"] = orng
+    rev_field = {"$ifNull": ["$item_subtotal", {"$ifNull": ["$total_price", 0]}]}
+    metric_rows = await db.orders.aggregate([
+        {"$match": omatch},
+        {"$group": {"_id": "$store_id", "orders": {"$sum": 1}, "revenue": {"$sum": rev_field}}},
+    ]).to_list(2000) if store_ids else []
+    metric_by = {m["_id"]: m for m in metric_rows}
+
+    # ---- Approved-discard wastage per store within window (by decided_at) ----
+    dmatch = {"store_id": {"$in": store_ids}, "status": "approved"}
+    if orng:
+        dmatch["decided_at"] = orng
+    waste_rows = await db.discards.aggregate([
+        {"$match": dmatch},
+        {"$group": {"_id": "$store_id", "wastage": {"$sum": {"$ifNull": ["$value", 0]}}}},
+    ]).to_list(2000) if store_ids else []
+    waste_by = {w["_id"]: float(w.get("wastage", 0) or 0) for w in waste_rows}
+
+    # ---- Latest closed business day per store -> cash variance ----
+    var_by = {}
+    if store_ids:
+        closed = await db.business_days.find(
+            {"store_id": {"$in": store_ids}, "status": "closed"},
+            {"_id": 0, "store_id": 1, "cash_variance": 1, "closed_at": 1, "business_date": 1}
+        ).sort("closed_at", -1).to_list(5000)
+        for c in closed:
+            if c["store_id"] not in var_by:  # first seen = most recent close
+                var_by[c["store_id"]] = c
+
+    # ---- Per-store comparison ----
+    comparison = []
+    for sid in store_ids:
+        m = metric_by.get(sid, {})
+        orders = int(m.get("orders", 0) or 0)
+        revenue = round(float(m.get("revenue", 0) or 0), 2)
+        wastage = round(waste_by.get(sid, 0.0), 2)
+        wastage_pct = round(wastage / revenue * 100, 1) if revenue > 0 else (0.0 if wastage == 0 else None)
+        day = var_by.get(sid)
+        comparison.append({
+            "store_id": sid, "store": name_of.get(sid, sid),
+            "revenue": revenue, "orders": orders,
+            "aov": round(revenue / orders, 2) if orders else 0,
+            "wastage": wastage, "wastage_pct": wastage_pct,
+            "variance": (day.get("cash_variance") if day else None),
+        })
+    comparison.sort(key=lambda r: r["revenue"], reverse=True)
+
+    # ---- Cluster pulse (totals + worst store by revenue) ----
+    total_rev = round(sum(c["revenue"] for c in comparison), 2)
+    total_orders = sum(c["orders"] for c in comparison)
+    worst = min(comparison, key=lambda c: c["revenue"]) if comparison else None
+    cluster_pulse = {
+        "revenue": total_rev,
+        "orders": total_orders,
+        "aov": round(total_rev / total_orders, 2) if total_orders else 0,
+        "stores": len(store_ids),
+        "worst_store": ({"store_id": worst["store_id"], "store": worst["store"], "revenue": worst["revenue"]}
+                        if worst else None),
+        "window": {"from": win_from, "to": win_to},
+    }
+
+    # ---- Discard pattern: store wastage% ranking (worst first) ----
+    discard_pattern = sorted(
+        [{"store_id": c["store_id"], "store": c["store"], "wastage": c["wastage"],
+          "wastage_pct": c["wastage_pct"]} for c in comparison],
+        key=lambda r: (r["wastage_pct"] if r["wastage_pct"] is not None else -1.0), reverse=True)
+
+    # ---- Cash reconciliation (latest closed day per store) ----
+    cash_recon = []
+    for sid in store_ids:
+        day = var_by.get(sid)
+        v = day.get("cash_variance") if day else None
+        cash_recon.append({
+            "store_id": sid, "store": name_of.get(sid, sid),
+            "cash_variance": v, "status": _variance_status(v),
+            "business_date": (day.get("business_date") if day else None),
+        })
+    cash_recon.sort(key=lambda r: abs(r["cash_variance"]) if r["cash_variance"] is not None else -1, reverse=True)
+
+    # ---- Compliance (GST + FSSAI expiries within the cluster) ----
+    compliance = []
+    for s in stores:
+        for label, field in (("gst", "gst_expiry_at"), ("fssai", "fssai_expiry_at")):
+            days_left = _days_until(s.get(field))
+            if days_left is None:
+                continue
+            compliance.append({
+                "store_id": s["store_id"], "store": name_of.get(s["store_id"], s["store_id"]),
+                "type": label, "expiry": s.get(field), "days_left": days_left,
+            })
+    compliance.sort(key=lambda r: r["days_left"])
+
+    return {
+        "scope": {"store_ids": store_ids, "is_super_admin": scope is None},
+        "approval_inbox": inbox,
+        "cluster_pulse": cluster_pulse,
+        "store_comparison": comparison,
+        "discard_pattern": discard_pattern,
+        "cash_recon": cash_recon,
+        "compliance": compliance,
+    }
+
 @api_router.get("/stores/{store_id}/shifts/summary")
 async def shift_sales_summary(
     store_id: str,
