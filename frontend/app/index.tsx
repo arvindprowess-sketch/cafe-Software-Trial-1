@@ -28,8 +28,14 @@ export default function AuthScreen() {
   const [demoOtp, setDemoOtp] = useState('');
   const [countdown, setCountdown] = useState(0);
   const [isNewUser, setIsNewUser] = useState(false);
+  const [mode, setMode] = useState<'login' | 'signup'>('login'); // LOGIN / SIGN UP tabs (phone step only)
 
   const otpRefs = useRef<(TextInput | null)[]>([]);
+
+  const switchMode = (m: 'login' | 'signup') => {
+    if (m === mode) return;
+    setMode(m); setError(''); setName('');
+  };
 
   // Countdown timer for resend
   useEffect(() => {
@@ -220,6 +226,63 @@ export default function AuthScreen() {
     </>
   );
 
+  // Sign Up Step (name + phone, then the SAME OTP verify flow)
+  const renderSignupStep = () => {
+    const phoneValid = phone.replace(/\D/g, '').length === 10;
+    const valid = !!name.trim() && phoneValid;
+    return (
+      <>
+        <Text style={styles.title}>Create your account</Text>
+        <Text style={styles.subtitle}>We'll verify your number with an OTP</Text>
+
+        <TextInput
+          testID="signup-name"
+          style={styles.nameInput}
+          value={name}
+          onChangeText={setName}
+          placeholder="Your name"
+          placeholderTextColor={FUEL.muted}
+          autoCapitalize="words"
+        />
+
+        <View style={styles.phoneInputContainer}>
+          <View style={styles.countryCode}>
+            <Text style={styles.flag}>🇮🇳</Text>
+            <Text style={styles.countryText}>+91</Text>
+          </View>
+          <TextInput
+            testID="signup-phone"
+            style={styles.phoneInput}
+            value={phone}
+            onChangeText={setPhone}
+            placeholder="9876543210"
+            placeholderTextColor={FUEL.muted}
+            keyboardType="phone-pad"
+            maxLength={10}
+          />
+        </View>
+
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+
+        <TouchableOpacity
+          testID="signup-submit"
+          style={[styles.primaryBtn, !valid && styles.primaryBtnDisabled]}
+          onPress={handleSendOtp}
+          disabled={loading || !valid}
+        >
+          {loading ? (
+            <ActivityIndicator color={FUEL.ink} />
+          ) : (
+            <>
+              <Text style={styles.primaryBtnText}>Get OTP</Text>
+              <Ionicons name="arrow-forward" size={20} color={FUEL.ink} />
+            </>
+          )}
+        </TouchableOpacity>
+      </>
+    );
+  };
+
   // OTP Input Step
   const renderOtpStep = () => (
     <>
@@ -329,14 +392,39 @@ export default function AuthScreen() {
     <SafeAreaView style={styles.safe}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-          {/* Logo */}
-          <View style={styles.logoSection}>
-            <Image source={require('../assets/images/boraroc-monogram.png')} style={styles.logoImg} contentFit="contain" />
-            <Text style={styles.brand}>BORAROC</Text>
-          </View>
+          {/* HERO — approved brand lockup (Option A2): full width, edge-to-edge,
+              whole lockup visible (contain, natural aspect — never crop). Cream
+              artwork background blends into the sand screen. The image already
+              contains the logo, wordmark, tagline and ROC strip. */}
+          <Image
+            testID="brand-hero"
+            source={require('../assets/images/brand-hero.png')}
+            style={styles.heroImg}
+            contentFit="contain"
+          />
+
+          {/* LOGIN / SIGN UP tabs (shown on the phone/entry step) */}
+          {step === 'phone' && (
+            <View style={styles.tabRow}>
+              <TouchableOpacity
+                testID="auth-tab-login"
+                style={[styles.tab, mode === 'login' && styles.tabActive]}
+                onPress={() => switchMode('login')}
+              >
+                <Text style={[styles.tabText, mode === 'login' && styles.tabTextActive]}>LOGIN</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                testID="auth-tab-signup"
+                style={[styles.tab, mode === 'signup' && styles.tabActive]}
+                onPress={() => switchMode('signup')}
+              >
+                <Text style={[styles.tabText, mode === 'signup' && styles.tabTextActive]}>SIGN UP</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           <View style={styles.formCard}>
-            {step === 'phone' && renderPhoneStep()}
+            {step === 'phone' && (mode === 'signup' ? renderSignupStep() : renderPhoneStep())}
             {step === 'otp' && renderOtpStep()}
             {step === 'name' && renderNameStep()}
           </View>
@@ -355,16 +443,21 @@ export default function AuthScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: FUEL.ink },
-  scroll: { flexGrow: 1, justifyContent: 'center', padding: SPACE.xl },
+  safe: { flex: 1, backgroundColor: FUEL.sand },
+  scroll: { flexGrow: 1, paddingBottom: SPACE.xl },
 
-  // Logo
-  logoSection: { alignItems: 'center', marginBottom: SPACE.xxl },
-  logoImg: { width: 96, height: 96, marginBottom: SPACE.l },
-  brand: { fontFamily: FONT.display, fontSize: 40, color: FUEL.sand, textTransform: 'uppercase', letterSpacing: 1 },
+  // HERO — full-width brand lockup (edge-to-edge, natural aspect, never cropped)
+  heroImg: { width: '100%', aspectRatio: 1122 / 1402 },
+
+  // LOGIN / SIGN UP segmented tabs
+  tabRow: { flexDirection: 'row', marginHorizontal: SPACE.xl, marginTop: SPACE.s, marginBottom: SPACE.l, backgroundColor: FUEL.white, borderRadius: RADIUS.pill, padding: 4, borderWidth: 1.5, borderColor: FUEL.sandBorder },
+  tab: { flex: 1, alignItems: 'center', paddingVertical: SPACE.m, borderRadius: RADIUS.pill },
+  tabActive: { backgroundColor: FUEL.ink },
+  tabText: { fontFamily: FONT.display, fontSize: 15, color: FUEL.muted, letterSpacing: 0.5 },
+  tabTextActive: { color: FUEL.lime },
 
   // Form Card
-  formCard: { backgroundColor: FUEL.white, borderRadius: RADIUS.lg, padding: SPACE.xxl, shadowColor: FUEL.ink, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 20, elevation: 6 },
+  formCard: { backgroundColor: FUEL.white, borderRadius: RADIUS.lg, padding: SPACE.xxl, marginHorizontal: SPACE.xl, shadowColor: FUEL.ink, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 20, elevation: 6 },
 
   // Back button
   backBtn: { position: 'absolute', top: 16, left: 16, width: 40, height: 40, borderRadius: 20, backgroundColor: FUEL.sand, alignItems: 'center', justifyContent: 'center', zIndex: 10 }, // circle
@@ -424,6 +517,6 @@ const styles = StyleSheet.create({
   error: { color: FUEL.error, fontFamily: FONT.bodySemibold, fontSize: 13, textAlign: 'center', marginBottom: SPACE.m },
 
   // Terms / consent line
-  terms: { fontFamily: FONT.body, fontSize: 11, color: 'rgba(244,241,233,0.5)', textAlign: 'center', marginTop: SPACE.xl },
-  termsLink: { fontFamily: FONT.bodySemibold, color: 'rgba(244,241,233,0.8)', textDecorationLine: 'underline' },
+  terms: { fontFamily: FONT.body, fontSize: 11, color: FUEL.muted, textAlign: 'center', marginTop: SPACE.xl, paddingHorizontal: SPACE.xl },
+  termsLink: { fontFamily: FONT.bodySemibold, color: FUEL.ink, textDecorationLine: 'underline' },
 });
