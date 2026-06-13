@@ -176,12 +176,6 @@ export default function AuthScreen() {
   // Phone Input Step
   const renderPhoneStep = () => (
     <>
-      <View style={styles.iconContainer}>
-        <View style={styles.phoneBg}>
-          <Ionicons name="phone-portrait" size={40} color={FUEL.limeDeep} />
-        </View>
-      </View>
-
       <Text style={styles.title}>Enter your mobile number</Text>
       <Text style={styles.subtitle}>We'll send you an OTP to verify</Text>
 
@@ -463,7 +457,7 @@ const styles = StyleSheet.create({
   tabTextActive: { color: FUEL.lime },
 
   // Form Card
-  formCard: { backgroundColor: FUEL.white, borderRadius: RADIUS.lg, padding: SPACE.xxl, marginHorizontal: SPACE.xl, shadowColor: FUEL.ink, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 20, elevation: 6 },
+  formCard: { backgroundColor: FUEL.white, borderRadius: RADIUS.lg, padding: SPACE.l, marginHorizontal: SPACE.xl, shadowColor: FUEL.ink, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 20, elevation: 6 },
 
   // Back button
   backBtn: { position: 'absolute', top: 16, left: 16, width: 40, height: 40, borderRadius: 20, backgroundColor: FUEL.sand, alignItems: 'center', justifyContent: 'center', zIndex: 10 }, // circle
@@ -476,7 +470,7 @@ const styles = StyleSheet.create({
 
   // Titles
   title: { fontFamily: FONT.display, fontSize: 24, color: FUEL.ink, textAlign: 'center', marginBottom: SPACE.s, textTransform: 'uppercase', letterSpacing: 0.3 },
-  subtitle: { fontFamily: FONT.body, fontSize: 14, color: FUEL.muted, textAlign: 'center', marginBottom: SPACE.xl },
+  subtitle: { fontFamily: FONT.body, fontSize: 14, color: FUEL.muted, textAlign: 'center', marginBottom: SPACE.l },
 
   // Phone input
   phoneInputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: FUEL.sand, borderRadius: RADIUS.md, overflow: 'hidden', marginBottom: SPACE.l, borderWidth: 1.5, borderColor: FUEL.sandBorder },
@@ -507,7 +501,7 @@ const styles = StyleSheet.create({
   resendText: { fontFamily: FONT.bodyBold, fontSize: 14, color: FUEL.limeDeep },
 
   // Divider
-  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: SPACE.xl },
+  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: SPACE.m },
   dividerLine: { flex: 1, height: 1, backgroundColor: FUEL.sandBorder },
   dividerText: { paddingHorizontal: SPACE.l, fontFamily: FONT.body, fontSize: 13, color: FUEL.muted },
 
