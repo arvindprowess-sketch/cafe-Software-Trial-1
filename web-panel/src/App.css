@@ -304,6 +304,42 @@ input, select { font-family: inherit; }
 .search-input:focus { border-color: var(--ink); }
 .search-input::placeholder { color: var(--muted); }
 
+/* ===================================================================== */
+/* AREA DASHBOARD (Phase 5) — cluster command center, mobile-first.       */
+/* ===================================================================== */
+.area-section { margin-bottom: 28px; }
+.area-section h2 { font-family: var(--font-brand); font-size: 20px; color: var(--ink); text-transform: uppercase; letter-spacing: 0.02em; margin-bottom: 4px; }
+.area-section .area-sub { color: var(--muted); font-size: 13px; font-weight: 500; margin-bottom: 14px; }
+
+/* Generic card used across the dashboard sections */
+.area-card { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 18px; box-shadow: var(--shadow-card); }
+
+/* Responsive two-up grid of cards — collapses to one column on small screens */
+.area-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+
+/* Approval inbox — thumb-friendly stacked cards */
+.area-inbox { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.appr-card { display: flex; flex-direction: column; gap: 12px; background: var(--white); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; box-shadow: var(--shadow-card); }
+.appr-card.high-value { border-color: var(--lime-deep); border-left: 5px solid var(--lime-deep); }
+.appr-card .appr-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.appr-card .appr-title { font-weight: 700; color: var(--ink); font-size: 15px; }
+.appr-card .appr-meta { font-size: 13px; color: var(--muted); margin-top: 2px; }
+.appr-actions { display: flex; gap: 10px; }
+/* Thumb-friendly: large tap targets, each action fills half the card width */
+.appr-actions .btn { flex: 1; justify-content: center; min-height: 48px; }
+
+.area-list { list-style: none; margin: 0; padding: 0; }
+.area-list li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 11px 2px; border-bottom: 1px solid var(--border); font-size: 14px; }
+.area-list li:last-child { border-bottom: none; }
+
+th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+th.sortable .sort-caret { opacity: 0.6; font-size: 11px; margin-left: 4px; }
+
+@media (max-width: 920px) {
+  .area-grid { grid-template-columns: 1fr; }
+  .area-inbox { grid-template-columns: 1fr; }
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: var(--sand); }
