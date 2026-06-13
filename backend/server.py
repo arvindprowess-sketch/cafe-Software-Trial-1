@@ -8196,6 +8196,174 @@ async def area_dashboard(
         "compliance": compliance,
     }
 
+# ==========================================================================
+# STORE DASHBOARD (Phase 5) — single-store command center for store managers.
+# READ-ONLY: today's pulse, live kitchen ops, low stock, today's discards,
+# staff in/absent, day open/close + cash, top/bottom items this week, and the
+# manager's last physical-count result. Scope: store_manager (own store ONLY,
+# 403 otherwise), area_manager (cluster), super_admin (any). Also the drill-down
+# target for the HQ health grid / area store-comparison rows.
+# ==========================================================================
+@api_router.get("/store/{store_id}/dashboard")
+async def store_dashboard(store_id: str, user=Depends(get_current_user)):
+    """One store's operational dashboard. store_manager is locked to their own
+    store (assert_store_allowed -> 403 on mismatch); area_manager limited to their
+    cluster; super_admin any. A brand-new store returns zeros with empty=True."""
+    if not role_in(user, "store_manager", "area_manager", "super_admin"):
+        raise HTTPException(status_code=403, detail="Store managers, area managers or HQ only")
+    assert_store_allowed(user, store_id)  # 403 if outside caller's scope
+    store = await db.stores.find_one({"store_id": store_id}, {"_id": 0})
+    if not store:
+        raise HTTPException(status_code=404, detail="Store not found")
+
+    now = datetime.now(timezone.utc)
+    today = now.date().isoformat()
+    last_week = (now.date() - timedelta(days=7)).isoformat()
+    week_start = (now.date() - timedelta(days=6)).isoformat()  # inclusive 7-day window
+
+    def _rev(o):  # selling-price revenue (matches order_revenue helper)
+        v = o.get("item_subtotal")
+        return float(v if v is not None else (o.get("total_price") or 0) or 0)
+
+    # ---- TODAY vs SAME WEEKDAY LAST WEEK ----
+    day_orders = await db.orders.find(
+        {"store_id": store_id, "status": {"$ne": "cancelled"}, "created_at": {"$gte": today}},
+        {"_id": 0}).to_list(100000)
+    today_rev = round(sum(_rev(o) for o in day_orders), 2)
+    today_n = len(day_orders)
+    prev_orders = await db.orders.find(
+        {"store_id": store_id, "status": {"$ne": "cancelled"},
+         "created_at": {"$gte": last_week, "$lte": last_week + "T23:59:59.999999+00:00"}},
+        {"_id": 0, "item_subtotal": 1, "total_price": 1}).to_list(100000)
+    prev_rev = round(sum(_rev(o) for o in prev_orders), 2)
+    vs_pct = round((today_rev - prev_rev) / prev_rev * 100, 1) if prev_rev > 0 else None
+    today_block = {
+        "revenue": today_rev, "orders": today_n,
+        "avg_ticket": round(today_rev / today_n, 2) if today_n else 0,
+        "vs_same_weekday_pct": vs_pct,
+    }
+
+    # ---- LIVE KITCHEN OPS ----
+    queue_len = await db.orders.count_documents(
+        {"store_id": store_id, "status": {"$in": ["pending", "accepted", "preparing"]}})
+    # No per-transition timestamps exist, so prep time is the recipe estimate:
+    # average of the LONGEST item prep time per order today (mirrors B5 alert logic).
+    pids = {it.get("product_id") for o in day_orders for it in o.get("items", []) if it.get("product_id")}
+    prep_by_pid = {}
+    if pids:
+        prods = await db.products.find({"id": {"$in": list(pids)}},
+                                       {"_id": 0, "id": 1, "preparation_time_minutes": 1}).to_list(5000)
+        prep_by_pid = {p["id"]: float(p.get("preparation_time_minutes") or 0) for p in prods}
+    per_order_prep = []
+    for o in day_orders:
+        times = [prep_by_pid.get(it.get("product_id"), 0) for it in o.get("items", [])]
+        times = [t for t in times if t > 0]
+        if times:
+            per_order_prep.append(max(times))
+    prep_avg = round(sum(per_order_prep) / len(per_order_prep), 1) if per_order_prep else 0
+    live_block = {"kitchen_queue_len": queue_len, "prep_time_avg_today": prep_avg}
+
+    # ---- STOCK: low stock (qty at/below reorder level) ----
+    inv = await db.inventory_items.find({"store_id": store_id}, {"_id": 0}).to_list(5000)
+    low_stock = []
+    for i in inv:
+        qty = float(i.get("qty_on_hand", 0) or 0)
+        rl = float(i.get("reorder_level", 0) or 0)
+        if rl > 0 and qty <= rl:
+            low_stock.append({"item": i.get("name") or i["id"], "item_id": i["id"],
+                              "qty": round(qty, 2), "reorder_level": round(rl, 2),
+                              "unit": i.get("unit", "g")})
+    low_stock.sort(key=lambda r: (r["qty"] - r["reorder_level"]))
+    stock_block = {"low_stock": low_stock, "tracked_items": len(inv)}
+
+    # ---- DISCARDS TODAY ----
+    today_discards = await db.discards.find(
+        {"store_id": store_id, "raised_at": {"$gte": today}}, {"_id": 0}).to_list(5000)
+    waste_value = round(sum(float(d.get("value", 0) or 0) for d in today_discards), 2)
+    wastage_pct = round(waste_value / today_rev * 100, 1) if today_rev > 0 else (0.0 if waste_value == 0 else None)
+    discards_block = {"items": len(today_discards), "wastage_value": waste_value,
+                      "total_wastage_pct": wastage_pct}
+
+    # ---- STAFF: scheduled today, in (rang/handled activity) vs absent ----
+    shifts_today = await db.shifts.find({"store_id": store_id, "date": today}, {"_id": 0}).to_list(1000)
+    active_ids = {o.get("user_id") for o in day_orders if o.get("user_id")}  # rang sales today
+    staff_in, staff_absent = [], []
+    for s in shifts_today:
+        entry = {"staff_id": s.get("staff_id"), "name": s.get("staff_name"), "role": s.get("staff_role")}
+        (staff_in if s.get("staff_id") in active_ids else staff_absent).append(entry)
+    staff_block = {"scheduled": len(shifts_today), "in": len(staff_in), "absent": len(staff_absent),
+                   "in_list": staff_in, "absent_list": staff_absent}
+
+    # ---- DAY: open/close + cash position ----
+    open_day = await db.business_days.find_one({"store_id": store_id, "status": "open"}, {"_id": 0})
+    if open_day:
+        cash_sales = await _cash_sales_in_window(store_id, open_day["opened_at"], now.isoformat())
+        cash_position = round(float(open_day.get("opening_cash_float", 0) or 0)
+                              + cash_sales - float(open_day.get("payouts", 0) or 0), 2)
+        day_block = {"status": "open", "opened_at": open_day.get("opened_at"), "closed_at": None,
+                     "cash_position": cash_position, "cash_variance": None,
+                     "business_date": open_day.get("business_date")}
+    else:
+        last_closed = await db.business_days.find(
+            {"store_id": store_id, "status": "closed"}, {"_id": 0}).sort("closed_at", -1).to_list(1)
+        if last_closed:
+            d = last_closed[0]
+            day_block = {"status": "closed", "opened_at": d.get("opened_at"), "closed_at": d.get("closed_at"),
+                         "cash_position": d.get("closing_cash_counted"), "cash_variance": d.get("cash_variance"),
+                         "business_date": d.get("business_date")}
+        else:
+            day_block = {"status": "none", "opened_at": None, "closed_at": None,
+                         "cash_position": None, "cash_variance": None, "business_date": None}
+
+    # ---- TOP / BOTTOM 5 ITEMS THIS WEEK (by qty sold) ----
+    week_rows = await db.orders.aggregate([
+        {"$match": {"store_id": store_id, "status": {"$ne": "cancelled"}, "created_at": {"$gte": week_start}}},
+        {"$unwind": "$items"},
+        {"$group": {"_id": "$items.product_id",
+                    "name": {"$first": {"$ifNull": ["$items.name", "$items.product_name"]}},
+                    "qty": {"$sum": {"$ifNull": ["$items.quantity", 1]}}}},
+        {"$sort": {"qty": -1}},
+    ]).to_list(10000)
+    sellers = [{"product_id": r["_id"], "name": r.get("name") or r["_id"], "qty": r.get("qty", 0)}
+               for r in week_rows if r.get("_id")]
+    top5 = sellers[:5]
+    bottom5 = list(reversed(sellers[-5:])) if len(sellers) > 5 else list(reversed(sellers))
+
+    # ---- MY VARIANCE: latest physical-count session ----
+    last_counts = await db.movement_log.find(
+        {"store_id": store_id, "source": "physical_count"}, {"_id": 0}
+    ).sort("created_at", -1).to_list(500)
+    if last_counts:
+        last_date = (last_counts[0].get("created_at") or "")[:10]
+        session = [m for m in last_counts if (m.get("created_at") or "")[:10] == last_date]
+        flagged = sum(1 for m in session if m.get("flagged_for_review"))
+        my_variance = {
+            "last_count_at": last_counts[0].get("created_at"),
+            "last_count_result": {"items_counted": len(session), "flagged_items": flagged,
+                                  "net_variance": round(sum(float(m.get("qty_delta", 0) or 0) for m in session), 2)},
+            "within_tolerance": flagged == 0,
+        }
+    else:
+        my_variance = {"last_count_at": None, "last_count_result": None, "within_tolerance": True}
+
+    # Brand-new store with nothing recorded yet -> let the UI show "No data yet".
+    empty = (today_n == 0 and not low_stock and not today_discards and not shifts_today
+             and day_block["status"] == "none" and not sellers)
+
+    return {
+        "store_id": store_id, "store_name": store.get("name") or store_id,
+        "empty": empty,
+        "today": today_block,
+        "live": live_block,
+        "stock": stock_block,
+        "discards_today": discards_block,
+        "staff": staff_block,
+        "day": day_block,
+        "top5": top5,
+        "bottom5": bottom5,
+        "my_variance": my_variance,
+    }
+
 @api_router.get("/stores/{store_id}/shifts/summary")
 async def shift_sales_summary(
     store_id: str,

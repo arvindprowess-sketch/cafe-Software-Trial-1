@@ -51,6 +51,7 @@ export const ADMIN_NAV_KEYS: Record<string, string[]> = {
  */
 export const HQ_SUB_ROUTE_ROLES: Record<string, string[]> = {
   '/hq/area-dashboard': ['area_manager', 'super_admin'],
+  '/hq/store-dashboard': ['store_manager', 'area_manager', 'super_admin'],
   '/hq/stores':  ['admin', 'super_admin', 'area_manager'],
   '/hq/catalog': ['admin', 'super_admin', 'area_manager', 'store_manager'],
   '/hq/push':    ['admin', 'super_admin'],

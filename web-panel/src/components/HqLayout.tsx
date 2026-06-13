@@ -11,6 +11,7 @@ import { HQ_SUB_ROUTE_ROLES, ADMIN_HOME_ROUTE } from '../auth/permissions';
 // - store_manager: Store Catalog (own store), Offers.
 // cashier/kitchen never reach here (route + default-route gating).
 const HQ_NAV = [
+  { path: '/hq/store-dashboard', label: 'My Store' },
   { path: '/hq/area-dashboard', label: 'My Cluster' },
   { path: '/hq/stores', label: 'Stores & Clusters' },
   { path: '/hq/catalog', label: 'Store Catalog' },
@@ -33,7 +34,7 @@ function navForRole(role?: string) {
 
 export function hqHomeFor(role?: string) {
   if (role === 'area_manager') return '/hq/area-dashboard';
-  if (role === 'store_manager') return '/hq/catalog';
+  if (role === 'store_manager') return '/hq/store-dashboard';
   return '/hq/stores';
 }
 
