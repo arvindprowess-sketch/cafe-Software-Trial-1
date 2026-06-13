@@ -191,16 +191,8 @@ export default function HomeScreen() {
   // Avatar initial derived from the loaded user's name
   const userInitial = (user?.name || '').trim().charAt(0).toUpperCase();
 
-  // Memoize popular products (best sellers, up to 30) arranged into a 5-row horizontal grid
+  // Memoize popular products (best sellers, up to 30); shown as a single-row carousel
   const popularProducts = useMemo(() => products.slice(0, 30), [products]);
-  const POPULAR_ROWS = 5;
-  const popularColumns = useMemo(() => {
-    const cols: any[][] = [];
-    for (let i = 0; i < popularProducts.length; i += POPULAR_ROWS) {
-      cols.push(popularProducts.slice(i, i + POPULAR_ROWS));
-    }
-    return cols;
-  }, [popularProducts]);
 
   const renderPopularCard = (item: any, idx: number) => {
     // v5 badge precedence (client-side only): HIGH PROTEIN -> BUDGET -> POPULAR
@@ -1022,11 +1014,7 @@ export default function HomeScreen() {
           contentContainerStyle={styles.popularGridScroll}
           removeClippedSubviews={true}
         >
-          {popularColumns.map((col, ci) => (
-            <View key={ci} style={styles.popularColumn}>
-              {col.map((item, ri) => renderPopularCard(item, ci * POPULAR_ROWS + ri))}
-            </View>
-          ))}
+          {popularProducts.slice(0, 12).map((item, idx) => renderPopularCard(item, idx))}
         </ScrollView>
 
         <View style={{ height: 100 }} />
@@ -1571,9 +1559,8 @@ const styles = StyleSheet.create({
   popularHeaderRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', paddingRight: SPACE.l },
   popularHint: { fontFamily: FONT.bodyBold, fontSize: 11, color: FUEL.muted, marginBottom: SPACE.l, textTransform: 'uppercase', letterSpacing: 0.3 },
   popularGridScroll: { paddingHorizontal: SPACE.m, gap: SPACE.m, paddingBottom: SPACE.xs },
-  popularColumn: { gap: SPACE.m },
   popularCard: {
-    width: 156,
+    width: 168,
     backgroundColor: FUEL.white,
     borderRadius: RADIUS.md,
     overflow: 'hidden',
