@@ -24,6 +24,20 @@ const hapticSuccess = () => {
 
 const { width } = Dimensions.get('window');
 
+// Offers carousel (v5 ticket cards): ~78% width so the next card peeks.
+const OFFER_CARD_W = Math.round(width * 0.78);
+const OFFER_GAP = 12;
+const OFFER_SNAP = OFFER_CARD_W + OFFER_GAP;
+const OFFER_ACCENTS = [FUEL.lime, FUEL.protein, FUEL.carbs]; // rotates by index
+
+// percentage="{v}% OFF", flat="₹{v} OFF", bogo="BUY 1 GET 1"
+const offerValueText = (item: any): string => {
+  const v = item?.discount_value ?? 0;
+  if (item?.discount_type === 'bogo') return 'BUY 1 GET 1';
+  if (item?.discount_type === 'flat') return `₹${v} OFF`;
+  return `${v}% OFF`;
+};
+
 // Category grid (FUEL palette)
 const MENU_CATEGORIES = [
   { key: 'Protein', label: 'High Protein', icon: 'barbell', color: FUEL.protein, image: 'https://images.unsplash.com/photo-1632778149955-e80f8ceca2e8?w=100&h=100&fit=crop' },
@@ -48,6 +62,9 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const bannerRef = useRef<FlatList>(null);
   const [bannerIdx, setBannerIdx] = useState(0);
+  // Offers popup (NET-NEW): bottom-sheet shown once/day/user after first load
+  const [showOffersPopup, setShowOffersPopup] = useState(false);
+  const offersPopupChecked = useRef(false);
 
   // Side drawer state
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -91,6 +108,24 @@ export default function HomeScreen() {
     } catch {}
   }, []);
 
+  // Show the offers popup once per day per user, only when active offers exist.
+  // Data source: the type:'offer' entries from /banners (the active-offers feed
+  // Home already loads) — no new endpoint. Frequency key: per-user YYYY-MM-DD.
+  const maybeShowOffersPopup = useCallback(async (bannerList: any[], u: any) => {
+    if (offersPopupChecked.current) return;
+    const offers = (bannerList || []).filter((x: any) => x.type === 'offer' && x.offer_id);
+    if (!offers.length) return;
+    const key = `offers_popup_last_shown_${u?.id || 'anon'}`;
+    const today = new Date().toISOString().slice(0, 10);
+    try {
+      const last = await AsyncStorage.getItem(key);
+      offersPopupChecked.current = true; // one decision per app session
+      if (last === today) return;        // already shown today → skip
+      await AsyncStorage.setItem(key, today);
+      setShowOffersPopup(true);
+    } catch { offersPopupChecked.current = true; }
+  }, []);
+
   const loadData = useCallback(async () => {
     try {
       const [u, s, best, b, cats] = await Promise.all([
@@ -104,8 +139,9 @@ export default function HomeScreen() {
       setMenuCats(Array.isArray(cats) && cats.length ? cats : []);
       loadTarget();
       loadSavedMeals();
+      maybeShowOffersPopup(b, u);
     } catch (e) {} finally { setLoading(false); }
-  }, [loadTarget, loadSavedMeals]);
+  }, [loadTarget, loadSavedMeals, maybeShowOffersPopup]);
 
   useEffect(() => { loadData(); }, []);
   // Refresh the personalized target (and saved meals — e.g. after saving a build)
@@ -117,17 +153,21 @@ export default function HomeScreen() {
   useEffect(() => {
     if (params.openAi) { setShowMealBuilder(true); }
   }, [params.openAi]);
-  useEffect(() => {
-    if (banners.length <= 1) return;
-    const timer = setInterval(() => {
-      setBannerIdx(prev => {
-        const next = (prev + 1) % banners.length;
-        bannerRef.current?.scrollToIndex({ index: next, animated: true });
-        return next;
-      });
-    }, 3000);
-    return () => clearInterval(timer);
-  }, [banners]);
+  // Offers carousel: drive the dot pager from the snap position.
+  const onOffersScroll = (e: any) => {
+    const x = e?.nativeEvent?.contentOffset?.x || 0;
+    const idx = Math.max(0, Math.min(banners.length - 1, Math.round(x / OFFER_SNAP)));
+    if (idx !== bannerIdx) setBannerIdx(idx);
+  };
+
+  // Existing tap behavior: offer -> /offer-detail, pack -> /pack-detail.
+  const handleBannerPress = (item: any) => {
+    if (item.type === 'offer' && item.offer_id) {
+      router.push({ pathname: '/offer-detail', params: { offerId: item.offer_id } });
+    } else if (item.type === 'pack' && item.pack_id) {
+      router.push({ pathname: '/pack-detail', params: { packId: item.pack_id } });
+    }
+  };
 
   const onRefresh = async () => { setRefreshing(true); await loadData(); setRefreshing(false); };
 
@@ -486,61 +526,94 @@ export default function HomeScreen() {
           ) : null}
         </View>
 
-        {/* ===== PROMOTIONAL BANNERS — dark hero style (ink + lime) ===== */}
-        {banners.length > 0 && (
-          <FlatList
-            ref={bannerRef}
-            horizontal showsHorizontalScrollIndicator={false} pagingEnabled
-            data={banners} keyExtractor={item => item.id}
-            style={styles.bannerList}
-            onScrollToIndexFailed={() => {}}
-            removeClippedSubviews={true}
-            maxToRenderPerBatch={3}
-            windowSize={5}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                activeOpacity={0.85}
-                testID={`banner-${item.id}`}
-                onPress={() => {
-                  if (item.type === 'offer' && item.offer_id) {
-                    router.push({ pathname: '/offer-detail', params: { offerId: item.offer_id } });
-                  } else if (item.type === 'pack' && item.pack_id) {
-                    router.push({ pathname: '/pack-detail', params: { packId: item.pack_id } });
-                  }
-                }}
-              >
-                <View style={styles.banner}>
-                  <View style={styles.bannerContent}>
-                    <Text style={styles.bannerTitle}>{item.title}</Text>
-                    <Text style={styles.bannerSub}>{item.subtitle}</Text>
-                    {item.type === 'offer' && (
-                      <View style={styles.bannerDiscountCircle}>
-                        <Text style={styles.bannerDiscountPercent}>
-                          {item.discount_type === 'percentage' ? `${item.discount_value}%` : `₹${item.discount_value}`}
+        {/* ===== OFFERS FOR YOU — v5 ticket carousel (data + routing kept) ===== */}
+        {loading ? (
+          <View style={styles.offerSkeletonRow}>
+            <View style={styles.offerSkeletonCard} />
+            <View style={[styles.offerSkeletonCard, styles.offerSkeletonPeek]} />
+          </View>
+        ) : banners.length > 0 ? (
+          <>
+            <FlatList
+              ref={bannerRef}
+              testID="offers-carousel"
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              data={banners}
+              keyExtractor={item => item.id}
+              style={styles.offerList}
+              contentContainerStyle={styles.offerListContent}
+              snapToInterval={OFFER_SNAP}
+              snapToAlignment="start"
+              decelerationRate="fast"
+              onMomentumScrollEnd={onOffersScroll}
+              removeClippedSubviews={true}
+              renderItem={({ item, index }) => {
+                const accent = OFFER_ACCENTS[index % OFFER_ACCENTS.length];
+                const isOffer = item.type === 'offer';
+                const isPack = item.type === 'pack';
+                const cardId = item.offer_id || item.pack_id || item.id;
+                const eyebrow = isOffer ? 'LIMITED OFFER' : isPack ? 'MEAL PACK' : 'BORAROC';
+                return (
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    testID={`offer-card-${cardId}`}
+                    style={styles.offerCard}
+                    onPress={() => handleBannerPress(item)}
+                  >
+                    <View style={styles.offerTop}>
+                      <View style={[styles.offerEyebrow, { backgroundColor: accent }]}>
+                        <Text style={styles.offerEyebrowText}>{eyebrow}</Text>
+                      </View>
+                      {isOffer && (
+                        <Text style={[styles.offerValue, { color: accent }]} numberOfLines={1}>
+                          {offerValueText(item)}
                         </Text>
-                        <Text style={styles.bannerDiscountLabel}>OFF</Text>
-                      </View>
-                    )}
-                    {item.type === 'pack' && (
-                      <View style={styles.bannerBadge}>
-                        <Ionicons name="nutrition" size={12} color={FUEL.lime} />
-                        <Text style={styles.bannerBadgeText}>View Pack</Text>
-                      </View>
-                    )}
-                  </View>
-                  <View style={styles.bannerImagePlaceholder}>
-                    <Ionicons name={item.type === 'pack' ? 'fitness' : item.type === 'offer' ? 'pricetag' : 'fast-food'} size={60} color="rgba(199,242,78,0.35)" />
-                  </View>
-                </View>
-              </TouchableOpacity>
-            )}
-          />
-        )}
-        <View style={styles.dots}>
-          {banners.map((_, i) => (
-            <View key={i} style={[styles.dot, i === bannerIdx && styles.dotActive]} />
-          ))}
-        </View>
+                      )}
+                      <Text style={styles.offerTitle} numberOfLines={1}>{item.title}</Text>
+                      <Text style={styles.offerSubtitle} numberOfLines={1}>{item.subtitle}</Text>
+                    </View>
+
+                    {/* coupon perforation divider with two side notches */}
+                    <View style={styles.offerPerf}>
+                      <View style={[styles.offerNotch, styles.offerNotchLeft]} />
+                      <View style={styles.offerDash} />
+                      <View style={[styles.offerNotch, styles.offerNotchRight]} />
+                    </View>
+
+                    <View style={styles.offerBottom}>
+                      {isOffer ? (
+                        <>
+                          <View style={styles.offerCodeChip}>
+                            <Ionicons name="ticket-outline" size={12} color={FUEL.sand} />
+                            <Text testID={`offer-code-${cardId}`} style={styles.offerCodeText}>TAP TO APPLY</Text>
+                          </View>
+                          <TouchableOpacity
+                            testID={`offer-redeem-${cardId}`}
+                            style={styles.offerRedeem}
+                            activeOpacity={0.85}
+                            onPress={() => handleBannerPress(item)}
+                          >
+                            <Text style={styles.offerRedeemText}>REDEEM</Text>
+                          </TouchableOpacity>
+                        </>
+                      ) : (
+                        <TouchableOpacity style={styles.offerRedeem} activeOpacity={0.85} onPress={() => handleBannerPress(item)}>
+                          <Text style={styles.offerRedeemText}>{isPack ? 'VIEW PACK' : 'EXPLORE'}</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                );
+              }}
+            />
+            <View style={styles.dots}>
+              {banners.map((_, i) => (
+                <View key={i} style={[styles.dot, i === bannerIdx && styles.dotActive]} />
+              ))}
+            </View>
+          </>
+        ) : null}
 
         {/* ===== CATEGORY CHIPS (DB taxonomy + synthetic AI Picks) ===== */}
         <Text style={styles.sectionTitle}>Our Menu</Text>
@@ -985,6 +1058,52 @@ export default function HomeScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* ===== OFFERS POPUP — post-login bottom sheet (once/day/user) ===== */}
+      <Modal visible={showOffersPopup} transparent animationType="slide" onRequestClose={() => setShowOffersPopup(false)}>
+        <View style={styles.offersPopupOverlay}>
+          <View style={styles.offersPopupSheet}>
+            <View style={styles.offersPopupHeader}>
+              <View>
+                <Text style={styles.offersPopupTitle}>Offers for you</Text>
+                <Text style={styles.offersPopupCount}>
+                  {banners.filter((b: any) => b.type === 'offer').length} active {banners.filter((b: any) => b.type === 'offer').length === 1 ? 'offer' : 'offers'}
+                </Text>
+              </View>
+              <TouchableOpacity testID="offers-popup-close" style={styles.offersPopupClose} onPress={() => setShowOffersPopup(false)} activeOpacity={0.85}>
+                <Ionicons name="close" size={20} color={FUEL.ink} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.offersPopupList} showsVerticalScrollIndicator={false}>
+              {banners.filter((b: any) => b.type === 'offer').map((item: any, index: number) => {
+                const accent = OFFER_ACCENTS[index % OFFER_ACCENTS.length];
+                return (
+                  <TouchableOpacity
+                    key={item.id}
+                    testID={`offers-popup-card-${item.offer_id}`}
+                    style={styles.offersPopupCard}
+                    activeOpacity={0.9}
+                    onPress={() => { setShowOffersPopup(false); handleBannerPress(item); }}
+                  >
+                    <View style={[styles.offersPopupValuePill, { backgroundColor: accent }]}>
+                      <Text style={styles.offersPopupValueText}>{offerValueText(item)}</Text>
+                    </View>
+                    <View style={styles.offersPopupCardBody}>
+                      <Text style={styles.offersPopupCardTitle} numberOfLines={1}>{item.title}</Text>
+                      <Text style={styles.offersPopupCardSub} numberOfLines={1}>{item.subtitle}</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={FUEL.lime} />
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+            <TouchableOpacity testID="offers-popup-skip" style={styles.offersPopupSkip} onPress={() => setShowOffersPopup(false)} activeOpacity={0.7}>
+              <Text style={styles.offersPopupSkipText}>Skip for now</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       <CartPill bottom={6} />
     </SafeAreaView>
   );
@@ -1176,6 +1295,58 @@ const styles = StyleSheet.create({
   dots: { flexDirection: 'row', justifyContent: 'center', gap: SPACE.s, marginTop: SPACE.m },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: FUEL.sandBorder }, // circle
   dotActive: { backgroundColor: FUEL.limeDeep, width: 24 },
+
+  // ===== Offers carousel — v5 ticket cards =====
+  offerList: { marginTop: SPACE.m },
+  offerListContent: { paddingHorizontal: SPACE.l },
+  offerCard: {
+    width: OFFER_CARD_W,
+    marginRight: OFFER_GAP,
+    backgroundColor: FUEL.ink,
+    borderRadius: RADIUS.lg,
+    paddingHorizontal: SPACE.l,
+    paddingVertical: SPACE.l,
+    minHeight: 168,
+    justifyContent: 'space-between',
+  },
+  offerTop: {},
+  offerEyebrow: { alignSelf: 'flex-start', borderRadius: RADIUS.lg, paddingHorizontal: SPACE.m, paddingVertical: 3 },
+  offerEyebrowText: { fontFamily: FONT.bodyExtrabold, fontSize: 10, color: FUEL.ink, letterSpacing: 0.8 },
+  offerValue: { fontFamily: FONT.display, fontSize: 34, letterSpacing: 0.5, marginTop: SPACE.s, textTransform: 'uppercase' },
+  offerTitle: { fontFamily: FONT.bodyExtrabold, fontSize: 15, color: FUEL.sand, marginTop: SPACE.xs, textTransform: 'uppercase', letterSpacing: 0.3 },
+  offerSubtitle: { fontFamily: FONT.bodySemibold, fontSize: 12.5, color: 'rgba(244,241,233,0.7)', marginTop: 2 },
+  // coupon perforation
+  offerPerf: { height: 14, justifyContent: 'center', marginVertical: SPACE.s },
+  offerDash: { borderTopWidth: 1.5, borderStyle: 'dashed', borderColor: 'rgba(244,241,233,0.35)' },
+  offerNotch: { position: 'absolute', width: 14, height: 14, borderRadius: 7, backgroundColor: FUEL.sand, top: 0 },
+  offerNotchLeft: { left: -SPACE.l - 7 },
+  offerNotchRight: { right: -SPACE.l - 7 },
+  offerBottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  offerCodeChip: { flexDirection: 'row', alignItems: 'center', gap: SPACE.xs, borderWidth: 1, borderStyle: 'dashed', borderColor: 'rgba(244,241,233,0.5)', borderRadius: RADIUS.sm, paddingHorizontal: SPACE.m, paddingVertical: SPACE.xs },
+  offerCodeText: { fontFamily: FONT.bodyExtrabold, fontSize: 10.5, color: FUEL.sand, letterSpacing: 0.5 },
+  offerRedeem: { backgroundColor: FUEL.lime, borderRadius: RADIUS.lg, paddingHorizontal: SPACE.l, paddingVertical: SPACE.s },
+  offerRedeemText: { fontFamily: FONT.bodyExtrabold, fontSize: 12, color: FUEL.ink, letterSpacing: 0.5 },
+  // loading skeleton
+  offerSkeletonRow: { flexDirection: 'row', marginTop: SPACE.m, paddingHorizontal: SPACE.l },
+  offerSkeletonCard: { width: OFFER_CARD_W, minHeight: 168, borderRadius: RADIUS.lg, backgroundColor: FUEL.sandBorder, marginRight: OFFER_GAP },
+  offerSkeletonPeek: { opacity: 0.5 },
+
+  // ===== Offers popup — bottom sheet =====
+  offersPopupOverlay: { flex: 1, backgroundColor: 'rgba(21,20,15,0.45)', justifyContent: 'flex-end' },
+  offersPopupSheet: { backgroundColor: FUEL.sand, borderTopLeftRadius: RADIUS.lg, borderTopRightRadius: RADIUS.lg, paddingHorizontal: SPACE.l, paddingTop: SPACE.l, paddingBottom: SPACE.xl, maxHeight: '70%' },
+  offersPopupHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: SPACE.m },
+  offersPopupTitle: { fontFamily: FONT.display, fontSize: 22, color: FUEL.ink, textTransform: 'uppercase', letterSpacing: 0.4 },
+  offersPopupCount: { fontFamily: FONT.bodySemibold, fontSize: 12.5, color: FUEL.muted, marginTop: 2 },
+  offersPopupClose: { width: 36, height: 36, borderRadius: 18, backgroundColor: FUEL.white, borderWidth: 1, borderColor: FUEL.sandBorder, alignItems: 'center', justifyContent: 'center' },
+  offersPopupList: { flexGrow: 0 },
+  offersPopupCard: { flexDirection: 'row', alignItems: 'center', gap: SPACE.m, backgroundColor: FUEL.ink, borderRadius: RADIUS.md, paddingHorizontal: SPACE.l, paddingVertical: SPACE.m, marginBottom: SPACE.s },
+  offersPopupValuePill: { borderRadius: RADIUS.sm, paddingHorizontal: SPACE.s, paddingVertical: SPACE.xs, minWidth: 64, alignItems: 'center' },
+  offersPopupValueText: { fontFamily: FONT.bodyExtrabold, fontSize: 12, color: FUEL.ink, letterSpacing: 0.3 },
+  offersPopupCardBody: { flex: 1 },
+  offersPopupCardTitle: { fontFamily: FONT.bodyExtrabold, fontSize: 14, color: FUEL.sand, textTransform: 'uppercase', letterSpacing: 0.3 },
+  offersPopupCardSub: { fontFamily: FONT.bodySemibold, fontSize: 12, color: 'rgba(244,241,233,0.7)', marginTop: 2 },
+  offersPopupSkip: { alignItems: 'center', paddingVertical: SPACE.m, marginTop: SPACE.s },
+  offersPopupSkipText: { fontFamily: FONT.bodyExtrabold, fontSize: 13, color: FUEL.muted, textDecorationLine: 'underline' },
 
   // Category Grid
   sectionTitle: { fontFamily: FONT.display, fontSize: 24, color: FUEL.ink, paddingHorizontal: SPACE.l, marginTop: SPACE.xl, marginBottom: SPACE.l, letterSpacing: 0.3, textTransform: 'uppercase' },
