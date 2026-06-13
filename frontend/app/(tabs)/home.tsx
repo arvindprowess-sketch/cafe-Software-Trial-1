@@ -203,9 +203,12 @@ export default function HomeScreen() {
   }, [popularProducts]);
 
   const renderPopularCard = (item: any, idx: number) => {
-    const isHighProtein = item.protein_per_100g >= 20;
-    const isUnderBudget = item.cost_per_100g <= 50;
-    const isPopular = idx < 3;
+    // v5 badge precedence (client-side only): HIGH PROTEIN -> BUDGET -> POPULAR
+    const badge = item.protein_per_100g >= 20
+      ? { label: 'HIGH PROTEIN', icon: 'barbell', bg: FUEL.ink, color: FUEL.lime }
+      : item.cost_per_100g <= 15
+        ? { label: 'BUDGET', icon: 'wallet', bg: FUEL.success, color: FUEL.white }
+        : { label: 'POPULAR', icon: 'flame', bg: null, color: FUEL.lime };
     const ci = cartCtx.getItem(item.id);
     return (
       <TouchableOpacity
@@ -219,24 +222,10 @@ export default function HomeScreen() {
             <Ionicons name="restaurant" size={28} color={FUEL.sandBorder} />
           </View>
         )}
-        {isPopular && (
-          <View style={styles.popularBadge}>
-            <Ionicons name="flame" size={10} color={FUEL.lime} />
-            <Text style={styles.popularBadgeText}>POPULAR</Text>
-          </View>
-        )}
-        {isHighProtein && !isPopular && (
-          <View style={[styles.popularBadge, { backgroundColor: FUEL.ink }]}>
-            <Ionicons name="barbell" size={10} color={FUEL.lime} />
-            <Text style={styles.popularBadgeText}>HIGH PROTEIN</Text>
-          </View>
-        )}
-        {isUnderBudget && !isPopular && !isHighProtein && (
-          <View style={[styles.popularBadge, { backgroundColor: FUEL.success }]}>
-            <Ionicons name="wallet" size={10} color={FUEL.white} />
-            <Text style={styles.popularBadgeText}>BUDGET</Text>
-          </View>
-        )}
+        <View testID={`popular-badge-${item.id}`} style={[styles.popularBadge, badge.bg && { backgroundColor: badge.bg }]}>
+          <Ionicons name={badge.icon as any} size={10} color={badge.color} />
+          <Text style={styles.popularBadgeText}>{badge.label}</Text>
+        </View>
         <View style={styles.proteinBadge}>
           <Text style={styles.proteinText}>{item.protein_per_100g}g</Text>
           <Text style={styles.proteinLabel}>Protein</Text>
@@ -407,11 +396,10 @@ export default function HomeScreen() {
       <SideDrawer visible={drawerVisible} onClose={() => setDrawerVisible(false)} user={user} />
 
       <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={FUEL.ink} />} showsVerticalScrollIndicator={false}>
-        {/* ===== HEADER: ☰ · DELIVERY/DINE-IN TOGGLE · AVATAR ===== */}
+        {/* ===== HEADER: DELIVERY/DINE-IN TOGGLE · AVATAR (avatar opens drawer) ===== */}
         <View style={styles.header}>
-          <TouchableOpacity testID="menu-drawer-btn" style={styles.menuBtn} onPress={() => setDrawerVisible(true)}>
-            <Ionicons name="menu" size={24} color={FUEL.sand} />
-          </TouchableOpacity>
+          {/* spacer keeps the toggle centered now that the hamburger is gone */}
+          <View style={styles.headerSpacer} />
 
           {/* Delivery / Dine-in Toggle */}
           <View style={styles.orderToggle}>
@@ -1204,14 +1192,7 @@ const styles = StyleSheet.create({
     paddingBottom: SPACE.m,
     backgroundColor: FUEL.ink,
   },
-  menuBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: RADIUS.md,
-    backgroundColor: FUEL.inkSoft,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
+  headerSpacer: { width: 36, height: 36 }, // mirrors the avatar so the toggle stays centered
   avatar: {
     width: 36,
     height: 36,
