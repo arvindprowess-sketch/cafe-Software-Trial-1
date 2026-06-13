@@ -32,6 +32,7 @@ function navForRole(role?: string) {
 }
 
 export function hqHomeFor(role?: string) {
+  if (role === 'area_manager') return '/hq/area-dashboard';
   if (role === 'store_manager') return '/hq/catalog';
   return '/hq/stores';
 }
