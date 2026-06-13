@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Image,
-  ActivityIndicator, Alert, Switch,
+  ActivityIndicator, Alert, Switch, Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -49,6 +49,7 @@ export default function CartScreen() {
   const { stores, selectedStoreId, selectStore } = useStore();
 
   const [user, setUser] = useState<any>(null);
+  const [showClearConfirm, setShowClearConfirm] = useState(false); // web-safe Clear confirm (Alert collapses to window.confirm on web)
   const [quote, setQuote] = useState<any>(null);
   const [quoting, setQuoting] = useState(false);
   const [placing, setPlacing] = useState(false);
@@ -246,7 +247,7 @@ export default function CartScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <Header title="Your Cart" onBack={() => router.back()} right={
-        <TouchableOpacity testID="clear-cart-btn" onPress={() => Alert.alert('Clear cart?', 'Remove all items?', [{ text: 'No' }, { text: 'Yes', onPress: clear }])}>
+        <TouchableOpacity testID="clear-cart-btn" onPress={() => setShowClearConfirm(true)}>
           <Text style={styles.clearText}>Clear</Text>
         </TouchableOpacity>
       } />
@@ -495,6 +496,24 @@ export default function CartScreen() {
           )}
         </PressableScale>
       </View>
+
+      {/* Web-safe Clear confirmation (Alert.alert collapses to window.confirm on Expo Web) */}
+      <Modal visible={showClearConfirm} transparent animationType="fade" onRequestClose={() => setShowClearConfirm(false)}>
+        <View style={styles.clearOverlay}>
+          <View style={styles.clearCard} testID="clear-confirm-modal">
+            <Text style={styles.clearTitle}>Clear cart?</Text>
+            <Text style={styles.clearMsg}>Remove all items from your cart?</Text>
+            <View style={styles.clearActions}>
+              <TouchableOpacity testID="clear-confirm-no" style={[styles.clearBtn, styles.clearBtnCancel]} onPress={() => setShowClearConfirm(false)} activeOpacity={0.85}>
+                <Text style={styles.clearBtnCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity testID="clear-confirm-yes" style={[styles.clearBtn, styles.clearBtnConfirm]} onPress={() => { clear(); setShowClearConfirm(false); }} activeOpacity={0.85}>
+                <Text style={styles.clearBtnConfirmText}>Clear</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -540,6 +559,17 @@ const styles = StyleSheet.create({
   hTitle: { flex: 1, marginLeft: SPACE.m, fontFamily: FONT.display, fontSize: 22, color: FUEL.ink, textTransform: 'uppercase', letterSpacing: 0.5 },
   hRight: { minWidth: 40, alignItems: 'flex-end' },
   clearText: { color: FUEL.error, fontSize: 13, fontFamily: FONT.bodyExtrabold },
+  // Clear-cart confirm modal (web-safe)
+  clearOverlay: { flex: 1, backgroundColor: 'rgba(21,20,15,0.45)', alignItems: 'center', justifyContent: 'center', padding: SPACE.xl },
+  clearCard: { width: '100%', maxWidth: 360, backgroundColor: FUEL.white, borderRadius: RADIUS.lg, padding: SPACE.xl },
+  clearTitle: { fontFamily: FONT.display, fontSize: 20, color: FUEL.ink, textTransform: 'uppercase', letterSpacing: 0.3 },
+  clearMsg: { fontFamily: FONT.body, fontSize: 14, color: FUEL.muted, marginTop: SPACE.s, marginBottom: SPACE.l },
+  clearActions: { flexDirection: 'row', gap: SPACE.m },
+  clearBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: SPACE.m, borderRadius: RADIUS.pill },
+  clearBtnCancel: { backgroundColor: FUEL.white, borderWidth: 1.5, borderColor: FUEL.sandBorder },
+  clearBtnCancelText: { fontFamily: FONT.bodyExtrabold, fontSize: 14, color: FUEL.ink, textTransform: 'uppercase', letterSpacing: 0.3 },
+  clearBtnConfirm: { backgroundColor: FUEL.error },
+  clearBtnConfirmText: { fontFamily: FONT.bodyExtrabold, fontSize: 14, color: FUEL.white, textTransform: 'uppercase', letterSpacing: 0.3 },
 
   scroll: { padding: SPACE.l, paddingBottom: SPACE.xxl },
   sectionTitle: { fontFamily: FONT.display, fontSize: 16, color: FUEL.ink, textTransform: 'uppercase', letterSpacing: 0.3, marginTop: SPACE.l, marginBottom: SPACE.m },
