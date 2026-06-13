@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../utils/api';
 import { useRealtime } from '../utils/realtime';
 
@@ -27,7 +27,19 @@ function Delta({ pct, suffix }: { pct: number | null; suffix: string }) {
   );
 }
 
+// ── HQ Command Center — Strip 2 Store Health Grid ──
+type StoreHealth = {
+  store_id: string; name: string; revenue_today: number; sales_delta_pct: number | null;
+  stock_out_count: number; pending_approvals: number; day_opened: boolean;
+  health: 'bad' | 'warn' | 'ok' | 'closed'; flags: string[];
+};
+const HEALTH_COLOR: Record<StoreHealth['health'], string> = {
+  bad: 'var(--error)', warn: 'var(--warning)', ok: 'var(--success)', closed: 'var(--muted)',
+};
+const slug = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
 export default function AdminDashboard() {
+  const navigate = useNavigate();
   const [range, setRange] = useState<Pulse['range']>('today');
   const [pulse, setPulse] = useState<Pulse | null>(null);
   const [pulseLoading, setPulseLoading] = useState(true);
@@ -40,8 +52,21 @@ export default function AdminDashboard() {
     finally { setPulseLoading(false); }
   }, [range]);
   useEffect(() => { loadPulse(); }, [loadPulse]);
+
+  // Strip 2 — Store Health Grid
+  const [health, setHealth] = useState<StoreHealth[] | null>(null);
+  const [healthLoading, setHealthLoading] = useState(true);
+  const [healthError, setHealthError] = useState('');
+  const loadHealth = useCallback(async () => {
+    setHealthLoading(true); setHealthError('');
+    try { setHealth(await api('/hq/store-health')); }
+    catch (e: any) { setHealthError(e?.message || 'Failed'); }
+    finally { setHealthLoading(false); }
+  }, []);
+  useEffect(() => { loadHealth(); }, [loadHealth]);
+
   useRealtime(['hq'], (msg) => {
-    if (['new_order', 'order_status', 'business_day'].includes(msg.type)) loadPulse();
+    if (['new_order', 'order_status', 'business_day'].includes(msg.type)) { loadPulse(); loadHealth(); }
   });
 
   const [stats, setStats] = useState<any>({ products: 0, categories: 0, today_orders: 0, pending_orders: 0, revenue: 0, low_stock_alerts: [] });
@@ -132,6 +157,51 @@ export default function AdminDashboard() {
           </div>
         </div>
       ) : null}
+
+      {/* HQ Command Center — Strip 2 Store Health Grid (worst-first) */}
+      <h2 style={{ fontSize: 16, fontWeight: 700, margin: '28px 0 12px' }}>Store Health</h2>
+      {healthLoading ? (
+        <div className="stats-grid" data-testid="store-health-grid">
+          {[0, 1, 2].map((i) => <div key={i} className="stat-card" style={{ height: 110, background: 'var(--border)', opacity: 0.5 }} />)}
+        </div>
+      ) : healthError ? (
+        <div className="stat-card" style={{ textAlign: 'center', padding: 28, marginBottom: 28 }}>
+          <p style={{ color: 'var(--error)', fontWeight: 600, marginBottom: 12 }}>Couldn't load store health.</p>
+          <button onClick={loadHealth} style={{ padding: '10px 20px', borderRadius: 'var(--radius-pill)', border: 'none', background: 'var(--lime)', color: 'var(--ink)', fontWeight: 700, cursor: 'pointer' }}>Retry</button>
+        </div>
+      ) : health && health.length > 0 ? (
+        <div className="stats-grid" data-testid="store-health-grid" style={{ marginBottom: 28 }}>
+          {health.map((s) => (
+            <div
+              key={s.store_id}
+              data-testid={`store-tile-${slug(s.name) || s.store_id}`}
+              className="stat-card"
+              onClick={() => navigate(`/hq/store-dashboard?store=${encodeURIComponent(s.store_id)}`)}
+              style={{ cursor: 'pointer', borderLeft: `4px solid ${HEALTH_COLOR[s.health]}`, textAlign: 'left', alignItems: 'stretch' }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+                <strong style={{ fontSize: 15, color: 'var(--ink)' }}>{s.name}</strong>
+                <span style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: HEALTH_COLOR[s.health] }}>{s.health}</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 6 }}>
+                <span style={{ fontFamily: 'var(--font-brand)', fontSize: 22, color: 'var(--ink)' }}>{inr(s.revenue_today)}</span>
+                <Delta pct={s.sales_delta_pct} suffix="vs 7d avg" />
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+                {s.flags.map((f, i) => (
+                  <span key={i} style={{
+                    fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 'var(--radius-pill)',
+                    background: f === 'Healthy' ? '#3FA34D18' : f === 'Day not opened' ? '#6B6A5E18' : '#C0392B12',
+                    color: f === 'Healthy' ? 'var(--success)' : f === 'Day not opened' ? 'var(--muted)' : 'var(--error)',
+                  }}>{f}</span>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="stat-card" style={{ textAlign: 'center', padding: 28, marginBottom: 28, color: 'var(--muted)', fontWeight: 600 }}>No stores yet</div>
+      )}
 
       <div className="stats-grid" data-testid="stats-grid">
         {[

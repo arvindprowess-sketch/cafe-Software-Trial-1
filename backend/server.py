@@ -1936,6 +1936,86 @@ async def hq_pulse(range_: str = Query("today", alias="range"), user=Depends(get
         "critical_alerts": critical_alerts,
     }
 
+async def _rev_by_store(start: str, end: str) -> dict:
+    """{store_id: revenue} for paid, non-cancelled orders with created_at in [start, end)."""
+    pipeline = [
+        {"$match": {"created_at": {"$gte": start, "$lt": end}, "payment_status": "paid", "status": {"$ne": "cancelled"}}},
+        {"$group": {"_id": "$store_id", "rev": {"$sum": "$total_price"}}},
+    ]
+    rows = await db.orders.aggregate(pipeline).to_list(1000)
+    return {r["_id"]: round(float(r.get("rev") or 0), 2) for r in rows}
+
+async def _count_by_store(coll, match: dict) -> dict:
+    """{store_id: count} grouping `coll` docs matching `match` by store_id."""
+    rows = await coll.aggregate([{"$match": match}, {"$group": {"_id": "$store_id", "c": {"$sum": 1}}}]).to_list(1000)
+    return {r["_id"]: int(r.get("c") or 0) for r in rows}
+
+@api_router.get("/hq/store-health")
+async def hq_store_health(user=Depends(get_current_user)):
+    """HQ Command Center — Strip 2 Store Health Grid. Live query. HQ only.
+    Per store: today's sales vs its OWN trailing-7-day daily avg, stock-outs,
+    pending approvals (discards + transfers), and whether the day is opened."""
+    if not role_in(user, "super_admin", "admin"):
+        raise HTTPException(status_code=403, detail="HQ only")
+
+    today = datetime.now(timezone.utc).date()
+    today_s, tomorrow_s = today.isoformat(), (today + timedelta(days=1)).isoformat()
+    prev7_s = (today - timedelta(days=7)).isoformat()  # [today-7, today)
+
+    stores = await db.stores.find({"status": "active"}, {"_id": 0, "store_id": 1, "name": 1}).sort("name", 1).to_list(500)
+
+    rev_today = await _rev_by_store(today_s, tomorrow_s)
+    rev_prev7 = await _rev_by_store(prev7_s, today_s)
+    stock_outs = await _count_by_store(db.inventory_items, {"qty_on_hand": {"$lte": 0}, "is_active": {"$ne": False}})
+    pending_discards = await _count_by_store(db.discards, {"status": "pending"})
+    opened_today = set(await db.business_days.distinct("store_id", {"business_date": today_s}))
+
+    # Pending transfers tallied per store (a request touches both from & to stores).
+    pending_transfers: dict = {}
+    async for t in db.transfers.find({"status": "requested"}, {"_id": 0, "from_store_id": 1, "to_store_id": 1}):
+        for sid in (t.get("from_store_id"), t.get("to_store_id")):
+            if sid:
+                pending_transfers[sid] = pending_transfers.get(sid, 0) + 1
+
+    RANK = {"bad": 0, "warn": 1, "ok": 2, "closed": 3}
+    out = []
+    for s in stores:
+        sid = s.get("store_id")
+        r_today = rev_today.get(sid, 0.0)
+        avg7 = round(rev_prev7.get(sid, 0.0) / 7, 2)
+        delta = round((r_today - avg7) / avg7 * 100, 1) if avg7 > 0 else None
+        stock_out = stock_outs.get(sid, 0)
+        pending = pending_discards.get(sid, 0) + pending_transfers.get(sid, 0)
+        day_opened = sid in opened_today
+
+        flags = []
+        if not day_opened:
+            health = "closed"
+            flags.append("Day not opened")
+        else:
+            if delta is not None and delta <= -15:
+                flags.append(f"Sales down {abs(round(delta))}%")
+            if stock_out > 0:
+                flags.append(f"{stock_out} stock-out{'s' if stock_out != 1 else ''}")
+            if pending > 0:
+                flags.append(f"{pending} pending approval{'s' if pending != 1 else ''}")
+            bad = (delta is not None and delta <= -15) or (stock_out > 0 and pending > 0)
+            warn = (delta is not None and delta <= -5) or stock_out > 0 or pending > 0
+            health = "bad" if bad else ("warn" if warn else "ok")
+            if health == "ok":
+                flags.append("Healthy")
+
+        out.append({
+            "store_id": sid, "name": s.get("name"),
+            "revenue_today": r_today, "sales_delta_pct": delta,
+            "stock_out_count": stock_out, "pending_approvals": pending,
+            "day_opened": day_opened, "health": health, "flags": flags,
+        })
+
+    # Worst-first: bad > warn > ok > closed; then biggest sales drop first.
+    out.sort(key=lambda x: (RANK[x["health"]], x["sales_delta_pct"] if x["sales_delta_pct"] is not None else 0))
+    return out
+
 @api_router.get("/admin/staff-accounts")
 async def admin_staff_accounts(user=Depends(get_current_user)):
     """Admin: list kitchen & cashier accounts"""
