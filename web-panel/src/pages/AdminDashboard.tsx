@@ -1,8 +1,49 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../utils/api';
+import { useRealtime } from '../utils/realtime';
+
+// ── HQ Command Center — Strip 1 PULSE (lives at the top of /admin) ──
+type Pulse = {
+  range: 'today' | 'week' | 'month';
+  revenue: number; revenue_delta_pct: number | null;
+  orders: number; aov: number; aov_delta_pct: number | null;
+  active_stores: number; total_stores: number;
+  stores_not_opened: { store_id: string; name: string }[];
+  critical_alerts: number;
+};
+const PULSE_RANGES: { key: Pulse['range']; label: string }[] = [
+  { key: 'today', label: 'Today' }, { key: 'week', label: 'Week' }, { key: 'month', label: 'Month' },
+];
+const inr = (n: number) => `₹${Math.round(n || 0).toLocaleString('en-IN')}`;
+const deltaSuffix = (r: Pulse['range']) => (r === 'today' ? 'vs same weekday' : r === 'week' ? 'vs prev 7d' : 'vs prev 30d');
+function Delta({ pct, suffix }: { pct: number | null; suffix: string }) {
+  if (pct === null || pct === undefined) return <span style={{ color: 'var(--muted)', fontSize: 12, fontWeight: 600 }}>— no baseline</span>;
+  const up = pct >= 0;
+  return (
+    <span style={{ color: up ? 'var(--success)' : 'var(--error)', fontSize: 12, fontWeight: 700 }}>
+      {up ? '▲' : '▼'} {Math.abs(pct)}% <span style={{ color: 'var(--muted)', fontWeight: 600 }}>{suffix}</span>
+    </span>
+  );
+}
 
 export default function AdminDashboard() {
+  const [range, setRange] = useState<Pulse['range']>('today');
+  const [pulse, setPulse] = useState<Pulse | null>(null);
+  const [pulseLoading, setPulseLoading] = useState(true);
+  const [pulseError, setPulseError] = useState('');
+
+  const loadPulse = useCallback(async () => {
+    setPulseLoading(true); setPulseError('');
+    try { setPulse(await api(`/hq/pulse?range=${range}`)); }
+    catch (e: any) { setPulseError(e?.message || 'Failed'); }
+    finally { setPulseLoading(false); }
+  }, [range]);
+  useEffect(() => { loadPulse(); }, [loadPulse]);
+  useRealtime(['hq'], (msg) => {
+    if (['new_order', 'order_status', 'business_day'].includes(msg.type)) loadPulse();
+  });
+
   const [stats, setStats] = useState<any>({ products: 0, categories: 0, today_orders: 0, pending_orders: 0, revenue: 0, low_stock_alerts: [] });
   const [staff, setStaff] = useState<any[]>([]);
   const [resetPinId, setResetPinId] = useState('');
@@ -35,7 +76,62 @@ export default function AdminDashboard() {
     <div>
       <div className="page-header">
         <div><h1>Dashboard</h1><p>BORAROC Control Center</p></div>
+        <div className="time-switcher" data-testid="time-switcher" style={{ display: 'flex', gap: 8 }}>
+          {PULSE_RANGES.map((r) => (
+            <button
+              key={r.key}
+              onClick={() => setRange(r.key)}
+              style={{
+                padding: '8px 16px', borderRadius: 'var(--radius-pill)',
+                border: '1.5px solid ' + (range === r.key ? 'var(--ink)' : 'var(--border)'),
+                background: range === r.key ? 'var(--ink)' : 'var(--white)',
+                color: range === r.key ? 'var(--white)' : 'var(--muted)',
+                fontWeight: 700, fontSize: 13, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.04em',
+              }}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
       </div>
+
+      {/* HQ Command Center — Strip 1 PULSE (live, across all stores) */}
+      {pulseLoading ? (
+        <div className="stats-grid">
+          {[0, 1, 2, 3].map((i) => <div key={i} className="stat-card" style={{ height: 120, background: 'var(--border)', opacity: 0.5 }} />)}
+        </div>
+      ) : pulseError ? (
+        <div className="stat-card" style={{ textAlign: 'center', padding: 32, marginBottom: 28 }}>
+          <p style={{ color: 'var(--error)', fontWeight: 600, marginBottom: 12 }}>Couldn't load pulse.</p>
+          <button onClick={loadPulse} style={{ padding: '10px 20px', borderRadius: 'var(--radius-pill)', border: 'none', background: 'var(--lime)', color: 'var(--ink)', fontWeight: 700, cursor: 'pointer' }}>Retry</button>
+        </div>
+      ) : pulse ? (
+        <div className="stats-grid">
+          <div className="stat-card" data-testid="pulse-revenue">
+            <div className="stat-icon" style={{ background: '#15140F15' }}>💰</div>
+            <div className="stat-value">{inr(pulse.revenue)}</div>
+            <div className="stat-label">Revenue</div>
+            <div style={{ textAlign: 'center', marginTop: 6 }}><Delta pct={pulse.revenue_delta_pct} suffix={deltaSuffix(pulse.range)} /></div>
+          </div>
+          <div className="stat-card" data-testid="pulse-orders">
+            <div className="stat-icon" style={{ background: '#A6D62E22' }}>🧾</div>
+            <div className="stat-value">{pulse.orders}</div>
+            <div className="stat-label">Orders</div>
+            <div style={{ textAlign: 'center', marginTop: 6, fontSize: 12, fontWeight: 600 }}>AOV {inr(pulse.aov)} <Delta pct={pulse.aov_delta_pct} suffix={deltaSuffix(pulse.range)} /></div>
+          </div>
+          <div className="stat-card" data-testid="pulse-active-stores">
+            <div className="stat-icon" style={{ background: '#5E97B822' }}>🏪</div>
+            <div className="stat-value">{pulse.active_stores}/{pulse.total_stores}</div>
+            <div className="stat-label">Active Stores</div>
+            <div style={{ textAlign: 'center', marginTop: 6, fontSize: 12, fontWeight: 600, color: 'var(--muted)' }}>{pulse.stores_not_opened.length > 0 ? `${pulse.stores_not_opened.length} not opened` : 'all open'}</div>
+          </div>
+          <div className="stat-card" data-testid="pulse-alerts" style={{ background: pulse.critical_alerts > 0 ? '#C0392B' : 'var(--white)', borderColor: pulse.critical_alerts > 0 ? '#C0392B' : 'var(--border)' }}>
+            <div className="stat-icon" style={{ background: pulse.critical_alerts > 0 ? '#ffffff22' : '#C0392B15' }}>⚠️</div>
+            <div className="stat-value" style={{ color: pulse.critical_alerts > 0 ? 'var(--white)' : 'var(--ink)' }}>{pulse.critical_alerts}</div>
+            <div className="stat-label" style={{ color: pulse.critical_alerts > 0 ? '#ffffffcc' : 'var(--muted)' }}>Critical Alerts</div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="stats-grid" data-testid="stats-grid">
         {[

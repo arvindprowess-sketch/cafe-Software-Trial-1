@@ -1848,6 +1848,94 @@ async def admin_dashboard_stats(user=Depends(get_current_user)):
         "low_stock_alerts": low_stock
     }
 
+# ========== HQ COMMAND CENTER ==========
+def _pulse_range_bounds(rng: str):
+    """(cur_start, cur_end, prev_start, prev_end) as YYYY-MM-DD date strings.
+    Boundaries are date-only; ISO timestamps (created_at/opened_at) compare
+    lexically (any 'D...' >= 'D' and < 'D+1'). UTC, matching the dashboard.
+    prev = same weekday last week (today) / prior 7d (week) / prior 30d (month)."""
+    today = datetime.now(timezone.utc).date()
+    day = timedelta(days=1)
+    if rng == "week":
+        cur_start, cur_end = today - timedelta(days=6), today + day
+        prev_start, prev_end = today - timedelta(days=13), today - timedelta(days=6)
+    elif rng == "month":
+        cur_start, cur_end = today - timedelta(days=29), today + day
+        prev_start, prev_end = today - timedelta(days=59), today - timedelta(days=29)
+    else:  # today
+        cur_start, cur_end = today, today + day
+        prev_start, prev_end = today - timedelta(days=7), today - timedelta(days=6)
+    return cur_start.isoformat(), cur_end.isoformat(), prev_start.isoformat(), prev_end.isoformat()
+
+async def _pulse_orders_agg(start: str, end: str):
+    """Revenue + count of PAID, non-cancelled orders with created_at in [start, end)."""
+    pipeline = [
+        {"$match": {"created_at": {"$gte": start, "$lt": end},
+                    "payment_status": "paid", "status": {"$ne": "cancelled"}}},
+        {"$group": {"_id": None, "rev": {"$sum": "$total_price"}, "cnt": {"$sum": 1}}},
+    ]
+    res = await db.orders.aggregate(pipeline).to_list(1)
+    if not res:
+        return 0.0, 0
+    return round(float(res[0].get("rev") or 0), 2), int(res[0].get("cnt") or 0)
+
+def _pulse_pct_delta(cur, prev):
+    """Signed pct change vs prev; None when there is no baseline (prev == 0)."""
+    if prev and prev > 0:
+        return round((cur - prev) / prev * 100, 1)
+    return None
+
+@api_router.get("/hq/pulse")
+async def hq_pulse(range_: str = Query("today", alias="range"), user=Depends(get_current_user)):
+    """HQ Command Center — Strip 1 PULSE. Live query (no rollup). HQ only."""
+    if not role_in(user, "super_admin", "admin"):
+        raise HTTPException(status_code=403, detail="HQ only")
+    rng = range_ if range_ in ("today", "week", "month") else "today"
+    cur_s, cur_e, prev_s, prev_e = _pulse_range_bounds(rng)
+
+    cur_rev, cur_orders = await _pulse_orders_agg(cur_s, cur_e)
+    prev_rev, prev_orders = await _pulse_orders_agg(prev_s, prev_e)
+    aov = round(cur_rev / cur_orders, 2) if cur_orders else 0.0
+    prev_aov = round(prev_rev / prev_orders, 2) if prev_orders else 0.0
+
+    # Active stores = distinct stores that opened a business day within the range.
+    opened_in_range = await db.business_days.distinct("store_id", {"opened_at": {"$gte": cur_s, "$lt": cur_e}})
+    active_stores = len(opened_in_range)
+    total_stores = await db.stores.count_documents({"status": "active"})
+
+    # Stores not day-opened today by 11:00 (UTC) — operational alert for "today".
+    today_str = datetime.now(timezone.utc).date().isoformat()
+    stores_not_opened = []
+    if datetime.now(timezone.utc).hour >= 11:
+        opened_today = set(await db.business_days.distinct(
+            "store_id", {"business_date": today_str, "status": "open"}))
+        async for s in db.stores.find({"status": "active"}, {"_id": 0, "store_id": 1, "name": 1}):
+            if s.get("store_id") not in opened_today:
+                stores_not_opened.append({"store_id": s.get("store_id"), "name": s.get("name")})
+
+    # Critical alerts = pending discards + stores-not-opened + cash-variance flags (closed days in range).
+    pending_discards = await db.discards.count_documents({"status": "pending"})
+    cash_variance_flags = 0
+    async for d in db.business_days.find(
+        {"business_date": {"$gte": cur_s, "$lt": cur_e}}, {"_id": 0, "cash_variance": 1}):
+        cv = d.get("cash_variance")
+        if cv is not None and abs(cv) > 0:
+            cash_variance_flags += 1
+    critical_alerts = pending_discards + len(stores_not_opened) + cash_variance_flags
+
+    return {
+        "range": rng,
+        "revenue": cur_rev,
+        "revenue_delta_pct": _pulse_pct_delta(cur_rev, prev_rev),
+        "orders": cur_orders,
+        "aov": aov,
+        "aov_delta_pct": _pulse_pct_delta(aov, prev_aov),
+        "active_stores": active_stores,
+        "total_stores": total_stores,
+        "stores_not_opened": stores_not_opened,
+        "critical_alerts": critical_alerts,
+    }
+
 @api_router.get("/admin/staff-accounts")
 async def admin_staff_accounts(user=Depends(get_current_user)):
     """Admin: list kitchen & cashier accounts"""
