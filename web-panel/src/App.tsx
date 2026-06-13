@@ -14,6 +14,7 @@ import KitchenLayout from './components/KitchenLayout';
 import CashierLayout from './components/CashierLayout';
 import HqLayout, { HqIndex } from './components/HqLayout';
 import AreaDashboard from './pages/AreaDashboard';
+import StoreDashboard from './pages/StoreDashboard';
 import HqStores from './pages/HqStores';
 import HqCatalog from './pages/HqCatalog';
 import HqPush from './pages/HqPush';
@@ -85,6 +86,7 @@ export default function App() {
       <Route path="/hq" element={<ProtectedRoute roles={ADMIN_PORTAL_ROLES}><HqLayout /></ProtectedRoute>}>
         <Route index element={<HqIndex />} />
         <Route path="area-dashboard" element={<RoleRoute allowed={HQ_SUB_ROUTE_ROLES['/hq/area-dashboard']}><AreaDashboard /></RoleRoute>} />
+        <Route path="store-dashboard" element={<RoleRoute allowed={HQ_SUB_ROUTE_ROLES['/hq/store-dashboard']}><StoreDashboard /></RoleRoute>} />
         <Route path="stores" element={<RoleRoute allowed={HQ_SUB_ROUTE_ROLES['/hq/stores']}><HqStores /></RoleRoute>} />
         <Route path="catalog" element={<RoleRoute allowed={HQ_SUB_ROUTE_ROLES['/hq/catalog']}><HqCatalog /></RoleRoute>} />
         <Route path="push" element={<RoleRoute allowed={HQ_SUB_ROUTE_ROLES['/hq/push']}><HqPush /></RoleRoute>} />

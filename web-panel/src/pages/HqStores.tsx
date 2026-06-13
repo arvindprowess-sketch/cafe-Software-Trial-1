@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { useStores } from '../context/StoreContext';
@@ -120,7 +121,7 @@ export default function HqStores() {
         <tbody>
           {stores.map((s) => (
             <tr key={s.store_id} data-testid={`store-row-${s.store_id}`}>
-              <td><strong>{s.name}</strong></td>
+              <td><Link to={`/hq/store-dashboard?store=${s.store_id}`} data-testid={`store-drill-${s.store_id}`}><strong>{s.name}</strong></Link></td>
               <td><span className="badge badge-purple">{s.code}</span></td>
               <td style={{ fontSize: 13, color: '#696969' }}>{s.address || '—'}</td>
               <td style={{ fontSize: 13 }}>{isHQ ? amName(s.area_manager_id) : (s.area_manager_id ? amName(s.area_manager_id) : '—')}</td>

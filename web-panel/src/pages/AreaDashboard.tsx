@@ -267,7 +267,7 @@ export default function AreaDashboard() {
               <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--muted)', padding: 30 }}>No stores in scope.</td></tr>
             ) : sortedComparison.map((r) => (
               <tr key={r.store_id} data-testid={`compare-row-${r.store_id}`}>
-                <td><strong>{r.store}</strong></td>
+                <td><Link to={`/hq/store-dashboard?store=${r.store_id}`} data-testid={`compare-drill-${r.store_id}`}><strong>{r.store}</strong></Link></td>
                 <td>{inr(r.revenue)}</td>
                 <td>{r.orders}</td>
                 <td>{r.wastage_pct == null ? '—' : `${r.wastage_pct}%`}</td>
