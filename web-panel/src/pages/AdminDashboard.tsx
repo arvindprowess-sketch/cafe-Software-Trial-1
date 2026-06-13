@@ -38,6 +38,14 @@ const HEALTH_COLOR: Record<StoreHealth['health'], string> = {
 };
 const slug = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
+// ── HQ Command Center — Strip 3 Exception Feed ──
+type Exception = {
+  id: string; severity: 1 | 2 | 3; type: string; title: string; detail: string;
+  store_id: string | null; action: 'review' | 'assign' | 'open'; deeplink: string;
+};
+const SEV_COLOR: Record<number, string> = { 3: 'var(--error)', 2: 'var(--warning)', 1: 'var(--muted)' };
+const ACTION_LABEL: Record<Exception['action'], string> = { review: 'Review', assign: 'Assign', open: 'Open' };
+
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const [range, setRange] = useState<Pulse['range']>('today');
@@ -65,8 +73,21 @@ export default function AdminDashboard() {
   }, []);
   useEffect(() => { loadHealth(); }, [loadHealth]);
 
+  // Strip 3 — Exception Feed
+  const [exceptions, setExceptions] = useState<Exception[] | null>(null);
+  const [excLoading, setExcLoading] = useState(true);
+  const [excError, setExcError] = useState('');
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set()); // session-local hide, no backend
+  const loadExceptions = useCallback(async () => {
+    setExcLoading(true); setExcError('');
+    try { setExceptions(await api('/hq/exceptions')); }
+    catch (e: any) { setExcError(e?.message || 'Failed'); }
+    finally { setExcLoading(false); }
+  }, []);
+  useEffect(() => { loadExceptions(); }, [loadExceptions]);
+
   useRealtime(['hq'], (msg) => {
-    if (['new_order', 'order_status', 'business_day'].includes(msg.type)) { loadPulse(); loadHealth(); }
+    if (['new_order', 'order_status', 'business_day'].includes(msg.type)) { loadPulse(); loadHealth(); loadExceptions(); }
   });
 
   const [stats, setStats] = useState<any>({ products: 0, categories: 0, today_orders: 0, pending_orders: 0, revenue: 0, low_stock_alerts: [] });
@@ -202,6 +223,59 @@ export default function AdminDashboard() {
       ) : (
         <div className="stat-card" style={{ textAlign: 'center', padding: 28, marginBottom: 28, color: 'var(--muted)', fontWeight: 600 }}>No stores yet</div>
       )}
+
+      {/* HQ Command Center — Strip 3 Exception Feed (ranked anomalies, sev 3>2>1) */}
+      <h2 style={{ fontSize: 16, fontWeight: 700, margin: '28px 0 12px' }}>Exceptions</h2>
+      {excLoading ? (
+        <div data-testid="exception-feed" style={{ display: 'grid', gap: 10, marginBottom: 28 }}>
+          {[0, 1].map((i) => <div key={i} className="stat-card" style={{ height: 64, background: 'var(--border)', opacity: 0.5 }} />)}
+        </div>
+      ) : excError ? (
+        <div className="stat-card" style={{ textAlign: 'center', padding: 28, marginBottom: 28 }}>
+          <p style={{ color: 'var(--error)', fontWeight: 600, marginBottom: 12 }}>Couldn't load exceptions.</p>
+          <button onClick={loadExceptions} style={{ padding: '10px 20px', borderRadius: 'var(--radius-pill)', border: 'none', background: 'var(--lime)', color: 'var(--ink)', fontWeight: 700, cursor: 'pointer' }}>Retry</button>
+        </div>
+      ) : (() => {
+        const visible = (exceptions || []).filter((e) => !dismissed.has(e.id));
+        if (visible.length === 0) {
+          return <div data-testid="exception-feed" className="stat-card" style={{ textAlign: 'center', padding: 28, marginBottom: 28, color: 'var(--muted)', fontWeight: 600 }}>Nothing needs attention. All clear.</div>;
+        }
+        return (
+          <div data-testid="exception-feed" style={{ display: 'grid', gap: 10, marginBottom: 28 }}>
+            {visible.map((e, i) => (
+              <div
+                key={e.id}
+                data-testid={`exc-${e.id}`}
+                className="stat-card"
+                style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px', borderLeft: `4px solid ${SEV_COLOR[e.severity]}`, textAlign: 'left' }}
+              >
+                <span style={{ fontFamily: 'var(--font-brand)', fontSize: 18, color: 'var(--muted)', minWidth: 22 }}>{i + 1}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 10, fontWeight: 800, color: SEV_COLOR[e.severity], textTransform: 'uppercase', letterSpacing: '0.05em' }}>Sev {e.severity}</span>
+                    <strong style={{ fontSize: 14, color: 'var(--ink)' }}>{e.title}</strong>
+                  </div>
+                  <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 2 }}>{e.detail}</div>
+                </div>
+                <button
+                  data-testid={`exc-action-${e.id}`}
+                  onClick={() => navigate(e.deeplink)}
+                  style={{ padding: '8px 16px', borderRadius: 'var(--radius-pill)', border: 'none', background: 'var(--ink)', color: 'var(--white)', fontWeight: 700, fontSize: 12, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.03em' }}
+                >
+                  {ACTION_LABEL[e.action]}
+                </button>
+                <button
+                  data-testid={`exc-dismiss-${e.id}`}
+                  onClick={() => setDismissed((prev) => new Set(prev).add(e.id))}
+                  style={{ padding: '8px 14px', borderRadius: 'var(--radius-pill)', border: '1.5px solid var(--border)', background: 'var(--white)', color: 'var(--muted)', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}
+                >
+                  Dismiss
+                </button>
+              </div>
+            ))}
+          </div>
+        );
+      })()}
 
       <div className="stats-grid" data-testid="stats-grid">
         {[
