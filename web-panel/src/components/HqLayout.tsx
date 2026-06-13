@@ -11,7 +11,6 @@ import { HQ_SUB_ROUTE_ROLES, ADMIN_HOME_ROUTE } from '../auth/permissions';
 // - store_manager: Store Catalog (own store), Offers.
 // cashier/kitchen never reach here (route + default-route gating).
 const HQ_NAV = [
-  { path: '/hq/dashboard', label: 'Command Center' },
   { path: '/hq/stores', label: 'Stores & Clusters' },
   { path: '/hq/catalog', label: 'Store Catalog' },
   { path: '/hq/push', label: 'Catalog Push' },
