@@ -2016,6 +2016,102 @@ async def hq_store_health(user=Depends(get_current_user)):
     out.sort(key=lambda x: (RANK[x["health"]], x["sales_delta_pct"] if x["sales_delta_pct"] is not None else 0))
     return out
 
+@api_router.get("/hq/exceptions")
+async def hq_exceptions(user=Depends(get_current_user)):
+    """HQ Command Center — Strip 3 Exception Feed. Ranked live anomalies (sev 3>2>1),
+    each with a deeplink to an existing page whose buttons reuse the existing
+    approve/reject endpoints. HQ only."""
+    if not role_in(user, "super_admin", "admin"):
+        raise HTTPException(status_code=403, detail="HQ only")
+
+    now = datetime.now(timezone.utc)
+    today_s = now.date().isoformat()
+    exceptions = []
+
+    stores = await db.stores.find({"status": "active"}, {"_id": 0, "store_id": 1, "name": 1}).to_list(500)
+    store_name = {s["store_id"]: s.get("name") for s in stores}
+
+    # ── sev3: day_not_opened (no business_day today by 11:00 local/UTC) ──
+    if now.hour >= 11:
+        opened_today = set(await db.business_days.distinct("store_id", {"business_date": today_s}))
+        for s in stores:
+            sid = s["store_id"]
+            if sid not in opened_today:
+                exceptions.append({
+                    "id": f"daynotopen-{sid}", "severity": 3, "type": "day_not_opened",
+                    "title": f"{s.get('name')} not opened", "detail": "No business day opened by 11:00.",
+                    "store_id": sid, "action": "open", "deeplink": f"/hq/store-dashboard?store={sid}",
+                })
+
+    # ── sev2: voids_same_cashier (>=4 voids/refunds today by one cashier in a store) ──
+    void_counts: dict = {}  # (store_id, raised_by) -> count
+    async for r in db.refunds.find({"raised_at": {"$gte": today_s}}, {"_id": 0, "store_id": 1, "raised_by": 1}):
+        key = (r.get("store_id"), r.get("raised_by"))
+        if key[0] and key[1]:
+            void_counts[key] = void_counts.get(key, 0) + 1
+    flagged = {k: v for k, v in void_counts.items() if v >= 4}
+    names = {}
+    if flagged:
+        uids = list({k[1] for k in flagged})
+        for u in await db.users.find({"id": {"$in": uids}}, {"_id": 0, "id": 1, "name": 1}).to_list(200):
+            names[u["id"]] = u.get("name")
+    for (sid, uid), cnt in flagged.items():
+        exceptions.append({
+            "id": f"voids-{sid}-{uid}", "severity": 2, "type": "voids_same_cashier",
+            "title": f"{names.get(uid, 'A cashier')}: {cnt} voids/refunds today",
+            "detail": f"At {store_name.get(sid, sid)} — unusually high void/refund volume.",
+            "store_id": sid, "action": "review", "deeplink": "/admin/orders",
+        })
+
+    # ── sev2: stockout_top_seller (a top-5 selling product is out of stock in a store) ──
+    sales_by_store: dict = {}  # store_id -> {product_id: qty}
+    async for o in db.orders.find({}, {"_id": 0, "store_id": 1, "items": 1}):
+        sid = o.get("store_id")
+        if not sid:
+            continue
+        bucket = sales_by_store.setdefault(sid, {})
+        for it in o.get("items", []):
+            pid = it.get("product_id")
+            if pid:
+                bucket[pid] = bucket.get(pid, 0) + (it.get("quantity") or 1)
+    top5_by_store = {sid: {pid for pid, _ in sorted(b.items(), key=lambda x: -x[1])[:5]}
+                     for sid, b in sales_by_store.items()}
+    prod_name = {}
+    async for inv in db.inventory_items.find({"qty_on_hand": {"$lte": 0}, "is_active": {"$ne": False}},
+                                             {"_id": 0, "store_id": 1, "product_id": 1, "name": 1}):
+        sid, pid = inv.get("store_id"), inv.get("product_id")
+        if pid and pid in top5_by_store.get(sid, set()):
+            exceptions.append({
+                "id": f"stockout-{sid}-{pid}", "severity": 2, "type": "stockout_top_seller",
+                "title": f"{inv.get('name')} (top seller) out of stock",
+                "detail": f"At {store_name.get(sid, sid)} — a top-5 seller has zero stock.",
+                "store_id": sid, "action": "review", "deeplink": "/hq/inventory/health",
+            })
+
+    # ── sev1: pending_approvals_summary (pending discards / transfers / escalations) ──
+    pending_discards = await db.discards.count_documents({"status": {"$in": ["pending", "pending_hq"]}})
+    pending_transfers = await db.transfers.count_documents({"status": "requested"})
+    if pending_discards > 0:
+        exceptions.append({
+            "id": "pending-discards", "severity": 1, "type": "pending_approvals_summary",
+            "title": f"{pending_discards} discard approval{'s' if pending_discards != 1 else ''} pending",
+            "detail": "Includes any HQ-escalated high-value discards.",
+            "store_id": None, "action": "open", "deeplink": "/hq/discards",
+        })
+    if pending_transfers > 0:
+        exceptions.append({
+            "id": "pending-transfers", "severity": 1, "type": "pending_approvals_summary",
+            "title": f"{pending_transfers} transfer approval{'s' if pending_transfers != 1 else ''} pending",
+            "detail": "Stock transfer requests awaiting a decision.",
+            "store_id": None, "action": "open", "deeplink": "/hq/transfers",
+        })
+
+    # ── V2 (NOT built): cost-anomaly / supplier-price-spike detectors go here. ──
+    # exceptions += await _detect_cost_anomalies()  # TODO V2
+
+    exceptions.sort(key=lambda x: -x["severity"])
+    return exceptions
+
 @api_router.get("/admin/staff-accounts")
 async def admin_staff_accounts(user=Depends(get_current_user)):
     """Admin: list kitchen & cashier accounts"""
