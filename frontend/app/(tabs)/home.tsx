@@ -667,6 +667,9 @@ export default function HomeScreen() {
             <View style={styles.nutriMain}>
               <Text style={[styles.calValue, isCalorieOver && { color: FUEL.error }]}>{Math.round(consumed.calories || 0)}</Text>
               <Text style={styles.calUnit}>/ {goals.daily_calories || 2000} kcal</Text>
+              {goals.daily_calories > 0 && !isCalorieOver && (
+                <Text style={styles.calLeft}>{Math.round(goals.daily_calories - (consumed.calories || 0))} left</Text>
+              )}
             </View>
             <View style={styles.macroRow}>
               {[
@@ -674,8 +677,10 @@ export default function HomeScreen() {
                 { label: 'Carbs', val: consumed.carbs, goal: goals.daily_carbs, color: FUEL.carbs },
                 { label: 'Fat', val: consumed.fat, goal: goals.daily_fat, color: FUEL.fat },
               ].map(m => (
-                <View key={m.label} style={styles.macroItem}>
-                  <Text style={[styles.macroVal, { color: m.color }]}>{Math.round(m.val || 0)}g</Text>
+                <View key={m.label} testID={`macro-chip-${m.label.toLowerCase()}`} style={styles.macroItem}>
+                  <Text style={[styles.macroVal, { color: m.color }]}>
+                    {m.goal > 0 ? `${Math.round(m.val || 0)}/${Math.round(m.goal)}g` : `${Math.round(m.val || 0)}g`}
+                  </Text>
                   <Text style={styles.macroLabel}>{m.label}</Text>
                 </View>
               ))}
@@ -1389,6 +1394,7 @@ const styles = StyleSheet.create({
   nutriMain: { flexDirection: 'row', alignItems: 'baseline', gap: SPACE.xs },
   calValue: { fontFamily: FONT.display, fontSize: 34, color: FUEL.ink },
   calUnit: { fontFamily: FONT.body, fontSize: 13, color: FUEL.muted },
+  calLeft: { fontFamily: FONT.bodyExtrabold, fontSize: 11, color: FUEL.limeDeep, marginLeft: SPACE.xs },
   macroRow: { flexDirection: 'row', gap: SPACE.l },
   macroItem: { alignItems: 'center' },
   macroVal: { fontFamily: FONT.bodyExtrabold, fontSize: 16 },
