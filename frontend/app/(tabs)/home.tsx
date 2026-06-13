@@ -38,6 +38,15 @@ const offerValueText = (item: any): string => {
   return `${v}% OFF`;
 };
 
+// Inline AI Combo Builder: 4 goals (keys match GOALS + /ai/quick-meal) + min budget.
+const COMBO_GOALS = [
+  { key: 'muscle_gain', label: 'Muscle' },
+  { key: 'fat_loss', label: 'Fat Loss' },
+  { key: 'maintenance', label: 'Maintain' },
+  { key: 'recomposition', label: 'Recomp' },
+];
+const COMBO_MIN_BUDGET = 50;
+
 // Category grid (FUEL palette)
 const MENU_CATEGORIES = [
   { key: 'Protein', label: 'High Protein', icon: 'barbell', color: FUEL.protein, image: 'https://images.unsplash.com/photo-1632778149955-e80f8ceca2e8?w=100&h=100&fit=crop' },
@@ -170,6 +179,8 @@ export default function HomeScreen() {
   };
 
   const onRefresh = async () => { setRefreshing(true); await loadData(); setRefreshing(false); };
+
+  const comboBudgetValid = parseFloat(mealBudget) >= COMBO_MIN_BUDGET;
 
   const consumed = summary?.consumed || {};
   const goals = summary?.goals || {};
@@ -715,20 +726,61 @@ export default function HomeScreen() {
           </TouchableOpacity>
         )}
 
-        {/* ===== AI COMBO BUILDER — dark hero card ===== */}
+        {/* ===== AI COMBO BUILDER — inline ink card (no navigate-away) ===== */}
         {!showMealBuilder && !aiMeal && (
-          <TouchableOpacity testID="open-meal-builder" style={styles.mealBuilderCTA} onPress={() => router.push('/combo-builder')} activeOpacity={0.9}>
-            <View style={styles.ctaLeft}>
+          <View testID="open-meal-builder" style={styles.comboCard}>
+            <View style={styles.comboTitleRow}>
               <View style={styles.heroCtaIconBg}>
-                <Ionicons name="sparkles" size={20} color={FUEL.ink} />
+                <Ionicons name="sparkles" size={18} color={FUEL.ink} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.heroCtaTitle}>AI Combo Builder</Text>
-                <Text style={styles.heroCtaSub}>Budget + Goal = Perfect meal in seconds</Text>
+                <Text style={styles.comboTitle}>AI Combo Builder</Text>
+                <Text style={styles.comboSub}>Budget + Goal = Perfect meal in seconds</Text>
               </View>
             </View>
-            <Ionicons name="arrow-forward-circle" size={28} color={FUEL.lime} />
-          </TouchableOpacity>
+
+            <View style={styles.comboGoalRow}>
+              {COMBO_GOALS.map(g => {
+                const active = mealGoal === g.key;
+                return (
+                  <TouchableOpacity
+                    key={g.key}
+                    testID={`combo-goal-${g.key}`}
+                    style={[styles.comboGoalChip, active && styles.comboGoalChipActive]}
+                    onPress={() => setMealGoal(g.key)}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={[styles.comboGoalText, active && styles.comboGoalTextActive]}>{g.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <View style={styles.comboBuildRow}>
+              <TextInput
+                testID="combo-budget-input"
+                style={styles.comboBudgetInput}
+                value={mealBudget}
+                onChangeText={setMealBudget}
+                placeholder={`₹ Budget (min ${COMBO_MIN_BUDGET})`}
+                placeholderTextColor="rgba(244,241,233,0.5)"
+                keyboardType="number-pad"
+              />
+              <PressableScale
+                haptic
+                testID="combo-build-btn"
+                style={[styles.comboBuildBtn, (!comboBudgetValid || !mealGoal || aiLoading) && styles.comboBuildBtnDisabled]}
+                disabled={!comboBudgetValid || !mealGoal || aiLoading}
+                onPress={buildMeal}
+              >
+                {aiLoading ? (
+                  <ActivityIndicator color={FUEL.ink} size="small" />
+                ) : (
+                  <Text style={styles.comboBuildText}>BUILD</Text>
+                )}
+              </PressableScale>
+            </View>
+          </View>
         )}
 
         {/* ===== SCHEDULE FOR LATER ===== */}
@@ -1412,12 +1464,23 @@ const styles = StyleSheet.create({
   scanCtaTitle: { fontFamily: FONT.display, fontSize: 16, color: FUEL.success, textTransform: 'uppercase' },
   scanCtaSub: { fontFamily: FONT.bodyMedium, fontSize: 12, color: '#4F5A2E', marginTop: 2 },
 
-  // AI Combo Builder CTA — dark hero card
-  mealBuilderCTA: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: FUEL.ink, marginHorizontal: SPACE.l, marginTop: SPACE.l, borderRadius: RADIUS.md, padding: SPACE.l },
+  // AI Combo Builder — inline ink card
+  comboCard: { backgroundColor: FUEL.ink, marginHorizontal: SPACE.l, marginTop: SPACE.l, borderRadius: RADIUS.md, padding: SPACE.l, gap: SPACE.m },
+  comboTitleRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.m },
+  comboTitle: { fontFamily: FONT.display, fontSize: 16, color: FUEL.sand, textTransform: 'uppercase' },
+  comboSub: { fontFamily: FONT.bodyMedium, fontSize: 12, color: 'rgba(244,241,233,0.7)', marginTop: 2 },
+  comboGoalRow: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.s },
+  comboGoalChip: { paddingHorizontal: SPACE.m, paddingVertical: SPACE.s, borderRadius: 999, backgroundColor: FUEL.inkSoft, borderWidth: 1.5, borderColor: FUEL.inkSoft },
+  comboGoalChipActive: { backgroundColor: FUEL.lime, borderColor: FUEL.lime },
+  comboGoalText: { fontFamily: FONT.bodyExtrabold, fontSize: 12, color: FUEL.sand, textTransform: 'uppercase', letterSpacing: 0.3 },
+  comboGoalTextActive: { color: FUEL.ink },
+  comboBuildRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s },
+  comboBudgetInput: { flex: 1, backgroundColor: FUEL.inkSoft, borderRadius: RADIUS.sm, paddingHorizontal: SPACE.m, paddingVertical: SPACE.m, fontFamily: FONT.bodySemibold, fontSize: 14, color: FUEL.sand },
+  comboBuildBtn: { backgroundColor: FUEL.lime, borderRadius: RADIUS.sm, paddingHorizontal: SPACE.xl, paddingVertical: SPACE.m, alignItems: 'center', justifyContent: 'center', minWidth: 96 },
+  comboBuildBtnDisabled: { opacity: 0.5 },
+  comboBuildText: { fontFamily: FONT.bodyExtrabold, fontSize: 14, color: FUEL.ink, letterSpacing: 0.5 },
   ctaLeft: { flexDirection: 'row', alignItems: 'center', gap: SPACE.m, flex: 1 },
   heroCtaIconBg: { width: 44, height: 44, borderRadius: RADIUS.md, backgroundColor: FUEL.lime, alignItems: 'center', justifyContent: 'center' },
-  heroCtaTitle: { fontFamily: FONT.display, fontSize: 16, color: FUEL.sand, textTransform: 'uppercase' },
-  heroCtaSub: { fontFamily: FONT.bodyMedium, fontSize: 12, color: 'rgba(244,241,233,0.7)', marginTop: 2 },
   ctaIconBg: { width: 44, height: 44, borderRadius: RADIUS.md, backgroundColor: FUEL.ink, alignItems: 'center', justifyContent: 'center' },
   ctaTitle: { fontFamily: FONT.display, fontSize: 16, color: FUEL.ink, textTransform: 'uppercase' },
   ctaSub: { fontFamily: FONT.bodyMedium, fontSize: 12, color: FUEL.muted, marginTop: 2 },
