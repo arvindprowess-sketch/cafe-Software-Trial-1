@@ -212,6 +212,76 @@ function IntelStrip({ range }: { range: IntelRange }) {
   );
 }
 
+// ── HQ Command Center — Strip 5 Security Center ──
+type SecEvent = { type: string; summary: string; actor: string; store_id: string | null; severity: number; ts: string };
+const SEC_META: Record<string, { icon: string; label: string }> = {
+  price_change: { icon: '₹', label: 'Price change' },
+  role_change: { icon: '🛡', label: 'Role change' },
+  after_hours_activity: { icon: '🌙', label: 'After hours' },
+  rejected_discard: { icon: '⊘', label: 'Rejected discard' },
+  manual_stock_adjust: { icon: '📦', label: 'Stock adjust' },
+};
+const SEC_SEV_BG: Record<number, string> = { 3: '#C0392B22', 2: '#D69A3522', 1: '#6B6A5E18' };
+const SEC_SEV_FG: Record<number, string> = { 3: 'var(--error)', 2: 'var(--warning)', 1: 'var(--muted)' };
+const relTime = (iso: string) => {
+  const s = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (!iso || isNaN(s)) return '';
+  if (s < 60) return 'just now';
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
+};
+
+function SecurityStrip({ range }: { range: IntelRange }) {
+  const [feed, setFeed] = useState<SecEvent[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const load = useCallback(async () => {
+    setLoading(true); setError('');
+    try { setFeed(await api(`/hq/security-feed?range=${range}`)); }
+    catch (e: any) { setError(e?.message || 'Failed'); }
+    finally { setLoading(false); }
+  }, [range]);
+  useEffect(() => { load(); }, [load]);
+
+  return (
+    <>
+      <h2 style={{ fontSize: 16, fontWeight: 700, margin: '28px 0 12px' }}>Security Center</h2>
+      {loading ? (
+        <div data-testid="security-feed" style={{ display: 'grid', gap: 10, marginBottom: 28 }}>
+          {[0, 1].map((i) => <div key={i} className="stat-card" style={{ height: 56, background: 'var(--border)', opacity: 0.5 }} />)}
+        </div>
+      ) : error ? (
+        <div className="stat-card" style={{ textAlign: 'center', padding: 24, marginBottom: 28 }}>
+          <span style={{ color: 'var(--error)', fontWeight: 600 }}>Couldn't load security feed. </span>
+          <button onClick={load} style={{ marginLeft: 8, padding: '6px 14px', borderRadius: 'var(--radius-pill)', border: 'none', background: 'var(--lime)', color: 'var(--ink)', fontWeight: 700, cursor: 'pointer' }}>Retry</button>
+        </div>
+      ) : feed && feed.length > 0 ? (
+        <div data-testid="security-feed" style={{ display: 'grid', gap: 10, marginBottom: 28 }}>
+          {feed.map((e, i) => {
+            const meta = SEC_META[e.type] || { icon: '•', label: e.type };
+            return (
+              <div key={`${e.type}-${i}`} data-testid={`sec-${e.type}-${i}`} className="stat-card" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 18px', textAlign: 'left' }}>
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: SEC_SEV_BG[e.severity] || 'var(--border)', color: SEC_SEV_FG[e.severity], display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>{meta.icon}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: SEC_SEV_FG[e.severity] }}>{meta.label}</span>
+                    <strong style={{ fontSize: 13.5, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.summary}</strong>
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{e.actor}{e.store_id ? ` · ${e.store_id}` : ''}</div>
+                </div>
+                <span style={{ fontSize: 12, color: 'var(--muted)', whiteSpace: 'nowrap' }}>{relTime(e.ts)}</span>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div data-testid="security-feed" className="stat-card" style={{ textAlign: 'center', padding: 28, marginBottom: 28, color: 'var(--muted)', fontWeight: 600 }}>No flagged activity in this range.</div>
+      )}
+    </>
+  );
+}
+
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const [range, setRange] = useState<Pulse['range']>('today');
@@ -445,6 +515,9 @@ export default function AdminDashboard() {
 
       {/* HQ Command Center — Strip 4 Intelligence (6 tabs) */}
       <IntelStrip range={range} />
+
+      {/* HQ Command Center — Strip 5 Security Center */}
+      <SecurityStrip range={range} />
 
       <div className="stats-grid" data-testid="stats-grid">
         {[
