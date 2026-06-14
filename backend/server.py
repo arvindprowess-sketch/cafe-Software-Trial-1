@@ -2240,6 +2240,84 @@ async def hq_intel_ratings(range_: str = Query("month", alias="range"), user=Dep
     lowest_items = [{"product_id": r["_id"], "name": r.get("name"), "avg_rating": round(float(r["avg"] or 0), 2), "n": int(r["n"])} for r in item_rows]
     return {"range": rng, "by_store": by_store, "lowest_items": lowest_items}
 
+# ── Strip 5 Security Center (HQ) — classify flagged activity from the existing
+#    append-only audit sources (admin_audit + movement_log + discards). No new
+#    audit writes; read-only reuse. ──
+_PRICE_FIELDS = ("cost_per_100g", "fixed_price", "price", "discount_value")
+def _after_hours(iso_ts: str) -> bool:
+    """True if the ISO timestamp falls outside 06:00–22:00 (UTC)."""
+    try:
+        h = datetime.fromisoformat(iso_ts.replace("Z", "+00:00")).hour
+        return h < 6 or h >= 22
+    except Exception:
+        return False
+
+@api_router.get("/hq/security-feed")
+async def hq_security_feed(range_: str = Query("month", alias="range"), user=Depends(get_current_user)):
+    """HQ Command Center — Strip 5 Security Center. Newest-first feed of flagged
+    activity classified from admin_audit + movement_log + discards. HQ only."""
+    if not role_in(user, "super_admin", "admin"):
+        raise HTTPException(status_code=403, detail="HQ only")
+    rng, cur_s, cur_e, _, _ = _intel_range(range_)
+    events = []
+    actor_ids = set()
+
+    # admin_audit → role_change / price_change / (else) after_hours_activity
+    async for a in db.admin_audit.find({"created_at": {"$gte": cur_s, "$lt": cur_e}}, {"_id": 0}).sort("created_at", -1).to_list(2000):
+        ts, entity, action = a.get("created_at"), a.get("entity"), a.get("action")
+        before, after = a.get("before") or {}, a.get("after") or {}
+        actor_ids.add(a.get("actor_id"))
+        name = (after or before).get("name") or a.get("entity_id")
+        if entity == "staff":
+            events.append({"type": "role_change", "severity": 3,
+                           "summary": f"Staff {action}: {after.get('name') or name}" + (f" ({after.get('role')})" if after.get("role") else ""),
+                           "actor_id": a.get("actor_id"), "store_id": a.get("store_id"), "ts": ts})
+            continue
+        if action == "update" and entity in ("product", "product_override", "offer"):
+            changed = [f for f in _PRICE_FIELDS if f in after and before.get(f) != after.get(f)]
+            if changed:
+                f = changed[0]
+                events.append({"type": "price_change", "severity": 2,
+                               "summary": f"Price changed on {name}: {before.get(f)} → {after.get(f)}",
+                               "actor_id": a.get("actor_id"), "store_id": a.get("store_id"), "ts": ts})
+                continue
+        if _after_hours(ts):
+            events.append({"type": "after_hours_activity", "severity": 2,
+                           "summary": f"After-hours {action} on {entity} ({name})",
+                           "actor_id": a.get("actor_id"), "store_id": a.get("store_id"), "ts": ts})
+
+    # movement_log → manual_stock_adjust / (else after-hours) after_hours_activity
+    async for m in db.movement_log.find({"created_at": {"$gte": cur_s, "$lt": cur_e}}, {"_id": 0}).sort("created_at", -1).to_list(3000):
+        ts = m.get("created_at")
+        actor_ids.add(m.get("user_id"))
+        if m.get("type") == "adjust":
+            events.append({"type": "manual_stock_adjust", "severity": 1,
+                           "summary": f"Manual stock adjust: {m.get('qty_delta')}g" + (f" — {m.get('reason')}" if m.get("reason") else ""),
+                           "actor_id": m.get("user_id"), "store_id": m.get("store_id"), "ts": ts})
+        elif _after_hours(ts):
+            events.append({"type": "after_hours_activity", "severity": 2,
+                           "summary": f"After-hours stock movement ({m.get('type')})",
+                           "actor_id": m.get("user_id"), "store_id": m.get("store_id"), "ts": ts})
+
+    # discards rejected → investigation flag
+    async for d in db.discards.find({"status": "rejected", "decided_at": {"$gte": cur_s, "$lt": cur_e}}, {"_id": 0}).to_list(2000):
+        actor_ids.add(d.get("approved_by"))
+        events.append({"type": "rejected_discard", "severity": 2,
+                       "summary": f"Discard rejected (₹{round(d.get('value', 0) or 0)})" + (f" — {d.get('reason')}" if d.get("reason") else ""),
+                       "actor_id": d.get("approved_by"), "store_id": d.get("store_id"), "ts": d.get("decided_at")})
+
+    # resolve actor names
+    names = {}
+    ids = [i for i in actor_ids if i]
+    if ids:
+        for u in await db.users.find({"id": {"$in": ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(500):
+            names[u["id"]] = u.get("name")
+    for e in events:
+        e["actor"] = names.get(e.pop("actor_id"), "System")
+
+    events.sort(key=lambda e: e.get("ts") or "", reverse=True)
+    return events
+
 @api_router.get("/admin/staff-accounts")
 async def admin_staff_accounts(user=Depends(get_current_user)):
     """Admin: list kitchen & cashier accounts"""
