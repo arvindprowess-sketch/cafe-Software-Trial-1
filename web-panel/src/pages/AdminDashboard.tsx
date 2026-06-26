@@ -581,8 +581,6 @@ export default function AdminDashboard() {
         {[
           { to: '/admin/categories', title: 'Manage Categories', desc: 'Icons, fonts, ordering', color: '#15140F', icon: 'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z' },
           { to: '/admin/products', title: 'Manage Products', desc: 'Meals & single items', color: '#3FA34D', icon: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4' },
-          { to: '/admin/orders', title: 'Orders', desc: 'All orders & history', color: '#D69A35', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2' },
-          { to: '/admin/kitchen', title: 'Kitchen Monitor', desc: 'Live kitchen view', color: '#15140F', icon: 'M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z' },
         ].map(a => (
           <Link to={a.to} className="action-card" key={a.to} data-testid={`goto-${a.title.toLowerCase().replace(/ /g, '-')}`}>
             <div className="action-icon" style={{ background: `${a.color}12` }}>
