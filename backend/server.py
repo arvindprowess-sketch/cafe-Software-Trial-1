@@ -2263,7 +2263,7 @@ async def hq_security_feed(range_: str = Query("month", alias="range"), user=Dep
     actor_ids = set()
 
     # admin_audit → role_change / price_change / (else) after_hours_activity
-    async for a in db.admin_audit.find({"created_at": {"$gte": cur_s, "$lt": cur_e}}, {"_id": 0}).sort("created_at", -1).to_list(2000):
+    for a in await db.admin_audit.find({"created_at": {"$gte": cur_s, "$lt": cur_e}}, {"_id": 0}).sort("created_at", -1).to_list(2000):
         ts, entity, action = a.get("created_at"), a.get("entity"), a.get("action")
         before, after = a.get("before") or {}, a.get("after") or {}
         actor_ids.add(a.get("actor_id"))
@@ -2287,7 +2287,7 @@ async def hq_security_feed(range_: str = Query("month", alias="range"), user=Dep
                            "actor_id": a.get("actor_id"), "store_id": a.get("store_id"), "ts": ts})
 
     # movement_log → manual_stock_adjust / (else after-hours) after_hours_activity
-    async for m in db.movement_log.find({"created_at": {"$gte": cur_s, "$lt": cur_e}}, {"_id": 0}).sort("created_at", -1).to_list(3000):
+    for m in await db.movement_log.find({"created_at": {"$gte": cur_s, "$lt": cur_e}}, {"_id": 0}).sort("created_at", -1).to_list(3000):
         ts = m.get("created_at")
         actor_ids.add(m.get("user_id"))
         if m.get("type") == "adjust":
@@ -2300,7 +2300,7 @@ async def hq_security_feed(range_: str = Query("month", alias="range"), user=Dep
                            "actor_id": m.get("user_id"), "store_id": m.get("store_id"), "ts": ts})
 
     # discards rejected → investigation flag
-    async for d in db.discards.find({"status": "rejected", "decided_at": {"$gte": cur_s, "$lt": cur_e}}, {"_id": 0}).to_list(2000):
+    for d in await db.discards.find({"status": "rejected", "decided_at": {"$gte": cur_s, "$lt": cur_e}}, {"_id": 0}).to_list(2000):
         actor_ids.add(d.get("approved_by"))
         events.append({"type": "rejected_discard", "severity": 2,
                        "summary": f"Discard rejected (₹{round(d.get('value', 0) or 0)})" + (f" — {d.get('reason')}" if d.get("reason") else ""),
