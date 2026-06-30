@@ -186,7 +186,11 @@ if _is_prod and not os.environ.get("EMERGENT_LLM_KEY", "").strip():
     logger.warning("EMERGENT_LLM_KEY is not set in production; AI features will be degraded")
 
 # ========== SOCKET.IO REAL-TIME SERVER (Part C) ==========
-sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")
+# M-3: Socket.IO CORS is env-driven (ALLOWED_ORIGINS), not a hardcoded "*". When
+# ALLOWED_ORIGINS isn't set we fall back to "*" for local dev only (same posture
+# as the REST CORS layer); production must set ALLOWED_ORIGINS.
+_SOCKET_CORS = "*" if ALLOWED_ORIGINS == ["*"] else ALLOWED_ORIGINS
+sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins=_SOCKET_CORS)
 # Generic role rooms — used only for GLOBAL events (e.g. catalog/menu updates).
 # Store-scoped operational events go to per-store rooms instead (see store_event_rooms).
 STAFF_ROOMS = ["kitchen", "cashier", "admin"]
@@ -9746,9 +9750,29 @@ app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
     allow_origins=ALLOWED_ORIGINS,  # A4: from ALLOWED_ORIGINS env (dev fallback ["*"])
-    allow_methods=["*"],
-    allow_headers=["*"],
+    # M-5: explicit methods/headers instead of "*".
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
+
+# H-5: baseline security headers on every API response. HSTS is prod-only (it must
+# not be sent over plain-HTTP dev). The API serves JSON, so a strict CSP is inert
+# here — Swagger/Redoc are exempted so their CDN/inline assets still load. The SPA
+# gets its own (looser) CSP via web-panel/index.html.
+_API_CSP = "default-src 'self'; frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    if _is_prod:
+        response.headers.setdefault("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
+    path = request.url.path
+    if not (path.startswith("/docs") or path.startswith("/redoc") or path.startswith("/openapi")):
+        response.headers.setdefault("Content-Security-Policy", _API_CSP)
+    return response
 
 # ========== MULTI-STORE MIGRATION (idempotent, backward-compatible) ==========
 STORE_SCOPED_COLLECTIONS = [
