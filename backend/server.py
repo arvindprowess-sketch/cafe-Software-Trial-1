@@ -81,6 +81,12 @@ _otp_phone_storage = MemoryStorage()
 _otp_phone_limiter = MovingWindowRateLimiter(_otp_phone_storage)
 _OTP_PHONE_LIMIT = parse_rate_limit("3/15minutes")
 
+# Per-identifier limit for super-admin reset requests (on top of the per-IP slowapi
+# limit). Keyed on the submitted identifier, which slowapi's key_func can't see.
+_super_reset_storage = MemoryStorage()
+_super_reset_limiter = MovingWindowRateLimiter(_super_reset_storage)
+_SUPER_RESET_LIMIT = parse_rate_limit("3/15minutes")
+
 # ========== CONFIG (env-driven, A3 + A4) ==========
 JWT_SECRET = os.environ.get("JWT_SECRET") or secrets.token_hex(32)
 JWT_ALGORITHM = "HS256"
@@ -91,6 +97,23 @@ ALLOWED_ORIGINS = [o.strip() for o in _origins_env.split(",") if o.strip()] or [
 # Auth V2: unified code+password login + domain-gated super-admin.
 SUPERADMIN_EMAIL_DOMAIN = (os.environ.get("SUPERADMIN_EMAIL_DOMAIN", "boraroc.com") or "boraroc.com").strip().lower()
 BOOTSTRAP_SUPERADMIN_EMAIL = (os.environ.get("BOOTSTRAP_SUPERADMIN_EMAIL") or f"owner@{SUPERADMIN_EMAIL_DOMAIN}").strip().lower()
+# Optional recovery phone for the bootstrap super-admin (enables phone reset channel).
+BOOTSTRAP_SUPERADMIN_PHONE = (os.environ.get("BOOTSTRAP_SUPERADMIN_PHONE") or "").strip().replace(" ", "").replace("-", "")
+
+# Super-admin self-service reset: stronger password floor + 15-min single-use codes.
+SUPERADMIN_RESET_PW_MIN = 12
+SUPERADMIN_RESET_TTL_MIN = 15
+SUPERADMIN_RESET_MAX_ATTEMPTS = 5
+
+# Email sender (SMTP or AWS SES). Unconfigured = graceful no-op + warn-log; boot
+# NEVER blocks (mirrors the MSG91 dev fallback).
+SMTP_HOST = os.environ.get("SMTP_HOST", "").strip()
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "587") or "587")
+SMTP_USER = os.environ.get("SMTP_USER", "").strip()
+SMTP_PASS = os.environ.get("SMTP_PASS", "")
+SMTP_FROM = os.environ.get("SMTP_FROM", "").strip()
+SES_REGION = os.environ.get("SES_REGION", "").strip()
+SES_FROM = os.environ.get("SES_FROM", "").strip()
 
 # ========== ENV GUARD ==========
 def assert_prod_secrets(env: str, jwt_secret: str, origins: list, msg91_key: Optional[str] = None) -> None:
@@ -1015,6 +1038,56 @@ async def send_otp_sms(phone: str, otp: str) -> bool:
     # DEV MODE: no SMS provider configured -> log only, never expose in response
     logger.info(f"[SMS][DEV] OTP for {phone}: {otp}  (configure MSG91_AUTH_KEY + MSG91_TEMPLATE_ID for real SMS)")
     return True
+
+def email_is_configured() -> bool:
+    """True only when a real email provider (SMTP or AWS SES) is configured."""
+    return bool((SMTP_HOST and SMTP_FROM) or (SES_REGION and SES_FROM))
+
+async def send_email(to: str, subject: str, body: str) -> bool:
+    """Send a plaintext email via AWS SES or SMTP. Graceful no-op + warn-log when
+    neither is configured — boot/flow NEVER blocks (mirrors the MSG91 dev fallback).
+    Returns True only when a real provider accepted the message. The body (which may
+    contain a secret) is never logged."""
+    if SES_REGION and SES_FROM:
+        try:
+            import boto3  # optional dependency; only needed for SES delivery
+            def _ses_send():
+                client = boto3.client("ses", region_name=SES_REGION)
+                client.send_email(
+                    Source=SES_FROM,
+                    Destination={"ToAddresses": [to]},
+                    Message={"Subject": {"Data": subject}, "Body": {"Text": {"Data": body}}},
+                )
+            await asyncio.to_thread(_ses_send)
+            logger.info(f"[EMAIL] sent to {to} via SES")
+            return True
+        except Exception as e:
+            logger.error(f"[EMAIL] SES error: {e}")
+            return False
+    if SMTP_HOST and SMTP_FROM:
+        try:
+            import smtplib
+            from email.message import EmailMessage
+            msg = EmailMessage()
+            msg["From"] = SMTP_FROM
+            msg["To"] = to
+            msg["Subject"] = subject
+            msg.set_content(body)
+            def _smtp_send():
+                with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as s:
+                    s.starttls()
+                    if SMTP_USER:
+                        s.login(SMTP_USER, SMTP_PASS)
+                    s.send_message(msg)
+            await asyncio.to_thread(_smtp_send)
+            logger.info(f"[EMAIL] sent to {to} via SMTP")
+            return True
+        except Exception as e:
+            logger.error(f"[EMAIL] SMTP error: {e}")
+            return False
+    # DEV MODE: no email provider -> log recipient + subject only (never the body/secret).
+    logger.warning(f"[EMAIL][DEV] would send to {to}: {subject}  (configure SMTP_* or SES_* to deliver)")
+    return False
 
 class OTPSendRequest(BaseModel):
     phone: str
@@ -4427,6 +4500,8 @@ async def seed_data(actor=Depends(get_optional_user)):
             "is_active": True,
             "created_at": datetime.now(timezone.utc).isoformat()
         }
+        if BOOTSTRAP_SUPERADMIN_PHONE:
+            admin["recovery_phone"] = BOOTSTRAP_SUPERADMIN_PHONE
         await db.users.insert_one(admin)
         logger.warning(f"[seed] bootstrap super-admin {BOOTSTRAP_SUPERADMIN_EMAIL} ONE-TIME PASSWORD: {one_time_pw}")
         bootstrap = {"email": BOOTSTRAP_SUPERADMIN_EMAIL, "password": one_time_pw}
@@ -6429,6 +6504,140 @@ async def pin_login(request: Request):
         status_code=410,
         detail="PIN login has been retired. Sign in at /api/auth/login with your login code and password.",
     )
+
+# ========== SUPER-ADMIN SELF-SERVICE PASSWORD RESET ==========
+# There is no role above super_admin, so a forgotten super-admin password is
+# recovered out-of-band (phone+email), not by another user. Staff resets stay with
+# the super-admin (PUT /admin/staff/{id}/reset-password). These endpoints are
+# super_admin-only by construction: lookups are filtered to role == super_admin, so
+# a staff/customer identifier never matches and gets the same generic response.
+
+class SuperResetRequest(BaseModel):
+    identifier: str  # company email OR registered recovery_phone
+
+class SuperResetConfirm(BaseModel):
+    identifier: str
+    code: str
+    new_password: str
+
+class RecoveryPhoneUpdate(BaseModel):
+    phone: str
+
+def _normalize_phone(raw: str) -> str:
+    return (raw or "").strip().replace(" ", "").replace("-", "")
+
+async def _find_super_admin_by_identifier(identifier: str):
+    """Resolve a super_admin by company email OR recovery_phone. Returns None for
+    any non-super_admin match (no cross-role reset, no enumeration signal)."""
+    ident = (identifier or "").strip()
+    if not ident:
+        return None
+    return await db.users.find_one(
+        {"role": "super_admin",
+         "$or": [{"email": ident.lower()}, {"recovery_phone": _normalize_phone(ident)}]},
+        {"_id": 0})
+
+@api_router.post("/auth/super/reset/request")
+@limiter.limit("10/15minutes")
+async def super_reset_request(request: Request, data: SuperResetRequest):
+    """Start a super-admin password reset. ALWAYS returns a generic 200 (no user
+    enumeration). When a matching super_admin exists, a single-use 6-digit code is
+    stored (15-min expiry) and sent over every configured channel (phone + email)."""
+    generic = {"message": "If an account exists, a reset code was sent."}
+    ident = (data.identifier or "").strip()
+    if not ident:
+        return generic
+    # Per-identifier rate limit (applies to any identifier, so it leaks nothing).
+    if limiter.enabled and not _super_reset_limiter.hit(_SUPER_RESET_LIMIT, "super-reset", ident.lower()):
+        raise HTTPException(status_code=429, detail="Too many reset requests. Try again later.")
+
+    user = await _find_super_admin_by_identifier(ident)
+    if user:
+        code = generate_otp()
+        now = datetime.now(timezone.utc)
+        channels = []
+        phone = user.get("recovery_phone")
+        if phone:
+            await send_otp_sms(phone, code)
+            channels.append("phone")
+        if email_is_configured() and user.get("email"):
+            await send_email(
+                user["email"],
+                "BORAROC super-admin password reset",
+                f"Your password reset code is {code}. It expires in {SUPERADMIN_RESET_TTL_MIN} minutes. "
+                f"If you did not request this, ignore this message.")
+            channels.append("email")
+        # DEV fallback: with no real channel, surface the code in logs for local testing
+        # (same convention as the MSG91 dev fallback). Never logged when a provider is set.
+        if not phone and not email_is_configured():
+            logger.warning(f"[RESET][DEV] super-admin reset code: {code} (configure MSG91/SMTP/SES to deliver)")
+            channels.append("dev-log")
+        await db.password_resets.insert_one({
+            "id": str(uuid.uuid4()),
+            "user_id": user["id"],
+            "code_hash": hash_password(code),
+            "expires_at": now + timedelta(minutes=SUPERADMIN_RESET_TTL_MIN),
+            "used": False,
+            "attempts": 0,
+            "channel": ",".join(channels),
+            "created_at": now.isoformat(),
+        })
+        await log_admin_audit({"id": "system", "role": "system"}, "password_reset_request",
+                              "user", user["id"], None, {"channels": channels})
+    return generic
+
+@api_router.post("/auth/super/reset/confirm")
+@limiter.limit("10/15minutes")
+async def super_reset_confirm(request: Request, data: SuperResetConfirm):
+    """Complete a super-admin reset. The code must be the latest unused one, not
+    expired, under the attempt cap, and matching. On success the password is set
+    (>= 12 chars) and all existing sessions are revoked (token_version bumped)."""
+    invalid = HTTPException(status_code=400, detail="Invalid or expired reset code")
+    user = await _find_super_admin_by_identifier(data.identifier)
+    if not user:
+        raise invalid  # staff/unknown identifier -> generic 400 (no enumeration)
+    reset = await db.password_resets.find_one(
+        {"user_id": user["id"], "used": False}, {"_id": 0}, sort=[("created_at", -1)])
+    if not reset:
+        raise invalid
+    now = datetime.now(timezone.utc)
+    exp = reset["expires_at"]
+    if isinstance(exp, str):
+        exp = datetime.fromisoformat(exp)
+    if exp.tzinfo is None:
+        exp = exp.replace(tzinfo=timezone.utc)
+    if now > exp:
+        await db.password_resets.delete_one({"id": reset["id"]})
+        raise invalid
+    if reset.get("attempts", 0) >= SUPERADMIN_RESET_MAX_ATTEMPTS:
+        await db.password_resets.delete_one({"id": reset["id"]})
+        raise HTTPException(status_code=400, detail="Too many attempts; request a new code")
+    if not verify_password(data.code or "", reset["code_hash"]):
+        await db.password_resets.update_one({"id": reset["id"]}, {"$inc": {"attempts": 1}})
+        raise invalid
+    # Code is valid — enforce the super-admin password floor before consuming it.
+    if not data.new_password or len(data.new_password) < SUPERADMIN_RESET_PW_MIN:
+        raise HTTPException(status_code=400, detail=f"Password must be at least {SUPERADMIN_RESET_PW_MIN} characters")
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {"password_hash": hash_password(data.new_password)}, "$inc": {"token_version": 1}})
+    await db.password_resets.update_one({"id": reset["id"]}, {"$set": {"used": True}})
+    await log_admin_audit({"id": "system", "role": "system"}, "password_reset_confirm",
+                          "user", user["id"], None, {"channel": reset.get("channel")})
+    return {"message": "Password updated. All existing sessions have been signed out."}
+
+@api_router.put("/auth/super/recovery-phone")
+async def set_super_recovery_phone(data: RecoveryPhoneUpdate, user=Depends(get_current_user)):
+    """super_admin-only: set/update the recovery phone used for self-service reset."""
+    if normalize_role(user) != "super_admin":
+        raise HTTPException(status_code=403, detail="super_admin only")
+    phone = _normalize_phone(data.phone)
+    if not phone.isdigit() or len(phone) != 10:
+        raise HTTPException(status_code=400, detail="Invalid phone number. Enter 10 digits.")
+    await db.users.update_one({"id": user["id"]}, {"$set": {"recovery_phone": phone}})
+    # Don't store/echo the number in the audit payload.
+    await log_admin_audit(user, "update", "recovery_phone", user["id"], None, {"recovery_phone": "set"})
+    return {"message": "Recovery phone updated"}
 
 # ========== ORDER PRIORITY ==========
 @api_router.put("/orders/{order_id}/priority")
@@ -9404,6 +9613,13 @@ async def on_startup():
         logger.info("[startup] otp_codes TTL index ensured")
     except Exception as e:
         logger.error(f"[startup] index error: {e}")
+    # Super-admin reset codes: auto-expire + fast latest-unused lookup per user.
+    try:
+        await db.password_resets.create_index("expires_at", expireAfterSeconds=0)
+        await db.password_resets.create_index([("user_id", 1), ("created_at", -1)])
+        logger.info("[startup] password_resets indexes ensured")
+    except Exception as e:
+        logger.error(f"[startup] password_resets index error: {e}")
     # Phase 1A: one override per (store, product)
     try:
         await db.product_overrides.create_index([("store_id", 1), ("product_id", 1)], unique=True)
