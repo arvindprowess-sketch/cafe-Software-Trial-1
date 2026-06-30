@@ -9,32 +9,36 @@ from datetime import datetime, timezone
 
 BASE_URL = "https://meal-fit-goals.preview.emergentagent.com"
 
-# Admin credentials
-ADMIN_EMAIL = "admin@dietcafe.com"
-ADMIN_PASSWORD = "admin123"
+# Admin credentials — Auth V2: code+password supplied via env (no fixed creds).
+ADMIN_CODE = os.environ.get("SMOKE_ADMIN_CODE")
+ADMIN_PASSWORD = os.environ.get("SMOKE_ADMIN_PASSWORD")
 
 
 class TestAdminAuthentication:
-    """Admin login via email/password"""
-    
+    """Admin login via code/password (Auth V2)."""
+
     def test_admin_login_success(self):
-        """Admin can login with email/password"""
+        """Super-admin can sign in with code+password."""
+        if not ADMIN_CODE or not ADMIN_PASSWORD:
+            pytest.skip("Set SMOKE_ADMIN_CODE + SMOKE_ADMIN_PASSWORD")
         response = requests.post(f"{BASE_URL}/api/auth/login", json={
-            "email": ADMIN_EMAIL,
+            "code": ADMIN_CODE,
             "password": ADMIN_PASSWORD
         })
         assert response.status_code == 200, f"Admin login failed: {response.text}"
         data = response.json()
         assert "token" in data, "No token in response"
-        assert data["user"]["role"] == "admin", "User role is not admin"
+        assert data["user"]["role"] == "super_admin", "User role is not super_admin"
         print(f"✅ Admin login successful: {data['user']['name']}")
 
 
 @pytest.fixture(scope="module")
 def admin_token():
-    """Get admin token for authenticated requests"""
+    """Get a super-admin token for authenticated requests (Auth V2)."""
+    if not ADMIN_CODE or not ADMIN_PASSWORD:
+        pytest.skip("Set SMOKE_ADMIN_CODE + SMOKE_ADMIN_PASSWORD")
     response = requests.post(f"{BASE_URL}/api/auth/login", json={
-        "email": ADMIN_EMAIL,
+        "code": ADMIN_CODE,
         "password": ADMIN_PASSWORD
     })
     if response.status_code != 200:
@@ -82,7 +86,7 @@ class TestAdminDashboardStats:
 
 
 class TestAdminStaffAccounts:
-    """Tests for GET /api/admin/staff-accounts and PUT /api/admin/staff/{id}/reset-pin"""
+    """Tests for GET /api/admin/staff-accounts and PUT /api/admin/staff/{id}/reset-password"""
     
     def test_staff_accounts_returns_kitchen_cashier(self, admin_headers):
         """Staff accounts returns kitchen and cashier users"""
@@ -105,56 +109,43 @@ class TestAdminStaffAccounts:
         response = requests.get(f"{BASE_URL}/api/admin/staff-accounts")
         assert response.status_code == 403, "Should require auth"
     
-    def test_reset_pin_success(self, admin_headers):
-        """Admin can reset staff PIN"""
+    def test_reset_password_success(self, admin_headers):
+        """Admin can reset a staff member's password (Auth V2)."""
         # First get staff list
         staff_response = requests.get(f"{BASE_URL}/api/admin/staff-accounts", headers=admin_headers)
         if staff_response.status_code != 200:
             pytest.skip("Could not get staff list")
-        
+
         staff = staff_response.json()
         if len(staff) == 0:
-            pytest.skip("No staff accounts to test PIN reset")
-        
-        # Get first staff member
+            pytest.skip("No staff accounts to test password reset")
+
         staff_id = staff[0]["id"]
-        original_pin = staff[0].get("pin", "1234")
-        
-        # Reset PIN to a test value
-        test_pin = "9999"
+
+        # Reset password to a test value (>= 8 chars)
         response = requests.put(
-            f"{BASE_URL}/api/admin/staff/{staff_id}/reset-pin",
+            f"{BASE_URL}/api/admin/staff/{staff_id}/reset-password",
             headers=admin_headers,
-            json={"pin": test_pin}
+            json={"password": "newpassword1"}
         )
-        assert response.status_code == 200, f"PIN reset failed: {response.text}"
-        
-        # Restore original PIN
-        restore_response = requests.put(
-            f"{BASE_URL}/api/admin/staff/{staff_id}/reset-pin",
-            headers=admin_headers,
-            json={"pin": original_pin}
-        )
-        assert restore_response.status_code == 200, "Could not restore original PIN"
-        print(f"✅ PIN reset successful for staff {staff[0].get('name', staff_id)}")
-    
-    def test_reset_pin_validation(self, admin_headers):
-        """PIN reset validates PIN length"""
-        # Get first staff
+        assert response.status_code == 200, f"Password reset failed: {response.text}"
+        print(f"✅ Password reset successful for staff {staff[0].get('name', staff_id)}")
+
+    def test_reset_password_validation(self, admin_headers):
+        """Password reset rejects passwords shorter than 8 chars."""
         staff_response = requests.get(f"{BASE_URL}/api/admin/staff-accounts", headers=admin_headers)
         if staff_response.status_code != 200 or len(staff_response.json()) == 0:
             pytest.skip("No staff accounts")
-        
+
         staff_id = staff_response.json()[0]["id"]
-        
-        # Try with too short PIN
+
         response = requests.put(
-            f"{BASE_URL}/api/admin/staff/{staff_id}/reset-pin",
+            f"{BASE_URL}/api/admin/staff/{staff_id}/reset-password",
             headers=admin_headers,
-            json={"pin": "12"}  # Less than 4 digits
+            json={"password": "short"}  # < 8 chars
         )
-        assert response.status_code == 400, "Should reject short PIN"
-        print("✅ PIN validation rejects short PIN")
+        assert response.status_code == 400, "Should reject short password"
+        print("✅ Password validation rejects short password")
 
 
 class TestCategoriesCRUD:
@@ -296,26 +287,18 @@ class TestProductsFiltering:
         print(f"✅ GET /api/products/all: {len(data)} total products")
 
 
-class TestStaffPINLogin:
-    """Tests for staff PIN login"""
-    
-    def test_kitchen_pin_login(self):
-        """Kitchen staff can login with PIN 1234"""
+class TestStaffPINLoginRetired:
+    """Auth V2: staff PIN login is retired (HTTP 410)."""
+
+    def test_kitchen_pin_login_retired(self):
         response = requests.post(f"{BASE_URL}/api/auth/pin-login", json={"pin": "1234"})
-        assert response.status_code == 200, f"Kitchen PIN login failed: {response.text}"
-        data = response.json()
-        assert "token" in data, "No token"
-        assert data["user"]["role"] == "kitchen", "Role should be kitchen"
-        print(f"✅ Kitchen PIN login successful")
-    
-    def test_cashier_pin_login(self):
-        """Cashier staff can login with PIN 5678"""
+        assert response.status_code == 410, f"Expected 410, got {response.status_code}"
+        print("✅ Kitchen PIN login retired (410)")
+
+    def test_cashier_pin_login_retired(self):
         response = requests.post(f"{BASE_URL}/api/auth/pin-login", json={"pin": "5678"})
-        assert response.status_code == 200, f"Cashier PIN login failed: {response.text}"
-        data = response.json()
-        assert "token" in data, "No token"
-        assert data["user"]["role"] == "cashier", "Role should be cashier"
-        print(f"✅ Cashier PIN login successful")
+        assert response.status_code == 410, f"Expected 410, got {response.status_code}"
+        print("✅ Cashier PIN login retired (410)")
 
 
 if __name__ == "__main__":

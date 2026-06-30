@@ -1,6 +1,8 @@
-"""Security tests: PIN plaintext removal, rate-limit, Socket.IO auth.
+"""Security tests: credential storage, retired PIN login, Socket.IO auth.
 
-In-process (mongomock_motor) — no real server boot needed.
+In-process (mongomock_motor) — no real server boot needed. Auth V2: staff sign in
+with login_code + password; PIN login is retired (HTTP 410). The in-memory
+rate-limit helpers remain unit-tested utilities.
 
 Run:  pytest backend/tests/test_security_pin_ratelimit_socket.py
 """
@@ -18,6 +20,7 @@ import httpx
 from mongomock_motor import AsyncMongoMockClient
 
 import server
+from _authv2 import hq_token
 
 
 def run(coro):
@@ -44,8 +47,7 @@ def ctx():
         c.client = client
         await client.post("/api/seed")
         await server.run_store_migration()
-        c.hq = (await client.post("/api/auth/login", json={
-            "email": "admin@dietcafe.com", "password": "admin123"})).json()["token"]
+        c.hq = await hq_token()
         return c
 
     c = run(build())
@@ -53,96 +55,111 @@ def ctx():
     run(client.aclose())
 
 
-# ── ITEM 1: pin_plain must never be persisted ────────────────────────────────
+# ── ITEM 1: credentials are hashed; no PIN / plaintext is persisted ──────────
 
-def test_create_staff_no_pin_plain(ctx):
-    """pin_plain must not be written to the DB on staff create."""
+def test_create_staff_uses_code_password(ctx):
+    """Staff create stores password_hash + login_code, never a PIN / plaintext."""
     async def go():
         r = await ctx.client.post("/api/staff", json={
             "name": "Test Cashier Sec",
             "role": "cashier",
-            "pin": "667701",
+            "login_code": "SEC-CASH",
+            "password": "supersecret1",
             "store_id": server.DEFAULT_STORE_ID,
         }, headers=auth(ctx.hq))
         assert r.status_code == 200, r.text
         staff_id = r.json()["id"]
         doc = await server.db.users.find_one({"id": staff_id}, {"_id": 0})
         assert doc is not None
-        assert "pin_plain" not in doc, "pin_plain must not be stored in DB"
-        assert "pin_hash" in doc, "pin_hash must be present"
-        assert "pin_token" in doc, "pin_token (uniqueness index) must be present"
+        assert "password_hash" in doc, "password_hash must be present"
+        assert doc.get("login_code") == "SEC-CASH" and doc.get("login_code_l") == "sec-cash"
+        assert "password" not in doc, "plaintext password must not be stored"
+        for k in ("pin", "pin_hash", "pin_token", "pin_plain"):
+            assert k not in doc, f"{k} must not be stored (PIN retired)"
     run(go())
 
 
-def test_seed_demo_staff_no_pin_plain(ctx):
-    """seed-demo-staff must not store pin_plain."""
+def test_seed_demo_staff_no_pin(ctx):
+    """seed-demo-staff must not store any PIN field."""
     async def go():
         await ctx.client.post("/api/admin/seed-demo-staff", headers=auth(ctx.hq))
-        async for doc in server.db.users.find(
+        for doc in await server.db.users.find(
             {"role": {"$in": ["area_manager", "cashier", "kitchen"]}}, {"_id": 0}
-        ):
-            assert "pin_plain" not in doc, f"pin_plain found in {doc.get('role')} doc"
+        ).to_list(50):
+            for k in ("pin", "pin_hash", "pin_token", "pin_plain"):
+                assert k not in doc, f"{k} found in {doc.get('role')} doc"
     run(go())
 
 
-def test_migration_store_manager_no_pin_plain(ctx):
-    """run_store_migration store_manager must not have pin_plain."""
+def test_migration_store_manager_no_pin(ctx):
+    """run_store_migration store_manager must use code+password, not a PIN."""
     async def go():
         doc = await server.db.users.find_one(
             {"role": "store_manager", "store_id": server.DEFAULT_STORE_ID}, {"_id": 0}
         )
         assert doc is not None
-        assert "pin_plain" not in doc, "pin_plain must not be stored"
+        assert doc.get("login_code_l") and "password_hash" in doc
+        for k in ("pin", "pin_hash", "pin_token", "pin_plain"):
+            assert k not in doc, f"{k} must not be stored"
     run(go())
 
 
-def test_pin_login_succeeds_via_hash(ctx):
-    """PIN login must work via bcrypt hash even without pin_plain."""
+def test_login_code_case_insensitive(ctx):
+    """Login by code is case-insensitive and returns the right role."""
     async def go():
-        # store_manager created by run_store_migration
-        r = await ctx.client.post("/api/auth/pin-login", json={"pin": "550001"})
+        r = await ctx.client.post("/api/auth/login", json={"code": "sec-cash", "password": "supersecret1"})
         assert r.status_code == 200, r.text
-        assert r.json()["user"]["role"] == "store_manager"
-        # cashier created directly in test_create_staff_no_pin_plain
-        r2 = await ctx.client.post("/api/auth/pin-login", json={"pin": "667701"})
-        assert r2.status_code == 200, r2.text
-        assert r2.json()["user"]["role"] == "cashier"
+        assert r.json()["user"]["role"] == "cashier"
+        assert r.json()["user"]["login_code"] == "SEC-CASH"
     run(go())
 
 
-def test_wrong_pin_fails(ctx):
-    """Wrong PIN must return 401."""
+def test_login_wrong_password_401(ctx):
+    """Wrong password must return 401."""
     async def go():
-        r = await ctx.client.post("/api/auth/pin-login", json={"pin": "000000"})
+        r = await ctx.client.post("/api/auth/login", json={"code": "SEC-CASH", "password": "nope"})
         assert r.status_code == 401
     run(go())
 
 
-def test_update_staff_no_pin_plain(ctx):
-    """Staff PIN update must not write pin_plain."""
+def test_pin_login_retired_410(ctx):
+    """PIN login is retired and must return HTTP 410."""
     async def go():
-        # find the cashier created in test_create_staff_no_pin_plain
-        doc = await server.db.users.find_one({"name": "Test Cashier Sec"}, {"_id": 0})
-        assert doc is not None
-        r = await ctx.client.put(f"/api/staff/{doc['id']}", json={"pin": "667702"},
-                                 headers=auth(ctx.hq))
-        assert r.status_code == 200, r.text
-        updated = await server.db.users.find_one({"id": doc["id"]}, {"_id": 0})
-        assert "pin_plain" not in updated
+        r = await ctx.client.post("/api/auth/pin-login", json={"pin": "550001"})
+        assert r.status_code == 410, r.text
     run(go())
 
 
-def test_list_staff_pin_masked(ctx):
-    """list_staff must never expose pin_plain — returns '***'."""
+def test_update_staff_password_no_pin(ctx):
+    """Staff password update must not write any PIN field."""
+    async def go():
+        doc = await server.db.users.find_one({"name": "Test Cashier Sec"}, {"_id": 0})
+        assert doc is not None
+        r = await ctx.client.put(f"/api/staff/{doc['id']}", json={"password": "rotated12345"},
+                                 headers=auth(ctx.hq))
+        assert r.status_code == 200, r.text
+        updated = await server.db.users.find_one({"id": doc["id"]}, {"_id": 0})
+        assert "password" not in updated
+        for k in ("pin", "pin_hash", "pin_token", "pin_plain"):
+            assert k not in updated
+        # New password works; old one is revoked.
+        assert (await ctx.client.post("/api/auth/login",
+                json={"code": "SEC-CASH", "password": "rotated12345"})).status_code == 200
+    run(go())
+
+
+def test_list_staff_shows_login_code(ctx):
+    """list_staff exposes login_code and never a password."""
     async def go():
         r = await ctx.client.get("/api/staff", headers=auth(ctx.hq))
         assert r.status_code == 200
         for s in r.json():
-            assert s.get("pin") == "***", f"Expected masked pin, got {s.get('pin')!r}"
+            assert "login_code" in s
+            assert "password" not in s and "password_hash" not in s and "pin" not in s
     run(go())
 
 
-# ── ITEM 2: rate-limit helper unit tests ────────────────────────────────────
+# ── ITEM 2: rate-limit helper unit tests (utilities retained) ───────────────
 
 def test_rate_limit_allows_under_threshold():
     key = "testip:555"
@@ -165,41 +182,20 @@ def test_rate_limit_blocks_on_5th_fail():
     assert retry_after > 0
 
 
-def test_rate_limit_429_via_api(ctx):
-    """6th failed attempt in window must return 429."""
-    async def go():
-        # Use a PIN that doesn't match anyone
-        for _ in range(5):
-            r = await ctx.client.post("/api/auth/pin-login", json={"pin": "999991"})
-            assert r.status_code == 401
-        r = await ctx.client.post("/api/auth/pin-login", json={"pin": "999991"})
-        assert r.status_code == 429, f"Expected 429, got {r.status_code}"
-        assert "Retry-After" in r.headers
-    run(go())
+def test_rate_limit_resets_on_success():
+    key = "testclient:550"
+    server._PIN_FAIL_LOG.pop(key, None)
+    now = time.time()
+    for _ in range(4):
+        server.record_pin_fail(key, now)
+    server.reset_pin_counter(key)
+    allowed, _ = server.check_pin_login_rate(key, now + 1)
+    assert allowed is True
 
 
-def test_rate_limit_resets_on_success(ctx):
-    """Successful PIN login must clear the fail counter for that key."""
-    async def go():
-        pin = "550001"
-        key_prefix = "testclient:550"  # matches ip=testclient, pin[:3]=550
-        server._PIN_FAIL_LOG.pop(key_prefix, None)
-        # Inject 4 fails manually
-        now = time.time()
-        for _ in range(4):
-            server.record_pin_fail(key_prefix, now)
-        # Successful login resets (we can't inject the IP easily via httpx, so test directly)
-        server.reset_pin_counter(key_prefix)
-        allowed, _ = server.check_pin_login_rate(key_prefix, now + 1)
-        assert allowed is True
-    run(go())
-
-
-def test_rate_limit_expires_after_lockout(ctx):
-    """After lockout window passes, attempts should be allowed again."""
+def test_rate_limit_expires_after_lockout():
     key = "expired:557"
     server._PIN_FAIL_LOG.pop(key, None)
-    # Record 5 fails that happened more than _PIN_LOCKOUT_SECS ago
     old_time = time.time() - server._PIN_LOCKOUT_SECS - 5
     for _ in range(5):
         server.record_pin_fail(key, old_time)
@@ -211,7 +207,6 @@ def test_rate_limit_expires_after_lockout(ctx):
 # ── ITEM 3: Socket.IO auth / room-scope logic ────────────────────────────────
 
 def test_socket_connect_rejects_no_token():
-    """connect without token must reject (return False)."""
     async def go():
         result = await server.connect("sid_noauth", {})
         assert result is False
@@ -219,7 +214,6 @@ def test_socket_connect_rejects_no_token():
 
 
 def test_socket_connect_rejects_invalid_token():
-    """connect with a garbled token must reject."""
     async def go():
         environ = {"QUERY_STRING": "token=this.is.garbage"}
         result = await server.connect("sid_bad", environ)
@@ -227,18 +221,14 @@ def test_socket_connect_rejects_invalid_token():
     run(go())
 
 
-def test_socket_connect_accepts_valid_token():
-    """Valid JWT token is correctly decoded — the auth logic accepts it.
-    (sio.save_session requires a live engine socket; we test the decode path directly.)"""
+def test_socket_connect_accepts_valid_token(ctx):
     async def go():
         admin = await server.db.users.find_one({"role": "super_admin"}, {"_id": 0})
         assert admin, "super_admin must exist"
         token = server.create_token(admin["id"], "super_admin")
-        # Verify the token round-trips through jwt.decode correctly
         payload = server.jwt.decode(token, server.JWT_SECRET, algorithms=[server.JWT_ALGORITHM])
         assert payload["user_id"] == admin["id"]
         assert payload["role"] == "super_admin"
-        # A bad/empty environ should be rejected
         result = await server.connect("sid_noenv", {})
         assert result is False
     run(go())
@@ -267,7 +257,6 @@ def _room_allowed_for(role: str, store_id, cluster_ids: list, user_id: str, r: s
 
 
 def test_socket_kitchen_denied_wrong_store():
-    """Kitchen staff from store-A must not be allowed into store-B's kitchen room."""
     STORE_A = server.DEFAULT_STORE_ID
     STORE_B = "STORE-OTHER"
     assert _room_allowed_for("kitchen", STORE_A, [], "u1", f"kitchen:{STORE_A}") is True
@@ -276,7 +265,6 @@ def test_socket_kitchen_denied_wrong_store():
 
 
 def test_socket_hq_can_join_any_room():
-    """super_admin must be allowed to join any store room."""
     STORE_A = server.DEFAULT_STORE_ID
     assert _room_allowed_for("super_admin", None, [], "", f"kitchen:{STORE_A}") is True
     assert _room_allowed_for("super_admin", None, [], "", "hq") is True
@@ -284,7 +272,6 @@ def test_socket_hq_can_join_any_room():
 
 
 def test_socket_area_manager_cluster_scope():
-    """area_manager may only join rooms for stores in their cluster."""
     cluster = [server.DEFAULT_STORE_ID, "STORE-B"]
     assert _room_allowed_for("area_manager", None, cluster, "", f"kitchen:{server.DEFAULT_STORE_ID}") is True
     assert _room_allowed_for("area_manager", None, cluster, "", "kitchen:STORE-C") is False

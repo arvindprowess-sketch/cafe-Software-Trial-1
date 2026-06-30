@@ -17,6 +17,7 @@ import httpx
 from mongomock_motor import AsyncMongoMockClient
 
 import server
+from _authv2 import hq_token
 
 
 def run(coro):
@@ -44,14 +45,13 @@ def ctx():
         c.client = client
         await client.post("/api/seed")
         await server.run_store_migration()
-        c.hq = (await client.post("/api/auth/login", json={
-            "email": "admin@dietcafe.com", "password": "admin123"})).json()["token"]
+        c.hq = await hq_token()
         r = await client.post("/api/staff", json={
-            "name": "Cash", "role": "cashier", "store_id": server.DEFAULT_STORE_ID, "pin": "4455"}, headers=auth(c.hq))
+            "name": "Cash", "role": "cashier", "store_id": server.DEFAULT_STORE_ID, "login_code": "CODE-4455", "password": "password123"}, headers=auth(c.hq))
         c.cashier = server.create_token(r.json()["id"], "cashier")
         # an area_manager (non-super_admin HQ-ish) for the 403 check
         r2 = await client.post("/api/staff", json={
-            "name": "Area", "role": "area_manager", "cluster_store_ids": [server.DEFAULT_STORE_ID], "pin": "4466"}, headers=auth(c.hq))
+            "name": "Area", "role": "area_manager", "cluster_store_ids": [server.DEFAULT_STORE_ID], "login_code": "CODE-4466", "password": "password123"}, headers=auth(c.hq))
         c.area = server.create_token(r2.json()["id"], "area_manager")
         return c
 

@@ -19,6 +19,7 @@ import httpx
 from mongomock_motor import AsyncMongoMockClient
 
 import server
+from _authv2 import hq_token
 
 
 def run(coro):
@@ -44,8 +45,7 @@ def ctx():
         c = Ctx()
         c.client = client
         await client.post("/api/seed")
-        c.hq = (await client.post("/api/auth/login", json={
-            "email": "admin@dietcafe.com", "password": "admin123"})).json()["token"]
+        c.hq = await hq_token()
         r = (await client.post("/api/auth/register", json={
             "email": "push@test.com", "password": "p", "name": "Pusher", "role": "customer"})).json()
         c.cust, c.cust_id = r["token"], r["user"]["id"]

@@ -21,9 +21,14 @@ def api_client():
 
 @pytest.fixture
 def admin_token(api_client):
+    # Auth V2: code+password supplied via env (no fixed admin creds).
+    code = os.environ.get("SMOKE_ADMIN_CODE")
+    password = os.environ.get("SMOKE_ADMIN_PASSWORD")
+    if not code or not password:
+        pytest.skip("Set SMOKE_ADMIN_CODE + SMOKE_ADMIN_PASSWORD")
     response = api_client.post(f"{BASE_URL}/api/auth/login", json={
-        "email": "admin@dietcafe.com",
-        "password": "admin123"
+        "code": code,
+        "password": password
     })
     assert response.status_code == 200, f"Admin login failed: {response.text}"
     return response.json()["token"]

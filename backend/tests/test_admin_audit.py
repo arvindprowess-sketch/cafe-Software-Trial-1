@@ -19,6 +19,7 @@ import httpx
 from mongomock_motor import AsyncMongoMockClient
 
 import server
+from _authv2 import hq_token
 
 
 def run(coro):
@@ -44,18 +45,17 @@ def ctx():
         c = Ctx()
         c.client = client
         await client.post("/api/seed")
-        c.hq = (await client.post("/api/auth/login", json={
-            "email": "admin@dietcafe.com", "password": "admin123"})).json()["token"]
+        c.hq = await hq_token()
         c.store_a = (await client.post("/api/stores", json={"name": "A", "code": "AUD-A"},
                                        headers=auth(c.hq))).json()["store_id"]
         c.store_b = (await client.post("/api/stores", json={"name": "B", "code": "AUD-B"},
                                        headers=auth(c.hq))).json()["store_id"]
         r = (await client.post("/api/staff", json={
-            "name": "MgrA", "role": "store_manager", "store_id": c.store_a, "pin": "7301"},
+            "name": "MgrA", "role": "store_manager", "store_id": c.store_a, "login_code": "CODE-7301", "password": "password123"},
             headers=auth(c.hq))).json()
         c.mgr_a = server.create_token(r["id"], "store_manager")
         r = (await client.post("/api/staff", json={
-            "name": "CashA", "role": "cashier", "store_id": c.store_a, "pin": "7302"},
+            "name": "CashA", "role": "cashier", "store_id": c.store_a, "login_code": "CODE-7302", "password": "password123"},
             headers=auth(c.hq))).json()
         c.cashier_a, c.cashier_a_id = server.create_token(r["id"], "cashier"), r["id"]
         r = (await client.post("/api/products", json={"name": "Audit Dish", "cost_per_100g": 50},

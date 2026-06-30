@@ -9,31 +9,28 @@ BASE_URL = "https://meal-fit-goals.preview.emergentagent.com"
 class TestAuth:
     """Authentication endpoint tests"""
 
-    def test_admin_login_success(self, api_client):
-        """Test admin login with demo credentials"""
-        response = api_client.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "admin@dietcafe.com",
-            "password": "admin123"
+    def test_admin_login_success(self, api_client, admin_token):
+        """Auth V2: super-admin signs in via code+password (env-supplied creds)."""
+        if not admin_token:
+            pytest.skip("Admin creds not available (set SMOKE_ADMIN_CODE/PASSWORD)")
+        response = api_client.get(f"{BASE_URL}/api/auth/me", headers={
+            "Authorization": f"Bearer {admin_token}"
         })
-        assert response.status_code == 200, f"Login failed: {response.text}"
-        data = response.json()
-        assert "token" in data, "Token not in response"
-        assert "user" in data, "User not in response"
-        assert data["user"]["role"] == "admin", "Role is not admin"
-        assert data["user"]["email"] == "admin@dietcafe.com"
-        print("✓ Admin login successful")
+        assert response.status_code == 200, f"auth/me failed: {response.text}"
+        assert response.json()["role"] == "super_admin"
+        print("✓ Super-admin login successful")
 
     def test_login_invalid_credentials(self, api_client):
         """Test login with invalid credentials"""
         response = api_client.post(f"{BASE_URL}/api/auth/login", json={
-            "email": "admin@dietcafe.com",
+            "code": "owner@boraroc.com",
             "password": "wrongpassword"
         })
         assert response.status_code == 401, "Should return 401 for invalid credentials"
         print("✓ Invalid login returns 401")
 
-    def test_customer_register_and_verify(self, api_client):
-        """Test customer registration and verify data persistence"""
+    def test_customer_register_then_login_blocked(self, api_client):
+        """Auth V2: customers register, but /auth/login is staff-only (403)."""
         email = f"TEST_customer_{uuid.uuid4().hex[:8]}@test.com"
         register_response = api_client.post(f"{BASE_URL}/api/auth/register", json={
             "email": email,
@@ -46,26 +43,36 @@ class TestAuth:
         assert "token" in data
         assert data["user"]["role"] == "customer"
         assert data["user"]["email"] == email
-        token = data["token"]
-        
-        # Verify by logging in
+
+        # Customers sign in from the app (phone+OTP); /auth/login rejects them.
         login_response = api_client.post(f"{BASE_URL}/api/auth/login", json={
-            "email": email,
+            "code": email,
             "password": "test123"
         })
-        assert login_response.status_code == 200, "Login failed after registration"
-        print(f"✓ Customer registration and login successful: {email}")
+        assert login_response.status_code == 403, "Customer must be blocked from staff login"
+        print(f"✓ Customer registered and correctly blocked from staff login: {email}")
 
     def test_duplicate_email_registration(self, api_client):
         """Test registration with duplicate email"""
+        email = f"TEST_dup_{uuid.uuid4().hex[:8]}@test.com"
+        first = api_client.post(f"{BASE_URL}/api/auth/register", json={
+            "email": email, "password": "test123", "name": "First", "role": "customer"
+        })
+        assert first.status_code == 200, f"First registration failed: {first.text}"
         response = api_client.post(f"{BASE_URL}/api/auth/register", json={
-            "email": "admin@dietcafe.com",
+            "email": email,
             "password": "test123",
             "name": "Duplicate",
             "role": "customer"
         })
         assert response.status_code == 400, "Should return 400 for duplicate email"
         print("✓ Duplicate email registration blocked")
+
+    def test_pin_login_retired(self, api_client):
+        """Auth V2: PIN login is retired and must return HTTP 410."""
+        response = api_client.post(f"{BASE_URL}/api/auth/pin-login", json={"pin": "1234"})
+        assert response.status_code == 410, f"Expected 410, got {response.status_code}"
+        print("✓ PIN login retired (410)")
 
     def test_auth_me_endpoint(self, api_client, admin_token):
         """Test /auth/me endpoint"""
@@ -76,8 +83,7 @@ class TestAuth:
         })
         assert response.status_code == 200
         data = response.json()
-        assert data["email"] == "admin@dietcafe.com"
-        assert data["role"] == "admin"
+        assert data["role"] == "super_admin"
         print("✓ /auth/me endpoint working")
 
 

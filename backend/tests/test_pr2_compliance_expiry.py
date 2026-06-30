@@ -18,6 +18,7 @@ import httpx
 from mongomock_motor import AsyncMongoMockClient
 
 import server
+from _authv2 import hq_token
 
 
 def run(coro):
@@ -48,11 +49,10 @@ def ctx():
         c.client = client
         await client.post("/api/seed")
         await server.run_store_migration()
-        c.hq = (await client.post("/api/auth/login", json={
-            "email": "admin@dietcafe.com", "password": "admin123"})).json()["token"]
+        c.hq = await hq_token()
         # cashier for scope-guard
         r = await client.post("/api/staff", json={
-            "name": "Cash", "role": "cashier", "store_id": server.DEFAULT_STORE_ID, "pin": "4343"}, headers=auth(c.hq))
+            "name": "Cash", "role": "cashier", "store_id": server.DEFAULT_STORE_ID, "login_code": "CODE-4343", "password": "password123"}, headers=auth(c.hq))
         c.cashier = server.create_token(r.json()["id"], "cashier")
         return c
 

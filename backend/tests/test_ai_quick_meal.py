@@ -19,41 +19,40 @@ def api_client():
     session.headers.update({"Content-Type": "application/json"})
     return session
 
+def _staff_token(api_client, code_env, password_env):
+    """Auth V2: sign in a staff member via code+password from env. Skips the
+    dependent tests when creds aren't supplied (PIN auth is retired)."""
+    code = os.environ.get(code_env)
+    password = os.environ.get(password_env)
+    if not code or not password:
+        pytest.skip(f"Set {code_env} + {password_env} to run AI quick-meal tests")
+    response = api_client.post(f"{BASE_URL}/api/auth/login", json={"code": code, "password": password})
+    assert response.status_code == 200, f"Staff login failed: {response.text}"
+    return response.json()["token"]
+
 @pytest.fixture(scope="module")
 def cashier_token(api_client):
-    """Get cashier token via PIN login"""
-    response = api_client.post(f"{BASE_URL}/api/auth/pin-login", json={"pin": "5678"})
-    assert response.status_code == 200, f"Cashier PIN login failed: {response.text}"
-    return response.json()["token"]
+    """Get cashier token via code+password login."""
+    return _staff_token(api_client, "SMOKE_CASHIER_CODE", "SMOKE_CASHIER_PASSWORD")
 
 @pytest.fixture(scope="module")
 def kitchen_token(api_client):
-    """Get kitchen token via PIN login"""
-    response = api_client.post(f"{BASE_URL}/api/auth/pin-login", json={"pin": "1234"})
-    assert response.status_code == 200, f"Kitchen PIN login failed: {response.text}"
-    return response.json()["token"]
+    """Get kitchen token via code+password login."""
+    return _staff_token(api_client, "SMOKE_KITCHEN_CODE", "SMOKE_KITCHEN_PASSWORD")
 
 
-class TestPINLogin:
-    """Test PIN-based authentication for Cashier and Kitchen"""
-    
-    def test_cashier_pin_login(self, api_client):
-        """Kitchen login with PIN 1234 should work"""
+class TestRetiredPINLogin:
+    """Auth V2: PIN login is retired and must return HTTP 410."""
+
+    def test_cashier_pin_login_retired(self, api_client):
         response = api_client.post(f"{BASE_URL}/api/auth/pin-login", json={"pin": "5678"})
-        assert response.status_code == 200, f"Cashier PIN login failed: {response.text}"
-        data = response.json()
-        assert "token" in data, "Token missing from response"
-        assert data["user"]["role"] == "cashier", f"Expected cashier role, got {data['user']['role']}"
-        print(f"✅ Cashier PIN login successful - user: {data['user']['name']}")
-    
-    def test_kitchen_pin_login(self, api_client):
-        """Kitchen login with PIN 1234 should work"""
+        assert response.status_code == 410, f"Expected 410, got {response.status_code}"
+        print("✅ Cashier PIN login retired (410)")
+
+    def test_kitchen_pin_login_retired(self, api_client):
         response = api_client.post(f"{BASE_URL}/api/auth/pin-login", json={"pin": "1234"})
-        assert response.status_code == 200, f"Kitchen PIN login failed: {response.text}"
-        data = response.json()
-        assert "token" in data, "Token missing from response"
-        assert data["user"]["role"] == "kitchen", f"Expected kitchen role, got {data['user']['role']}"
-        print(f"✅ Kitchen PIN login successful - user: {data['user']['name']}")
+        assert response.status_code == 410, f"Expected 410, got {response.status_code}"
+        print("✅ Kitchen PIN login retired (410)")
 
 
 class TestAIQuickMealBudgetAccuracy:

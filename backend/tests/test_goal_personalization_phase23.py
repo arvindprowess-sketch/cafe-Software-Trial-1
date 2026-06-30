@@ -55,7 +55,12 @@ def auth_headers(customer_auth):
 
 @pytest.fixture(scope="module")
 def admin_token(session):
-    r = session.post(f"{API}/auth/login", json={"email": "admin@dietcafe.com", "password": "admin123"})
+    # Auth V2: code+password supplied via env (no fixed admin creds).
+    code = os.environ.get("SMOKE_ADMIN_CODE")
+    password = os.environ.get("SMOKE_ADMIN_PASSWORD")
+    if not code or not password:
+        pytest.skip("Set SMOKE_ADMIN_CODE + SMOKE_ADMIN_PASSWORD")
+    r = session.post(f"{API}/auth/login", json={"code": code, "password": password})
     if r.status_code != 200:
         pytest.skip(f"admin login failed: {r.status_code} {r.text}")
     return r.json()["token"]

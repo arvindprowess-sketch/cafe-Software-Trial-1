@@ -1,6 +1,9 @@
-import asyncio, json, socketio, httpx
+import asyncio, json, os, socketio, httpx
 
 BASE = "http://localhost:8001"
+# Auth V2: code+password from env (no fixed admin creds).
+ADMIN_CODE = os.environ.get("SMOKE_ADMIN_CODE", "owner@boraroc.com")
+ADMIN_PASSWORD = os.environ.get("SMOKE_ADMIN_PASSWORD", "")
 
 async def main():
     received = []
@@ -16,7 +19,7 @@ async def main():
     await asyncio.sleep(1)
 
     async with httpx.AsyncClient(timeout=20) as hc:
-        tok = (await hc.post(f"{BASE}/api/auth/login", json={"email":"admin@dietcafe.com","password":"admin123"})).json()["token"]
+        tok = (await hc.post(f"{BASE}/api/auth/login", json={"code": ADMIN_CODE, "password": ADMIN_PASSWORD})).json()["token"]
         prods = (await hc.get(f"{BASE}/api/products")).json()
         p = prods[0]
         order = {

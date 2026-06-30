@@ -2,7 +2,7 @@
 
 In-process (mongomock_motor). Verifies POST /admin/seed-demo-staff is HQ-gated,
 idempotent, creates area_manager/cashier/kitchen for the default store, and that
-the seeded PINs pin-login to the correct role.
+the seeded login_code + one-time password sign in to the correct role (Auth V2).
 
 Run:  pytest backend/tests/test_demo_staff_seed.py
 """
@@ -19,6 +19,7 @@ import httpx
 from mongomock_motor import AsyncMongoMockClient
 
 import server
+from _authv2 import hq_token
 
 
 def run(coro):
@@ -44,10 +45,9 @@ def ctx():
         c = Ctx()
         c.client = client
         await client.post("/api/seed")
-        # Ensure default store + the migration's store_manager (PIN 550001).
+        # Ensure default store + the migration's store_manager.
         await server.run_store_migration()
-        c.hq = (await client.post("/api/auth/login", json={
-            "email": "admin@dietcafe.com", "password": "admin123"})).json()["token"]
+        c.hq = await hq_token()
         # A plain customer for the 403 check
         c.cust = (await client.post("/api/auth/register", json={
             "email": "c@t.com", "password": "p", "name": "c", "role": "customer"})).json()["token"]
@@ -71,6 +71,10 @@ def test_seed_creates_each_role(ctx):
         assert r.status_code == 200, r.text
         roles = {x["role"]: x for x in r.json()["demo_staff"]}
         assert {"area_manager", "cashier", "kitchen"} <= set(roles)
+        # Each freshly-created role returns a login_code + one-time password.
+        for role in ("area_manager", "cashier", "kitchen"):
+            assert roles[role]["login_code"]
+            assert roles[role]["password"]
 
         sid = server.DEFAULT_STORE_ID
         am = await server.db.users.find_one({"role": "area_manager", "cluster_store_ids": sid}, {"_id": 0})
@@ -79,6 +83,10 @@ def test_seed_creates_each_role(ctx):
         assert am and am["cluster_store_ids"] == [sid]
         assert ca and ca["store_id"] == sid
         assert ki and ki["store_id"] == sid
+        # Stored as password_hash + login_code_l; never a plaintext password / PIN.
+        for doc in (am, ca, ki):
+            assert "password_hash" in doc and doc.get("login_code_l")
+            assert "pin_hash" not in doc and "pin_plain" not in doc
     run(go())
 
 
@@ -97,25 +105,38 @@ def test_idempotent_no_duplicates(ctx):
     run(go())
 
 
-def test_pin_login_returns_right_role(ctx):
+def test_login_returns_right_role(ctx):
     async def go():
-        for pin, role in [("550010", "area_manager"), ("550020", "cashier"), ("550030", "kitchen")]:
-            r = await ctx.client.post("/api/auth/pin-login", json={"pin": pin})
-            assert r.status_code == 200, f"{pin}: {r.text}"
+        # Re-seed to capture the (idempotent) demo creds; only freshly-created
+        # users return a plaintext password, so create them in a clean DB slice.
+        server.client = AsyncMongoMockClient()
+        server.db = server.client["demostaff_login_test"]
+        await ctx.client.post("/api/seed")
+        await server.run_store_migration()
+        hq = await hq_token()
+        creds = (await ctx.client.post("/api/admin/seed-demo-staff", headers=auth(hq))).json()["demo_staff"]
+        by_role = {x["role"]: x for x in creds}
+        for role in ("area_manager", "cashier", "kitchen"):
+            code, pw = by_role[role]["login_code"], by_role[role]["password"]
+            # Case-insensitive: log in with the lower-cased code.
+            r = await ctx.client.post("/api/auth/login", json={"code": code.lower(), "password": pw})
+            assert r.status_code == 200, f"{role}: {r.text}"
             assert r.json()["user"]["role"] == role
     run(go())
 
 
-def test_store_manager_550001_untouched(ctx):
+def test_store_manager_default_uses_code_password(ctx):
     async def go():
-        # The migration's store_manager (PIN 550001) must remain a single row.
+        # Fresh slice so the migration's default store_manager is a single row.
+        server.client = AsyncMongoMockClient()
+        server.db = server.client["demostaff_sm_test"]
+        await ctx.client.post("/api/seed")
+        await server.run_store_migration()
         sid = server.DEFAULT_STORE_ID
         assert await server.db.users.count_documents(
             {"role": "store_manager", "store_id": sid}) == 1
         sm = await server.db.users.find_one({"role": "store_manager", "store_id": sid}, {"_id": 0})
-        assert "pin_plain" not in sm, "pin_plain must not be persisted"
-        # Verify PIN still works via hash
-        r = await ctx.client.post("/api/auth/pin-login", json={"pin": "550001"})
-        assert r.status_code == 200
-        assert r.json()["user"]["role"] == "store_manager"
+        assert sm.get("login_code_l"), "store_manager must have a login code"
+        assert "password_hash" in sm
+        assert "pin_plain" not in sm and "pin_hash" not in sm, "PIN must be fully retired"
     run(go())
