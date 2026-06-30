@@ -6,19 +6,21 @@ type User = {
   name: string;
   role: string;
   email?: string;
+  login_code?: string | null;
   store_id?: string | null;
   cluster_store_ids?: string[] | null;
 };
 
 // Multi-store: HQ super-admin (legacy 'admin' alias) and the staff roles allowed
-// into the web panel.
+// into the web panel. Auth V2: everyone signs in here with code + password
+// (customers are blocked server-side with a 403).
 const HQ_ROLES = ['admin', 'super_admin'];
 const STAFF_ROLES = ['kitchen', 'cashier', 'store_manager', 'area_manager'];
+const PORTAL_ROLES = [...HQ_ROLES, ...STAFF_ROLES];
 type AuthCtx = {
   user: User | null;
   loading: boolean;
-  loginEmail: (email: string, password: string) => Promise<void>;
-  loginPin: (pin: string) => Promise<void>;
+  login: (code: string, password: string) => Promise<void>;
   logout: () => void;
 };
 
@@ -38,17 +40,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(false);
   }, []);
 
-  const loginEmail = async (email: string, password: string) => {
-    const res = await api('/auth/login', { method: 'POST', body: { email, password } });
-    if (!HQ_ROLES.includes(res.user.role)) throw new Error('Access denied. HQ only.');
-    localStorage.setItem('token', res.token);
-    localStorage.setItem('user', JSON.stringify(res.user));
-    setUser(res.user);
-  };
-
-  const loginPin = async (pin: string) => {
-    const res = await api('/auth/pin-login', { method: 'POST', body: { pin } });
-    if (!STAFF_ROLES.includes(res.user.role)) throw new Error('Invalid staff role');
+  // Auth V2: single code+password login (staff + HQ). The login code OR an email
+  // is accepted as the `code`.
+  const login = async (code: string, password: string) => {
+    const res = await api('/auth/login', { method: 'POST', body: { code, password } });
+    if (!PORTAL_ROLES.includes(res.user.role)) throw new Error('Access denied. This account cannot use the panel.');
+    // Token kept in localStorage for now; cookie/CSP hardening (H-5) is Phase 9.
     localStorage.setItem('token', res.token);
     localStorage.setItem('user', JSON.stringify(res.user));
     setUser(res.user);
@@ -61,7 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, loginEmail, loginPin, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
