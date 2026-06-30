@@ -18,6 +18,7 @@ import httpx
 from mongomock_motor import AsyncMongoMockClient
 
 import server
+from _authv2 import hq_token
 
 
 def run(coro):
@@ -61,8 +62,7 @@ def ctx():
         c = Ctx()
         c.client = client
         await client.post("/api/seed")
-        c.hq_token = (await client.post(
-            "/api/auth/login", json={"email": "admin@dietcafe.com", "password": "admin123"})).json()["token"]
+        c.hq_token = await hq_token()
 
         async def mk_store(name, code):
             return (await client.post("/api/stores", json={"name": name, "code": code},
@@ -72,7 +72,7 @@ def ctx():
         c.store_c = await mk_store("Store C", "CCC")
 
         async def mk_staff(role, store_id=None, cluster=None, pin="0000"):
-            body = {"name": role, "role": role, "pin": pin}
+            body = {"name": role, "role": role, "login_code": f"CODE-{pin}", "password": "password123"}
             if store_id:
                 body["store_id"] = store_id
             if cluster:

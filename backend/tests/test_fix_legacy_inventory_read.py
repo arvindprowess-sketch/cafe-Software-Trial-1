@@ -18,6 +18,7 @@ import httpx
 from mongomock_motor import AsyncMongoMockClient
 
 import server
+from _authv2 import hq_token
 
 
 def run(coro):
@@ -43,13 +44,13 @@ def ctx():
         c = Ctx()
         c.client = client
         await client.post("/api/seed")
-        c.hq = (await client.post("/api/auth/login", json={"email": "admin@dietcafe.com", "password": "admin123"})).json()["token"]
+        c.hq = await hq_token()
         c.store_a = (await client.post("/api/stores", json={"name": "A", "code": "AAA"}, headers=auth(c.hq))).json()["store_id"]
         c.store_b = (await client.post("/api/stores", json={"name": "B", "code": "BBB"}, headers=auth(c.hq))).json()["store_id"]
         c.store_z = (await client.post("/api/stores", json={"name": "Z", "code": "ZZZ"}, headers=auth(c.hq))).json()["store_id"]
 
         async def mk_staff(role, store_id=None, cluster=None, pin="0"):
-            body = {"name": role + pin, "role": role, "pin": pin}
+            body = {"name": role + pin, "role": role, "login_code": f"CODE-{pin}", "password": "password123"}
             if store_id:
                 body["store_id"] = store_id
             if cluster:
@@ -185,7 +186,7 @@ def test_insights_analytics_low_stock_shape_and_source(ctx):
     # get_admin_analytics powers /admin/ai-insights; assert its low_stock_alerts keep
     # the {name, stock} shape AND come from inventory_items, store-scoped.
     async def go():
-        hq_user = await server.db.users.find_one({"email": "admin@dietcafe.com"}, {"_id": 0})
+        hq_user = await server.db.users.find_one({"role": "super_admin"}, {"_id": 0})
         analytics = await server.get_admin_analytics(hq_user)
         alerts = analytics["low_stock_alerts"]
         assert all(set(a.keys()) == {"name", "stock"} for a in alerts)   # shape unchanged

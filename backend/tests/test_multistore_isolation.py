@@ -20,6 +20,7 @@ import httpx
 from mongomock_motor import AsyncMongoMockClient
 
 import server
+from _authv2 import hq_token
 
 
 def run(coro):
@@ -67,9 +68,8 @@ def ctx():
         # Seed catalog + HQ super_admin + default store/migration
         await client.post("/api/seed")
 
-        # HQ token (legacy admin login is now super_admin)
-        r = await client.post("/api/auth/login", json={"email": "admin@dietcafe.com", "password": "admin123"})
-        c.hq_token = r.json()["token"]
+        # HQ token (Auth V2: minted for the seeded bootstrap super_admin)
+        c.hq_token = await hq_token()
 
         # Two stores
         ra = await client.post("/api/stores", json={"name": "Store A", "code": "AAA"}, headers=auth(c.hq_token))
@@ -79,7 +79,7 @@ def ctx():
 
         # Staff for store A and B (created by HQ), then mint tokens directly
         async def make_staff(role, store_id=None, cluster=None, pin="0000"):
-            body = {"name": f"{role}", "role": role, "pin": pin}
+            body = {"name": f"{role}", "role": role, "login_code": f"CODE-{pin}", "password": "password123"}
             if store_id:
                 body["store_id"] = store_id
             if cluster:

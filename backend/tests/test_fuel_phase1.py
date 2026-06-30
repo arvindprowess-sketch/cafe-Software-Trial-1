@@ -21,8 +21,9 @@ import requests
 BASE_URL = os.environ.get("FUEL_BASE_URL", "http://localhost:8001")
 API = f"{BASE_URL}/api"
 
-ADMIN_EMAIL = "admin@dietcafe.com"
-ADMIN_PASS = "admin123"
+# Auth V2: code+password supplied via env (no fixed admin creds).
+ADMIN_CODE = os.environ.get("SMOKE_ADMIN_CODE")
+ADMIN_PASS = os.environ.get("SMOKE_ADMIN_PASSWORD")
 
 
 # ---------- helpers ----------
@@ -54,7 +55,9 @@ def _read_dev_otp(phone: str, timeout: float = 5.0) -> str | None:
 # ---------- fixtures ----------
 @pytest.fixture(scope="module")
 def admin_token():
-    r = requests.post(f"{API}/auth/login", json={"email": ADMIN_EMAIL, "password": ADMIN_PASS}, timeout=10)
+    if not ADMIN_CODE or not ADMIN_PASS:
+        pytest.skip("Set SMOKE_ADMIN_CODE + SMOKE_ADMIN_PASSWORD")
+    r = requests.post(f"{API}/auth/login", json={"code": ADMIN_CODE, "password": ADMIN_PASS}, timeout=10)
     assert r.status_code == 200, f"admin login failed: {r.status_code} {r.text}"
     return r.json()["token"]
 

@@ -19,22 +19,27 @@ BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'http://localhost:8001').rstr
 PRODUCT_ID = "f889181b-813f-4de6-94d1-6e0bd2826d43"  # Chicken Breast
 
 
+def _staff_token(code_env, password_env):
+    """Auth V2: sign in a staff member via code+password from env (PIN retired).
+    Skips dependent tests when creds aren't supplied."""
+    code = os.environ.get(code_env)
+    password = os.environ.get(password_env)
+    if not code or not password:
+        pytest.skip(f"Set {code_env} + {password_env} (Auth V2: PIN login retired)")
+    r = requests.post(f"{BASE_URL}/api/auth/login", json={"code": code, "password": password})
+    assert r.status_code == 200, f"Staff login failed: {r.text}"
+    return r.json()["token"]
+
+
 class TestScheduledOrders:
     """Test scheduled order functionality"""
     
     @pytest.fixture(autouse=True)
     def setup(self):
         """Get auth tokens for testing"""
-        # Kitchen user login
-        kitchen_resp = requests.post(f"{BASE_URL}/api/auth/pin-login", json={"pin": "1234"})
-        assert kitchen_resp.status_code == 200, f"Kitchen login failed: {kitchen_resp.text}"
-        self.kitchen_token = kitchen_resp.json()["token"]
-        
-        # Cashier user login
-        cashier_resp = requests.post(f"{BASE_URL}/api/auth/pin-login", json={"pin": "5678"})
-        assert cashier_resp.status_code == 200, f"Cashier login failed: {cashier_resp.text}"
-        self.cashier_token = cashier_resp.json()["token"]
-        
+        # Kitchen + cashier login (Auth V2: code+password from env)
+        self.kitchen_token = _staff_token("SMOKE_KITCHEN_CODE", "SMOKE_KITCHEN_PASSWORD")
+        self.cashier_token = _staff_token("SMOKE_CASHIER_CODE", "SMOKE_CASHIER_PASSWORD")
         self.cashier_headers = {"Authorization": f"Bearer {self.cashier_token}", "Content-Type": "application/json"}
         self.kitchen_headers = {"Authorization": f"Bearer {self.kitchen_token}", "Content-Type": "application/json"}
 
@@ -217,14 +222,9 @@ class TestAlertTriggeredLogic:
     @pytest.fixture(autouse=True)
     def setup(self):
         """Get auth tokens for testing"""
-        kitchen_resp = requests.post(f"{BASE_URL}/api/auth/pin-login", json={"pin": "1234"})
-        assert kitchen_resp.status_code == 200
-        self.kitchen_token = kitchen_resp.json()["token"]
+        self.kitchen_token = _staff_token("SMOKE_KITCHEN_CODE", "SMOKE_KITCHEN_PASSWORD")
         self.kitchen_headers = {"Authorization": f"Bearer {self.kitchen_token}"}
-        
-        cashier_resp = requests.post(f"{BASE_URL}/api/auth/pin-login", json={"pin": "5678"})
-        assert cashier_resp.status_code == 200
-        self.cashier_token = cashier_resp.json()["token"]
+        self.cashier_token = _staff_token("SMOKE_CASHIER_CODE", "SMOKE_CASHIER_PASSWORD")
         self.cashier_headers = {"Authorization": f"Bearer {self.cashier_token}", "Content-Type": "application/json"}
 
     def test_alert_triggered_true_for_past_alert_time(self):

@@ -19,6 +19,7 @@ import httpx
 from mongomock_motor import AsyncMongoMockClient
 
 import server
+from _authv2 import hq_token
 
 
 def run(coro):
@@ -44,9 +45,9 @@ def ctx():
         c = Ctx()
         c.client = client
         await client.post("/api/seed")
-        c.hq = (await client.post("/api/auth/login", json={"email": "admin@dietcafe.com", "password": "admin123"})).json()["token"]
+        c.hq = await hq_token()
         c.store_a = (await client.post("/api/stores", json={"name": "A", "code": "AAA"}, headers=auth(c.hq))).json()["store_id"]
-        mid, c.mgr = ((await client.post("/api/staff", json={"name": "m", "role": "store_manager", "store_id": c.store_a, "pin": "1111"}, headers=auth(c.hq))).json()["id"],
+        mid, c.mgr = ((await client.post("/api/staff", json={"name": "m", "role": "store_manager", "store_id": c.store_a, "login_code": "CODE-1111", "password": "password123"}, headers=auth(c.hq))).json()["id"],
                       None)
         c.mgr = server.create_token(mid, "store_manager")
         await client.post("/api/admin/migrate-inventory", headers=auth(c.hq))

@@ -88,6 +88,10 @@ JWT_ALGORITHM = "HS256"
 _origins_env = os.environ.get("ALLOWED_ORIGINS", "").strip()
 ALLOWED_ORIGINS = [o.strip() for o in _origins_env.split(",") if o.strip()] or ["*"]
 
+# Auth V2: unified code+password login + domain-gated super-admin.
+SUPERADMIN_EMAIL_DOMAIN = (os.environ.get("SUPERADMIN_EMAIL_DOMAIN", "boraroc.com") or "boraroc.com").strip().lower()
+BOOTSTRAP_SUPERADMIN_EMAIL = (os.environ.get("BOOTSTRAP_SUPERADMIN_EMAIL") or f"owner@{SUPERADMIN_EMAIL_DOMAIN}").strip().lower()
+
 # ========== ENV GUARD ==========
 def assert_prod_secrets(env: str, jwt_secret: str, origins: list, msg91_key: Optional[str] = None) -> None:
     """Raise RuntimeError if production env is missing required secrets.
@@ -326,7 +330,8 @@ class UserRegister(BaseModel):
     role: str = "customer"
 
 class UserLogin(BaseModel):
-    email: str
+    code: Optional[str] = None     # Auth V2: login code (or email)
+    email: Optional[str] = None    # legacy alias for `code`
     password: str
 
 class UserGoals(BaseModel):
@@ -524,6 +529,27 @@ def create_token(user_id: str, role: str, token_version: int = 0) -> str:
 def pin_uniqueness_token(pin: str) -> str:
     """SHA-256 of PIN — stored for fast duplicate-PIN lookup only; never used for auth."""
     return hashlib.sha256(pin.encode()).hexdigest()
+
+# ── Auth V2: login codes + company-domain gating ─────────────────────────────
+# Login code: starts alphanumeric, then alphanumeric/./_/-, total length 3..32.
+LOGIN_CODE_RE = re.compile(r"^[A-Z0-9][A-Z0-9._-]{2,31}$")
+
+def is_company_email(value: str) -> bool:
+    """True iff the email's domain (after the LAST '@') is EXACTLY the configured
+    super-admin domain. rpartition on the last '@' (not a substring check) so
+    'x@evil-boraroc.com.attacker.com' is False."""
+    if not value or "@" not in value:
+        return False
+    domain = value.rpartition("@")[2].strip().lower()
+    return domain == SUPERADMIN_EMAIL_DOMAIN
+
+def normalize_login_code(value: str) -> str:
+    """Canonical login code form: trimmed + upper-cased."""
+    return (value or "").strip().upper()
+
+def gen_random_password(nbytes: int = 12) -> str:
+    """URL-safe random secret for one-time bootstrap / reset passwords."""
+    return secrets.token_urlsafe(nbytes)
 
 # ── PIN-login brute-force guard ──────────────────────────────────────────────
 # In-memory: per-worker (acceptable for pilot; replace with Redis for multi-worker).
@@ -1186,16 +1212,33 @@ async def register(data: UserRegister):
 @api_router.post("/auth/login")
 @limiter.limit("10/15minutes")
 async def login(request: Request, data: UserLogin):
+    # Auth V2: staff + super-admin sign in here with {code, password}. `email`
+    # is accepted as a legacy alias for `code`. Customers use phone+OTP instead.
+    raw = (data.code or data.email or "").strip()
+    if not raw or not data.password:
+        raise HTTPException(status_code=400, detail="code and password are required")
+    ident = raw.lower()  # login_code_l and emails are both stored lower-cased
     # P8 compliance: deleted (anonymized) accounts can never log back in.
-    user = await db.users.find_one({"email": data.email, "deleted": {"$ne": True}}, {"_id": 0})
+    user = await db.users.find_one(
+        {"$or": [{"login_code_l": ident}, {"email": ident}], "deleted": {"$ne": True}},
+        {"_id": 0})
     if not user or not user.get("password_hash") or not verify_password(data.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
+    role = normalize_role(user)
+    if role == "customer":
+        raise HTTPException(status_code=403, detail="Customers sign in from the app")
+    if user.get("is_active") is False:
+        raise HTTPException(status_code=401, detail="Account deactivated")
+    # Super-admin must own a company-domain email (defence-in-depth for the HQ role).
+    if role == "super_admin" and not is_company_email(user.get("email") or ""):
+        raise HTTPException(status_code=403, detail="Super-admin must sign in with a company email")
     token = create_token(user["id"], user["role"], user.get("token_version", 0))
     return {
         "token": token,
         "user": {
-            "id": user["id"], "email": user["email"], "name": user["name"],
-            "role": user["role"], "fitness_goal": user.get("fitness_goal", "maintenance"),
+            "id": user["id"], "email": user.get("email"), "name": user["name"],
+            "role": user["role"], "login_code": user.get("login_code"),
+            "fitness_goal": user.get("fitness_goal", "maintenance"),
             "store_id": user.get("store_id"), "cluster_store_ids": user.get("cluster_store_ids"),
             "daily_calories": user.get("daily_calories", 2000),
             "daily_protein": user.get("daily_protein", 100),
@@ -2326,18 +2369,21 @@ async def admin_staff_accounts(user=Depends(get_current_user)):
     staff = await db.users.find({"role": {"$in": ["kitchen", "cashier"]}}, {"_id": 0, "password": 0}).to_list(20)
     return staff
 
-@api_router.put("/admin/staff/{staff_id}/reset-pin")
-async def admin_reset_staff_pin(staff_id: str, body: dict = Body(...), user=Depends(get_current_user)):
-    """Admin: reset a staff member's PIN"""
+@api_router.put("/admin/staff/{staff_id}/reset-password")
+@api_router.put("/admin/staff/{staff_id}/reset-pin")  # legacy alias
+async def admin_reset_staff_password(staff_id: str, body: dict = Body(...), user=Depends(get_current_user)):
+    """Admin: set a staff member's login password (and revoke their sessions)."""
     if not is_hq(user):
         raise HTTPException(status_code=403, detail="HQ only")
-    new_pin = body.get("pin")
-    if not new_pin or len(new_pin) < 4:
-        raise HTTPException(status_code=400, detail="PIN must be at least 4 digits")
-    result = await db.users.update_one({"id": staff_id}, {"$set": {"pin": new_pin}})
+    new_password = body.get("password")
+    if not new_password or len(new_password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    result = await db.users.update_one(
+        {"id": staff_id},
+        {"$set": {"password_hash": hash_password(new_password)}, "$inc": {"token_version": 1}})
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Staff not found")
-    return {"message": "PIN updated"}
+    return {"message": "Password updated"}
 
 # ========== FOOD IMAGE BANK ==========
 FOOD_IMAGES = {
@@ -4313,7 +4359,11 @@ async def meal_history(user=Depends(get_current_user)):
 
 # ========== SEED DATA ==========
 @api_router.post("/seed")
-async def seed_data():
+async def seed_data(actor=Depends(get_optional_user)):
+    # Gate: once a super-admin exists, re-seeding requires a super-admin token.
+    # On first boot (no super-admin yet) it is open so the chain can bootstrap.
+    if await db.users.find_one({"role": "super_admin"}, {"_id": 0}) and not is_hq(actor):
+        raise HTTPException(status_code=403, detail="Super-admin token required to re-seed")
     existing = await db.products.count_documents({})
     if existing > 0:
         return {"message": "Data already seeded"}
@@ -4355,26 +4405,38 @@ async def seed_data():
             "created_at": datetime.now(timezone.utc).isoformat()
         }
         await db.products.insert_one(product)
-    # Create default HQ super-admin (legacy email/password login preserved)
-    admin_exists = await db.users.find_one({"email": "admin@dietcafe.com"}, {"_id": 0})
+    # Bootstrap the HQ super-admin with a company-domain email + a RANDOM one-time
+    # password (logged once; no hardcoded credentials).
+    if not is_company_email(BOOTSTRAP_SUPERADMIN_EMAIL):
+        raise HTTPException(status_code=400, detail="BOOTSTRAP_SUPERADMIN_EMAIL must be on the company domain")
+    bootstrap = None
+    admin_exists = await db.users.find_one({"email": BOOTSTRAP_SUPERADMIN_EMAIL}, {"_id": 0})
     if not admin_exists:
+        one_time_pw = gen_random_password()
         admin = {
             "id": str(uuid.uuid4()),
-            "email": "admin@dietcafe.com",
-            "password_hash": hash_password("admin123"),
-            "name": "Admin",
+            "email": BOOTSTRAP_SUPERADMIN_EMAIL,
+            "password_hash": hash_password(one_time_pw),
+            "name": "Owner",
             "role": "super_admin",  # HQ
             "fitness_goal": "maintenance",
             "daily_calories": 2000,
             "daily_protein": 100,
             "daily_carbs": 250,
             "daily_fat": 65,
+            "is_active": True,
             "created_at": datetime.now(timezone.utc).isoformat()
         }
         await db.users.insert_one(admin)
+        logger.warning(f"[seed] bootstrap super-admin {BOOTSTRAP_SUPERADMIN_EMAIL} ONE-TIME PASSWORD: {one_time_pw}")
+        bootstrap = {"email": BOOTSTRAP_SUPERADMIN_EMAIL, "password": one_time_pw}
     # Ensure the multi-store foundation (default store + store_manager + backfill)
     await run_store_migration()
-    return {"message": "Seed data created", "products": len(seed_products)}
+    resp = {"message": "Seed data created", "products": len(seed_products)}
+    if bootstrap:
+        # First-boot only: returned once so the operator can capture the password.
+        resp["bootstrap"] = bootstrap
+    return resp
 
 @api_router.get("/banners")
 async def get_banners():
@@ -6146,7 +6208,7 @@ async def sales_summary(
         })
     return result
 
-# ========== STAFF MANAGEMENT (PIN-based auth) ==========
+# ========== STAFF MANAGEMENT (code+password auth) ==========
 # Roles a staff member can be created with via this endpoint. super_admin is
 # bootstrapped by migration/seed; customers register via /auth/register.
 STAFF_CREATE_ROLES = {"area_manager", "store_manager", "cashier", "kitchen"}
@@ -6154,19 +6216,18 @@ STAFF_CREATE_ROLES = {"area_manager", "store_manager", "cashier", "kitchen"}
 class StaffCreate(BaseModel):
     name: str
     role: str  # area_manager | store_manager | cashier | kitchen
-    pin: str  # 4-6 digit PIN
+    login_code: str  # unique sign-in code (e.g. RIYA-CASH); case-insensitive
+    password: str  # >= 8 chars
     store_id: Optional[str] = None  # required for store_manager/cashier/kitchen
     cluster_store_ids: Optional[List[str]] = None  # required for area_manager
 
 class StaffUpdate(BaseModel):
     name: Optional[str] = None
-    pin: Optional[str] = None
+    login_code: Optional[str] = None
+    password: Optional[str] = None
     is_active: Optional[bool] = None
     store_id: Optional[str] = None
     cluster_store_ids: Optional[List[str]] = None
-
-class PinLogin(BaseModel):
-    pin: str
 
 @api_router.post("/staff")
 async def create_staff(data: StaffCreate, user=Depends(get_current_user)):
@@ -6182,15 +6243,20 @@ async def create_staff(data: StaffCreate, user=Depends(get_current_user)):
         raise HTTPException(status_code=400, detail=f"Role must be one of {sorted(STAFF_CREATE_ROLES)}")
     if creator_role == "store_manager" and data.role not in ("cashier", "kitchen"):
         raise HTTPException(status_code=403, detail="Store managers can only create cashier/kitchen staff")
-    if not data.pin.isdigit() or len(data.pin) < 4 or len(data.pin) > 6:
-        raise HTTPException(status_code=400, detail="PIN must be 4-6 digits")
+    code_disp = normalize_login_code(data.login_code)
+    if not LOGIN_CODE_RE.match(code_disp):
+        raise HTTPException(status_code=400, detail="login_code must be 3-32 chars: start alphanumeric, then letters/digits/.-_")
+    if not data.password or len(data.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    code_l = code_disp.lower()
 
     staff_doc = {
         "id": str(uuid.uuid4()),
         "name": data.name,
         "role": data.role,
-        "pin_hash": hash_password(data.pin),
-        "pin_token": pin_uniqueness_token(data.pin),
+        "login_code": code_disp,
+        "login_code_l": code_l,
+        "password_hash": hash_password(data.password),
         "is_active": True,
         "store_id": None,
         "cluster_store_ids": None,
@@ -6214,15 +6280,17 @@ async def create_staff(data: StaffCreate, user=Depends(get_current_user)):
             raise HTTPException(status_code=400, detail="Invalid store_id")
         staff_doc["store_id"] = store_id
 
-    # PIN uniqueness (fast lookup via sha256 token, no plaintext stored)
-    existing = await db.users.find_one({"pin_token": pin_uniqueness_token(data.pin)}, {"_id": 0})
+    # Uniqueness across login codes AND emails (a code must not shadow an email).
+    existing = await db.users.find_one({"$or": [{"login_code_l": code_l}, {"email": code_l}]}, {"_id": 0})
     if existing:
-        raise HTTPException(status_code=400, detail="This PIN is already in use")
+        raise HTTPException(status_code=400, detail="This login code is already in use")
 
     await db.users.insert_one(staff_doc)
     await log_admin_audit(user, "create", "staff", staff_doc["id"], None, staff_doc)
+    # Echo the plaintext password ONCE so the creator can hand it over; never stored.
     return {
-        "id": staff_doc["id"], "name": data.name, "role": data.role, "pin": data.pin,
+        "id": staff_doc["id"], "name": data.name, "role": data.role,
+        "login_code": code_disp, "password": data.password,
         "store_id": staff_doc["store_id"], "cluster_store_ids": staff_doc["cluster_store_ids"],
         "is_active": True,
     }
@@ -6245,7 +6313,7 @@ async def list_staff(user=Depends(get_current_user)):
     return [
         {
             "id": s["id"], "name": s["name"], "role": s["role"],
-            "pin": "***",  # PIN shown only at creation time; never stored as plaintext
+            "login_code": s.get("login_code"),  # password is never returned after creation
             "store_id": s.get("store_id"), "cluster_store_ids": s.get("cluster_store_ids"),
             "is_active": s.get("is_active", True), "created_at": s.get("created_at"),
         }
@@ -6266,13 +6334,25 @@ async def update_staff(staff_id: str, data: StaffUpdate, user=Depends(get_curren
     if target.get("store_id"):
         assert_store_allowed(user, target.get("store_id"))
     update_data = {}
+    bump_token = False
     if data.name is not None:
         update_data["name"] = data.name
-    if data.pin is not None:
-        if not data.pin.isdigit() or len(data.pin) < 4 or len(data.pin) > 6:
-            raise HTTPException(status_code=400, detail="PIN must be 4-6 digits")
-        update_data["pin_hash"] = hash_password(data.pin)
-        update_data["pin_token"] = pin_uniqueness_token(data.pin)
+    if data.login_code is not None:
+        code_disp = normalize_login_code(data.login_code)
+        if not LOGIN_CODE_RE.match(code_disp):
+            raise HTTPException(status_code=400, detail="login_code must be 3-32 chars: start alphanumeric, then letters/digits/.-_")
+        code_l = code_disp.lower()
+        clash = await db.users.find_one(
+            {"$or": [{"login_code_l": code_l}, {"email": code_l}], "id": {"$ne": staff_id}}, {"_id": 0})
+        if clash:
+            raise HTTPException(status_code=400, detail="This login code is already in use")
+        update_data["login_code"] = code_disp
+        update_data["login_code_l"] = code_l
+    if data.password is not None:
+        if len(data.password) < 8:
+            raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+        update_data["password_hash"] = hash_password(data.password)
+        bump_token = True  # changing the password revokes existing sessions
     if data.is_active is not None:
         update_data["is_active"] = data.is_active
     if data.store_id is not None and role == "super_admin":
@@ -6283,8 +6363,9 @@ async def update_staff(staff_id: str, data: StaffUpdate, user=Depends(get_curren
         raise HTTPException(status_code=400, detail="No updates provided")
     update_ops: Dict[str, Any] = {"$set": update_data}
     if data.is_active is False:
-        # Revoke every outstanding token for the deactivated account
-        # ($inc initializes token_version to 1 when the field is absent).
+        bump_token = True  # revoke every outstanding token for the deactivated account
+    if bump_token:
+        # $inc initializes token_version to 1 when the field is absent.
         update_ops["$inc"] = {"token_version": 1}
     await db.users.update_one({"id": staff_id}, update_ops)
     audit_after = await db.users.find_one({"id": staff_id}, {"_id": 0})
@@ -6341,46 +6422,13 @@ async def list_admin_audit(limit: int = 50, before: Optional[str] = None,
             "next_before": rows[-1]["created_at"] if len(rows) == limit else None}
 
 @api_router.post("/auth/pin-login")
-async def pin_login(data: PinLogin, request: Request):
-    """PIN-based login for store staff (store_manager/cashier/kitchen/area_manager)."""
-    if not data.pin.isdigit() or len(data.pin) < 4 or len(data.pin) > 6:
-        raise HTTPException(status_code=400, detail="Invalid PIN format")
-    # Rate-limit by (client IP + submitted PIN prefix) to guard brute-force.
-    # In-memory per-worker — flag for Redis if multi-worker deployment is needed.
-    ip = (request.client.host if request.client else "unknown")
-    rl_key = f"{ip}:{data.pin[:3]}"
-    now = time.time()
-    allowed, retry_after = check_pin_login_rate(rl_key, now)
-    if not allowed:
-        raise HTTPException(
-            status_code=429,
-            detail="Too many failed PIN attempts. Try again later.",
-            headers={"Retry-After": str(retry_after)},
-        )
-    # Find staff by PIN (hash verify)
-    staff_list = await db.users.find(
-        {"role": {"$in": ["store_manager", "kitchen", "cashier", "area_manager"]}, "is_active": True}, {"_id": 0}
-    ).to_list(500)
-    matched_staff = None
-    for s in staff_list:
-        if s.get("pin_hash") and verify_password(data.pin, s["pin_hash"]):
-            matched_staff = s
-            break
-    if not matched_staff:
-        record_pin_fail(rl_key, now)
-        raise HTTPException(status_code=401, detail="Invalid PIN")
-    reset_pin_counter(rl_key)
-    token = create_token(matched_staff["id"], matched_staff["role"], matched_staff.get("token_version", 0))
-    return {
-        "token": token,
-        "user": {
-            "id": matched_staff["id"],
-            "name": matched_staff["name"],
-            "role": matched_staff["role"],
-            "store_id": matched_staff.get("store_id"),
-            "cluster_store_ids": matched_staff.get("cluster_store_ids"),
-        }
-    }
+async def pin_login(request: Request):
+    """Retired in Auth V2. Staff now sign in via POST /auth/login with their
+    login code + password. Kept as a 410 so old clients get a clear message."""
+    raise HTTPException(
+        status_code=410,
+        detail="PIN login has been retired. Sign in at /api/auth/login with your login code and password.",
+    )
 
 # ========== ORDER PRIORITY ==========
 @api_router.put("/orders/{order_id}/priority")
@@ -9192,30 +9240,20 @@ async def go_live(store_id: str, user=Depends(get_current_user)):
     await db.stores.update_one({"store_id": store_id}, {"$set": {"onboarding_status": "live"}})
     return {"store_id": store_id, "onboarding_status": "live"}
 
-# Demo staff PINs, one per staff role, for role-separation testing.
-# NOTE: pin_plain storage + fixed demo PINs are a pre-launch security concern
-# (see PR note). Demo PINs must be removed/rotated before real launch.
+# Demo staff login codes, one per staff role, for role-separation testing.
+# Each gets a RANDOM one-time password, returned once at creation (never stored).
 _DEMO_STAFF = [
-    {"role": "area_manager",  "name": "Demo Area Manager",  "pin": "550010"},
-    {"role": "cashier",       "name": "Demo Cashier",       "pin": "550020"},
-    {"role": "kitchen",       "name": "Demo Kitchen",       "pin": "550030"},
+    {"role": "area_manager",  "name": "Demo Area Manager",  "login_code": "DEMO-AREA"},
+    {"role": "cashier",       "name": "Demo Cashier",       "login_code": "DEMO-CASH"},
+    {"role": "kitchen",       "name": "Demo Kitchen",       "login_code": "DEMO-KITCHEN"},
 ]
-
-async def _free_pin(preferred: str) -> Optional[str]:
-    """Return `preferred` if unused, else the next free PIN in its +0..+5 range
-    (mirrors the 550001..550005 loop in run_store_migration)."""
-    base = int(preferred)
-    for candidate in [str(base + i) for i in range(0, 6)]:
-        if not await db.users.find_one({"pin_token": pin_uniqueness_token(candidate)}, {"_id": 0}):
-            return candidate
-    return None
 
 @api_router.post("/admin/seed-demo-staff")
 async def admin_seed_demo_staff(user=Depends(get_current_user)):
     """HQ only: idempotently ensure one demo login per staff role for the default
-    store (area_manager / cashier / kitchen). The store_manager (PIN 550001) is
-    created by run_store_migration and is left untouched. Returns demo creds so
-    the owner can log in as each role. Does not auto-run on boot."""
+    store (area_manager / cashier / kitchen). The default store_manager is created
+    by run_store_migration and is left untouched. Returns demo creds (login_code +
+    one-time password) so the owner can sign in as each role. Not auto-run on boot."""
     if not is_hq(user):
         raise HTTPException(status_code=403, detail="HQ only")
 
@@ -9230,20 +9268,23 @@ async def admin_seed_demo_staff(user=Depends(get_current_user)):
             existing = await db.users.find_one(
                 {"role": role, "store_id": DEFAULT_STORE_ID}, {"_id": 0})
         if existing:
-            creds.append({"role": role, "pin": "*** (PIN shown only at creation)",
+            creds.append({"role": role, "login_code": existing.get("login_code"),
+                          "password": "*** (shown only at creation)",
                           "store_id": existing.get("store_id"),
                           "cluster_store_ids": existing.get("cluster_store_ids")})
             continue
 
-        pin = await _free_pin(spec["pin"])
-        if not pin:
-            continue  # no free PIN in range; skip rather than collide
+        code = normalize_login_code(spec["login_code"])
+        if await db.users.find_one({"login_code_l": code.lower()}, {"_id": 0}):
+            continue  # code already taken; skip rather than collide
+        one_time_pw = gen_random_password()
         doc = {
             "id": str(uuid.uuid4()),
             "name": spec["name"],
             "role": role,
-            "pin_hash": hash_password(pin),
-            "pin_token": pin_uniqueness_token(pin),
+            "login_code": code,
+            "login_code_l": code.lower(),
+            "password_hash": hash_password(one_time_pw),
             "is_active": True,
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
@@ -9252,8 +9293,8 @@ async def admin_seed_demo_staff(user=Depends(get_current_user)):
         else:
             doc["store_id"] = DEFAULT_STORE_ID
         await db.users.insert_one(doc)
-        logger.info(f"[demo] created {role} (PIN {pin})")
-        creds.append({"role": role, "pin": pin,
+        logger.warning(f"[demo] created {role} (login {code}) ONE-TIME PASSWORD: {one_time_pw}")
+        creds.append({"role": role, "login_code": code, "password": one_time_pw,
                       "store_id": doc.get("store_id"),
                       "cluster_store_ids": doc.get("cluster_store_ids")})
 
@@ -9327,26 +9368,24 @@ async def run_store_migration():
         {"$set": {"store_id": DEFAULT_STORE_ID}},
     )
 
-    # Ensure a store_manager exists for the default store
+    # Ensure a store_manager exists for the default store (Auth V2: code+password)
     sm = await db.users.find_one({"role": "store_manager", "store_id": DEFAULT_STORE_ID}, {"_id": 0})
     if not sm:
-        pin = None
-        for candidate in ["550001", "550002", "550003", "550004", "550005"]:
-            if not await db.users.find_one({"pin_token": pin_uniqueness_token(candidate)}, {"_id": 0}):
-                pin = candidate
-                break
-        if pin:
+        code = "STORE-MANAGER"
+        if not await db.users.find_one({"login_code_l": code.lower()}, {"_id": 0}):
+            one_time_pw = gen_random_password()
             await db.users.insert_one({
                 "id": str(uuid.uuid4()),
                 "name": "Default Store Manager",
                 "role": "store_manager",
                 "store_id": DEFAULT_STORE_ID,
-                "pin_hash": hash_password(pin),
-                "pin_token": pin_uniqueness_token(pin),
+                "login_code": code,
+                "login_code_l": code.lower(),
+                "password_hash": hash_password(one_time_pw),
                 "is_active": True,
                 "created_at": datetime.now(timezone.utc).isoformat(),
             })
-            logger.info(f"[migration] created default store_manager (PIN {pin})")
+            logger.warning(f"[migration] created default store_manager (login {code}) ONE-TIME PASSWORD: {one_time_pw}")
     logger.info("[migration] multi-store migration complete")
 
 @api_router.post("/admin/migrate-multistore")
@@ -9403,16 +9442,25 @@ async def on_startup():
         logger.info("[startup] admin_audit indexes ensured")
     except Exception as e:
         logger.error(f"[startup] admin_audit index error: {e}")
-    # One-time cleanup: remove plaintext PINs from all existing user docs (idempotent).
+    # Auth V2: retire PIN — strip every pin field from all user docs (idempotent).
     try:
         result = await db.users.update_many(
-            {"pin_plain": {"$exists": True}},
-            {"$unset": {"pin_plain": ""}},
+            {"$or": [{"pin": {"$exists": True}}, {"pin_hash": {"$exists": True}},
+                     {"pin_token": {"$exists": True}}, {"pin_plain": {"$exists": True}}]},
+            {"$unset": {"pin": "", "pin_hash": "", "pin_token": "", "pin_plain": ""}},
         )
         if result.modified_count:
-            logger.info(f"[startup] unset pin_plain from {result.modified_count} user doc(s)")
+            logger.info(f"[startup] retired PIN fields from {result.modified_count} user doc(s)")
     except Exception as e:
-        logger.error(f"[startup] pin_plain cleanup error: {e}")
+        logger.error(f"[startup] PIN retire error: {e}")
+    # Auth V2: unique login codes (partial — only docs that actually have one).
+    try:
+        await db.users.create_index(
+            "login_code_l", unique=True,
+            partialFilterExpression={"login_code_l": {"$exists": True}})
+        logger.info("[startup] login_code_l unique index ensured")
+    except Exception as e:
+        logger.error(f"[startup] login_code_l index error: {e}")
     # Multi-store foundation: ensure default store + migrate legacy data
     try:
         await run_store_migration()

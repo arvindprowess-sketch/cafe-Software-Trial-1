@@ -5,14 +5,17 @@ import pytest
 import requests
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://meal-fit-goals.preview.emergentagent.com").rstrip("/")
-ADMIN_EMAIL = "admin@dietcafe.com"
-ADMIN_PASS = "admin123"
+# Auth V2: code+password supplied via env (no fixed admin creds).
+ADMIN_CODE = os.environ.get("SMOKE_ADMIN_CODE")
+ADMIN_PASS = os.environ.get("SMOKE_ADMIN_PASSWORD")
 REQUIRED_FIELDS = ["name", "category", "sales_count", "image_url", "cost_per_100g"]
 
 
 @pytest.fixture(scope="module")
 def admin_token():
-    r = requests.post(f"{BASE_URL}/api/auth/login", json={"email": ADMIN_EMAIL, "password": ADMIN_PASS}, timeout=15)
+    if not ADMIN_CODE or not ADMIN_PASS:
+        pytest.skip("Set SMOKE_ADMIN_CODE + SMOKE_ADMIN_PASSWORD")
+    r = requests.post(f"{BASE_URL}/api/auth/login", json={"code": ADMIN_CODE, "password": ADMIN_PASS}, timeout=15)
     assert r.status_code == 200, r.text
     return r.json()["token"]
 

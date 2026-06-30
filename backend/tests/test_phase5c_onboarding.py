@@ -18,6 +18,7 @@ import httpx
 from mongomock_motor import AsyncMongoMockClient
 
 import server
+from _authv2 import hq_token
 
 _codeseq = [0]
 
@@ -45,7 +46,7 @@ def ctx():
         c = Ctx()
         c.client = client
         await client.post("/api/seed")
-        c.hq = (await client.post("/api/auth/login", json={"email": "admin@dietcafe.com", "password": "admin123"})).json()["token"]
+        c.hq = await hq_token()
         return c
 
     c = run(build())
@@ -72,7 +73,7 @@ async def _mk_store(ctx, gst=None, fssai=None):
 
 async def _mk_staff(ctx, role, store_id=None, cluster=None):
     _codeseq[0] += 1
-    body = {"name": f"{role}{_codeseq[0]}", "role": role, "pin": f"{7000 + _codeseq[0]}"}
+    body = {"name": f"{role}{_codeseq[0]}", "role": role, "login_code": f"CODE-{role}-{_codeseq[0]}", "password": "password123"}
     if store_id:
         body["store_id"] = store_id
     if cluster:
