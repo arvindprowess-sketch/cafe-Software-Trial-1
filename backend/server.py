@@ -28,6 +28,7 @@ import bcrypt
 import jwt
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
 from limits import parse as parse_rate_limit
 from limits.storage import MemoryStorage
@@ -64,16 +65,23 @@ api_router = APIRouter(prefix="/api")
 security = HTTPBearer()
 
 # ========== RATE LIMITING (slowapi) ==========
-# In-memory storage — swap to Redis storage when multi-instance.
+# In-memory storage — swap to a shared Redis storage when running multiple
+# instances (this per-process counter does NOT coordinate across workers). The
+# same caveat applies to every in-memory limiter/dict in this module.
 # Disabled by default under pytest: the suite's module fixtures all log in from
 # one IP in one process-wide window. The rate-limit tests re-enable it explicitly
 # (or set RATE_LIMIT_ENABLED=1).
+# H-4: a global per-IP default so the 180+ undecorated routes aren't unbounded.
 limiter = Limiter(
     key_func=get_remote_address,
+    default_limits=["100/minute"],
     enabled=("pytest" not in sys.modules or os.environ.get("RATE_LIMIT_ENABLED") == "1"),
 )
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+# Enforce the default_limits on every route (routes with an explicit @limiter.limit
+# override the default). No-op when the limiter is disabled (pytest).
+app.add_middleware(SlowAPIMiddleware)
 
 # Per-phone OTP send limit — keyed on the normalized phone from the request body,
 # which slowapi's request-based key_func can't see. Same in-memory caveat as above.
@@ -86,6 +94,37 @@ _OTP_PHONE_LIMIT = parse_rate_limit("3/15minutes")
 _super_reset_storage = MemoryStorage()
 _super_reset_limiter = MovingWindowRateLimiter(_super_reset_storage)
 _SUPER_RESET_LIMIT = parse_rate_limit("3/15minutes")
+
+# H-4: per-USER rate limits for expensive LLM/AI routes. slowapi keys on the
+# client IP, which can't bound a single authenticated user (one user behind a
+# shared NAT, or just looping the call) from running up unbounded spend on the
+# shared LLM key — a cost-DoS. This sliding window keys on the user id instead.
+# In-memory + per-process: needs a shared Redis store for a multi-instance
+# deployment (flag only — not done here).
+_AI_RATE_LOG: dict = defaultdict(list)  # "bucket:user_id" -> [unix_ts, ...]
+AI_CHAT_LIMIT = (20, 3600)     # 20 / hour / user  (interactive chat)
+AI_DEFAULT_LIMIT = (30, 3600)  # 30 / hour / user  (all other AI/LLM routes)
+
+def enforce_user_ai_rate(bucket: str, user_id: str, limit=AI_DEFAULT_LIMIT):
+    """Sliding-window per-user limit for an AI/LLM route. Raises 429 once the
+    user exceeds `limit` = (max_calls, window_secs). No-op when the slowapi
+    limiter is disabled (pytest), so the in-process suite isn't throttled."""
+    if not limiter.enabled:
+        return
+    max_calls, window_secs = limit
+    key = f"{bucket}:{user_id}"
+    now = time.time()
+    cutoff = now - window_secs
+    recent = [t for t in _AI_RATE_LOG.get(key, []) if t > cutoff]
+    if len(recent) >= max_calls:
+        retry_after = int(window_secs - (now - recent[0])) + 1
+        raise HTTPException(
+            status_code=429,
+            detail="AI usage limit reached. Please try again later.",
+            headers={"Retry-After": str(retry_after)},
+        )
+    recent.append(now)
+    _AI_RATE_LOG[key] = recent
 
 # ========== CONFIG (env-driven, A3 + A4) ==========
 JWT_SECRET = os.environ.get("JWT_SECRET") or secrets.token_hex(32)
@@ -3227,6 +3266,7 @@ async def top_selling_by_category(user=Depends(get_current_user)):
 # ========== AI ROUTES ==========
 @api_router.post("/ai/suggest")
 async def ai_suggest(data: AISuggestRequest, user=Depends(get_current_user)):
+    enforce_user_ai_rate("ai-suggest", user["id"])  # H-4: per-user AI cost guard
     try:
         from emergentintegrations.llm.chat import LlmChat, UserMessage
         products = await db.products.find({"is_active": True}, {"_id": 0}).to_list(100)
@@ -3627,6 +3667,7 @@ Respond ONLY in this JSON format (no markdown, no backticks):
 
 @api_router.post("/ai/quick-meal")
 async def ai_quick_meal(data: QuickMealRequest, user=Depends(get_current_user)):
+    enforce_user_ai_rate("ai-quick-meal", user["id"])  # H-4: per-user AI cost guard
     try:
         # Get user's daily targets from profile
         user_goals = {
@@ -3883,6 +3924,7 @@ def strip_action_json(response: str):
 @api_router.post("/ai/chat")
 async def ai_chat(data: AIChatRequest, user=Depends(get_current_user)):
     """Conversational AI assistant for meal planning and nutrition advice"""
+    enforce_user_ai_rate("ai-chat", user["id"], AI_CHAT_LIMIT)  # H-4: 20/hour/user
     try:
         from emergentintegrations.llm.chat import LlmChat, UserMessage
         
@@ -4091,6 +4133,7 @@ async def migrate_diet_type():
 @api_router.post("/products/{product_id}/regenerate-image")
 async def regenerate_product_image(product_id: str, user=Depends(get_current_user)):
     """Regenerate AI image for a specific product"""
+    enforce_user_ai_rate("ai-regenerate-image", user["id"])  # H-4: per-user AI cost guard
     if not is_hq(user):
         raise HTTPException(status_code=403, detail="HQ only")
     product = await db.products.find_one({"id": product_id}, {"_id": 0})
@@ -5341,6 +5384,7 @@ async def get_admin_analytics(user=Depends(get_current_user)):
 @api_router.post("/admin/ai-insights")
 async def get_ai_business_insights(user=Depends(get_current_user)):
     """Get AI-powered business insights and recommendations"""
+    enforce_user_ai_rate("ai-insights", user["id"])  # H-4: per-user AI cost guard
     if not is_hq(user):
         raise HTTPException(status_code=403, detail="HQ only")
     
@@ -5850,6 +5894,7 @@ async def ai_adjust_portions(
     user=Depends(get_current_user)
 ):
     """AI suggests portion adjustments to fit within calorie goal"""
+    enforce_user_ai_rate("ai-adjust-portions", user["id"])  # H-4: per-user AI cost guard
     try:
         from emergentintegrations.llm.chat import LlmChat, UserMessage
         remaining_cal = calorie_goal - consumed_today
@@ -7152,6 +7197,7 @@ async def ai_generate_meal_plan(
     user=Depends(get_current_user)
 ):
     """AI generates a weekly meal plan"""
+    enforce_user_ai_rate("ai-generate-meal-plan", user["id"])  # H-4: per-user AI cost guard
     try:
         from emergentintegrations.llm.chat import LlmChat, UserMessage
         products = await db.products.find({"is_active": True}, {"_id": 0}).to_list(100)
