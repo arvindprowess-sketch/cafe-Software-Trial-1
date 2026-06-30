@@ -8,7 +8,6 @@ Run:  pytest backend/tests/test_security_pin_ratelimit_socket.py
 """
 import os
 import asyncio
-import time
 
 import pytest
 
@@ -159,52 +158,9 @@ def test_list_staff_shows_login_code(ctx):
     run(go())
 
 
-# ── ITEM 2: rate-limit helper unit tests (utilities retained) ───────────────
-
-def test_rate_limit_allows_under_threshold():
-    key = "testip:555"
-    server._PIN_FAIL_LOG.pop(key, None)
-    now = time.time()
-    for _ in range(4):
-        server.record_pin_fail(key, now)
-    allowed, _ = server.check_pin_login_rate(key, now + 1)
-    assert allowed is True
-
-
-def test_rate_limit_blocks_on_5th_fail():
-    key = "testip:556"
-    server._PIN_FAIL_LOG.pop(key, None)
-    now = time.time()
-    for _ in range(5):
-        server.record_pin_fail(key, now)
-    allowed, retry_after = server.check_pin_login_rate(key, now + 1)
-    assert allowed is False
-    assert retry_after > 0
-
-
-def test_rate_limit_resets_on_success():
-    key = "testclient:550"
-    server._PIN_FAIL_LOG.pop(key, None)
-    now = time.time()
-    for _ in range(4):
-        server.record_pin_fail(key, now)
-    server.reset_pin_counter(key)
-    allowed, _ = server.check_pin_login_rate(key, now + 1)
-    assert allowed is True
-
-
-def test_rate_limit_expires_after_lockout():
-    key = "expired:557"
-    server._PIN_FAIL_LOG.pop(key, None)
-    old_time = time.time() - server._PIN_LOCKOUT_SECS - 5
-    for _ in range(5):
-        server.record_pin_fail(key, old_time)
-    now = time.time()
-    allowed, _ = server.check_pin_login_rate(key, now)
-    assert allowed is True
-
-
-# ── ITEM 3: Socket.IO auth / room-scope logic ────────────────────────────────
+# ── ITEM 2: Socket.IO auth / room-scope logic ────────────────────────────────
+# (The PIN brute-force rate-limit helpers were removed in M-9 — PIN login is
+# retired — so their unit tests are gone with them.)
 
 def test_socket_connect_rejects_no_token():
     async def go():

@@ -592,10 +592,6 @@ def create_token(user_id: str, role: str, token_version: int = 0) -> str:
                "exp": datetime.now(timezone.utc).timestamp() + 86400 * 7}
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
-def pin_uniqueness_token(pin: str) -> str:
-    """SHA-256 of PIN — stored for fast duplicate-PIN lookup only; never used for auth."""
-    return hashlib.sha256(pin.encode()).hexdigest()
-
 # ── Auth V2: login codes + company-domain gating ─────────────────────────────
 # Login code: starts alphanumeric, then alphanumeric/./_/-, total length 3..32.
 LOGIN_CODE_RE = re.compile(r"^[A-Z0-9][A-Z0-9._-]{2,31}$")
@@ -616,32 +612,6 @@ def normalize_login_code(value: str) -> str:
 def gen_random_password(nbytes: int = 12) -> str:
     """URL-safe random secret for one-time bootstrap / reset passwords."""
     return secrets.token_urlsafe(nbytes)
-
-# ── PIN-login brute-force guard ──────────────────────────────────────────────
-# In-memory: per-worker (acceptable for pilot; replace with Redis for multi-worker).
-_PIN_FAIL_LOG: dict = defaultdict(list)  # key -> [fail_timestamp, ...]
-_PIN_WINDOW_SECS = 300    # 5-minute failure window
-_PIN_MAX_FAILS   = 5      # max failures before lockout
-_PIN_LOCKOUT_SECS = 600   # 10-minute lockout
-
-def check_pin_login_rate(key: str, now: float) -> tuple:
-    """Return (allowed: bool, retry_after: int). Unit-testable; no I/O."""
-    timestamps = _PIN_FAIL_LOG.get(key, [])
-    cutoff = now - _PIN_LOCKOUT_SECS
-    fresh = [t for t in timestamps if t > cutoff]
-    _PIN_FAIL_LOG[key] = fresh
-    window_start = now - _PIN_WINDOW_SECS
-    recent = [t for t in fresh if t > window_start]
-    if len(recent) >= _PIN_MAX_FAILS:
-        retry_after = int(_PIN_LOCKOUT_SECS - (now - recent[0])) + 1
-        return False, retry_after
-    return True, 0
-
-def record_pin_fail(key: str, now: float):
-    _PIN_FAIL_LOG[key].append(now)
-
-def reset_pin_counter(key: str):
-    _PIN_FAIL_LOG.pop(key, None)
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     try:
@@ -5647,7 +5617,8 @@ async def create_payment_order(data: PaymentCreateRequest, user=Depends(get_curr
         }
     except Exception as e:
         logger.error(f"Razorpay order creation failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Payment order creation failed: {str(e)}")
+        # Don't leak gateway/internal error text to the client (M-9).
+        raise HTTPException(status_code=500, detail="Payment could not be initiated. Please try again.")
 
 @api_router.post("/payments/verify")
 async def verify_payment(data: PaymentVerifyRequest, user=Depends(get_current_user)):
@@ -6963,30 +6934,10 @@ async def get_stock_logs(store_id: Optional[str] = None, user=Depends(get_curren
     return logs
 
 # ========== P1: NOTIFICATIONS ==========
-@api_router.get("/notifications")
-async def get_notifications(user=Depends(get_current_user)):
-    """Get notifications. Customers see their own; staff see their store's staff
-    notifications (scoped by role)."""
-    if normalize_role(user) == "customer":
-        query = {"user_id": user["id"]}
-    else:
-        # Staff-facing notifications carry a store_id; scope to the caller's store(s).
-        query = store_filter(user)
-    notifications = await db.notifications.find(query, {"_id": 0}).sort("created_at", -1).to_list(50)
-    return notifications
-
-@api_router.put("/notifications/{notif_id}/read")
-async def mark_notification_read(notif_id: str, user=Depends(get_current_user)):
-    notif = await db.notifications.find_one({"id": notif_id}, {"_id": 0})
-    if not notif:
-        raise HTTPException(status_code=404, detail="Notification not found")
-    if normalize_role(user) == "customer":
-        if notif.get("user_id") != user["id"]:
-            raise HTTPException(status_code=403, detail="Access denied")
-    elif notif.get("store_id"):
-        assert_store_allowed(user, notif.get("store_id"))
-    await db.notifications.update_one({"id": notif_id}, {"$set": {"read": True}})
-    return {"message": "Marked as read"}
+# NOTE: GET /notifications and PUT /notifications/{id}/read are defined once,
+# earlier in this module (near the customer notification reads). The duplicate
+# definitions that used to live here were dead (shadowed by registration order)
+# and have been removed (M-9).
 
 @api_router.put("/notifications/read-all")
 async def mark_all_notifications_read(user=Depends(get_current_user)):
