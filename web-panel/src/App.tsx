@@ -9,6 +9,7 @@ import {
   HQ_SUB_ROUTE_ROLES,
 } from './auth/permissions';
 import Login from './pages/Login';
+import ForgotPassword from './pages/ForgotPassword';
 import AdminLayout from './components/AdminLayout';
 import KitchenLayout from './components/KitchenLayout';
 import CashierLayout from './components/CashierLayout';
@@ -82,6 +83,8 @@ export default function App() {
     <StoreProvider>
     <Routes>
       <Route path="/login" element={user ? <Navigate to={getDefaultRoute()} /> : <Login />} />
+      {/* Public, outside the authed portal — super-admin self-service reset. */}
+      <Route path="/reset" element={<ForgotPassword />} />
 
       <Route path="/hq" element={<ProtectedRoute roles={ADMIN_PORTAL_ROLES}><HqLayout /></ProtectedRoute>}>
         <Route index element={<HqIndex />} />

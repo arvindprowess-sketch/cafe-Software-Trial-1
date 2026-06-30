@@ -1,21 +1,23 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
+// Auth V2: one login window for everyone — login code OR email + password.
+// No role tabs, no demo credentials. Redirect after login is handled by the
+// /login route in App.tsx (role -> ROLE_DEFAULT_ROUTE).
 export default function Login() {
-  const { loginEmail, loginPin } = useAuth();
-  const [tab, setTab] = useState<'admin' | 'staff'>('admin');
-  const [email, setEmail] = useState('');
+  const { login } = useAuth();
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
-  const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleAdminLogin = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      await loginEmail(email, password);
+      await login(identifier.trim(), password);
     } catch (err: any) {
       setError(err.message || 'Login failed');
     } finally {
@@ -23,20 +25,7 @@ export default function Login() {
     }
   };
 
-  const handlePinLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (pin.length < 4) { setError('Enter at least 4 digits'); return; }
-    setError('');
-    setLoading(true);
-    try {
-      await loginPin(pin);
-    } catch (err: any) {
-      setError(err.message || 'Invalid PIN');
-      setPin('');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const disabled = loading || !identifier.trim() || !password;
 
   return (
     <div className="login-page">
@@ -47,63 +36,49 @@ export default function Login() {
           <p>Management Panel</p>
         </div>
 
-        <div className="login-tabs">
-          <button className={`login-tab ${tab === 'admin' ? 'active' : ''}`} onClick={() => { setTab('admin'); setError(''); }} data-testid="tab-admin">
-            Admin Login
+        {error && <p className="login-error" data-testid="login-error">{error}</p>}
+
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label>Login code or email</label>
+            <input
+              type="text"
+              value={identifier}
+              onChange={e => setIdentifier(e.target.value)}
+              placeholder="e.g. RIYA-CASH or you@boraroc.com"
+              autoComplete="username"
+              autoFocus
+              data-testid="login-identifier-input"
+            />
+          </div>
+          <div className="form-group">
+            <label>Password</label>
+            <input
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="Password"
+              autoComplete="current-password"
+              data-testid="login-password-input"
+            />
+          </div>
+          <button type="submit" className="login-btn" disabled={disabled} data-testid="login-submit-btn">
+            {loading ? 'Signing in…' : 'Sign in'}
           </button>
-          <button className={`login-tab ${tab === 'staff' ? 'active' : ''}`} onClick={() => { setTab('staff'); setError(''); }} data-testid="tab-staff">
-            Staff PIN
-          </button>
+        </form>
+
+        <div className="login-demo">
+          <Link
+            to="/reset"
+            data-testid="forgot-password-link"
+            style={{
+              color: 'var(--lime-deep)', fontFamily: 'var(--font-brand)', fontSize: 13,
+              fontWeight: 400, textTransform: 'uppercase', letterSpacing: '0.03em', textDecoration: 'none',
+            }}
+          >
+            Forgot password?
+          </Link>
         </div>
-
-        {error && <p className="login-error">{error}</p>}
-
-        {tab === 'admin' ? (
-          <form onSubmit={handleAdminLogin}>
-            <div className="form-group">
-              <label>Email</label>
-              <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="admin@dietcafe.com" data-testid="email-input" />
-            </div>
-            <div className="form-group">
-              <label>Password</label>
-              <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Password" data-testid="password-input" />
-            </div>
-            <button type="submit" className="login-btn" disabled={loading || !email || !password} data-testid="admin-login-btn">
-              {loading ? 'Logging in...' : 'Login as Admin'}
-            </button>
-            <div className="login-demo">
-              <button type="button" onClick={() => { setEmail('admin@dietcafe.com'); setPassword('admin123'); }} data-testid="demo-btn">
-                Use demo credentials
-              </button>
-            </div>
-          </form>
-        ) : (
-          <form onSubmit={handlePinLogin}>
-            <div className="form-group">
-              <label style={{ textAlign: 'center', display: 'block' }}>Enter your staff PIN</label>
-              <input
-                type="password"
-                inputMode="numeric"
-                maxLength={6}
-                value={pin}
-                placeholder="Enter 4-6 digit PIN"
-                data-testid="pin-input"
-                style={{ textAlign: 'center', fontSize: 24, fontWeight: 800, letterSpacing: 12 }}
-                onChange={e => {
-                  const v = e.target.value.replace(/\D/g, '').slice(0, 6);
-                  setPin(v);
-                }}
-                autoFocus
-              />
-            </div>
-            <button type="submit" className="login-btn" disabled={loading || pin.length < 4} data-testid="pin-login-btn">
-              {loading ? 'Verifying...' : 'Login with PIN'}
-            </button>
-            <p style={{ textAlign: 'center', fontSize: 13, color: '#9C9C9C', marginTop: 16 }}>
-              Kitchen & Cashier staff use PIN login
-            </p>
-          </form>
-        )}
       </div>
     </div>
   );
