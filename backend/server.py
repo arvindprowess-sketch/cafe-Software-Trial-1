@@ -1712,20 +1712,60 @@ async def recipe_coverage(store_id: str, user=Depends(get_current_user)):
                                "product_type": ptype, "reason": "no inventory row in this store"})
     return report
 
+# M-10: only real raster images are accepted as uploads. The mime stored in the
+# data URI is taken from the decoded bytes (magic numbers), never the client's
+# declared type, so `data:text/html;base64,...` can't be smuggled in for a
+# stored-XSS. Cap keeps the DB from being bloated by huge blobs.
+_UPLOAD_MAX_BYTES = 2 * 1024 * 1024  # 2 MB (decoded)
+
+def _detect_image_mime(data: bytes) -> Optional[str]:
+    """Return image/png|jpeg|webp from magic bytes, or None for anything else."""
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    if data[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    return None
+
 @api_router.post("/upload/image")
 async def upload_image(body: dict = Body(...), user=Depends(get_current_user)):
-    """Upload base64 image and store it. Returns the data URI."""
+    """Upload a base64 image (PNG/JPEG/WebP, <= 2 MB) and store it. Returns the
+    data URI built from the DETECTED type."""
     if not is_hq(user):
         raise HTTPException(status_code=403, detail="HQ only")
     image_data = body.get("image")
-    if not image_data:
+    if not image_data or not isinstance(image_data, str):
         raise HTTPException(status_code=400, detail="No image provided")
-    # If it already starts with data:, it's a data URI
-    if not image_data.startswith("data:"):
-        image_data = f"data:image/png;base64,{image_data}"
+    # Pull out the raw base64 payload whether it's a bare string or a data: URI.
+    # The client's declared mediatype is intentionally ignored — we detect below.
+    b64 = image_data
+    if b64.startswith("data:"):
+        header, _, payload = b64.partition(",")
+        if "base64" not in header or not payload:
+            raise HTTPException(status_code=400, detail="Invalid image data URI")
+        b64 = payload
+    b64 = "".join(b64.split())  # tolerate newline-wrapped base64; reject garbage below
+    try:
+        raw = base64.b64decode(b64, validate=True)
+    except Exception:
+        # Never leak the underlying decoder error.
+        raise HTTPException(status_code=400, detail="Invalid base64 image data")
+    if not raw:
+        raise HTTPException(status_code=400, detail="Empty image data")
+    if len(raw) > _UPLOAD_MAX_BYTES:
+        raise HTTPException(status_code=400, detail="Image too large (max 2 MB)")
+    mime = _detect_image_mime(raw)
+    if not mime:
+        raise HTTPException(status_code=400, detail="Unsupported image type (PNG, JPEG, or WebP only)")
+    # Re-encode canonically and set the data URI mime from the detected type.
+    stored = f"data:{mime};base64,{base64.b64encode(raw).decode()}"
     image_id = str(uuid.uuid4())
-    await db.uploads.insert_one({"id": image_id, "data": image_data, "created_at": datetime.now(timezone.utc).isoformat()})
-    return {"id": image_id, "url": image_data}
+    await db.uploads.insert_one({
+        "id": image_id, "data": stored, "mime": mime,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    return {"id": image_id, "url": stored}
 
 # ========== CATEGORY MANAGEMENT ==========
 @api_router.get("/categories")
