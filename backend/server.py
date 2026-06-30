@@ -3081,6 +3081,12 @@ async def create_order(data: OrderCreate, user=Depends(get_current_user)):
     # (idempotent per order_id, graceful if a raw row is missing — never blocks).
     try:
         await decrement_stock_for_order(order, user["id"])
+    except InsufficientStock as e:
+        # M-6: a tracked raw can't cover this order -> reject and roll the order
+        # back so we never confirm a sale we can't fulfil (no negative stock).
+        await db.orders.delete_one({"id": order_id})
+        await db.coupon_redemptions.delete_many({"order_id": order_id})
+        raise HTTPException(status_code=400, detail=f"Insufficient stock for {e.item_name}")
     except Exception as e:
         logger.error(f"[3C] stock decrement error for order {order_id}: {e}")
 
@@ -7886,24 +7892,79 @@ async def explode_to_raw(target_type: str, ref_id: str, qty: float, store_id: st
 def _explode_value(exploded: list) -> float:
     return round(sum(e["grams"] * e["unit_cost"] for e in exploded), 2)
 
-async def _apply_stock_deltas(exploded: list, store_id: str, mtype: str, reason: str, user_id: str, ref_id: str):
+class InsufficientStock(Exception):
+    """M-6: raised by the sale path when a raw item can't cover the requested
+    amount. Carries the item name for the 400 response."""
+    def __init__(self, item_name: str):
+        self.item_name = item_name
+        super().__init__(f"Insufficient stock for {item_name}")
+
+
+async def _apply_stock_deltas(exploded: list, store_id: str, mtype: str, reason: str, user_id: str, ref_id: str,
+                              reject_on_insufficient: bool = False):
     """Deduct each exploded raw from stock and append one movement per raw.
-    PR-3: the decrement is atomic ($inc via find_one_and_update) so concurrent
-    sales can't race on the read-then-set; qty_after is derived from the returned
-    doc, and the movement is flagged_for_review when on-hand goes negative."""
+    The decrement is atomic ($inc via find_one_and_update) so concurrent writers
+    can't race on a read-then-set.
+
+    reject_on_insufficient=False (discard/transfer): unconditional $inc; on-hand
+    may go negative and the movement is flagged_for_review (PR-3, unchanged).
+
+    reject_on_insufficient=True (M-6, sale path): the decrement is also CONDITIONAL
+    on qty_on_hand >= amount, so two concurrent sales that both passed the
+    availability read can never push stock negative (oversell). If any raw can't
+    cover its amount AND its row exists, every raw already decremented in THIS call
+    is restored (+inc) and InsufficientStock is raised — and no movement is logged.
+    A row that is genuinely missing (raw tracking never set up) is skipped
+    gracefully, never blocking the sale."""
+    if not reject_on_insufficient:
+        for e in exploded:
+            item = e["item"]
+            updated = await db.inventory_items.find_one_and_update(
+                {"id": item["id"], "store_id": store_id},
+                {"$inc": {"qty_on_hand": -e["grams"]},
+                 "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}},
+                return_document=ReturnDocument.AFTER,
+            )
+            # Fallback if the row vanished mid-flight (shouldn't happen): derive locally.
+            new_qty = float((updated or {}).get("qty_on_hand", float(item.get("qty_on_hand", 0) or 0) - e["grams"]))
+            await log_movement(store_id=store_id, item_id=item["id"], product_id=item.get("product_id"),
+                               mtype=mtype, qty_delta=-e["grams"], qty_after=new_qty, reason=reason,
+                               user_id=user_id, ref_id=ref_id, unit_cost_at_time=e["unit_cost"],
+                               flagged_for_review=new_qty < 0)
+        return
+
+    # Sale path — conditional, order-wide reservation with rollback. Decrement all
+    # raws first (no logging); only persist movements once the WHOLE order fits.
+    applied = []  # [(item, grams, new_qty, unit_cost)]
     for e in exploded:
         item = e["item"]
+        grams = e["grams"]
+        if grams <= 0:
+            continue
+        now_iso = datetime.now(timezone.utc).isoformat()
         updated = await db.inventory_items.find_one_and_update(
-            {"id": item["id"], "store_id": store_id},
-            {"$inc": {"qty_on_hand": -e["grams"]},
-             "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}},
+            {"id": item["id"], "store_id": store_id, "qty_on_hand": {"$gte": grams}},
+            {"$inc": {"qty_on_hand": -grams}, "$set": {"updated_at": now_iso}},
             return_document=ReturnDocument.AFTER,
         )
-        # Fallback if the row vanished mid-flight (shouldn't happen): derive locally.
-        new_qty = float((updated or {}).get("qty_on_hand", float(item.get("qty_on_hand", 0) or 0) - e["grams"]))
+        if updated is None:
+            still_there = await db.inventory_items.find_one({"id": item["id"], "store_id": store_id}, {"_id": 0})
+            if not still_there:
+                continue  # row missing -> graceful, don't block (tracking not set up)
+            # Row exists but qty < grams: roll back everything decremented here, reject.
+            for (ritem, rgrams, _q, _c) in applied:
+                await db.inventory_items.update_one(
+                    {"id": ritem["id"], "store_id": store_id},
+                    {"$inc": {"qty_on_hand": rgrams},
+                     "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}},
+                )
+            raise InsufficientStock(item.get("name") or item.get("product_id") or "item")
+        applied.append((item, grams, float(updated.get("qty_on_hand", 0) or 0), e["unit_cost"]))
+
+    for (item, grams, new_qty, unit_cost) in applied:
         await log_movement(store_id=store_id, item_id=item["id"], product_id=item.get("product_id"),
-                           mtype=mtype, qty_delta=-e["grams"], qty_after=new_qty, reason=reason,
-                           user_id=user_id, ref_id=ref_id, unit_cost_at_time=e["unit_cost"],
+                           mtype=mtype, qty_delta=-grams, qty_after=new_qty, reason=reason,
+                           user_id=user_id, ref_id=ref_id, unit_cost_at_time=unit_cost,
                            flagged_for_review=new_qty < 0)
 
 # ---------- Discards ----------
@@ -8221,24 +8282,30 @@ async def raw_single_available(store_id: str, product_id: str, grams: float) -> 
 
 async def decrement_stock_for_order(order: dict, user_id: str):
     """Decrement raw inventory for a placed order, scoped to order.store_id, via
-    explode_to_raw. Idempotent per order_id; graceful when a raw row is missing."""
+    explode_to_raw. Idempotent per order_id; graceful when a raw row is missing.
+
+    M-6: all of the order's raws are reserved in ONE conditional pass so the whole
+    order succeeds or none of it does — raises InsufficientStock (no negative stock,
+    no partial decrement) when a tracked raw can't cover the order."""
     oid = order["id"]
     sid = order.get("store_id") or DEFAULT_STORE_ID
     # Idempotency: never decrement the same order twice (dup/reorder safe)
     if await db.movement_log.count_documents({"ref_id": oid, "type": "sale"}) > 0:
         return
+    exploded_all = []
     for it in order.get("items", []):
         pid = it.get("product_id")
         if not pid:
             continue
         if it.get("product_type") == "ready_made":
             units = int(it.get("quantity", 1) or 1)
-            exploded = await explode_to_raw("meal", pid, units, sid)
+            exploded_all.extend(await explode_to_raw("meal", pid, units, sid))
         else:
             grams = float(it.get("grams", 0) or 0)
-            exploded = await explode_to_raw("raw", pid, grams, sid)
-        if exploded:
-            await _apply_stock_deltas(exploded, sid, "sale", f"sale:{oid}", user_id, oid)
+            exploded_all.extend(await explode_to_raw("raw", pid, grams, sid))
+    if exploded_all:
+        await _apply_stock_deltas(exploded_all, sid, "sale", f"sale:{oid}", user_id, oid,
+                                  reject_on_insufficient=True)
 
 # ---------- Physical count / reconciliation ----------
 class CountLine(BaseModel):
