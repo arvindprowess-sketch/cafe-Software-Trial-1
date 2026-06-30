@@ -289,7 +289,7 @@ async def broadcast_event(event_type: str, payload: dict, rooms=None, store_id=N
             logger.error(f"[WS] broadcast error to {room}: {e}")
 
 # ========== CANONICAL ORDER STATUS FLOW (Part C2) ==========
-ORDER_STATUSES = ["pending", "accepted", "preparing", "ready", "completed", "cancelled", "scheduled", "out_for_delivery"]
+ORDER_STATUSES = ["pending", "pending_payment", "accepted", "preparing", "ready", "completed", "cancelled", "scheduled", "out_for_delivery"]
 
 # ========== NUTRITION DATABASE (per 100g) ==========
 NON_VEG_KEYWORDS = {"chicken", "egg", "fish", "kabab", "seekh", "mutton", "lamb", "prawn", "shrimp", "meat", "pork", "beef", "turkey"}
@@ -2743,6 +2743,82 @@ async def check_product_stock(product_id: str, quantity: int = 1, store_id: Opti
     return await check_ready_made_stock(product_id, quantity, store_id)
 
 # ========== ORDER ROUTES ==========
+async def _grant_order_rewards(order: dict):
+    """Customer rewards for a CONFIRMED order: meal history + loyalty points +
+    streak. Used by create_order for immediately-confirmed orders (POS / app-cash)
+    and by _fulfill_paid_order once an app non-cash order is gateway-verified —
+    never on an unpaid order, so loyalty/meal-history can't be farmed (C-4 #3)."""
+    uid = order["user_id"]
+    order_id = order["id"]
+    now_iso = datetime.now(timezone.utc).isoformat()
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    # Meal history
+    await db.meal_history.update_one(
+        {"user_id": uid, "date": today},
+        {"$push": {"meals": {"order_id": order_id, "calories": order.get("total_calories"),
+                             "protein": order.get("total_protein"), "carbs": order.get("total_carbs"),
+                             "fat": order.get("total_fat"), "time": now_iso}},
+         "$inc": {"total_calories": order.get("total_calories") or 0, "total_protein": order.get("total_protein") or 0,
+                  "total_carbs": order.get("total_carbs") or 0, "total_fat": order.get("total_fat") or 0}},
+        upsert=True
+    )
+    # Loyalty points (1 point per ₹10)
+    points = max(1, int((order.get("total_price") or 0) / 10))
+    await db.loyalty.update_one(
+        {"user_id": uid},
+        {"$inc": {"points": points, "total_earned": points},
+         "$push": {"history": {"order_id": order_id, "points": points, "type": "earned", "date": now_iso}}},
+        upsert=True
+    )
+    # Streak
+    yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
+    streak_data = await db.streaks.find_one({"user_id": uid}, {"_id": 0})
+    if not streak_data:
+        streak_data = {"user_id": uid, "current_streak": 0, "longest_streak": 0, "last_order_date": None, "total_orders": 0}
+    last_date = streak_data.get("last_order_date")
+    if last_date != today:
+        if last_date == yesterday:
+            streak_data["current_streak"] = streak_data.get("current_streak", 0) + 1
+        else:
+            streak_data["current_streak"] = 1
+        streak_data["last_order_date"] = today
+        streak_data["total_orders"] = streak_data.get("total_orders", 0) + 1
+        streak_data["longest_streak"] = max(streak_data.get("longest_streak", 0), streak_data["current_streak"])
+        await db.streaks.update_one({"user_id": uid}, {"$set": streak_data}, upsert=True)
+
+
+async def _fulfill_paid_order(order_id: str):
+    """Promote an app order from pending_payment -> preparing once its payment is
+    gateway-confirmed: decrement stock, grant rewards, notify the kitchen, and
+    broadcast. Idempotent — only the caller that wins the atomic status flip runs
+    the side effects, so repeated /payments/verify or webhook deliveries (or a
+    verify + webhook race) never double-apply. No-op for any order that is not in
+    pending_payment (POS / app-cash orders fulfilled at creation are untouched)."""
+    res = await db.orders.update_one(
+        {"id": order_id, "status": "pending_payment"},
+        {"$set": {"status": "preparing"}})
+    if res.modified_count != 1:
+        return  # not a held order (already fulfilled, or a different flow)
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        return
+    store_id = order.get("store_id") or DEFAULT_STORE_ID
+    try:
+        await decrement_stock_for_order(order, order["user_id"])
+    except Exception as e:
+        logger.error(f"[C-4] stock decrement on payment for order {order_id}: {e}")
+    await _grant_order_rewards(order)
+    await db.notifications.insert_one({
+        "id": str(uuid.uuid4()), "user_id": "kitchen", "store_id": store_id, "title": "New Order!",
+        "body": f"Order #{order_id} from {order.get('user_name', '')} ({order.get('order_type')})",
+        "type": "new_order", "order_id": order_id, "read": False,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    await broadcast_event("new_order", order, store_id=store_id)
+    await broadcast_event("menu_update", {"action": "stock_changed"})
+    logger.info(f"[C-4] order {order_id} payment-confirmed -> preparing (kitchen notified, stock decremented)")
+
+
 @api_router.post("/orders")
 async def create_order(data: OrderCreate, user=Depends(get_current_user)):
     order_id = str(uuid.uuid4())[:8].upper()
@@ -2826,6 +2902,16 @@ async def create_order(data: OrderCreate, user=Depends(get_current_user)):
     
     # Determine status based on scheduled or immediate
     is_scheduled = data.is_scheduled and data.scheduled_ready_time
+    payment_mode = getattr(data, 'payment_mode', None) or "cash"
+    order_source = "walk_in" if role_in(user, "cashier", "store_manager", "super_admin") else "app"
+    # C-4 (revenue-theft fix): a customer-app order paid by anything other than
+    # cash (i.e. an online gateway method) must be confirmed by the gateway BEFORE
+    # it is treated as real. Otherwise the client could just send payment_mode=upi
+    # and self-declare "paid" without ever paying. Held as pending_payment until
+    # /payments/verify or the webhook calls _fulfill_paid_order(). Staff/POS
+    # (walk_in) and app-cash (COD) orders are unaffected. Scheduled orders keep
+    # their existing flow.
+    defer_until_paid = (order_source == "app" and payment_mode != "cash" and not bool(is_scheduled))
     if is_scheduled:
         order_status = "scheduled"
         ready_dt = datetime.fromisoformat(data.scheduled_ready_time.replace('Z', '+00:00'))
@@ -2839,7 +2925,10 @@ async def create_order(data: OrderCreate, user=Depends(get_current_user)):
         alert_minutes = max_prep + (15 if data.order_type == "delivery" else 0)
         kitchen_alert_time = (ready_dt - timedelta(minutes=alert_minutes)).isoformat()
     else:
-        order_status = "preparing" if getattr(data, 'payment_mode', None) in ("cash", "upi", "card", "other") else "pending"
+        if defer_until_paid:
+            order_status = "pending_payment"
+        else:
+            order_status = "preparing" if payment_mode in ("cash", "upi", "card", "other") else "pending"
         kitchen_alert_time = None
 
     order = {
@@ -2862,16 +2951,18 @@ async def create_order(data: OrderCreate, user=Depends(get_current_user)):
         "total_carbs": data.total_carbs,
         "total_fat": data.total_fat,
         "fitness_goal": data.fitness_goal,
-        "payment_mode": getattr(data, 'payment_mode', None) or "cash",
+        "payment_mode": payment_mode,
         "coupon_code": data.coupon_code if bill["coupon_applied"] else None,
         "discount": bill["discount"],                       # ONLY from validate_offer_for_order
         "customer_name": data.customer_name or user["name"],
-        "order_source": "walk_in" if role_in(user, "cashier", "store_manager", "super_admin") else "app",
+        "order_source": order_source,
         "gst_percent": 5,
         "gst_amount": bill["gst_amount"],                   # server-authoritative
         "base_amount": bill["base_amount"],                 # server-authoritative
         "status": order_status,
-        "payment_status": "paid" if getattr(data, 'payment_mode', None) in ("cash", "upi", "card", "other") else "unpaid",
+        # C-4: app non-cash orders start UNPAID and only become paid once the
+        # gateway confirms (via /payments/verify or the webhook).
+        "payment_status": "unpaid" if defer_until_paid else ("paid" if payment_mode in ("cash", "upi", "card", "other") else "unpaid"),
         "is_scheduled": bool(is_scheduled),
         "scheduled_ready_time": data.scheduled_ready_time if is_scheduled else None,
         "kitchen_alert_time": kitchen_alert_time,
@@ -2881,13 +2972,7 @@ async def create_order(data: OrderCreate, user=Depends(get_current_user)):
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.orders.insert_one(order)
-
-    # Phase 3C: decrement THIS store's raw inventory via recipe explosion
-    # (idempotent per order_id, graceful if a raw row is missing — never blocks).
-    try:
-        await decrement_stock_for_order(order, user["id"])
-    except Exception as e:
-        logger.error(f"[3C] stock decrement error for order {order_id}: {e}")
+    clean_order = {k: v for k, v in order.items() if k != "_id"}
 
     # Phase 2A: record ONE coupon redemption per PLACED order (append-only).
     # Quote / apply-coupon never write here — only successful placement does, and
@@ -2904,40 +2989,26 @@ async def create_order(data: OrderCreate, user=Depends(get_current_user)):
             "redeemed_at": datetime.now(timezone.utc).isoformat(),
         })
 
-    # Save to meal history
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    await db.meal_history.update_one(
-        {"user_id": user["id"], "date": today},
-        {"$push": {"meals": {"order_id": order_id, "calories": data.total_calories,
-                             "protein": data.total_protein, "carbs": data.total_carbs,
-                             "fat": data.total_fat, "time": datetime.now(timezone.utc).isoformat()}},
-         "$inc": {"total_calories": data.total_calories, "total_protein": data.total_protein,
-                  "total_carbs": data.total_carbs, "total_fat": data.total_fat}},
-        upsert=True
-    )
-    # Auto-earn loyalty points (1 point per ₹10)
-    points = max(1, int(order["total_price"] / 10))
-    await db.loyalty.update_one(
-        {"user_id": user["id"]},
-        {"$inc": {"points": points, "total_earned": points},
-         "$push": {"history": {"order_id": order_id, "points": points, "type": "earned", "date": datetime.now(timezone.utc).isoformat()}}},
-        upsert=True
-    )
-    # Auto-update streak
-    yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
-    streak_data = await db.streaks.find_one({"user_id": user["id"]}, {"_id": 0})
-    if not streak_data:
-        streak_data = {"user_id": user["id"], "current_streak": 0, "longest_streak": 0, "last_order_date": None, "total_orders": 0}
-    last_date = streak_data.get("last_order_date")
-    if last_date != today:
-        if last_date == yesterday:
-            streak_data["current_streak"] = streak_data.get("current_streak", 0) + 1
-        else:
-            streak_data["current_streak"] = 1
-        streak_data["last_order_date"] = today
-        streak_data["total_orders"] = streak_data.get("total_orders", 0) + 1
-        streak_data["longest_streak"] = max(streak_data.get("longest_streak", 0), streak_data["current_streak"])
-        await db.streaks.update_one({"user_id": user["id"]}, {"$set": streak_data}, upsert=True)
+    # C-4: an app non-cash order is NOT real until the gateway confirms payment.
+    # Hold it as pending_payment — NO stock decrement, NO kitchen ticket/broadcast,
+    # NO loyalty / meal-history (anti-farming). Those side effects run later in
+    # _fulfill_paid_order() from /payments/verify or the webhook. The customer can
+    # see the order in GET /orders and pay via /payments/create-order.
+    if defer_until_paid:
+        logger.info(f"[C-4] order {order_id} held as pending_payment (app, {payment_mode}) — awaiting gateway")
+        return clean_order
+
+    # Phase 3C: decrement THIS store's raw inventory via recipe explosion
+    # (idempotent per order_id, graceful if a raw row is missing — never blocks).
+    try:
+        await decrement_stock_for_order(order, user["id"])
+    except Exception as e:
+        logger.error(f"[3C] stock decrement error for order {order_id}: {e}")
+
+    # Rewards: meal history + loyalty + streak — only for confirmed (paid/COD/POS)
+    # orders, never on an unpaid pending_payment order.
+    await _grant_order_rewards(order)
+
     # Notify kitchen about new order (skip for scheduled - kitchen gets alerted at alert time)
     if not is_scheduled:
         await db.notifications.insert_one({
@@ -2954,7 +3025,6 @@ async def create_order(data: OrderCreate, user=Depends(get_current_user)):
             "created_at": datetime.now(timezone.utc).isoformat()
         })
     # Real-time push (C1 + C5): notify ONLY this store's staff panels of the new order
-    clean_order = {k: v for k, v in order.items() if k != "_id"}
     await broadcast_event("new_order", clean_order, store_id=store_id)
     # Stock changed -> tell customer apps + POS to refresh menu (C3)
     await broadcast_event("menu_update", {"action": "stock_changed"})
@@ -5510,6 +5580,8 @@ async def verify_payment(data: PaymentVerifyRequest, user=Depends(get_current_us
             {"$set": {"status": "paid", "razorpay_payment_id": data.razorpay_payment_id, "paid_at": datetime.now(timezone.utc).isoformat()}}
         )
         await db.orders.update_one({"id": data.order_id}, {"$set": {"payment_status": "paid", "payment_method": "razorpay_mock"}})
+        # C-4: release a held app order to the kitchen now that payment is confirmed.
+        await _fulfill_paid_order(data.order_id)
         return {"status": "paid", "message": "Payment verified (mock mode)"}
     import razorpay
     key_id = os.environ.get("RAZORPAY_KEY_ID", "")
@@ -5526,6 +5598,8 @@ async def verify_payment(data: PaymentVerifyRequest, user=Depends(get_current_us
             {"$set": {"status": "paid", "razorpay_payment_id": data.razorpay_payment_id, "razorpay_signature": data.razorpay_signature, "paid_at": datetime.now(timezone.utc).isoformat()}}
         )
         await db.orders.update_one({"id": data.order_id}, {"$set": {"payment_status": "paid", "payment_method": "razorpay"}})
+        # C-4: release a held app order to the kitchen now that payment is confirmed.
+        await _fulfill_paid_order(data.order_id)
         return {"status": "paid", "message": "Payment verified successfully"}
     except Exception as e:
         logger.error(f"Payment verification failed: {e}")
@@ -5580,6 +5654,9 @@ async def razorpay_webhook(request: Request):
             {"id": payment["order_id"]},
             {"$set": {"payment_status": "paid", "payment_method": "razorpay"}}
         )
+        # C-4: release a held app order to the kitchen (idempotent — safe alongside
+        # a client /payments/verify for the same order).
+        await _fulfill_paid_order(payment["order_id"])
         logger.info(f"Razorpay webhook: marked order {payment['order_id']} paid via {rp_payment_id}")
     return {"status": "ok"}
 
