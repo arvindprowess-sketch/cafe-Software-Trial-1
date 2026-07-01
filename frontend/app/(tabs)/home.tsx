@@ -258,6 +258,9 @@ export default function HomeScreen() {
 
   // Header fades from transparent (over hero) to solid ink once scrolled in.
   const HERO_HEIGHT = 300;
+  // The tab bar is position:absolute, so the scene runs full height and
+  // bottom-anchored overlays must clear the bar (66) + the safe-area inset.
+  const TAB_BAR_H = 66 + insets.bottom;
   const headerBg = scrollY.interpolate({
     inputRange: [0, HERO_HEIGHT - 120, HERO_HEIGHT - 60],
     outputRange: ['rgba(21,20,15,0)', 'rgba(21,20,15,0)', FUEL.ink],
@@ -1202,7 +1205,7 @@ export default function HomeScreen() {
           {popularProducts.slice(0, 12).map((item, idx) => renderPopularCard(item, idx))}
         </ScrollView>
 
-        <View style={{ height: activeOrder ? 150 : 100 }} />
+        <View style={{ height: TAB_BAR_H + (activeOrder ? 96 : 24) }} />
       </Animated.ScrollView>
 
       {/* ===== FLOATING STICKY HEADER — transparent over hero → ink on scroll ===== */}
@@ -1254,7 +1257,7 @@ export default function HomeScreen() {
       {activeOrder && orderStage && (
         <TouchableOpacity
           testID="active-order-widget"
-          style={styles.orderWidget}
+          style={[styles.orderWidget, { bottom: TAB_BAR_H + 8 }]}
           activeOpacity={0.9}
           onPress={() => router.push({ pathname: '/delivery-tracking', params: { orderId: activeOrder.id } })}
         >
@@ -1380,7 +1383,7 @@ export default function HomeScreen() {
         </View>
       </Modal>
 
-      <CartPill bottom={activeOrder ? 78 : 6} />
+      <CartPill bottom={TAB_BAR_H + (activeOrder ? 78 : 8)} />
     </View>
   );
 }

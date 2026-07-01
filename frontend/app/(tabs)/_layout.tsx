@@ -52,6 +52,12 @@ export default function TabLayout() {
 
 const styles = StyleSheet.create({
   tabBar: {
+    // Absolute so the bar reserves no layout slot: when it slides away on
+    // scroll it reveals the sand scene behind it instead of a dark gap.
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: FUEL.ink,
     borderTopWidth: 0,
     height: 66,
