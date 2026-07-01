@@ -702,6 +702,9 @@ export default function HomeScreen() {
           </View>
         ) : banners.length > 0 ? (
           <>
+            <View style={styles.popularHeaderRow}>
+              <Text style={styles.sectionTitle}>Offers for you</Text>
+            </View>
             <FlatList
               ref={bannerRef}
               testID="offers-carousel"
@@ -717,59 +720,40 @@ export default function HomeScreen() {
               onMomentumScrollEnd={onOffersScroll}
               removeClippedSubviews={true}
               renderItem={({ item, index }) => {
-                const accent = OFFER_ACCENTS[index % OFFER_ACCENTS.length];
                 const isOffer = item.type === 'offer';
                 const isPack = item.type === 'pack';
                 const cardId = item.offer_id || item.pack_id || item.id;
+                const img = item.image_url || HERO_FALLBACK_IMAGES[index % HERO_FALLBACK_IMAGES.length];
                 const eyebrow = isOffer ? 'LIMITED OFFER' : isPack ? 'MEAL PACK' : 'BORAROC';
                 return (
                   <TouchableOpacity
                     activeOpacity={0.9}
                     testID={`offer-card-${cardId}`}
-                    style={styles.offerCard}
+                    style={styles.offerImgCard}
                     onPress={() => handleBannerPress(item)}
                   >
-                    <View style={styles.offerTop}>
-                      <View style={[styles.offerEyebrow, { backgroundColor: accent }]}>
-                        <Text style={styles.offerEyebrowText}>{eyebrow}</Text>
+                    <Image source={{ uri: img }} style={styles.offerImg} resizeMode="cover" />
+                    <LinearGradient
+                      colors={['rgba(21,20,15,0.15)', 'rgba(21,20,15,0)', 'rgba(21,20,15,0.9)']}
+                      locations={[0, 0.4, 1]}
+                      style={StyleSheet.absoluteFill}
+                    />
+                    <View style={styles.offerImgContent}>
+                      <View style={styles.offerImgTag}>
+                        <Text style={styles.offerImgTagText}>{eyebrow}</Text>
                       </View>
-                      {isOffer && (
-                        <Text style={[styles.offerValue, { color: accent }]} numberOfLines={1}>
-                          {offerValueText(item)}
-                        </Text>
-                      )}
-                      <Text style={styles.offerTitle} numberOfLines={1}>{item.title}</Text>
-                      <Text style={styles.offerSubtitle} numberOfLines={1}>{item.subtitle}</Text>
-                    </View>
-
-                    {/* coupon perforation divider with two side notches */}
-                    <View style={styles.offerPerf}>
-                      <View style={[styles.offerNotch, styles.offerNotchLeft]} />
-                      <View style={styles.offerDash} />
-                      <View style={[styles.offerNotch, styles.offerNotchRight]} />
-                    </View>
-
-                    <View style={styles.offerBottom}>
-                      {isOffer ? (
-                        <>
-                          <View style={styles.offerCodeChip}>
-                            <Ionicons name="ticket-outline" size={12} color={FUEL.sand} />
-                            <Text testID={`offer-code-${cardId}`} style={styles.offerCodeText}>TAP TO APPLY</Text>
+                      <View>
+                        {isOffer && <Text style={styles.offerImgValue} numberOfLines={1}>{offerValueText(item)}</Text>}
+                        <Text style={styles.offerImgTitle} numberOfLines={1}>{item.title}</Text>
+                        <View style={styles.offerImgBottom}>
+                          <Text style={styles.offerImgSub} numberOfLines={1}>{item.subtitle || ''}</Text>
+                          <View style={styles.offerImgBtn}>
+                            <Text testID={`offer-redeem-${cardId}`} style={styles.offerImgBtnText}>
+                              {isOffer ? 'REDEEM' : isPack ? 'VIEW' : 'EXPLORE'}
+                            </Text>
                           </View>
-                          <TouchableOpacity
-                            testID={`offer-redeem-${cardId}`}
-                            style={styles.offerRedeem}
-                            activeOpacity={0.85}
-                            onPress={() => handleBannerPress(item)}
-                          >
-                            <Text style={styles.offerRedeemText}>REDEEM</Text>
-                          </TouchableOpacity>
-                        </>
-                      ) : (
-                        <TouchableOpacity style={styles.offerRedeem} activeOpacity={0.85} onPress={() => handleBannerPress(item)}>
-                          <Text style={styles.offerRedeemText}>{isPack ? 'VIEW PACK' : 'EXPLORE'}</Text>
-                        </TouchableOpacity>
-                      )}
+                        </View>
+                      </View>
                     </View>
                   </TouchableOpacity>
                 );
@@ -1434,6 +1418,19 @@ const styles = StyleSheet.create({
 
   // Shared horizontal scroll padding for card rows
   hScroll: { paddingHorizontal: SPACE.l, paddingVertical: SPACE.s, gap: SPACE.m },
+
+  // ===== Offers (full-image cards) =====
+  offerImgCard: { width: OFFER_CARD_W, height: 150, borderRadius: RADIUS.lg, overflow: 'hidden', marginRight: OFFER_GAP, backgroundColor: FUEL.ink },
+  offerImg: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
+  offerImgContent: { flex: 1, padding: SPACE.l, justifyContent: 'space-between' },
+  offerImgTag: { alignSelf: 'flex-start', backgroundColor: FUEL.lime, borderRadius: RADIUS.pill, paddingHorizontal: SPACE.s, paddingVertical: 3 },
+  offerImgTagText: { fontFamily: FONT.bodyExtrabold, fontSize: 9, color: FUEL.ink, letterSpacing: 0.5 },
+  offerImgValue: { fontFamily: FONT.display, fontSize: 24, color: FUEL.white, letterSpacing: 0.5 },
+  offerImgTitle: { fontFamily: FONT.bodyExtrabold, fontSize: 15, color: FUEL.white, marginTop: 2 },
+  offerImgBottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6, gap: SPACE.s },
+  offerImgSub: { flex: 1, fontFamily: FONT.bodyMedium, fontSize: 11, color: 'rgba(255,255,255,0.82)' },
+  offerImgBtn: { backgroundColor: FUEL.lime, borderRadius: RADIUS.pill, paddingHorizontal: SPACE.m, paddingVertical: 6 },
+  offerImgBtnText: { fontFamily: FONT.bodyExtrabold, fontSize: 11, color: FUEL.ink, letterSpacing: 0.5 },
 
   // ===== Meal Packs =====
   packCard: { width: 220, borderRadius: RADIUS.lg, backgroundColor: FUEL.white, overflow: 'hidden', borderWidth: 1, borderColor: FUEL.sandBorder },
