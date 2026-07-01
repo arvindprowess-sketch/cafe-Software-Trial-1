@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Image,
-  RefreshControl, FlatList, Dimensions, ActivityIndicator, Alert, Modal
+  RefreshControl, FlatList, Dimensions, ActivityIndicator, Alert, Modal, Animated
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import * as Location from 'expo-location';
@@ -16,6 +17,27 @@ import { FUEL, FONT, GOALS as FUEL_GOALS, RADIUS, SPACE } from '../../utils/them
 import { DIET_TAGS, DIET_LABEL, toggleDietTag } from '../../utils/diet';
 import PressableScale from '../components/PressableScale';
 import * as Haptics from 'expo-haptics';
+import { setTabBarHidden, resetTabBar } from '../../utils/tabBar';
+
+// Active-order status vocabulary (from server.py). The order-on-the-way widget
+// shows only while the order is in one of these states; anything else
+// (delivered / completed / cancelled) hides it.
+const ACTIVE_ORDER_STATUSES = ['pending', 'accepted', 'preparing', 'ready', 'out_for_delivery'];
+const ORDER_STAGE = {
+  pending: { label: 'Order placed', icon: 'receipt', pct: 0.15 },
+  accepted: { label: 'Order confirmed', icon: 'checkmark-circle', pct: 0.35 },
+  preparing: { label: 'Preparing your meal', icon: 'restaurant', pct: 0.6 },
+  ready: { label: 'Ready for pickup', icon: 'bag-check', pct: 0.85 },
+  out_for_delivery: { label: 'Out for delivery', icon: 'bicycle', pct: 0.9 },
+} as const;
+
+// Hero fallback imagery (brand / healthy-lifestyle) used when a banner has no
+// image_url. Real banners come from /banners so this stays admin-driven.
+const HERO_FALLBACK_IMAGES = [
+  'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=900&h=800&fit=crop',
+  'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=900&h=800&fit=crop',
+  'https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=900&h=800&fit=crop',
+];
 
 // PR-C: success haptic on add-to-cart (safe no-op on web)
 const hapticSuccess = () => {
@@ -77,6 +99,24 @@ export default function HomeScreen() {
 
   // Side drawer state
   const [drawerVisible, setDrawerVisible] = useState(false);
+
+  // Hero carousel + sticky-header scroll state
+  const insets = useSafeAreaInsets();
+  const [heroIdx, setHeroIdx] = useState(0);
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const lastY = useRef(0);
+
+  // Live order-on-the-way widget (customer's own active order)
+  const [activeOrder, setActiveOrder] = useState<any>(null);
+  const loadActiveOrder = useCallback(async () => {
+    try {
+      const orders = await apiCall('/orders'); // customer: own orders, newest first
+      const active = Array.isArray(orders)
+        ? orders.find((o: any) => ACTIVE_ORDER_STATUSES.includes(o.status))
+        : null;
+      setActiveOrder(active || null);
+    } catch { setActiveOrder(null); }
+  }, []);
 
   // Order type toggle
   const [orderType, setOrderType] = useState<'delivery' | 'dine-in'>('dine-in');
@@ -148,14 +188,18 @@ export default function HomeScreen() {
       setMenuCats(Array.isArray(cats) && cats.length ? cats : []);
       loadTarget();
       loadSavedMeals();
+      loadActiveOrder();
       maybeShowOffersPopup(b, u);
     } catch (e) {} finally { setLoading(false); }
-  }, [loadTarget, loadSavedMeals, maybeShowOffersPopup]);
+  }, [loadTarget, loadSavedMeals, loadActiveOrder, maybeShowOffersPopup]);
 
   useEffect(() => { loadData(); }, []);
-  // Refresh the personalized target (and saved meals — e.g. after saving a build)
-  // whenever Home regains focus
-  useFocusEffect(useCallback(() => { loadTarget(); loadSavedMeals(); }, [loadTarget, loadSavedMeals]));
+  // Refresh the personalized target, saved meals and the live order status
+  // whenever Home regains focus; also restore the tab bar (it may have been
+  // hidden by scroll on a previous visit).
+  useFocusEffect(useCallback(() => {
+    loadTarget(); loadSavedMeals(); loadActiveOrder(); resetTabBar();
+  }, [loadTarget, loadSavedMeals, loadActiveOrder]));
   useEffect(() => {
     AsyncStorage.getItem('delivery_address').then(a => { if (a) setDeliveryAddress(a); }).catch(() => {});
   }, []);
@@ -179,6 +223,42 @@ export default function HomeScreen() {
   };
 
   const onRefresh = async () => { setRefreshing(true); await loadData(); setRefreshing(false); };
+
+  // Drive header background + tab-bar hide/show from the scroll position.
+  // (useNativeDriver:false because the header interpolates backgroundColor.)
+  const onScroll = Animated.event(
+    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+    {
+      useNativeDriver: false,
+      listener: (e: any) => {
+        const y = e?.nativeEvent?.contentOffset?.y || 0;
+        if (y <= 6) setTabBarHidden(false);            // at top → always show
+        else if (y > lastY.current + 6) setTabBarHidden(true);   // scroll down → hide
+        else if (y < lastY.current - 6) setTabBarHidden(false);  // scroll up → show
+        lastY.current = y;
+      },
+    }
+  );
+
+  // Header fades from transparent (over hero) to solid ink once scrolled in.
+  const HERO_HEIGHT = 300;
+  const headerBg = scrollY.interpolate({
+    inputRange: [0, HERO_HEIGHT - 120, HERO_HEIGHT - 60],
+    outputRange: ['rgba(21,20,15,0)', 'rgba(21,20,15,0)', FUEL.ink],
+    extrapolate: 'clamp',
+  });
+
+  // Active-order widget derived display data
+  const orderStage = activeOrder ? (ORDER_STAGE as any)[activeOrder.status] : null;
+
+  // Hero slides come from the /banners feed (admin-managed). Fall back to a
+  // single brand slide when there are no banners yet.
+  const heroSlides = banners.length > 0 ? banners : [{ id: '__brand__', __brand: true }];
+  const onHeroScroll = (e: any) => {
+    const x = e?.nativeEvent?.contentOffset?.x || 0;
+    const idx = Math.max(0, Math.min(heroSlides.length - 1, Math.round(x / width)));
+    if (idx !== heroIdx) setHeroIdx(idx);
+  };
 
   const comboBudgetValid = parseFloat(mealBudget) >= COMBO_MIN_BUDGET;
 
@@ -380,45 +460,71 @@ export default function HomeScreen() {
     }
   };
 
-  if (loading) return <SafeAreaView style={styles.safe}><View style={styles.center}><ActivityIndicator size="large" color={FUEL.ink} /></View></SafeAreaView>;
+  if (loading) return <SafeAreaView style={styles.safe} edges={['top']}><View style={styles.center}><ActivityIndicator size="large" color={FUEL.ink} /></View></SafeAreaView>;
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <View style={styles.safe}>
       {/* Side Drawer */}
       <SideDrawer visible={drawerVisible} onClose={() => setDrawerVisible(false)} user={user} />
 
-      <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={FUEL.ink} />} showsVerticalScrollIndicator={false}>
-        {/* ===== HEADER: DELIVERY/DINE-IN TOGGLE · AVATAR (avatar opens drawer) ===== */}
-        <View style={styles.header}>
-          {/* spacer keeps the toggle centered now that the hamburger is gone */}
-          <View style={styles.headerSpacer} />
-
-          {/* Delivery / Dine-in Toggle */}
-          <View style={styles.orderToggle}>
-            <TouchableOpacity
-              testID="order-delivery-toggle"
-              style={[styles.toggleBtn, orderType === 'delivery' && styles.toggleBtnActive]}
-              onPress={() => setOrderType('delivery')}
-            >
-              <Text style={[styles.toggleText, orderType === 'delivery' && styles.toggleTextActive]}>DELIVERY</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              testID="order-dinein-toggle"
-              style={[styles.toggleBtn, orderType === 'dine-in' && styles.toggleBtnActive]}
-              onPress={() => setOrderType('dine-in')}
-            >
-              <Text style={[styles.toggleText, orderType === 'dine-in' && styles.toggleTextActive]}>DINE-IN</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Avatar — lime circle with the user's initial, opens the drawer */}
-          <TouchableOpacity testID="header-avatar" style={styles.avatar} onPress={() => setDrawerVisible(true)} activeOpacity={0.85}>
-            {userInitial ? (
-              <Text style={styles.avatarInitial}>{userInitial}</Text>
-            ) : (
-              <Ionicons name="person" size={18} color={FUEL.ink} />
-            )}
-          </TouchableOpacity>
+      <Animated.ScrollView
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={FUEL.ink} progressViewOffset={insets.top + 44} />}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ===== EDGE-TO-EDGE HERO CAROUSEL — admin-managed /banners feed ===== */}
+        <View style={[styles.heroWrap, { height: HERO_HEIGHT }]}>
+          <FlatList
+            data={heroSlides}
+            keyExtractor={(item: any) => item.id}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onMomentumScrollEnd={onHeroScroll}
+            testID="home-hero-carousel"
+            renderItem={({ item, index }) => {
+              const img = item.image_url || HERO_FALLBACK_IMAGES[index % HERO_FALLBACK_IMAGES.length];
+              const isOffer = item.type === 'offer';
+              const isPack = item.type === 'pack';
+              const eyebrow = item.__brand ? 'EAT FOR YOUR GOAL' : isOffer ? 'LIMITED OFFER' : isPack ? 'MEAL PACK' : 'BORAROC';
+              const firstName = (user?.name || '').trim().split(' ')[0];
+              const title = item.__brand ? `Good to see you${firstName ? ', ' + firstName : ''}` : (item.title || 'Fuel your goal');
+              const subtitle = item.__brand ? 'Fresh, macro-perfect meals built for your body.' : (item.subtitle || '');
+              return (
+                <TouchableOpacity
+                  activeOpacity={item.__brand ? 1 : 0.9}
+                  onPress={() => { if (!item.__brand) handleBannerPress(item); }}
+                  style={[styles.heroSlide, { width, paddingTop: insets.top + 64 }]}
+                >
+                  <Image source={{ uri: img }} style={styles.heroImg} resizeMode="cover" />
+                  <LinearGradient
+                    colors={['rgba(21,20,15,0.4)', 'rgba(21,20,15,0)', 'rgba(21,20,15,0.94)']}
+                    locations={[0, 0.34, 1]}
+                    style={StyleSheet.absoluteFill}
+                  />
+                  <View style={styles.heroContent}>
+                    <Text style={styles.heroEyebrow}>{eyebrow}</Text>
+                    <Text style={styles.heroTitle} numberOfLines={2}>{title}</Text>
+                    {!!subtitle && <Text style={styles.heroSub} numberOfLines={2}>{subtitle}</Text>}
+                    {isOffer && (
+                      <View style={styles.heroCta}>
+                        <Ionicons name="ticket-outline" size={13} color={FUEL.ink} />
+                        <Text style={styles.heroCtaText}>{offerValueText(item)} · REDEEM</Text>
+                      </View>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              );
+            }}
+          />
+          {heroSlides.length > 1 && (
+            <View style={styles.heroDots}>
+              {heroSlides.map((_: any, i: number) => (
+                <View key={i} style={[styles.heroDot, i === heroIdx && styles.heroDotActive]} />
+              ))}
+            </View>
+          )}
         </View>
 
         {/* Location Bar */}
@@ -482,18 +588,25 @@ export default function HomeScreen() {
             })}
           </ScrollView>
 
-          {/* Phase 2/3: personalized daily target + plan entry */}
+          {/* Phase 2/3: personalized daily target — compact row with streak inline */}
           {dailyTarget?.has_body_stats ? (
-            <TouchableOpacity testID="home-daily-target" style={styles.targetBanner} activeOpacity={0.9} onPress={() => router.push('/meal-plan')}>
-              <View style={styles.targetBannerLeft}>
-                <Text style={styles.targetBannerLabel}>YOUR DAILY TARGET</Text>
-                <Text style={styles.targetBannerValue}>
+            <TouchableOpacity testID="home-daily-target" style={styles.targetCompact} activeOpacity={0.9} onPress={() => router.push('/meal-plan')}>
+              <View style={styles.targetCompactIcon}>
+                <Ionicons name="flame" size={15} color={FUEL.ink} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.targetCompactLabel}>DAILY TARGET</Text>
+                <Text style={styles.targetCompactValue} numberOfLines={1}>
                   {dailyTarget.daily_calories} kcal · <Text style={{ color: FUEL.protein }}>{dailyTarget.daily_protein}g protein</Text>
                 </Text>
               </View>
-              <View style={styles.targetBannerCta}>
-                <Ionicons name="restaurant" size={14} color={FUEL.ink} />
-                <Text style={styles.targetBannerCtaText}>PLAN MEALS</Text>
+              {coachNudge?.streak_days > 0 ? (
+                <View style={styles.targetStreakChip}>
+                  <Text style={styles.targetStreakText}>🔥 {coachNudge.streak_days}</Text>
+                </View>
+              ) : null}
+              <View style={styles.targetPlanBtn}>
+                <Text style={styles.targetPlanText}>PLAN</Text>
               </View>
             </TouchableOpacity>
           ) : (
@@ -516,6 +629,63 @@ export default function HomeScreen() {
             </TouchableOpacity>
           ) : null}
         </View>
+
+        {/* ===== AI COMBO BUILDER — moved directly below goals/target ===== */}
+        {!showMealBuilder && !aiMeal && (
+          <View testID="open-meal-builder" style={styles.comboCard}>
+            <View style={styles.comboTitleRow}>
+              <View style={styles.heroCtaIconBg}>
+                <Ionicons name="sparkles" size={18} color={FUEL.ink} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.comboTitle}>AI Combo Builder</Text>
+                <Text style={styles.comboSub}>Budget + Goal = Perfect meal in seconds</Text>
+              </View>
+            </View>
+
+            <View style={styles.comboGoalRow}>
+              {COMBO_GOALS.map(g => {
+                const active = mealGoal === g.key;
+                return (
+                  <TouchableOpacity
+                    key={g.key}
+                    testID={`combo-goal-${g.key}`}
+                    style={[styles.comboGoalChip, active && styles.comboGoalChipActive]}
+                    onPress={() => setMealGoal(g.key)}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={[styles.comboGoalText, active && styles.comboGoalTextActive]}>{g.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <View style={styles.comboBuildRow}>
+              <TextInput
+                testID="combo-budget-input"
+                style={styles.comboBudgetInput}
+                value={mealBudget}
+                onChangeText={setMealBudget}
+                placeholder={`₹ Budget (min ${COMBO_MIN_BUDGET})`}
+                placeholderTextColor="rgba(244,241,233,0.5)"
+                keyboardType="number-pad"
+              />
+              <PressableScale
+                haptic
+                testID="combo-build-btn"
+                style={[styles.comboBuildBtn, (!comboBudgetValid || !mealGoal || aiLoading) && styles.comboBuildBtnDisabled]}
+                disabled={!comboBudgetValid || !mealGoal || aiLoading}
+                onPress={buildMeal}
+              >
+                {aiLoading ? (
+                  <ActivityIndicator color={FUEL.ink} size="small" />
+                ) : (
+                  <Text style={styles.comboBuildText}>BUILD</Text>
+                )}
+              </PressableScale>
+            </View>
+          </View>
+        )}
 
         {/* ===== OFFERS FOR YOU — v5 ticket carousel (data + routing kept) ===== */}
         {loading ? (
@@ -704,63 +874,6 @@ export default function HomeScreen() {
             </View>
             <Ionicons name="scan" size={24} color={FUEL.success} />
           </TouchableOpacity>
-        )}
-
-        {/* ===== AI COMBO BUILDER — inline ink card (no navigate-away) ===== */}
-        {!showMealBuilder && !aiMeal && (
-          <View testID="open-meal-builder" style={styles.comboCard}>
-            <View style={styles.comboTitleRow}>
-              <View style={styles.heroCtaIconBg}>
-                <Ionicons name="sparkles" size={18} color={FUEL.ink} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.comboTitle}>AI Combo Builder</Text>
-                <Text style={styles.comboSub}>Budget + Goal = Perfect meal in seconds</Text>
-              </View>
-            </View>
-
-            <View style={styles.comboGoalRow}>
-              {COMBO_GOALS.map(g => {
-                const active = mealGoal === g.key;
-                return (
-                  <TouchableOpacity
-                    key={g.key}
-                    testID={`combo-goal-${g.key}`}
-                    style={[styles.comboGoalChip, active && styles.comboGoalChipActive]}
-                    onPress={() => setMealGoal(g.key)}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={[styles.comboGoalText, active && styles.comboGoalTextActive]}>{g.label}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            <View style={styles.comboBuildRow}>
-              <TextInput
-                testID="combo-budget-input"
-                style={styles.comboBudgetInput}
-                value={mealBudget}
-                onChangeText={setMealBudget}
-                placeholder={`₹ Budget (min ${COMBO_MIN_BUDGET})`}
-                placeholderTextColor="rgba(244,241,233,0.5)"
-                keyboardType="number-pad"
-              />
-              <PressableScale
-                haptic
-                testID="combo-build-btn"
-                style={[styles.comboBuildBtn, (!comboBudgetValid || !mealGoal || aiLoading) && styles.comboBuildBtnDisabled]}
-                disabled={!comboBudgetValid || !mealGoal || aiLoading}
-                onPress={buildMeal}
-              >
-                {aiLoading ? (
-                  <ActivityIndicator color={FUEL.ink} size="small" />
-                ) : (
-                  <Text style={styles.comboBuildText}>BUILD</Text>
-                )}
-              </PressableScale>
-            </View>
-          </View>
         )}
 
         {/* ===== SCHEDULE FOR LATER ===== */}
@@ -1017,12 +1130,72 @@ export default function HomeScreen() {
           {popularProducts.slice(0, 12).map((item, idx) => renderPopularCard(item, idx))}
         </ScrollView>
 
-        <View style={{ height: 100 }} />
-      </ScrollView>
+        <View style={{ height: activeOrder ? 150 : 100 }} />
+      </Animated.ScrollView>
+
+      {/* ===== FLOATING STICKY HEADER — transparent over hero → ink on scroll ===== */}
+      <Animated.View style={[styles.floatHeader, { paddingTop: insets.top + 6, backgroundColor: headerBg }]}>
+        {/* Delivery / Dine-in Toggle */}
+        <View style={styles.orderToggle}>
+          <TouchableOpacity
+            testID="order-delivery-toggle"
+            style={[styles.toggleBtn, orderType === 'delivery' && styles.toggleBtnActive]}
+            onPress={() => setOrderType('delivery')}
+          >
+            <Text style={[styles.toggleText, orderType === 'delivery' && styles.toggleTextActive]}>DELIVERY</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            testID="order-dinein-toggle"
+            style={[styles.toggleBtn, orderType === 'dine-in' && styles.toggleBtnActive]}
+            onPress={() => setOrderType('dine-in')}
+          >
+            <Text style={[styles.toggleText, orderType === 'dine-in' && styles.toggleTextActive]}>DINE-IN</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.headerActions}>
+          {/* Avatar — opens the drawer */}
+          <TouchableOpacity testID="header-avatar" style={styles.avatar} onPress={() => setDrawerVisible(true)} activeOpacity={0.85}>
+            {userInitial ? (
+              <Text style={styles.avatarInitial}>{userInitial}</Text>
+            ) : (
+              <Ionicons name="person" size={18} color={FUEL.ink} />
+            )}
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
+
+      {/* ===== ORDER ON THE WAY — only while an order is active, above the nav ===== */}
+      {activeOrder && orderStage && (
+        <TouchableOpacity
+          testID="active-order-widget"
+          style={styles.orderWidget}
+          activeOpacity={0.9}
+          onPress={() => router.push({ pathname: '/delivery-tracking', params: { orderId: activeOrder.id } })}
+        >
+          <View style={styles.orderWidgetIcon}>
+            <Ionicons name={orderStage.icon as any} size={20} color={FUEL.lime} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <View style={styles.orderWidgetTop}>
+              <View style={styles.orderLiveDot} />
+              <Text style={styles.orderWidgetTitle} numberOfLines={1}>{orderStage.label}</Text>
+            </View>
+            <Text style={styles.orderWidgetSub} numberOfLines={1}>
+              #{String(activeOrder.order_number || activeOrder.id || '').toString().slice(-6).toUpperCase()}
+              {activeOrder.eta_minutes ? ` · ~${activeOrder.eta_minutes} min` : ''}
+            </Text>
+          </View>
+          <View style={styles.orderWidgetTrack}>
+            <Text style={styles.orderWidgetTrackText}>TRACK</Text>
+            <Ionicons name="chevron-forward" size={13} color={FUEL.lime} />
+          </View>
+        </TouchableOpacity>
+      )}
 
       {/* Floating AI Chat Button — ink with lime accent */}
       <TouchableOpacity
-        style={[styles.floatingAiBtn, cartCtx.count > 0 && { bottom: 76 }]}
+        style={[styles.floatingAiBtn, { bottom: (activeOrder ? 84 : 16) + (cartCtx.count > 0 ? 60 : 0) }]}
         onPress={() => router.push('/ai-chat')}
         activeOpacity={0.9}
         testID="floating-ai-chat-btn"
@@ -1137,14 +1310,53 @@ export default function HomeScreen() {
         </View>
       </Modal>
 
-      <CartPill bottom={6} />
-    </SafeAreaView>
+      <CartPill bottom={activeOrder ? 78 : 6} />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: FUEL.sand },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+
+  // ===== Edge-to-edge hero carousel =====
+  heroWrap: { width: '100%', backgroundColor: FUEL.ink },
+  heroSlide: { height: '100%', justifyContent: 'flex-end' },
+  heroImg: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
+  heroContent: { paddingHorizontal: SPACE.xl, paddingBottom: SPACE.xxl + SPACE.s },
+  heroEyebrow: { fontFamily: FONT.bodyExtrabold, fontSize: 11, letterSpacing: 1.4, color: FUEL.lime, marginBottom: SPACE.s },
+  heroTitle: { fontFamily: FONT.display, fontSize: 30, lineHeight: 32, color: FUEL.white, letterSpacing: 0.3 },
+  heroSub: { fontFamily: FONT.bodyMedium, fontSize: 13.5, color: 'rgba(255,255,255,0.82)', marginTop: SPACE.s, lineHeight: 19 },
+  heroCta: { flexDirection: 'row', alignItems: 'center', gap: SPACE.xs, alignSelf: 'flex-start', backgroundColor: FUEL.lime, borderRadius: RADIUS.pill, paddingHorizontal: SPACE.l, paddingVertical: SPACE.s, marginTop: SPACE.m },
+  heroCtaText: { fontFamily: FONT.bodyExtrabold, fontSize: 12, color: FUEL.ink, letterSpacing: 0.5 },
+  heroDots: { position: 'absolute', bottom: SPACE.m, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 5 },
+  heroDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.5)' },
+  heroDotActive: { width: 20, backgroundColor: FUEL.lime },
+
+  // ===== Floating sticky header (over hero → ink) =====
+  floatHeader: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 30, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACE.l, paddingBottom: SPACE.s },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s },
+  headerIconBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(20,19,14,0.35)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
+
+  // ===== Compact daily target =====
+  targetCompact: { flexDirection: 'row', alignItems: 'center', gap: SPACE.m, backgroundColor: FUEL.ink, borderRadius: RADIUS.md, paddingVertical: SPACE.m, paddingHorizontal: SPACE.m, marginTop: SPACE.m },
+  targetCompactIcon: { width: 32, height: 32, borderRadius: RADIUS.sm, backgroundColor: FUEL.lime, alignItems: 'center', justifyContent: 'center' },
+  targetCompactLabel: { fontFamily: FONT.bodyExtrabold, fontSize: 9.5, letterSpacing: 1, color: 'rgba(244,241,233,0.6)' },
+  targetCompactValue: { fontFamily: FONT.bodyExtrabold, fontSize: 14, color: FUEL.lime, marginTop: 2 },
+  targetStreakChip: { backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: RADIUS.pill, paddingHorizontal: SPACE.s, paddingVertical: 4 },
+  targetStreakText: { fontFamily: FONT.bodyExtrabold, fontSize: 12, color: FUEL.white },
+  targetPlanBtn: { backgroundColor: FUEL.lime, borderRadius: RADIUS.pill, paddingHorizontal: SPACE.m, paddingVertical: SPACE.s },
+  targetPlanText: { fontFamily: FONT.bodyExtrabold, fontSize: 11, color: FUEL.ink, letterSpacing: 0.5 },
+
+  // ===== Order-on-the-way widget =====
+  orderWidget: { position: 'absolute', left: SPACE.l, right: SPACE.l, bottom: 8, zIndex: 25, flexDirection: 'row', alignItems: 'center', gap: SPACE.m, backgroundColor: FUEL.inkSoft, borderRadius: RADIUS.md, paddingVertical: SPACE.m, paddingHorizontal: SPACE.m, shadowColor: FUEL.ink, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 10 },
+  orderWidgetIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(199,242,78,0.15)', alignItems: 'center', justifyContent: 'center' },
+  orderWidgetTop: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s },
+  orderLiveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: FUEL.lime },
+  orderWidgetTitle: { fontFamily: FONT.bodyExtrabold, fontSize: 13.5, color: FUEL.white },
+  orderWidgetSub: { fontFamily: FONT.bodyMedium, fontSize: 11.5, color: 'rgba(244,241,233,0.6)', marginTop: 2 },
+  orderWidgetTrack: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  orderWidgetTrackText: { fontFamily: FONT.bodyExtrabold, fontSize: 11, color: FUEL.lime, letterSpacing: 0.5 },
 
   // Goal-first ordering
   goalSelector: { paddingHorizontal: SPACE.l, marginTop: SPACE.l },

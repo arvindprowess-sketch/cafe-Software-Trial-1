@@ -2,13 +2,15 @@ import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, View, Text } from 'react-native';
 import { FUEL, FONT, SPACE } from '../../utils/theme';
+import { tabBarTranslateY } from '../../utils/tabBar';
 
 export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: styles.tabBar,
+        // Animated transform lets Home slide the nav away on scroll-down.
+        tabBarStyle: [styles.tabBar, { transform: [{ translateY: tabBarTranslateY }] }],
         tabBarActiveTintColor: FUEL.lime,
         tabBarInactiveTintColor: 'rgba(244,241,233,0.55)',
         tabBarLabelStyle: styles.tabLabel,
