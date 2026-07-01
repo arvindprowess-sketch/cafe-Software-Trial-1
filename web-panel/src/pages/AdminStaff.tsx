@@ -44,6 +44,7 @@ export default function AdminStaff() {
   // One-time credentials returned by the backend after a successful create.
   const [createdCreds, setCreatedCreds] = useState<any>(null);
   const [copied, setCopied] = useState(false);
+  const [error, setError] = useState('');
 
   const load = async () => { try { setStaff(await api('/staff')); } catch {} };
   const loadStores = async () => { try { setStores(await api('/stores')); } catch {} };
@@ -57,32 +58,45 @@ export default function AdminStaff() {
 
   const resetForm = () => {
     setName(''); setRole('kitchen'); setLoginCode(''); setPassword('');
-    setStoreId(''); setClusterIds([]); setSubmitting(false);
+    setStoreId(''); setClusterIds([]); setSubmitting(false); setError('');
   };
   const closeModal = () => { setShowModal(false); setCreatedCreds(null); setCopied(false); resetForm(); };
 
   const codeValid = LOGIN_CODE_RE.test(loginCode);
   const roleNeedsStore = role !== 'area_manager';
-  const assignmentOk = roleNeedsStore ? !!storeId : clusterIds.length > 0;
-  const canSubmit = !!name.trim() && codeValid && password.length >= 8 && assignmentOk && !submitting;
 
   const toggleCluster = (id: string) => {
     setClusterIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   };
 
+  // Returns the first validation problem as a user-facing message, or '' if OK.
+  // Backend requires name, login_code, password (>=8) and a store/cluster.
+  const validationError = (): string => {
+    if (!name.trim()) return 'Enter the staff member’s name.';
+    if (!codeValid) return 'Enter a valid login code (3-32 chars, starting with a letter or digit).';
+    if (password.length < 8) return 'Password must be at least 8 characters.';
+    if (roleNeedsStore && !storeId) return stores.length ? 'Select a store for this role.' : 'No stores available yet — create a store first.';
+    if (!roleNeedsStore && clusterIds.length === 0) return stores.length ? 'Select at least one store for the cluster.' : 'No stores available yet — create a store first.';
+    return '';
+  };
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!canSubmit) return;
+    setError('');
+    // Validate on click and surface exactly what's missing (previously the
+    // button was silently disabled, so nothing happened and no message showed).
+    const problem = validationError();
+    if (problem) { setError(problem); return; }
     setSubmitting(true);
     const body: any = { name: name.trim(), role, login_code: loginCode, password };
     if (role === 'area_manager') body.cluster_store_ids = clusterIds;
     else body.store_id = storeId;
     try {
       const res = await api('/staff', { method: 'POST', body });
-      setCreatedCreds(res); // one-time credentials panel
-      load();
+      setCreatedCreds(res); // one-time credentials panel = success confirmation
+      load();               // refresh the list so the new user appears immediately
     } catch (err: any) {
-      alert(err.message);
+      setError(err?.message || 'Could not create staff. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -166,6 +180,12 @@ export default function AdminStaff() {
               <form onSubmit={handleCreate}>
                 <h2>Add Staff</h2>
 
+                {error && (
+                  <div data-testid="staff-form-error" style={{background:'#F7E6E0',color:'#C0392B',border:'1px solid #E2603F',borderRadius:6,padding:'8px 12px',fontSize:13,marginBottom:12}}>
+                    {error}
+                  </div>
+                )}
+
                 <div className="form-group">
                   <label>Name</label>
                   <input value={name} onChange={e => setName(e.target.value)} placeholder="Staff name" data-testid="staff-name-input" required />
@@ -233,7 +253,7 @@ export default function AdminStaff() {
 
                 <div className="modal-actions">
                   <button type="button" className="btn btn-secondary" onClick={closeModal}>Cancel</button>
-                  <button type="submit" className="btn btn-primary" data-testid="save-staff-btn" disabled={!canSubmit}>{submitting ? 'Creating…' : 'Create Staff'}</button>
+                  <button type="submit" className="btn btn-primary" data-testid="save-staff-btn" disabled={submitting}>{submitting ? 'Creating…' : 'Create Staff'}</button>
                 </div>
               </form>
             )}
