@@ -120,6 +120,15 @@ export default function HomeScreen() {
     } catch { setActiveOrder(null); }
   }, []);
 
+  // Unread notifications count for the header bell badge
+  const [notifUnread, setNotifUnread] = useState(0);
+  const loadNotifCount = useCallback(async () => {
+    try {
+      const list = await apiCall('/notifications');
+      setNotifUnread(Array.isArray(list) ? list.filter((n: any) => !n.read).length : 0);
+    } catch { setNotifUnread(0); }
+  }, []);
+
   // Order type toggle
   const [orderType, setOrderType] = useState<'delivery' | 'dine-in'>('dine-in');
 
@@ -195,17 +204,18 @@ export default function HomeScreen() {
       loadTarget();
       loadSavedMeals();
       loadActiveOrder();
+      loadNotifCount();
       maybeShowOffersPopup(b, u);
     } catch (e) {} finally { setLoading(false); }
-  }, [loadTarget, loadSavedMeals, loadActiveOrder, maybeShowOffersPopup]);
+  }, [loadTarget, loadSavedMeals, loadActiveOrder, loadNotifCount, maybeShowOffersPopup]);
 
   useEffect(() => { loadData(); }, []);
   // Refresh the personalized target, saved meals and the live order status
   // whenever Home regains focus; also restore the tab bar (it may have been
   // hidden by scroll on a previous visit).
   useFocusEffect(useCallback(() => {
-    loadTarget(); loadSavedMeals(); loadActiveOrder(); resetTabBar();
-  }, [loadTarget, loadSavedMeals, loadActiveOrder]));
+    loadTarget(); loadSavedMeals(); loadActiveOrder(); loadNotifCount(); resetTabBar();
+  }, [loadTarget, loadSavedMeals, loadActiveOrder, loadNotifCount]));
   useEffect(() => {
     AsyncStorage.getItem('delivery_address').then(a => { if (a) setDeliveryAddress(a); }).catch(() => {});
   }, []);
@@ -1220,6 +1230,15 @@ export default function HomeScreen() {
           <TouchableOpacity testID="header-ai-chat" style={styles.headerIconBtn} onPress={() => router.push('/ai-chat')} activeOpacity={0.85}>
             <Ionicons name="sparkles" size={17} color={FUEL.lime} />
           </TouchableOpacity>
+          {/* Notifications — bell with unread badge */}
+          <TouchableOpacity testID="header-notifications" style={styles.headerIconBtn} onPress={() => router.push('/notifications')} activeOpacity={0.85}>
+            <Ionicons name="notifications" size={17} color={FUEL.sand} />
+            {notifUnread > 0 && (
+              <View style={styles.notifBadge}>
+                <Text style={styles.notifBadgeText}>{notifUnread > 9 ? '9+' : notifUnread}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
           {/* Avatar — opens the drawer */}
           <TouchableOpacity testID="header-avatar" style={styles.avatar} onPress={() => setDrawerVisible(true)} activeOpacity={0.85}>
             {userInitial ? (
@@ -1388,6 +1407,8 @@ const styles = StyleSheet.create({
   floatHeader: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 30, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACE.l, paddingBottom: SPACE.s },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s },
   headerIconBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(20,19,14,0.35)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
+  notifBadge: { position: 'absolute', top: -2, right: -2, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: FUEL.protein, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
+  notifBadgeText: { fontFamily: FONT.bodyExtrabold, fontSize: 9, color: FUEL.white },
 
   // ===== Compact daily target =====
   targetCompact: { flexDirection: 'row', alignItems: 'center', gap: SPACE.m, backgroundColor: FUEL.ink, borderRadius: RADIUS.md, paddingVertical: SPACE.m, paddingHorizontal: SPACE.m, marginTop: SPACE.m },
