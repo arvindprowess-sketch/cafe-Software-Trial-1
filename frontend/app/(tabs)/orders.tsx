@@ -550,7 +550,7 @@ const styles = StyleSheet.create({
   ratedBadgeText: { fontFamily: FONT.bodyExtrabold, fontSize: 10, color: FUEL.ink },
   favoriteBtn: { padding: SPACE.xs, marginLeft: SPACE.s },
 
-  listContent: { padding: SPACE.l, paddingBottom: 100 },
+  listContent: { padding: SPACE.l, paddingBottom: 120 }, // clears the absolute tab bar
 
   orderItems: { marginBottom: SPACE.m },
   itemRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s, marginBottom: SPACE.s },

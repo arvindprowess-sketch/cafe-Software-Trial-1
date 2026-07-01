@@ -89,6 +89,8 @@ export default function HomeScreen() {
   const [products, setProducts] = useState<any[]>([]);
   const [menuCats, setMenuCats] = useState<any[]>([]);  // F2: DB taxonomy (fallback: MENU_CATEGORIES)
   const [banners, setBanners] = useState<any[]>([]);
+  const [packs, setPacks] = useState<any[]>([]);        // meal packs (/packs)
+  const [goalFit, setGoalFit] = useState<any[]>([]);    // "Best for your goal" (/products/goal-fit)
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const bannerRef = useRef<FlatList>(null);
@@ -116,6 +118,15 @@ export default function HomeScreen() {
         : null;
       setActiveOrder(active || null);
     } catch { setActiveOrder(null); }
+  }, []);
+
+  // Unread notifications count for the header bell badge
+  const [notifUnread, setNotifUnread] = useState(0);
+  const loadNotifCount = useCallback(async () => {
+    try {
+      const list = await apiCall('/notifications');
+      setNotifUnread(Array.isArray(list) ? list.filter((n: any) => !n.read).length : 0);
+    } catch { setNotifUnread(0); }
   }, []);
 
   // Order type toggle
@@ -177,29 +188,34 @@ export default function HomeScreen() {
 
   const loadData = useCallback(async () => {
     try {
-      const [u, s, best, b, cats] = await Promise.all([
+      const [u, s, best, b, cats, pk, gf] = await Promise.all([
         getStoredUser(),
         apiCall('/user/nutrition-summary').catch(() => null),
         apiCall('/products/best-sellers').catch(() => apiCall('/products')).catch(() => []),
         apiCall('/banners'),
         apiCall('/categories').catch(() => []),
+        apiCall('/packs').catch(() => []),
+        apiCall('/products/goal-fit').catch(() => null),
       ]);
+      setPacks(Array.isArray(pk) ? pk : []);
+      setGoalFit(gf?.products ? gf.products.filter((p: any) => p.goal_fit).slice(0, 8) : []);
       setUser(u); setSummary(s); setProducts(best); setBanners(b);
       setMenuCats(Array.isArray(cats) && cats.length ? cats : []);
       loadTarget();
       loadSavedMeals();
       loadActiveOrder();
+      loadNotifCount();
       maybeShowOffersPopup(b, u);
     } catch (e) {} finally { setLoading(false); }
-  }, [loadTarget, loadSavedMeals, loadActiveOrder, maybeShowOffersPopup]);
+  }, [loadTarget, loadSavedMeals, loadActiveOrder, loadNotifCount, maybeShowOffersPopup]);
 
   useEffect(() => { loadData(); }, []);
   // Refresh the personalized target, saved meals and the live order status
   // whenever Home regains focus; also restore the tab bar (it may have been
   // hidden by scroll on a previous visit).
   useFocusEffect(useCallback(() => {
-    loadTarget(); loadSavedMeals(); loadActiveOrder(); resetTabBar();
-  }, [loadTarget, loadSavedMeals, loadActiveOrder]));
+    loadTarget(); loadSavedMeals(); loadActiveOrder(); loadNotifCount(); resetTabBar();
+  }, [loadTarget, loadSavedMeals, loadActiveOrder, loadNotifCount]));
   useEffect(() => {
     AsyncStorage.getItem('delivery_address').then(a => { if (a) setDeliveryAddress(a); }).catch(() => {});
   }, []);
@@ -242,6 +258,9 @@ export default function HomeScreen() {
 
   // Header fades from transparent (over hero) to solid ink once scrolled in.
   const HERO_HEIGHT = 300;
+  // The tab bar is position:absolute, so the scene runs full height and
+  // bottom-anchored overlays must clear the bar (66) + the safe-area inset.
+  const TAB_BAR_H = 66 + insets.bottom;
   const headerBg = scrollY.interpolate({
     inputRange: [0, HERO_HEIGHT - 120, HERO_HEIGHT - 60],
     outputRange: ['rgba(21,20,15,0)', 'rgba(21,20,15,0)', FUEL.ink],
@@ -483,6 +502,7 @@ export default function HomeScreen() {
             showsHorizontalScrollIndicator={false}
             onMomentumScrollEnd={onHeroScroll}
             testID="home-hero-carousel"
+            style={{ height: HERO_HEIGHT }}
             renderItem={({ item, index }) => {
               const img = item.image_url || HERO_FALLBACK_IMAGES[index % HERO_FALLBACK_IMAGES.length];
               const isOffer = item.type === 'offer';
@@ -495,7 +515,7 @@ export default function HomeScreen() {
                 <TouchableOpacity
                   activeOpacity={item.__brand ? 1 : 0.9}
                   onPress={() => { if (!item.__brand) handleBannerPress(item); }}
-                  style={[styles.heroSlide, { width, paddingTop: insets.top + 64 }]}
+                  style={[styles.heroSlide, { width, height: HERO_HEIGHT, paddingTop: insets.top + 64 }]}
                 >
                   <Image source={{ uri: img }} style={styles.heroImg} resizeMode="cover" />
                   <LinearGradient
@@ -695,6 +715,9 @@ export default function HomeScreen() {
           </View>
         ) : banners.length > 0 ? (
           <>
+            <View style={styles.popularHeaderRow}>
+              <Text style={styles.sectionTitle}>Offers for you</Text>
+            </View>
             <FlatList
               ref={bannerRef}
               testID="offers-carousel"
@@ -710,59 +733,40 @@ export default function HomeScreen() {
               onMomentumScrollEnd={onOffersScroll}
               removeClippedSubviews={true}
               renderItem={({ item, index }) => {
-                const accent = OFFER_ACCENTS[index % OFFER_ACCENTS.length];
                 const isOffer = item.type === 'offer';
                 const isPack = item.type === 'pack';
                 const cardId = item.offer_id || item.pack_id || item.id;
+                const img = item.image_url || HERO_FALLBACK_IMAGES[index % HERO_FALLBACK_IMAGES.length];
                 const eyebrow = isOffer ? 'LIMITED OFFER' : isPack ? 'MEAL PACK' : 'BORAROC';
                 return (
                   <TouchableOpacity
                     activeOpacity={0.9}
                     testID={`offer-card-${cardId}`}
-                    style={styles.offerCard}
+                    style={styles.offerImgCard}
                     onPress={() => handleBannerPress(item)}
                   >
-                    <View style={styles.offerTop}>
-                      <View style={[styles.offerEyebrow, { backgroundColor: accent }]}>
-                        <Text style={styles.offerEyebrowText}>{eyebrow}</Text>
+                    <Image source={{ uri: img }} style={styles.offerImg} resizeMode="cover" />
+                    <LinearGradient
+                      colors={['rgba(21,20,15,0.15)', 'rgba(21,20,15,0)', 'rgba(21,20,15,0.9)']}
+                      locations={[0, 0.4, 1]}
+                      style={StyleSheet.absoluteFill}
+                    />
+                    <View style={styles.offerImgContent}>
+                      <View style={styles.offerImgTag}>
+                        <Text style={styles.offerImgTagText}>{eyebrow}</Text>
                       </View>
-                      {isOffer && (
-                        <Text style={[styles.offerValue, { color: accent }]} numberOfLines={1}>
-                          {offerValueText(item)}
-                        </Text>
-                      )}
-                      <Text style={styles.offerTitle} numberOfLines={1}>{item.title}</Text>
-                      <Text style={styles.offerSubtitle} numberOfLines={1}>{item.subtitle}</Text>
-                    </View>
-
-                    {/* coupon perforation divider with two side notches */}
-                    <View style={styles.offerPerf}>
-                      <View style={[styles.offerNotch, styles.offerNotchLeft]} />
-                      <View style={styles.offerDash} />
-                      <View style={[styles.offerNotch, styles.offerNotchRight]} />
-                    </View>
-
-                    <View style={styles.offerBottom}>
-                      {isOffer ? (
-                        <>
-                          <View style={styles.offerCodeChip}>
-                            <Ionicons name="ticket-outline" size={12} color={FUEL.sand} />
-                            <Text testID={`offer-code-${cardId}`} style={styles.offerCodeText}>TAP TO APPLY</Text>
+                      <View>
+                        {isOffer && <Text style={styles.offerImgValue} numberOfLines={1}>{offerValueText(item)}</Text>}
+                        <Text style={styles.offerImgTitle} numberOfLines={1}>{item.title}</Text>
+                        <View style={styles.offerImgBottom}>
+                          <Text style={styles.offerImgSub} numberOfLines={1}>{item.subtitle || ''}</Text>
+                          <View style={styles.offerImgBtn}>
+                            <Text testID={`offer-redeem-${cardId}`} style={styles.offerImgBtnText}>
+                              {isOffer ? 'REDEEM' : isPack ? 'VIEW' : 'EXPLORE'}
+                            </Text>
                           </View>
-                          <TouchableOpacity
-                            testID={`offer-redeem-${cardId}`}
-                            style={styles.offerRedeem}
-                            activeOpacity={0.85}
-                            onPress={() => handleBannerPress(item)}
-                          >
-                            <Text style={styles.offerRedeemText}>REDEEM</Text>
-                          </TouchableOpacity>
-                        </>
-                      ) : (
-                        <TouchableOpacity style={styles.offerRedeem} activeOpacity={0.85} onPress={() => handleBannerPress(item)}>
-                          <Text style={styles.offerRedeemText}>{isPack ? 'VIEW PACK' : 'EXPLORE'}</Text>
-                        </TouchableOpacity>
-                      )}
+                        </View>
+                      </View>
                     </View>
                   </TouchableOpacity>
                 );
@@ -776,9 +780,11 @@ export default function HomeScreen() {
           </>
         ) : null}
 
-        {/* ===== CATEGORY CHIPS (DB taxonomy + synthetic AI Picks) ===== */}
-        <Text style={styles.sectionTitle}>Our Menu</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryChipRow}>
+        {/* ===== CATEGORIES — photo circles (DB taxonomy + synthetic AI Picks) ===== */}
+        <View style={styles.popularHeaderRow}>
+          <Text style={styles.sectionTitle}>Our Menu</Text>
+        </View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.catRow}>
           {[
             { key: 'ai', label: 'AI Picks', icon: 'sparkles', synthetic: true },
             ...(menuCats.length ? menuCats : MENU_CATEGORIES),
@@ -788,28 +794,104 @@ export default function HomeScreen() {
               <TouchableOpacity
                 key={cat.key || cat.id}
                 testID={`cat-chip-${cat.key}`}
-                style={styles.categoryChip}
+                style={styles.catItem}
                 onPress={() => handleCategoryPress(cat)}
                 activeOpacity={0.85}
               >
                 {cat.synthetic ? (
-                  <View style={[styles.categoryChipThumb, styles.categoryChipThumbAi]}>
-                    <Ionicons name="sparkles" size={18} color={FUEL.lime} />
+                  <View style={[styles.catCircle, styles.catCircleAi]}>
+                    <Ionicons name="sparkles" size={24} color={FUEL.lime} />
                   </View>
                 ) : img ? (
-                  <Image source={{ uri: img }} style={styles.categoryChipThumb} />
+                  <Image source={{ uri: img }} style={styles.catCircle} />
                 ) : (
-                  <View style={[styles.categoryChipThumb, styles.categoryChipThumbAi, { backgroundColor: cat.color || FUEL.ink }]}>
-                    <Ionicons name={(cat.icon as any) || 'grid'} size={18} color={FUEL.white} />
+                  <View style={[styles.catCircle, styles.catCircleAi, { backgroundColor: cat.color || FUEL.ink }]}>
+                    <Ionicons name={(cat.icon as any) || 'grid'} size={22} color={FUEL.white} />
                   </View>
                 )}
-                <Text style={styles.categoryChipLabel} numberOfLines={1}>
-                  {cat.synthetic ? '✨ AI Picks' : (cat.label || cat.name)}
+                <Text style={styles.catLabel} numberOfLines={1}>
+                  {cat.synthetic ? 'AI Picks' : (cat.label || cat.name)}
                 </Text>
               </TouchableOpacity>
             );
           })}
         </ScrollView>
+
+        {/* ===== MEAL PACKS — curated combos (/packs) ===== */}
+        {packs.length > 0 && (
+          <>
+            <View style={styles.popularHeaderRow}>
+              <Text style={styles.sectionTitle}>Meal Packs</Text>
+              <Text style={styles.popularHint}>Curated combos</Text>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll} testID="packs-row">
+              {packs.map((p: any) => (
+                <TouchableOpacity
+                  key={p.id}
+                  testID={`pack-${p.id}`}
+                  style={styles.packCard}
+                  activeOpacity={0.9}
+                  onPress={() => router.push({ pathname: '/pack-detail', params: { packId: p.id } })}
+                >
+                  {p.image_url ? (
+                    <Image source={{ uri: p.image_url }} style={styles.packImg} resizeMode="cover" />
+                  ) : (
+                    <View style={[styles.packImg, styles.packImgPlaceholder, { backgroundColor: p.banner_color || FUEL.ink }]}>
+                      <Ionicons name="cube" size={26} color={FUEL.lime} />
+                    </View>
+                  )}
+                  <View style={styles.packBody}>
+                    <Text style={styles.packName} numberOfLines={1}>{p.name}</Text>
+                    <Text style={styles.packMeta} numberOfLines={1}>
+                      {p.total_calories} kcal · <Text style={{ color: FUEL.protein }}>{p.total_protein}g P</Text>
+                    </Text>
+                    <View style={styles.packBottom}>
+                      <Text style={styles.packPrice}>₹{Math.round(p.pack_price || 0)}</Text>
+                      <View style={styles.packViewBtn}><Text style={styles.packViewText}>VIEW</Text></View>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </>
+        )}
+
+        {/* ===== BEST FOR YOUR GOAL — personalized picks (/products/goal-fit) ===== */}
+        {goalFit.length > 0 && (
+          <>
+            <View style={styles.popularHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Ionicons name="ribbon" size={15} color={FUEL.limeDeep} />
+                <Text style={styles.sectionTitle}>Best for your goal</Text>
+              </View>
+              <Text style={styles.popularHint}>Picked for you</Text>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.popularGridScroll} testID="goal-fit-row">
+              {goalFit.map((item: any, idx: number) => renderPopularCard(item, idx))}
+            </ScrollView>
+          </>
+        )}
+
+        {/* ===== AI COACH — chat + portion adjust ===== */}
+        <View style={styles.popularHeaderRow}>
+          <Text style={styles.sectionTitle}>AI Coach</Text>
+        </View>
+        <View style={styles.aiCoachRow}>
+          <TouchableOpacity style={styles.aiCoachCard} onPress={() => router.push('/ai-chat')} testID="ai-coach-chat" activeOpacity={0.9}>
+            <View style={styles.aiCoachIcon}><Ionicons name="chatbubbles" size={18} color={FUEL.limeDeep} /></View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.aiCoachTitle}>AI Chat</Text>
+              <Text style={styles.aiCoachSub}>Ask your coach</Text>
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.aiCoachCard} onPress={() => setShowMealBuilder(true)} testID="ai-coach-adjust" activeOpacity={0.9}>
+            <View style={styles.aiCoachIcon}><Ionicons name="options" size={18} color={FUEL.limeDeep} /></View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.aiCoachTitle}>Adjust Portions</Text>
+              <Text style={styles.aiCoachSub}>Fine-tune macros</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
 
         {/* ===== TODAY'S NUTRITION CARD (CLICKABLE) ===== */}
         <TouchableOpacity
@@ -860,35 +942,28 @@ export default function HomeScreen() {
           )}
         </TouchableOpacity>
 
-        {/* ===== SCAN TABLE QR (For dine-in) ===== */}
-        {orderType === 'dine-in' && (
-          <TouchableOpacity style={styles.scanTableCTA} onPress={() => router.push('/scan-table')} activeOpacity={0.9}>
-            <View style={styles.scanCtaLeft}>
-              <View style={styles.scanCtaIconBg}>
-                <Ionicons name="qr-code" size={20} color={FUEL.white} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.scanCtaTitle}>Scan Table QR</Text>
-                <Text style={styles.scanCtaSub}>Order from your seat</Text>
-              </View>
-            </View>
-            <Ionicons name="scan" size={24} color={FUEL.success} />
+        {/* ===== QUICK ACTIONS — Reorder · Schedule · Scan ===== */}
+        <View style={styles.quickRow}>
+          <TouchableOpacity testID="quick-reorder" style={styles.quickCard} activeOpacity={0.9} onPress={() => router.push('/(tabs)/orders')}>
+            <View style={styles.quickIcon}><Ionicons name="repeat" size={19} color={FUEL.limeDeep} /></View>
+            <Text style={styles.quickLabel}>Reorder</Text>
           </TouchableOpacity>
-        )}
-
-        {/* ===== SCHEDULE FOR LATER ===== */}
-        <TouchableOpacity testID="schedule-for-later" style={styles.scheduleCTA} onPress={() => router.push('/(tabs)/menu')} activeOpacity={0.9}>
-          <View style={styles.ctaLeft}>
-            <View style={[styles.ctaIconBg, { backgroundColor: FUEL.success }]}>
-              <Ionicons name="time" size={20} color={FUEL.white} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.ctaTitle}>Schedule for Later</Text>
-              <Text style={styles.ctaSub}>Pre-order your meals in advance</Text>
-            </View>
-          </View>
-          <Ionicons name="calendar" size={28} color={FUEL.success} />
-        </TouchableOpacity>
+          <TouchableOpacity testID="schedule-for-later" style={styles.quickCard} activeOpacity={0.9} onPress={() => router.push('/(tabs)/menu')}>
+            <View style={styles.quickIcon}><Ionicons name="time" size={19} color={FUEL.success} /></View>
+            <Text style={styles.quickLabel}>Schedule</Text>
+          </TouchableOpacity>
+          {orderType === 'dine-in' ? (
+            <TouchableOpacity testID="quick-scan" style={[styles.quickCard, styles.quickCardInk]} activeOpacity={0.9} onPress={() => router.push('/scan-table')}>
+              <View style={[styles.quickIcon, styles.quickIconInk]}><Ionicons name="qr-code" size={19} color={FUEL.lime} /></View>
+              <Text style={[styles.quickLabel, { color: FUEL.white }]}>Scan Table</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity testID="quick-address" style={styles.quickCard} activeOpacity={0.9} onPress={() => setShowAddressModal(true)}>
+              <View style={styles.quickIcon}><Ionicons name="location" size={19} color={FUEL.limeDeep} /></View>
+              <Text style={styles.quickLabel}>Address</Text>
+            </TouchableOpacity>
+          )}
+        </View>
 
         {showMealBuilder && !aiMeal && (
           <View style={styles.builderCard}>
@@ -1130,7 +1205,7 @@ export default function HomeScreen() {
           {popularProducts.slice(0, 12).map((item, idx) => renderPopularCard(item, idx))}
         </ScrollView>
 
-        <View style={{ height: activeOrder ? 150 : 100 }} />
+        <View style={{ height: TAB_BAR_H + (activeOrder ? 96 : 24) }} />
       </Animated.ScrollView>
 
       {/* ===== FLOATING STICKY HEADER — transparent over hero → ink on scroll ===== */}
@@ -1154,6 +1229,19 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.headerActions}>
+          {/* AI chat — moved here from the old bottom floating button */}
+          <TouchableOpacity testID="header-ai-chat" style={styles.headerIconBtn} onPress={() => router.push('/ai-chat')} activeOpacity={0.85}>
+            <Ionicons name="sparkles" size={17} color={FUEL.lime} />
+          </TouchableOpacity>
+          {/* Notifications — bell with unread badge */}
+          <TouchableOpacity testID="header-notifications" style={styles.headerIconBtn} onPress={() => router.push('/notifications')} activeOpacity={0.85}>
+            <Ionicons name="notifications" size={17} color={FUEL.sand} />
+            {notifUnread > 0 && (
+              <View style={styles.notifBadge}>
+                <Text style={styles.notifBadgeText}>{notifUnread > 9 ? '9+' : notifUnread}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
           {/* Avatar — opens the drawer */}
           <TouchableOpacity testID="header-avatar" style={styles.avatar} onPress={() => setDrawerVisible(true)} activeOpacity={0.85}>
             {userInitial ? (
@@ -1169,7 +1257,7 @@ export default function HomeScreen() {
       {activeOrder && orderStage && (
         <TouchableOpacity
           testID="active-order-widget"
-          style={styles.orderWidget}
+          style={[styles.orderWidget, { bottom: TAB_BAR_H + 8 }]}
           activeOpacity={0.9}
           onPress={() => router.push({ pathname: '/delivery-tracking', params: { orderId: activeOrder.id } })}
         >
@@ -1192,21 +1280,6 @@ export default function HomeScreen() {
           </View>
         </TouchableOpacity>
       )}
-
-      {/* Floating AI Chat Button — ink with lime accent */}
-      <TouchableOpacity
-        style={[styles.floatingAiBtn, { bottom: (activeOrder ? 84 : 16) + (cartCtx.count > 0 ? 60 : 0) }]}
-        onPress={() => router.push('/ai-chat')}
-        activeOpacity={0.9}
-        testID="floating-ai-chat-btn"
-      >
-        <View style={styles.floatingAiInner}>
-          <Ionicons name="chatbubbles" size={22} color={FUEL.lime} />
-        </View>
-        <View style={styles.floatingAiBadge}>
-          <Ionicons name="sparkles" size={10} color={FUEL.ink} />
-        </View>
-      </TouchableOpacity>
 
       {/* ===== FIX 1: Delivery Address Modal ===== */}
       <Modal visible={showAddressModal} transparent animationType="slide" onRequestClose={() => setShowAddressModal(false)}>
@@ -1310,7 +1383,7 @@ export default function HomeScreen() {
         </View>
       </Modal>
 
-      <CartPill bottom={activeOrder ? 78 : 6} />
+      <CartPill bottom={TAB_BAR_H + (activeOrder ? 78 : 8)} />
     </View>
   );
 }
@@ -1337,6 +1410,8 @@ const styles = StyleSheet.create({
   floatHeader: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 30, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACE.l, paddingBottom: SPACE.s },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s },
   headerIconBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(20,19,14,0.35)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
+  notifBadge: { position: 'absolute', top: -2, right: -2, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: FUEL.protein, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
+  notifBadgeText: { fontFamily: FONT.bodyExtrabold, fontSize: 9, color: FUEL.white },
 
   // ===== Compact daily target =====
   targetCompact: { flexDirection: 'row', alignItems: 'center', gap: SPACE.m, backgroundColor: FUEL.ink, borderRadius: RADIUS.md, paddingVertical: SPACE.m, paddingHorizontal: SPACE.m, marginTop: SPACE.m },
@@ -1357,6 +1432,56 @@ const styles = StyleSheet.create({
   orderWidgetSub: { fontFamily: FONT.bodyMedium, fontSize: 11.5, color: 'rgba(244,241,233,0.6)', marginTop: 2 },
   orderWidgetTrack: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   orderWidgetTrackText: { fontFamily: FONT.bodyExtrabold, fontSize: 11, color: FUEL.lime, letterSpacing: 0.5 },
+
+  // ===== Categories (photo circles) =====
+  catRow: { flexDirection: 'row', gap: SPACE.l, paddingHorizontal: SPACE.l, paddingTop: SPACE.xs, paddingBottom: SPACE.s },
+  catItem: { width: 68, alignItems: 'center' },
+  catCircle: { width: 66, height: 66, borderRadius: 22, marginBottom: 6, backgroundColor: FUEL.white },
+  catCircleAi: { alignItems: 'center', justifyContent: 'center', backgroundColor: FUEL.ink },
+  catLabel: { fontFamily: FONT.bodySemibold, fontSize: 11, color: FUEL.ink, textAlign: 'center' },
+
+  // Shared horizontal scroll padding for card rows
+  hScroll: { paddingHorizontal: SPACE.l, paddingVertical: SPACE.s, gap: SPACE.m },
+
+  // ===== Offers (full-image cards) =====
+  offerImgCard: { width: OFFER_CARD_W, height: 150, borderRadius: RADIUS.lg, overflow: 'hidden', marginRight: OFFER_GAP, backgroundColor: FUEL.ink },
+  offerImg: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
+  offerImgContent: { flex: 1, padding: SPACE.l, justifyContent: 'space-between' },
+  offerImgTag: { alignSelf: 'flex-start', backgroundColor: FUEL.lime, borderRadius: RADIUS.pill, paddingHorizontal: SPACE.s, paddingVertical: 3 },
+  offerImgTagText: { fontFamily: FONT.bodyExtrabold, fontSize: 9, color: FUEL.ink, letterSpacing: 0.5 },
+  offerImgValue: { fontFamily: FONT.display, fontSize: 24, color: FUEL.white, letterSpacing: 0.5 },
+  offerImgTitle: { fontFamily: FONT.bodyExtrabold, fontSize: 15, color: FUEL.white, marginTop: 2 },
+  offerImgBottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6, gap: SPACE.s },
+  offerImgSub: { flex: 1, fontFamily: FONT.bodyMedium, fontSize: 11, color: 'rgba(255,255,255,0.82)' },
+  offerImgBtn: { backgroundColor: FUEL.lime, borderRadius: RADIUS.pill, paddingHorizontal: SPACE.m, paddingVertical: 6 },
+  offerImgBtnText: { fontFamily: FONT.bodyExtrabold, fontSize: 11, color: FUEL.ink, letterSpacing: 0.5 },
+
+  // ===== Meal Packs =====
+  packCard: { width: 220, borderRadius: RADIUS.lg, backgroundColor: FUEL.white, overflow: 'hidden', borderWidth: 1, borderColor: FUEL.sandBorder },
+  packImg: { width: '100%', height: 96 },
+  packImgPlaceholder: { alignItems: 'center', justifyContent: 'center' },
+  packBody: { padding: SPACE.m },
+  packName: { fontFamily: FONT.bodyExtrabold, fontSize: 14, color: FUEL.ink },
+  packMeta: { fontFamily: FONT.bodyMedium, fontSize: 11.5, color: FUEL.muted, marginTop: 2, marginBottom: SPACE.s } as any,
+  packBottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  packPrice: { fontFamily: FONT.display, fontSize: 16, color: FUEL.ink },
+  packViewBtn: { backgroundColor: FUEL.lime, borderRadius: RADIUS.pill, paddingHorizontal: SPACE.m, paddingVertical: 6 },
+  packViewText: { fontFamily: FONT.bodyExtrabold, fontSize: 11, color: FUEL.ink, letterSpacing: 0.5 },
+
+  // ===== AI Coach row =====
+  aiCoachRow: { flexDirection: 'row', gap: SPACE.m, paddingHorizontal: SPACE.l },
+  aiCoachCard: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: SPACE.s, backgroundColor: FUEL.white, borderRadius: RADIUS.md, padding: SPACE.m, borderWidth: 1, borderColor: FUEL.sandBorder },
+  aiCoachIcon: { width: 36, height: 36, borderRadius: RADIUS.sm, backgroundColor: FUEL.limeTint, alignItems: 'center', justifyContent: 'center' },
+  aiCoachTitle: { fontFamily: FONT.bodyExtrabold, fontSize: 12.5, color: FUEL.ink },
+  aiCoachSub: { fontFamily: FONT.body, fontSize: 10.5, color: FUEL.muted, marginTop: 1 },
+
+  // ===== Quick actions grid =====
+  quickRow: { flexDirection: 'row', gap: SPACE.m, paddingHorizontal: SPACE.l, marginTop: SPACE.l },
+  quickCard: { flex: 1, alignItems: 'center', gap: SPACE.s, backgroundColor: FUEL.white, borderRadius: RADIUS.md, paddingVertical: SPACE.l, borderWidth: 1, borderColor: FUEL.sandBorder },
+  quickCardInk: { backgroundColor: FUEL.ink, borderColor: FUEL.ink },
+  quickIcon: { width: 40, height: 40, borderRadius: RADIUS.sm, backgroundColor: FUEL.limeTint, alignItems: 'center', justifyContent: 'center' },
+  quickIconInk: { backgroundColor: 'rgba(199,242,78,0.15)' },
+  quickLabel: { fontFamily: FONT.bodyExtrabold, fontSize: 11.5, color: FUEL.ink },
 
   // Goal-first ordering
   goalSelector: { paddingHorizontal: SPACE.l, marginTop: SPACE.l },

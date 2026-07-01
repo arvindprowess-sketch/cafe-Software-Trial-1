@@ -162,7 +162,7 @@ const styles = StyleSheet.create({
   aiHelpText: { fontSize: 11, fontFamily: FONT.bodyBold, color: '#FFF', textTransform: 'uppercase' },
 
   scroll: { flex: 1 },
-  scrollContent: { paddingBottom: SPACE.xxl },
+  scrollContent: { paddingBottom: 120 }, // clears the absolute tab bar
 
   // Budget Section
   budgetSection: { backgroundColor: '#FFF', paddingHorizontal: SPACE.l, paddingVertical: SPACE.l, borderBottomWidth: 1, borderBottomColor: FUEL.sandBorder },

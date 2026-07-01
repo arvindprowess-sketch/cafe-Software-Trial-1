@@ -211,7 +211,7 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: FUEL.sand },
-  content: { padding: SPACE.l },
+  content: { padding: SPACE.l, paddingBottom: 120 }, // clears the absolute tab bar
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s, marginBottom: SPACE.l, marginTop: SPACE.s },
   titleLogo: { width: 28, height: 28 },
   title: { fontSize: 24, fontFamily: FONT.bodyExtrabold, color: FUEL.ink },
