@@ -429,6 +429,36 @@ th.sortable .sort-caret { opacity: 0.6; font-size: 11px; margin-left: 4px; }
 .pos-count-chip { background: var(--lime); color: var(--ink); font-family: var(--font-brand); font-size: 11px; min-width: 18px; height: 18px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; padding: 0 5px; }
 .pos-out-tag { font-family: var(--font-brand); font-size: 10px; background: var(--ink); color: var(--sand); padding: 2px 6px; border-radius: 4px; letter-spacing: 0.04em; }
 
+/* --- Payment sheet (A3) — slides in over the bill panel --- */
+.pos-pay-overlay { position: fixed; inset: 0; background: rgba(21,20,15,0.5); backdrop-filter: blur(4px); z-index: 210; display: flex; justify-content: flex-end; }
+.pos-pay-sheet { width: 420px; max-width: 100vw; height: 100%; background: var(--sand); display: flex; flex-direction: column; box-shadow: -18px 0 50px rgba(21,20,15,0.35); animation: pos-sheet-in 0.22s cubic-bezier(0.22,0.61,0.36,1); }
+@keyframes pos-sheet-in { from { transform: translateX(100%); } to { transform: translateX(0); } }
+.pos-pay-head { background: var(--ink); color: var(--sand); padding: 20px 22px 18px; }
+.pos-pay-head-row { display: flex; justify-content: space-between; align-items: center; }
+.pos-pay-kicker { font-family: var(--font-body); font-size: 12px; font-weight: 600; color: rgba(244,241,233,0.6); text-transform: uppercase; letter-spacing: 0.05em; }
+.pos-pay-close { background: rgba(244,241,233,0.1); border: none; color: var(--sand); width: 34px; height: 34px; border-radius: 50%; font-size: 20px; line-height: 1; }
+.pos-pay-close:hover { background: rgba(244,241,233,0.2); }
+.pos-pay-total { font-family: var(--font-brand); font-size: 34px; font-weight: 400; color: var(--sand); letter-spacing: 0.01em; font-variant-numeric: tabular-nums; margin-top: 4px; }
+.pos-pay-body { flex: 1; overflow-y: auto; padding: 20px 22px; }
+.pos-pay-label { font-family: var(--font-brand); font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink); margin-bottom: 10px; }
+
+/* Segmented payment mode control */
+.pos-seg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); padding: 5px; }
+.pos-seg-btn { display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 12px 4px; border-radius: 9px; border: none; background: transparent; color: var(--muted); font-family: var(--font-brand); font-size: 12px; text-transform: uppercase; letter-spacing: 0.02em; min-height: 56px; transition: background-color 0.12s, color 0.12s; }
+.pos-seg-btn.active { background: var(--ink); color: var(--lime); }
+
+/* Cash tender + change */
+.pos-tender-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 14px 0 10px; }
+.pos-tender-btn { padding: 12px 4px; border-radius: var(--radius); border: 1.5px solid var(--border); background: var(--white); font-family: var(--font-brand); font-size: 14px; color: var(--ink); min-height: 46px; transition: border-color 0.12s, background-color 0.12s; }
+.pos-tender-btn:hover { border-color: var(--ink); }
+.pos-tender-btn.exact { color: var(--lime-deep); border-color: var(--lime-deep); }
+.pos-tender-input { width: 100%; padding: 13px 14px; border-radius: var(--radius); border: 1.5px solid var(--border); font-size: 18px; font-weight: 700; color: var(--ink); outline: none; background: var(--white); font-variant-numeric: tabular-nums; }
+.pos-tender-input:focus { border-color: var(--ink); }
+.pos-change-row { display: flex; justify-content: space-between; align-items: center; background: var(--ink); border-radius: var(--radius); padding: 14px 16px; margin-top: 12px; }
+.pos-change-row .lbl { font-family: var(--font-brand); font-size: 14px; text-transform: uppercase; letter-spacing: 0.03em; color: rgba(244,241,233,0.7); }
+.pos-change-row .amt { font-family: var(--font-brand); font-size: 26px; color: var(--lime); font-variant-numeric: tabular-nums; }
+.pos-pay-foot { padding: 16px 22px 20px; border-top: 1px solid var(--border); background: var(--white); }
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: var(--sand); }

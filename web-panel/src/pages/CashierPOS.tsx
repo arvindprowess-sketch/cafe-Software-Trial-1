@@ -48,6 +48,7 @@ export default function CashierPOS() {
   // Payment
   const [showPayment, setShowPayment] = useState(false);
   const [paymentMode, setPaymentMode] = useState('cash');
+  const [tendered, setTendered] = useState('');   // FIX 4.3 — cash received
   const [showReceipt, setShowReceipt] = useState<any>(null);
 
   // View & offers
@@ -584,7 +585,7 @@ export default function CashierPOS() {
           <div className="pos-bill-total-row"><span>Base Amount</span><span>₹{getBaseAmount()}</span></div>
           <div className="pos-bill-total-row"><span>GST (5% incl.)</span><span>₹{getGST()}</span></div>
           <div className="pos-bill-total-row grand"><span>Total</span><span>{quoteLoading ? '…' : `₹${getFinalTotal()}`}</span></div>
-          <button className="pos-charge-btn" onClick={() => setShowPayment(true)} disabled={!cart.length} data-testid="proceed-payment-btn">Charge ₹{getFinalTotal()}</button>
+          <button className="pos-charge-btn" onClick={() => { setTendered(''); setShowPayment(true); }} disabled={!cart.length} data-testid="proceed-payment-btn">Charge ₹{getFinalTotal()}</button>
         </div>
       </div>
 
@@ -670,47 +671,59 @@ export default function CashierPOS() {
         </div>
       )}
 
-      {/* Payment Modal */}
-      {showPayment && (
-        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowPayment(false)}>
-          <div className="modal" style={{ maxWidth: 440 }}>
-            <h2>Collect Payment</h2>
-            <div style={{ background: '#F8F8F8', borderRadius: 10, padding: 14, marginBottom: 16 }}>
-              <div style={{ fontSize: 13, marginBottom: 8 }}>
-                {cart.map((c, i) => (
-                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
-                    <span>{c.name} {c.product_type === 'ready_made' ? `x${c.plateQty || 1}` : `(${c.grams}g)`}</span><span>₹{Math.round(c.price)}</span>
+      {/* Payment Sheet (A3) */}
+      {showPayment && (() => {
+        const total = getFinalTotal();
+        const tenderedNum = parseFloat(tendered) || 0;
+        const change = Math.max(0, Math.round((tenderedNum - total) * 100) / 100);
+        return (
+          <div className="pos-pay-overlay" onClick={e => e.target === e.currentTarget && !placing && setShowPayment(false)}>
+            <div className="pos-pay-sheet" data-testid="payment-sheet">
+              <div className="pos-pay-head">
+                <div className="pos-pay-head-row">
+                  <span className="pos-pay-kicker">Amount due</span>
+                  <button className="pos-pay-close" onClick={() => setShowPayment(false)} data-testid="close-payment-btn" aria-label="Close">×</button>
+                </div>
+                <div className="pos-pay-total" data-testid="pay-total">₹{total}</div>
+              </div>
+              <div className="pos-pay-body">
+                <div className="pos-pay-label">Payment method</div>
+                <div className="pos-seg">
+                  {PAYMENT_MODES.map(pm => (
+                    <button key={pm.key} data-testid={`pay-${pm.key}`} className={`pos-seg-btn ${paymentMode === pm.key ? 'active' : ''}`} onClick={() => setPaymentMode(pm.key)}>
+                      {pm.icon}{pm.label}
+                    </button>
+                  ))}
+                </div>
+
+                {paymentMode === 'cash' && (
+                  <div data-testid="cash-tender">
+                    <div className="pos-pay-label" style={{ marginTop: 22 }}>Cash received</div>
+                    <div className="pos-tender-grid">
+                      {[100, 200, 500].map(v => (
+                        <button key={v} type="button" className="pos-tender-btn" onClick={() => setTendered(String(v))} data-testid={`tender-${v}`}>₹{v}</button>
+                      ))}
+                      <button type="button" className="pos-tender-btn exact" onClick={() => setTendered(String(total))} data-testid="tender-exact">EXACT</button>
+                    </div>
+                    <input className="pos-tender-input" type="number" inputMode="numeric" value={tendered} onChange={e => setTendered(e.target.value)} placeholder="Enter amount" data-testid="tender-input" />
+                    {tenderedNum > 0 && (
+                      <div className="pos-change-row" data-testid="change-row">
+                        <span className="lbl">Change</span>
+                        <span className="amt" data-testid="change-amount">₹{change}</span>
+                      </div>
+                    )}
                   </div>
-                ))}
+                )}
               </div>
-              <div style={{ borderTop: '1px dashed #ccc', paddingTop: 8, marginTop: 8 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><span>Item Total</span><span>₹{Math.round(bill.itemTotal)}</span></div>
-                {bill.packaging > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><span>Packaging</span><span>₹{Math.round(bill.packaging)}</span></div>}
-                {couponInfo && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#3FA34D' }}><span>Discount</span><span>-₹{Math.round(bill.discount)}</span></div>}
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#9C9C9C', marginTop: 4 }}><span>Base (excl. GST)</span><span>₹{getBaseAmount()}</span></div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#9C9C9C' }}><span>CGST (2.5%)</span><span>₹{Math.round(getGST() / 2 * 100) / 100}</span></div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#9C9C9C' }}><span>SGST (2.5%)</span><span>₹{Math.round(getGST() / 2 * 100) / 100}</span></div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 18, fontWeight: 800, marginTop: 8, borderTop: '1px solid #333', paddingTop: 8 }}><span>TOTAL</span><span>₹{getFinalTotal()}</span></div>
+              <div className="pos-pay-foot">
+                <button className="pos-charge-btn" style={{ marginTop: 0 }} onClick={confirmPayment} disabled={placing} data-testid="confirm-payment-btn">
+                  {placing ? 'Processing…' : `Charge ₹${total} · ${paymentMode.toUpperCase()}`}
+                </button>
               </div>
-            </div>
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ fontWeight: 700, fontSize: 14, marginBottom: 8, display: 'block' }}>Payment Method</label>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-                {PAYMENT_MODES.map(pm => (
-                  <button key={pm.key} data-testid={`pay-${pm.key}`} onClick={() => setPaymentMode(pm.key)}
-                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '14px 8px', borderRadius: 12, cursor: 'pointer',
-                      border: paymentMode === pm.key ? '2px solid #15140F' : '2px solid #EFEFEF', background: paymentMode === pm.key ? '#15140F10' : '#fff',
-                      color: paymentMode === pm.key ? '#15140F' : '#333', fontWeight: paymentMode === pm.key ? 700 : 500, fontSize: 13 }}>{pm.icon}{pm.label}</button>
-                ))}
-              </div>
-            </div>
-            <div className="modal-actions">
-              <button className="btn btn-secondary" onClick={() => setShowPayment(false)}>Back to Cart</button>
-              <button className="btn btn-green" onClick={confirmPayment} disabled={placing} data-testid="confirm-payment-btn" style={{ flex: 2 }}>{placing ? 'Processing...' : `Confirm ${paymentMode.toUpperCase()} — ₹${getFinalTotal()}`}</button>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* AI Modal */}
       {showAI && (
