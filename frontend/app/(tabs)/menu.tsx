@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity, Image, RefreshControl,
-  Alert, ActivityIndicator, ScrollView, TextInput, Dimensions
+  Alert, ActivityIndicator, ScrollView, TextInput, Dimensions, Modal
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,6 +12,7 @@ import { getStoredUser } from '../../utils/api';
 import { useRealtime } from '../../utils/realtime';
 import { FUEL, FONT, RADIUS, SPACE } from '../../utils/theme';
 import { useCart } from '../../utils/CartContext';
+import { useStore } from '../../utils/StoreContext';
 import { DIET_TAGS, DIET_LABEL, matchesDiet, matchesAnyDiet, toggleDietTag } from '../../utils/diet';
 import { goalFitForProduct, sortByGoalFit } from '../../utils/goalFit';
 import CartPill from '../components/CartPill';
@@ -41,6 +42,19 @@ const BUDGET_PILLS = [
   { key: 'all', label: 'ALL', cap: null as number | null },
 ];
 
+// Store-resolved menus carry `selling_price` (base price + this store's HQ
+// override). Map it onto the price fields the whole app already reads
+// (fixed_price / cost_per_100g) so the override shows in the row price, the
+// ₹/g-protein value, and the cart estimate. No-op for the global (no-store)
+// menu, which omits selling_price. Authoritative totals still come from the
+// server quote / order — this only fixes what the customer SEES while browsing.
+const applyStorePricing = (p: any) => {
+  if (p == null || p.selling_price == null) return p;
+  return p.product_type === 'ready_made'
+    ? { ...p, fixed_price: p.selling_price }
+    : { ...p, cost_per_100g: p.selling_price };
+};
+
 // Displayed price of a default serving — same formula the product rows use
 const getDisplayPrice = (p: any) => {
   const isReadyMade = p.product_type === 'ready_made';
@@ -69,6 +83,10 @@ export default function MenuScreen() {
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>(DEFAULT_CATS);
   const { addItem, incItem, decItem, getItem, count: cartCount, subtotal: cartSubtotal } = useCart();
+  const { stores, selectedStoreId, selectedStore, selectStore } = useStore();
+  const [storePickerOpen, setStorePickerOpen] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const searchRef = useRef<TextInput>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [orderType, setOrderType] = useState('dine-in');
@@ -99,8 +117,10 @@ export default function MenuScreen() {
 
   const loadProducts = useCallback(async () => {
     try {
+      // Store-scoped catalog: send store_id so HQ per-store price/availability
+      // overrides show while browsing (not just at final bill). No store → global menu.
       const [data, u, cats, target, summary, valueCard] = await Promise.all([
-        apiCall('/products'),
+        apiCall(`/products${selectedStoreId ? `?store_id=${selectedStoreId}` : ''}`),
         getStoredUser(),
         apiCall('/categories').catch(() => []),
         apiCall('/user/daily-target').catch(() => null),
@@ -109,7 +129,7 @@ export default function MenuScreen() {
       ]);
       setUser(u);
       setValueCardSetting(valueCard);
-      setProducts(data.filter((p: any) => {
+      setProducts(data.map(applyStorePricing).filter((p: any) => {
         if (p.product_type === 'ready_made') return p.is_active !== false;
         return p.available_qty_grams > 0;
       }));
@@ -119,11 +139,13 @@ export default function MenuScreen() {
       if (cats && cats.length > 0) {
         setCategories(cats);
       }
+      setLoadError(false);
     }
-    catch (e) {} finally { setLoading(false); }
-  }, []);
+    catch (e) { setLoadError(true); } finally { setLoading(false); }
+  }, [selectedStoreId]);
 
-  useEffect(() => { loadProducts(); }, []);
+  // Re-fetch on mount and whenever the selected store changes (store-scoped menu).
+  useEffect(() => { loadProducts(); }, [loadProducts]);
   // Live menu/stock sync: re-fetch when admin edits menu or stock changes (C3)
   useRealtime((msg) => {
     if (msg.type === 'menu_update') loadProducts();
@@ -505,7 +527,7 @@ export default function MenuScreen() {
           <Ionicons name="menu" size={24} color={FUEL.sand} />
         </TouchableOpacity>
         <Text style={styles.title}>Our Menu</Text>
-        <TouchableOpacity style={styles.searchBtn} onPress={() => {}}>
+        <TouchableOpacity style={styles.searchBtn} onPress={() => searchRef.current?.focus()}>
           <Ionicons name="search" size={22} color={FUEL.lime} />
         </TouchableOpacity>
       </View>
@@ -515,6 +537,7 @@ export default function MenuScreen() {
         <View style={styles.searchBar}>
           <Ionicons name="search" size={18} color={FUEL.muted} />
           <TextInput
+            ref={searchRef}
             style={styles.searchInput}
             value={search}
             onChangeText={setSearch}
@@ -528,6 +551,20 @@ export default function MenuScreen() {
           ) : null}
         </View>
       </View>
+
+      {/* Store pill — which store's menu you're viewing (tap to switch) */}
+      {selectedStore && (
+        <TouchableOpacity
+          testID="menu-store-pill"
+          style={styles.storePill}
+          onPress={() => { if (stores.length > 1) setStorePickerOpen(true); }}
+          activeOpacity={stores.length > 1 ? 0.85 : 1}
+        >
+          <Ionicons name="storefront" size={14} color={FUEL.ink} />
+          <Text style={styles.storePillText} numberOfLines={1}>{selectedStore.name}</Text>
+          {stores.length > 1 && <Ionicons name="chevron-down" size={14} color={FUEL.muted} />}
+        </TouchableOpacity>
+      )}
 
       {/* Product list with hero / wall / best-value header */}
       <FlatList
@@ -546,6 +583,16 @@ export default function MenuScreen() {
         initialNumToRender={8}
         keyboardShouldPersistTaps="handled"
         ListEmptyComponent={
+          loadError ? (
+            <View style={styles.emptyState} testID="menu-error">
+              <Ionicons name="cloud-offline-outline" size={44} color={FUEL.sandBorder} />
+              <Text style={styles.emptyText}>Couldn't load the menu.</Text>
+              <TouchableOpacity testID="menu-retry" style={styles.retryBtn} onPress={() => { setLoading(true); loadProducts(); }} activeOpacity={0.85}>
+                <Ionicons name="refresh" size={16} color={FUEL.lime} />
+                <Text style={styles.retryText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
           <View style={styles.emptyState}>
             <Ionicons name="restaurant-outline" size={44} color={FUEL.sandBorder} />
             <Text style={styles.emptyText}>
@@ -570,8 +617,31 @@ export default function MenuScreen() {
               </>
             )}
           </View>
+          )
         }
       />
+
+      {/* Store picker — same store choices as cart, reused via useStore() */}
+      <Modal visible={storePickerOpen} transparent animationType="fade" onRequestClose={() => setStorePickerOpen(false)}>
+        <TouchableOpacity style={styles.storeModalOverlay} activeOpacity={1} onPress={() => setStorePickerOpen(false)}>
+          <View style={styles.storeModalCard} testID="menu-store-modal">
+            <Text style={styles.storeModalTitle}>Choose store</Text>
+            {stores.map(s => (
+              <TouchableOpacity
+                key={s.store_id}
+                testID={`menu-store-option-${s.store_id}`}
+                style={[styles.storeModalRow, selectedStoreId === s.store_id && styles.storeModalRowActive]}
+                onPress={() => { selectStore(s.store_id); setStorePickerOpen(false); }}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="storefront" size={18} color={selectedStoreId === s.store_id ? FUEL.ink : FUEL.muted} />
+                <Text style={[styles.storeModalRowText, selectedStoreId === s.store_id && styles.storeModalRowTextActive]}>{s.name}</Text>
+                {selectedStoreId === s.store_id && <Ionicons name="checkmark-circle" size={18} color={FUEL.limeDeep} />}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Cart Bar */}
       {cartCount > 0 && (
@@ -639,6 +709,36 @@ const styles = StyleSheet.create({
     gap: SPACE.s,
   },
   searchInput: { flex: 1, fontFamily: FONT.bodyMedium, fontSize: 13, color: FUEL.sand },
+
+  // Store pill (below the dark header band)
+  storePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACE.s,
+    alignSelf: 'flex-start',
+    backgroundColor: FUEL.white,
+    borderWidth: 1,
+    borderColor: FUEL.sandBorder,
+    borderRadius: RADIUS.lg,
+    paddingHorizontal: SPACE.m,
+    paddingVertical: SPACE.s,
+    marginHorizontal: SPACE.m,
+    marginTop: SPACE.s,
+  },
+  storePillText: { fontFamily: FONT.bodyExtrabold, fontSize: 12, color: FUEL.ink, textTransform: 'uppercase', letterSpacing: 0.3, maxWidth: 200 },
+
+  // Store picker modal
+  storeModalOverlay: { flex: 1, backgroundColor: 'rgba(21,20,15,0.45)', alignItems: 'center', justifyContent: 'center', padding: SPACE.xl },
+  storeModalCard: { width: '100%', maxWidth: 360, backgroundColor: FUEL.white, borderRadius: RADIUS.lg, padding: SPACE.xl },
+  storeModalTitle: { fontFamily: FONT.display, fontSize: 20, color: FUEL.ink, textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: SPACE.m },
+  storeModalRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.m, paddingVertical: SPACE.m, paddingHorizontal: SPACE.m, borderRadius: RADIUS.md, borderWidth: 1.5, borderColor: FUEL.sandBorder, marginBottom: SPACE.s },
+  storeModalRowActive: { borderColor: FUEL.lime, backgroundColor: FUEL.limeTint },
+  storeModalRowText: { flex: 1, fontFamily: FONT.bodyBold, fontSize: 14, color: FUEL.muted },
+  storeModalRowTextActive: { color: FUEL.ink, fontFamily: FONT.bodyExtrabold },
+
+  // Retry block (error state)
+  retryBtn: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s, backgroundColor: FUEL.ink, borderRadius: RADIUS.lg, paddingVertical: SPACE.m, paddingHorizontal: SPACE.xl, marginTop: SPACE.l },
+  retryText: { color: FUEL.lime, fontFamily: FONT.bodyExtrabold, fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.3 },
 
   // HERO — ink block, rounded bottom corners
   hero: {
