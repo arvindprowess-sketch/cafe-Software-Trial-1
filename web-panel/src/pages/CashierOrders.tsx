@@ -14,6 +14,9 @@ export default function CashierOrders() {
   const [showReceipt, setShowReceipt] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'orders' | 'held'>('orders');
   const [filter, setFilter] = useState('all'); // all, app, walk_in
+  const [assignFor, setAssignFor] = useState<any>(null); // delivery order awaiting a driver
+  const [driverName, setDriverName] = useState('');
+  const [assigning, setAssigning] = useState(false);
 
   const load = async () => {
     try {
@@ -56,6 +59,26 @@ export default function CashierOrders() {
     if (!confirm('Discard this held bill?')) return;
     try { await api(`/held-bills/${billId}`, { method: 'DELETE' }); load(); } catch (err: any) { alert(err.message); }
   };
+
+  const openAssign = (o: any) => { setAssignFor(o); setDriverName(o.driver_name || ''); };
+  const confirmAssign = async () => {
+    const name = driverName.trim();
+    if (!assignFor || !name) return;
+    setAssigning(true);
+    try {
+      // driver_name is a QUERY param on this endpoint (not a JSON body).
+      await api(`/orders/${assignFor.id}/assign-driver?driver_name=${encodeURIComponent(name)}`, { method: 'POST' });
+      setAssignFor(null); setDriverName('');
+      load(); // order flips to out_for_delivery + shows the driver
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setAssigning(false);
+    }
+  };
+  // Delivery orders still in the kitchen pipeline can be dispatched.
+  const canAssign = (o: any) => o.order_type === 'delivery'
+    && !['out_for_delivery', 'delivered', 'completed', 'cancelled', 'voided', 'refunded'].includes(o.status);
 
   const appOrders = orders.filter(o => o.order_source === 'app');
   const walkInOrders = orders.filter(o => o.order_source !== 'app');
@@ -179,7 +202,15 @@ export default function CashierOrders() {
                     <td><span className={`badge ${STATUS_COLORS[o.status] || 'badge-gray'}`}>{o.status}</span></td>
                     <td style={{ fontSize: 12, color: '#9C9C9C' }}>{new Date(o.created_at).toLocaleString()}</td>
                     <td>
-                      <button className="btn btn-sm btn-secondary" onClick={() => viewReceipt(o.id)} data-testid={`receipt-${o.id}`}>Receipt</button>
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <button className="btn btn-sm btn-secondary" onClick={() => viewReceipt(o.id)} data-testid={`receipt-${o.id}`}>Receipt</button>
+                        {canAssign(o) && (
+                          <button className="btn btn-sm btn-purple" onClick={() => openAssign(o)} data-testid={`assign-driver-${o.id}`}>Assign driver</button>
+                        )}
+                        {o.driver_name && (
+                          <span style={{ fontSize: 11, color: '#3FA34D', fontWeight: 700 }}>🛵 {o.driver_name}</span>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -187,6 +218,32 @@ export default function CashierOrders() {
             </tbody>
           </table>
         </>
+      )}
+
+      {/* Assign Driver Modal */}
+      {assignFor && (
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setAssignFor(null)}>
+          <div className="modal" style={{ maxWidth: 380 }}>
+            <h2>Assign driver</h2>
+            <p style={{ color: '#6B6A5E', marginTop: -4 }}>Order #{assignFor.id} · {assignFor.customer_name || assignFor.user_name}</p>
+            <div className="form-group">
+              <label>Driver name</label>
+              <input
+                value={driverName}
+                onChange={e => setDriverName(e.target.value)}
+                placeholder="e.g. Ravi"
+                data-testid="driver-name-input"
+                autoFocus
+              />
+            </div>
+            <div className="modal-actions">
+              <button className="btn btn-secondary" onClick={() => setAssignFor(null)}>Cancel</button>
+              <button className="btn btn-purple" onClick={confirmAssign} disabled={assigning || !driverName.trim()} data-testid="assign-driver-confirm">
+                {assigning ? 'Assigning…' : 'Assign & dispatch'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Receipt Modal */}
