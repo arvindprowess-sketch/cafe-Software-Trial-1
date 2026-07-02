@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import { FUEL, FONT, RADIUS, SPACE } from '../../utils/theme';
 import { useCart } from '../../utils/CartContext';
 import PressableScale, { useReduceMotion } from './PressableScale';
+import AnimatedNumber from './AnimatedNumber';
 
 // Persistent floating cart pill shown on browsing screens.
 // Tapping opens the unified Cart page.
@@ -45,7 +46,7 @@ export default function CartPill({ bottom = 80 }: { bottom?: number }) {
         </View>
         <View>
           <Text style={styles.title}>Cart · {count} item{count > 1 ? 's' : ''}</Text>
-          <Text style={styles.sub}>₹{Math.round(subtotal)}</Text>
+          <AnimatedNumber value={Math.round(subtotal)} prefix="₹" style={styles.sub} testID="cart-pill-total" />
         </View>
       </Animated.View>
       <View style={styles.right}>

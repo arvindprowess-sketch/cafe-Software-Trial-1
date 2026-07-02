@@ -12,6 +12,7 @@ import { useCart, itemPrice, CartItem } from '../utils/CartContext';
 import { useStore } from '../utils/StoreContext';
 import { FUEL, FONT, RADIUS, SPACE } from '../utils/theme';
 import PressableScale from './components/PressableScale';
+import AnimatedNumber from './components/AnimatedNumber';
 import * as Haptics from 'expo-haptics';
 
 // PR-C: success haptic on the order-placed moment (safe no-op on web)
@@ -511,7 +512,10 @@ export default function CartScreen() {
       <View style={styles.bottomBar}>
         <View>
           <Text style={styles.bottomLabel}>To Pay</Text>
-          <Text style={styles.bottomTotal}>₹{Math.round(grandTotal)}{quoting && <Text style={styles.bottomQuoting}>  …</Text>}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+            <AnimatedNumber value={Math.round(grandTotal)} prefix="₹" style={styles.bottomTotal} testID="cart-bottom-total" />
+            {quoting && <Text style={styles.bottomQuoting}>  …</Text>}
+          </View>
         </View>
         <PressableScale haptic testID="place-order-btn" style={[styles.payBtn, placing && { opacity: 0.6 }]} disabled={placing} onPress={() => placeOrder(false)}>
           {placing ? <ActivityIndicator color={FUEL.ink} /> : (
