@@ -676,7 +676,56 @@ export default function HomeScreen() {
           ) : null}
         </View>
 
-        {/* ===== AI COMBO BUILDER — moved directly below goals/target ===== */}
+        {/* ===== TODAY'S NUTRITION CARD (CLICKABLE) — placed right below the goal selector ===== */}
+        <TouchableOpacity
+          style={styles.nutriCard}
+          testID="nutrition-summary-card"
+          onPress={() => router.push('/nutrition-detail')}
+          activeOpacity={0.8}
+        >
+          <View style={styles.nutriHeader}>
+            <Ionicons name="fitness" size={18} color={isCalorieOver ? FUEL.error : FUEL.limeDeep} />
+            <Text style={styles.nutriTitle}>Today's Nutrition</Text>
+            <Text style={styles.nutriMeals}>{summary?.meals_count || 0} meals</Text>
+            <Ionicons name="chevron-forward" size={18} color={FUEL.muted} style={{ marginLeft: 'auto' }} />
+          </View>
+          <View style={styles.nutriRow}>
+            <View style={styles.nutriMain}>
+              <Text style={[styles.calValue, isCalorieOver && { color: FUEL.error }]}>{Math.round(consumed.calories || 0)}</Text>
+              <Text style={styles.calUnit}>/ {goals.daily_calories || 2000} kcal</Text>
+              {goals.daily_calories > 0 && !isCalorieOver && (
+                <Text style={styles.calLeft}>{Math.round(goals.daily_calories - (consumed.calories || 0))} left</Text>
+              )}
+            </View>
+            <View style={styles.macroRow}>
+              {[
+                { label: 'Protein', val: consumed.protein, goal: goals.daily_protein, color: FUEL.protein },
+                { label: 'Carbs', val: consumed.carbs, goal: goals.daily_carbs, color: FUEL.carbs },
+                { label: 'Fat', val: consumed.fat, goal: goals.daily_fat, color: FUEL.fat },
+              ].map(m => (
+                <View key={m.label} testID={`macro-chip-${m.label.toLowerCase()}`} style={styles.macroItem}>
+                  <Text style={[styles.macroVal, { color: m.color }]}>
+                    {m.goal > 0 ? `${Math.round(m.val || 0)}/${Math.round(m.goal)}g` : `${Math.round(m.val || 0)}g`}
+                  </Text>
+                  <Text style={styles.macroLabel}>{m.label}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+          <View style={styles.progressBg}>
+            <View style={[styles.progressFill, { width: `${Math.min(calPct, 100)}%` }, isCalorieOver && styles.progressFillOver]} />
+          </View>
+          {isCalorieOver && (
+            <View style={styles.overGoalBanner} testID="calorie-over-banner">
+              <Ionicons name="information-circle" size={14} color={FUEL.error} />
+              <Text style={styles.overGoalText}>
+                {caloriesOverAmount} cal over your daily goal — you're in control!
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        {/* ===== AI COMBO BUILDER — below goals + nutrition ===== */}
         {!showMealBuilder && !aiMeal && (
           <View testID="open-meal-builder" style={styles.comboCard}>
             <View style={styles.comboTitleRow}>
@@ -897,55 +946,6 @@ export default function HomeScreen() {
             </ScrollView>
           </>
         )}
-
-        {/* ===== TODAY'S NUTRITION CARD (CLICKABLE) ===== */}
-        <TouchableOpacity
-          style={styles.nutriCard}
-          testID="nutrition-summary-card"
-          onPress={() => router.push('/nutrition-detail')}
-          activeOpacity={0.8}
-        >
-          <View style={styles.nutriHeader}>
-            <Ionicons name="fitness" size={18} color={isCalorieOver ? FUEL.error : FUEL.limeDeep} />
-            <Text style={styles.nutriTitle}>Today's Nutrition</Text>
-            <Text style={styles.nutriMeals}>{summary?.meals_count || 0} meals</Text>
-            <Ionicons name="chevron-forward" size={18} color={FUEL.muted} style={{ marginLeft: 'auto' }} />
-          </View>
-          <View style={styles.nutriRow}>
-            <View style={styles.nutriMain}>
-              <Text style={[styles.calValue, isCalorieOver && { color: FUEL.error }]}>{Math.round(consumed.calories || 0)}</Text>
-              <Text style={styles.calUnit}>/ {goals.daily_calories || 2000} kcal</Text>
-              {goals.daily_calories > 0 && !isCalorieOver && (
-                <Text style={styles.calLeft}>{Math.round(goals.daily_calories - (consumed.calories || 0))} left</Text>
-              )}
-            </View>
-            <View style={styles.macroRow}>
-              {[
-                { label: 'Protein', val: consumed.protein, goal: goals.daily_protein, color: FUEL.protein },
-                { label: 'Carbs', val: consumed.carbs, goal: goals.daily_carbs, color: FUEL.carbs },
-                { label: 'Fat', val: consumed.fat, goal: goals.daily_fat, color: FUEL.fat },
-              ].map(m => (
-                <View key={m.label} testID={`macro-chip-${m.label.toLowerCase()}`} style={styles.macroItem}>
-                  <Text style={[styles.macroVal, { color: m.color }]}>
-                    {m.goal > 0 ? `${Math.round(m.val || 0)}/${Math.round(m.goal)}g` : `${Math.round(m.val || 0)}g`}
-                  </Text>
-                  <Text style={styles.macroLabel}>{m.label}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-          <View style={styles.progressBg}>
-            <View style={[styles.progressFill, { width: `${Math.min(calPct, 100)}%` }, isCalorieOver && styles.progressFillOver]} />
-          </View>
-          {isCalorieOver && (
-            <View style={styles.overGoalBanner} testID="calorie-over-banner">
-              <Ionicons name="information-circle" size={14} color={FUEL.error} />
-              <Text style={styles.overGoalText}>
-                {caloriesOverAmount} cal over your daily goal — you're in control!
-              </Text>
-            </View>
-          )}
-        </TouchableOpacity>
 
         {/* ===== QUICK ACTIONS — Reorder · Schedule · Scan ===== */}
         <View style={styles.quickRow}>
