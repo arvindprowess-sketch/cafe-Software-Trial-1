@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { apiCall, getStoredUser } from '../utils/api';
+import { apiCall, getStoredUser, createPayment } from '../utils/api';
 import { useCart, itemPrice, CartItem } from '../utils/CartContext';
 import { useStore } from '../utils/StoreContext';
 import { FUEL, FONT, RADIUS, SPACE } from '../utils/theme';
@@ -29,6 +29,7 @@ const PAY_MODES = [
   { key: 'cash', label: 'Cash', icon: 'cash' },
   { key: 'upi', label: 'UPI', icon: 'qr-code' },
   { key: 'card', label: 'Card', icon: 'card' },
+  { key: 'online', label: 'Pay Online', icon: 'globe' },
 ];
 
 const lineMacros = (i: CartItem) => {
@@ -188,6 +189,27 @@ export default function CartScreen() {
       if (isScheduled) orderBody.scheduled_ready_time = getScheduledReadyTime();
 
       const order = await apiCall('/orders', { method: 'POST', body: orderBody });
+
+      // Online payment: the order is held (pending_payment) until verified.
+      // Create the Razorpay order and hand off to the payment screen; the cart
+      // is only cleared once payment succeeds (handled in /pay).
+      if (paymentMode === 'online') {
+        const pay = await createPayment(order.id);
+        setPlacing(false);
+        router.replace({
+          pathname: '/pay',
+          params: {
+            orderId: order.id,
+            rzpOrderId: pay.razorpay_order_id,
+            amount: String(pay.amount),
+            currency: pay.currency || 'INR',
+            keyId: pay.key_id,
+            mock: pay.mock ? '1' : '0',
+          },
+        });
+        return;
+      }
+
       clear();
       hapticSuccess(); // PR-C: order-placed success moment
       Alert.alert(isScheduled ? 'Order Scheduled!' : 'Order Placed!', `₹${Math.round(fresh.grand_total)} · ${orderType}`);
@@ -476,7 +498,11 @@ export default function CartScreen() {
             </TouchableOpacity>
           ))}
         </View>
-        <Text style={styles.payHint}>Online payment (Razorpay) coming soon — pay by {paymentMode.toUpperCase()} for now.</Text>
+        {paymentMode === 'online' ? (
+          <Text style={styles.payHint}>Secure online payment via Razorpay. You'll complete payment on the next screen.</Text>
+        ) : (
+          <Text style={styles.payHint}>Pay by {paymentMode.toUpperCase()} at pickup/delivery.</Text>
+        )}
 
         <View style={{ height: 110 }} />
       </ScrollView>

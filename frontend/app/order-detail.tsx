@@ -5,7 +5,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { apiCall } from '../utils/api';
+import { apiCall, createPayment } from '../utils/api';
 import { useCart } from '../utils/CartContext';
 import { FUEL, FONT, RADIUS, SPACE } from '../utils/theme';
 
@@ -17,6 +17,32 @@ export default function OrderDetailScreen() {
   const [loading, setLoading] = useState(true);
   // P7: one-tap order rating (completed orders, once only)
   const [ratingSubmitting, setRatingSubmitting] = useState(false);
+  const [paying, setPaying] = useState(false);
+
+  // Retry online payment for an unpaid order: re-create the Razorpay order and
+  // hand off to the /pay screen (same flow as checkout).
+  const payNow = async () => {
+    if (!order || paying) return;
+    setPaying(true);
+    try {
+      const pay = await createPayment(order.id);
+      router.push({
+        pathname: '/pay',
+        params: {
+          orderId: order.id,
+          rzpOrderId: pay.razorpay_order_id,
+          amount: String(pay.amount),
+          currency: pay.currency || 'INR',
+          keyId: pay.key_id,
+          mock: pay.mock ? '1' : '0',
+        },
+      });
+    } catch (e: any) {
+      Alert.alert('Could not start payment', e?.message || 'Please try again.');
+    } finally {
+      setPaying(false);
+    }
+  };
 
   const submitRating = async (stars: number) => {
     if (!order || ratingSubmitting) return;
@@ -356,6 +382,20 @@ export default function OrderDetailScreen() {
                 Payment {order.payment_status === 'paid' ? 'Completed' : 'Pending'}
               </Text>
             </View>
+
+            {/* Pay now — online orders that aren't paid yet and are still payable */}
+            {order.payment_status !== 'paid'
+              && order.payment_mode === 'online'
+              && !['cancelled', 'voided', 'refunded'].includes(order.status) && (
+              <TouchableOpacity testID="pay-now-btn" style={styles.payNowBtn} onPress={payNow} disabled={paying} activeOpacity={0.9}>
+                {paying ? <ActivityIndicator color={FUEL.ink} size="small" /> : (
+                  <>
+                    <Ionicons name="card" size={16} color={FUEL.ink} />
+                    <Text style={styles.payNowText}>PAY NOW · ₹{Math.round(order.total_price || 0)}</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
@@ -595,6 +635,8 @@ const styles = StyleSheet.create({
     borderTopColor: FUEL.sandBorder,
   },
   paymentStatusText: { fontFamily: FONT.bodyBold, fontSize: 13 },
+  payNowBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.s, backgroundColor: FUEL.lime, borderRadius: RADIUS.pill, paddingVertical: SPACE.m, marginTop: SPACE.m },
+  payNowText: { fontFamily: FONT.bodyExtrabold, fontSize: 13, color: FUEL.ink, letterSpacing: 0.5 },
 
   infoCard: {
     backgroundColor: FUEL.white,
