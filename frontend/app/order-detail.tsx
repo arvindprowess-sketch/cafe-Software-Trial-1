@@ -1,12 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { apiCall, createPayment } from '../utils/api';
 import { useCart } from '../utils/CartContext';
+import { useRealtime } from '../utils/realtime';
 import { FUEL, FONT, RADIUS, SPACE } from '../utils/theme';
 
 export default function OrderDetailScreen() {
@@ -77,21 +78,36 @@ export default function OrderDetailScreen() {
     }
   };
 
-  useEffect(() => {
-    loadOrderDetails();
-  }, []);
-
-  const loadOrderDetails = async () => {
+  // Single-order fetch (no more pulling the whole /orders list and filtering).
+  const loadOrderDetails = useCallback(async () => {
+    if (!params.orderId) { setLoading(false); return; }
     try {
-      const orders = await apiCall('/orders');
-      const foundOrder = orders.find((o: any) => o.id === params.orderId);
-      setOrder(foundOrder);
+      const found = await apiCall(`/orders/${params.orderId}`);
+      setOrder(found);
     } catch (e) {
       console.error('Error loading order:', e);
     } finally {
       setLoading(false);
     }
-  };
+  }, [params.orderId]);
+
+  useEffect(() => {
+    loadOrderDetails();
+  }, [loadOrderDetails]);
+
+  // Live status: refresh when the kitchen/staff pushes a status change for THIS
+  // order (broadcast payload is the full order doc, keyed by id). Falls back to
+  // a full refetch so any other changed fields stay in sync.
+  useRealtime((msg: any) => {
+    if (msg?.type !== 'order_status') return;
+    const changedId = msg.data?.id || msg.data?.order_id;
+    if (changedId !== params.orderId) return;
+    if (msg.data?.status) setOrder((prev: any) => (prev ? { ...prev, ...msg.data } : msg.data));
+    else loadOrderDetails();
+  });
+
+  // Also refresh whenever the screen regains focus (e.g. back from /pay).
+  useFocusEffect(useCallback(() => { loadOrderDetails(); }, [loadOrderDetails]));
 
   const getStatusColor = (status: string) => {
     switch (status) {
