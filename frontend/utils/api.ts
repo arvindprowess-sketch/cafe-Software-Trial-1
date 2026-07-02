@@ -95,6 +95,25 @@ export async function logout() {
   console.log('[API] Logged out - cleared all auth data');
 }
 
+// ---------- Payments (Razorpay) ----------
+// Create a payment order for an existing order. Returns
+// { razorpay_order_id, amount (paise), currency, key_id, mock? }.
+export async function createPayment(orderId: string) {
+  return apiCall('/payments/create-order', { method: 'POST', body: { order_id: orderId } });
+}
+
+export interface VerifyPaymentPayload {
+  razorpay_order_id: string;
+  razorpay_payment_id: string;
+  razorpay_signature: string;
+  order_id: string;
+}
+// Verify a payment. In mock mode any razorpay_payment_id is accepted.
+// Returns { status: "paid", ... } on success.
+export async function verifyPayment(payload: VerifyPaymentPayload) {
+  return apiCall('/payments/verify', { method: 'POST', body: payload });
+}
+
 export async function getStoredUser() {
   const userData = await AsyncStorage.getItem('user_data');
   const token = await AsyncStorage.getItem('auth_token');
