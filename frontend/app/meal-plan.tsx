@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Image,
-  ActivityIndicator, RefreshControl, Modal,
+  ActivityIndicator, RefreshControl, Modal, TextInput, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -31,6 +31,10 @@ export default function MealPlanScreen() {
   const [dayPlan, setDayPlan] = useState<any>(null);
   const [showDayPlan, setShowDayPlan] = useState(false);
   const [dayPlanLoading, setDayPlanLoading] = useState(false);
+  // §7: persist the generated day plan
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [planName, setPlanName] = useState('');
+  const [savingPlan, setSavingPlan] = useState(false);
 
   const loadPlan = useCallback(async (count: number, remCal?: number, remPro?: number) => {
     setPlanning(true);
@@ -99,6 +103,37 @@ export default function MealPlanScreen() {
     router.push('/cart');
   };
 
+  // §7: map the generated day plan -> MealPlanCreate and persist it.
+  const saveDayPlan = async () => {
+    const name = planName.trim();
+    if (!dayPlan?.meals || !name) return;
+    setSavingPlan(true);
+    const meals = (dayPlan.meals || []).flatMap((m: any) =>
+      (m.items || []).map((it: any) => ({
+        product_id: it.product_id || it.id,
+        product_name: it.name || it.product_name,
+        grams: it.grams,
+        meal_type: m.label,
+      }))
+    );
+    const body = {
+      name,
+      goal: target?.fitness_goal || 'maintenance',
+      diet_preference: dietPref.length ? dietPref.join(',') : 'both',
+      days: [{ day: new Date().toLocaleDateString('en-IN', { weekday: 'long' }), meals }],
+    };
+    try {
+      await apiCall('/meal-plans', { method: 'POST', body });
+      setShowSaveModal(false);
+      setPlanName('');
+      Alert.alert('Plan saved', 'Find it under "My Plans" (bookmark icon, top right).');
+    } catch (e: any) {
+      Alert.alert('Could not save', e?.message || 'Please try again.');
+    } finally {
+      setSavingPlan(false);
+    }
+  };
+
   const goalInfo = getGoal(target?.fitness_goal);
   const remCalories = Math.max(0, Math.round((target?.daily_calories || 0) - (consumed.calories || 0)));
   const remProtein = Math.max(0, Math.round((target?.daily_protein || 0) - (consumed.protein || 0)));
@@ -139,7 +174,9 @@ export default function MealPlanScreen() {
           <Ionicons name="arrow-back" size={22} color={FUEL.sand} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Meal Plan</Text>
-        <View style={{ width: 40 }} />
+        <TouchableOpacity testID="my-plans-link" style={styles.backBtn} onPress={() => router.push('/my-plans')}>
+          <Ionicons name="bookmark" size={18} color={FUEL.lime} />
+        </TouchableOpacity>
       </View>
 
       {!hasStats ? (
@@ -318,10 +355,46 @@ export default function MealPlanScreen() {
                   <Ionicons name="cart" size={16} color={FUEL.ink} />
                   <Text style={styles.dayPlanCtaText}>Add full day to cart</Text>
                 </TouchableOpacity>
+                <TouchableOpacity testID="save-plan-btn" style={styles.savePlanBtn} onPress={() => setShowSaveModal(true)}>
+                  <Ionicons name="bookmark-outline" size={16} color={FUEL.ink} />
+                  <Text style={styles.savePlanText}>Save this plan</Text>
+                </TouchableOpacity>
               </>
             ) : (
               <Text style={styles.emptySub}>Couldn't build a plan for this diet. Try fewer filters.</Text>
             )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* §7: Save plan name modal */}
+      <Modal visible={showSaveModal} transparent animationType="fade" onRequestClose={() => setShowSaveModal(false)}>
+        <View style={styles.saveOverlay}>
+          <View style={styles.saveSheet}>
+            <Text style={styles.saveTitle}>Save this plan</Text>
+            <TextInput
+              testID="save-plan-name-input"
+              style={styles.saveInput}
+              value={planName}
+              onChangeText={setPlanName}
+              placeholder="Plan name (e.g. High-protein day)"
+              placeholderTextColor={FUEL.muted}
+              maxLength={60}
+              autoFocus
+            />
+            <View style={styles.saveActions}>
+              <TouchableOpacity style={styles.saveCancel} onPress={() => setShowSaveModal(false)}>
+                <Text style={styles.saveCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                testID="save-plan-confirm"
+                style={[styles.saveConfirm, (!planName.trim() || savingPlan) && { opacity: 0.5 }]}
+                disabled={!planName.trim() || savingPlan}
+                onPress={saveDayPlan}
+              >
+                <Text style={styles.saveConfirmText}>{savingPlan ? 'Saving…' : 'Save'}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -406,4 +479,17 @@ const styles = StyleSheet.create({
   dayItemName: { fontSize: 13.5, fontFamily: FONT.bodyBold, color: FUEL.ink },
   dayItemMacro: { fontSize: 11.5, color: FUEL.muted, marginTop: 1 },
   dayItemPrice: { fontSize: 13, fontFamily: FONT.bodyExtrabold, color: FUEL.ink },
+
+  // §7 save-plan
+  savePlanBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.s, backgroundColor: FUEL.white, borderRadius: RADIUS.md, paddingVertical: SPACE.m, marginTop: SPACE.s, borderWidth: 1.5, borderColor: FUEL.ink },
+  savePlanText: { fontFamily: FONT.bodyExtrabold, fontSize: 14, color: FUEL.ink, letterSpacing: 0.3 },
+  saveOverlay: { flex: 1, backgroundColor: 'rgba(21,20,15,0.5)', justifyContent: 'center', padding: SPACE.xl },
+  saveSheet: { backgroundColor: FUEL.sand, borderRadius: RADIUS.lg, padding: SPACE.l },
+  saveTitle: { fontFamily: FONT.display, fontSize: 18, color: FUEL.ink, marginBottom: SPACE.m },
+  saveInput: { backgroundColor: FUEL.white, borderRadius: RADIUS.md, borderWidth: 1, borderColor: FUEL.sandBorder, paddingHorizontal: SPACE.m, paddingVertical: SPACE.m, fontFamily: FONT.body, fontSize: 15, color: FUEL.ink },
+  saveActions: { flexDirection: 'row', gap: SPACE.m, marginTop: SPACE.l },
+  saveCancel: { flex: 1, alignItems: 'center', paddingVertical: SPACE.m, borderRadius: RADIUS.md, borderWidth: 1, borderColor: FUEL.sandBorder },
+  saveCancelText: { fontFamily: FONT.bodyExtrabold, fontSize: 14, color: FUEL.muted },
+  saveConfirm: { flex: 1, alignItems: 'center', paddingVertical: SPACE.m, borderRadius: RADIUS.md, backgroundColor: FUEL.lime },
+  saveConfirmText: { fontFamily: FONT.bodyExtrabold, fontSize: 14, color: FUEL.ink },
 });
