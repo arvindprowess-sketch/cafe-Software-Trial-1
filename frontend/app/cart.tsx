@@ -360,7 +360,9 @@ export default function CartScreen() {
         )}
 
         {/* SAVINGS BAR */}
-        {nextTier && (
+        {/* FIX 3 — the only remaining tier is free delivery, so the nudge is
+            meaningless on dine-in/takeaway (no delivery fee ever applies). */}
+        {nextTier && orderType === 'delivery' && (
           <Animated.View entering={FadeIn.duration(250)} style={styles.savingsBar} testID="savings-bar">
             <Ionicons name="pricetags" size={15} color={FUEL.limeDeep} />
             <Text style={styles.savingsText}>Add ₹{Math.round(nextTier.threshold - subtotal)} more to unlock <Text style={{ fontFamily: FONT.bodyExtrabold }}>{nextTier.label}</Text></Text>

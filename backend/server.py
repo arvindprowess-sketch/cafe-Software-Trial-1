@@ -5958,7 +5958,8 @@ async def compute_authoritative_bill(items, order_type, coupon_code, tip, store_
                 coupon_info = {"code": coupon_code, "title": offer["title"], "discount_type": offer["discount_type"]}
 
     # Delivery fee (free over threshold) + tip
-    free_delivery = subtotal >= await get_setting("free_delivery_threshold")
+    free_delivery_threshold = await get_setting("free_delivery_threshold")
+    free_delivery = subtotal >= free_delivery_threshold
     if order_type == "delivery":
         base_delivery = 30.0
         delivery_fee = 0.0 if free_delivery else base_delivery
@@ -5977,15 +5978,16 @@ async def compute_authoritative_bill(items, order_type, coupon_code, tip, store_
     free_delivery_savings = round(base_delivery - delivery_fee, 2) if order_type == "delivery" else 0
     total_savings = round(discount + free_delivery_savings, 2)
 
-    tiers = [
-        {"label": "Free Delivery", "threshold": 300},
-        {"label": "₹50 OFF", "threshold": 500},
-        {"label": "₹100 OFF", "threshold": 800},
-        {"label": "₹150 OFF", "threshold": 1000},
-    ]
-    for t in tiers:
-        t["unlocked"] = subtotal >= t["threshold"]
-    next_tier = next((t for t in tiers if not t["unlocked"]), None)
+    # FIX 3 (Round 4) — single source of truth = the admin-editable
+    # free_delivery_threshold setting. The old ₹50/₹100/₹150 "OFF" tiers were
+    # never applied by the bill (broken promise) and the free-delivery tier was
+    # hardcoded to 300 (drifting from the setting) — both removed.
+    tiers = [{
+        "label": "Free Delivery",
+        "threshold": free_delivery_threshold,
+        "unlocked": free_delivery,
+    }]
+    next_tier = None if free_delivery else tiers[0]
 
     return {
         "line_items": line_items,
@@ -6011,7 +6013,7 @@ async def compute_authoritative_bill(items, order_type, coupon_code, tip, store_
         "price_changes": price_changes,
         "tiers": tiers,
         "next_tier": next_tier,
-        "free_delivery_threshold": await get_setting("free_delivery_threshold"),
+        "free_delivery_threshold": free_delivery_threshold,
     }
 
 @api_router.post("/cart/quote")
