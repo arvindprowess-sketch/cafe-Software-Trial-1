@@ -142,6 +142,12 @@ export default function ProfileScreen() {
             <Text style={styles.progressRowText}>Rewards & loyalty points</Text>
             <Ionicons name="chevron-forward" size={16} color="#6B6A5E" />
           </TouchableOpacity>
+
+          <TouchableOpacity testID="profile-history-link" style={styles.progressRow} onPress={() => router.push('/history')}>
+            <Ionicons name="time" size={18} color="#15140F" />
+            <Text style={styles.progressRowText}>Meal history & macros</Text>
+            <Ionicons name="chevron-forward" size={16} color="#6B6A5E" />
+          </TouchableOpacity>
           <Text style={styles.subLabel}>You can fine-tune the numbers below anytime.</Text>
           <View style={styles.targetsGrid}>
             {[
