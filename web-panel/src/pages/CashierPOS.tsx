@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../utils/api';
+import { useAuth } from '../context/AuthContext';
 
 const GST_RATE = 5;
 const POS_DIET_TAGS = ['veg', 'non-veg', 'vegan', 'eggetarian', 'jain', 'keto', 'high-protein'];
@@ -7,6 +8,7 @@ const POS_DIET_LABEL: Record<string, string> = { 'veg': 'Veg', 'non-veg': 'Non-V
 const dietTagsOf = (p: any): string[] => (p?.diet_types && p.diet_types.length ? p.diet_types : [p?.diet_type]).filter(Boolean);
 
 export default function CashierPOS() {
+  const { user } = useAuth();
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [offers, setOffers] = useState<any[]>([]);
@@ -34,10 +36,14 @@ export default function CashierPOS() {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiResult, setAiResult] = useState<any>(null);
 
-  // Coupon
+  // Coupon (server-quoted; appliedCode is the code sent to /cart/quote)
   const [couponCode, setCouponCode] = useState('');
-  const [couponDiscount, setCouponDiscount] = useState<any>(null);
-  const [couponError, setCouponError] = useState('');
+  const [appliedCode, setAppliedCode] = useState('');
+
+  // Server-authoritative bill (FIX 4 — /cart/quote is the single source of truth
+  // for subtotal / discount / GST / total; client math is optimistic-only).
+  const [quote, setQuote] = useState<any>(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
 
   // Payment
   const [showPayment, setShowPayment] = useState(false);
@@ -71,7 +77,7 @@ export default function CashierPOS() {
         setCustomerName(bill.customer_name || '');
         setOrderType(bill.order_type || 'dine-in');
         setActiveHoldId(bill.id);
-        if (bill.coupon_code) setCouponCode(bill.coupon_code);
+        if (bill.coupon_code) { setCouponCode(bill.coupon_code); setAppliedCode(bill.coupon_code); }
         // Restore cart items
         if (bill.items?.length) {
           setCart(bill.items.map((item: any) => ({
@@ -220,29 +226,64 @@ export default function CashierPOS() {
     setEditingIdx(null);
   };
 
-  const resetCoupon = () => { if (couponDiscount) { setCouponDiscount(null); setCouponCode(''); setCouponError(''); } };
+  // Cart edits invalidate any applied coupon; the quote re-runs and re-validates.
+  const resetCoupon = () => { if (appliedCode) { setAppliedCode(''); setCouponCode(''); } };
 
   const totals = cart.reduce((a, c) => ({ price: a.price + c.price, calories: a.calories + c.calories, protein: a.protein + c.protein, carbs: a.carbs + (c.carbs || 0), fat: a.fat + (c.fat || 0) }), { price: 0, calories: 0, protein: 0, carbs: 0, fat: 0 });
 
-  const applyCoupon = async () => {
-    if (!couponCode.trim()) return;
-    setCouponError('');
-    try {
-      const result = await api('/orders/apply-coupon', { method: 'POST', body: { coupon_code: couponCode.trim().toUpperCase() } });
-      if (result.min_order_value && totals.price < result.min_order_value) { setCouponError(`Min order ₹${result.min_order_value}`); setCouponDiscount(null); return; }
-      let discount = 0;
-      if (result.discount_type === 'percentage') { discount = (totals.price * result.discount_value) / 100; if (result.max_discount) discount = Math.min(discount, result.max_discount); }
-      else discount = result.discount_value;
-      setCouponDiscount({ ...result, calculated_discount: Math.round(discount * 100) / 100 });
-    } catch (err: any) { setCouponError(err.message || 'Invalid coupon'); setCouponDiscount(null); }
-  };
+  // FIX 4 — debounced server quote. Bill panel renders THESE numbers; the client
+  // reduce above is only an optimistic placeholder shown until the quote lands.
+  useEffect(() => {
+    if (!cart.length) { setQuote(null); setQuoteLoading(false); return; }
+    const items = cart.map(c => ({
+      product_id: c.id, grams: c.grams, quantity: c.plateQty || 1,
+      product_type: c.product_type || 'single', cost_per_100g: c.cost_per_100g,
+    }));
+    let cancelled = false;
+    setQuoteLoading(true);
+    const t = setTimeout(async () => {
+      try {
+        const q = await api('/cart/quote', { method: 'POST', body: {
+          items, order_type: orderType,
+          coupon_code: appliedCode || undefined,
+          store_id: user?.store_id || undefined,
+        } });
+        if (!cancelled) setQuote(q);
+      } catch { if (!cancelled) setQuote(null); }
+      finally { if (!cancelled) setQuoteLoading(false); }
+    }, 400);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [cart, orderType, appliedCode, user?.store_id]);
 
-  const getExtraCharge = () => orderType === 'takeaway' ? 10 : 0;
-  const getDiscount = () => couponDiscount?.calculated_discount || 0;
-  const getSubtotal = () => Math.round((totals.price + getExtraCharge() - getDiscount()) * 100) / 100;
-  const getGST = () => Math.round(getSubtotal() * GST_RATE / (100 + GST_RATE) * 100) / 100;
-  const getBaseAmount = () => Math.round((getSubtotal() - getGST()) * 100) / 100;
-  const getFinalTotal = () => Math.max(0, getSubtotal());
+  // Apply = send the code to the next quote; the quote result is the authority.
+  const applyCoupon = () => { if (couponCode.trim()) setAppliedCode(couponCode.trim().toUpperCase()); };
+
+  // Coupon feedback derived from the server quote (no local percentage math).
+  const couponApplied = !!(appliedCode && quote?.coupon_applied);
+  const couponInfo = couponApplied ? quote.coupon : null;
+  const couponError = (appliedCode && quote && !quote.coupon_applied) ? (quote.coupon_error || 'Coupon not valid') : '';
+
+  // Server-authoritative bill, with an optimistic client fallback pre-quote.
+  const clientNet = Math.max(0, totals.price + (orderType === 'takeaway' ? 10 : 0));
+  const bill = quote ? {
+    itemTotal: quote.subtotal,
+    packaging: quote.delivery_fee || 0,
+    discount: quote.coupon_applied ? quote.discount : 0,
+    gst: quote.gst_amount,
+    base: quote.base_amount,
+    total: quote.total,
+  } : {
+    itemTotal: Math.round(totals.price * 100) / 100,
+    packaging: orderType === 'takeaway' ? 10 : 0,
+    discount: 0,
+    gst: Math.round(clientNet * GST_RATE / (100 + GST_RATE) * 100) / 100,
+    base: Math.round((clientNet - clientNet * GST_RATE / (100 + GST_RATE)) * 100) / 100,
+    total: clientNet,
+  };
+  const getDiscount = () => bill.discount;
+  const getGST = () => bill.gst;
+  const getBaseAmount = () => bill.base;
+  const getFinalTotal = () => Math.round(bill.total);
 
   const isUnavailable = (p: any) => p.product_type === 'ready_made' ? ((p.available_servings || 0) <= 0 && !p.is_active) : (p.available_qty_grams || 0) <= 0;
 
@@ -257,8 +298,8 @@ export default function CashierPOS() {
         protein_per_100g: c.protein_per_100g, carbs_per_100g: c.carbs_per_100g || 0,
         fat_per_100g: c.fat_per_100g || 0, diet_type: c.diet_type, category: c.category,
       }));
-      await api('/held-bills', { method: 'POST', body: { customer_name: customerName || 'Walk-in', order_type: orderType, items, coupon_code: couponDiscount ? couponCode : null, coupon_discount: getDiscount() } });
-      setCart([]); setCouponCode(''); setCouponDiscount(null); setCouponError(''); setCustomerName(''); setActiveHoldId(null);
+      await api('/held-bills', { method: 'POST', body: { customer_name: customerName || 'Walk-in', order_type: orderType, items, coupon_code: appliedCode || null, coupon_discount: getDiscount() } });
+      setCart([]); setCouponCode(''); setAppliedCode(''); setCustomerName(''); setActiveHoldId(null);
     } catch (e: any) { alert(e.message); }
   };
 
@@ -270,7 +311,7 @@ export default function CashierPOS() {
       const body = {
         order_type: orderType, payment_mode: paymentMode,
         customer_name: customerName.trim() || undefined,
-        coupon_code: couponDiscount ? couponCode : undefined, discount: getDiscount(),
+        coupon_code: couponApplied ? appliedCode : undefined, discount: getDiscount(),
         items: cart.map(c => ({ product_id: c.id, product_name: c.name, grams: c.grams, price: c.price, calories: c.calories, protein: c.protein, carbs: c.carbs || 0, fat: c.fat || 0, product_type: c.product_type || 'single', quantity: c.plateQty || 1 })),
         total_price: getFinalTotal(), total_calories: totals.calories, total_protein: totals.protein, total_carbs: totals.carbs, total_fat: totals.fat,
       };
@@ -278,7 +319,7 @@ export default function CashierPOS() {
       // If resumed from hold, delete the held bill
       if (activeHoldId) { try { await api(`/held-bills/${activeHoldId}`, { method: 'DELETE' }); } catch {} }
       try { const receipt = await api(`/orders/${r.id}/receipt`); setShowReceipt(receipt); } catch { alert(`Order #${r.id} placed!`); }
-      setCart([]); setCouponCode(''); setCouponDiscount(null); setCouponError(''); setShowPayment(false); setCustomerName(''); setActiveHoldId(null);
+      setCart([]); setCouponCode(''); setAppliedCode(''); setShowPayment(false); setCustomerName(''); setActiveHoldId(null);
     } catch (e: any) { alert(e.message); }
     finally { setPlacing(false); }
   };
@@ -342,8 +383,9 @@ export default function CashierPOS() {
       // Show all products for "all" offers
       setSelectedCat('All');
     }
-    // Auto-apply coupon
+    // Auto-apply coupon (drives the server quote)
     setCouponCode(offer.coupon_code || '');
+    setAppliedCode((offer.coupon_code || '').toUpperCase());
   };
 
   const PAYMENT_MODES = [
@@ -528,13 +570,13 @@ export default function CashierPOS() {
           {cart.length > 0 && (
             <div style={{ marginBottom: 10 }}>
               <div style={{ display: 'flex', gap: 6 }}>
-                <input value={couponCode} onChange={e => { setCouponCode(e.target.value.toUpperCase()); setCouponError(''); }} placeholder="Coupon code" data-testid="coupon-input" style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: '1px solid #EFEFEF', fontSize: 13, fontWeight: 600 }} />
+                <input value={couponCode} onChange={e => setCouponCode(e.target.value.toUpperCase())} onKeyDown={e => e.key === 'Enter' && applyCoupon()} placeholder="Coupon code" data-testid="coupon-input" style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: '1px solid #EFEFEF', fontSize: 13, fontWeight: 600 }} />
                 <button className="btn btn-sm btn-orange" onClick={applyCoupon} data-testid="apply-coupon-btn" disabled={!couponCode.trim()}>Apply</button>
               </div>
               {couponError && <p style={{ color: '#15140F', fontSize: 12, marginTop: 4 }} data-testid="coupon-error">{couponError}</p>}
-              {couponDiscount && (
+              {couponInfo && (
                 <div style={{ background: '#EAF2DD', borderRadius: 8, padding: '6px 10px', marginTop: 6, fontSize: 12, color: '#3FA34D', display: 'flex', justifyContent: 'space-between' }} data-testid="coupon-applied">
-                  <span>{couponDiscount.title}</span><span style={{ fontWeight: 700 }}>-₹{couponDiscount.calculated_discount}</span>
+                  <span>{couponInfo.title}</span><span style={{ fontWeight: 700 }}>-₹{Math.round(bill.discount)}</span>
                 </div>
               )}
             </div>
@@ -545,12 +587,12 @@ export default function CashierPOS() {
             ))}
           </div>
           <div className="pos-totals">
-            <div className="pos-total-row"><span>Item Total</span><span>₹{Math.round(totals.price)}</span></div>
-            {orderType === 'takeaway' && <div className="pos-total-row"><span>Packaging</span><span>₹10</span></div>}
-            {couponDiscount && <div className="pos-total-row" style={{ color: '#3FA34D' }}><span>Discount</span><span>-₹{couponDiscount.calculated_discount}</span></div>}
+            <div className="pos-total-row"><span>Item Total</span><span>{quoteLoading ? '…' : `₹${Math.round(bill.itemTotal)}`}</span></div>
+            {bill.packaging > 0 && <div className="pos-total-row"><span>Packaging</span><span>₹{Math.round(bill.packaging)}</span></div>}
+            {couponInfo && <div className="pos-total-row" style={{ color: '#3FA34D' }}><span>Discount</span><span>-₹{Math.round(bill.discount)}</span></div>}
             <div className="pos-total-row" style={{ fontSize: 12, color: '#9C9C9C' }}><span>Base Amount</span><span>₹{getBaseAmount()}</span></div>
             <div className="pos-total-row" style={{ fontSize: 12, color: '#9C9C9C' }}><span>GST (5% incl.)</span><span>₹{getGST()}</span></div>
-            <div className="pos-total-row grand"><span>Total</span><span>₹{getFinalTotal()}</span></div>
+            <div className="pos-total-row grand"><span>Total</span><span>{quoteLoading ? '…' : `₹${getFinalTotal()}`}</span></div>
             <div className="pos-total-row" style={{ fontSize: 11, color: '#9C9C9C' }}><span>Nutrition</span><span>{Math.round(totals.calories)} cal | P:{Math.round(totals.protein)}g</span></div>
           </div>
           <button className="pos-order-btn" onClick={() => setShowPayment(true)} disabled={!cart.length} data-testid="proceed-payment-btn">Proceed to Payment — ₹{getFinalTotal()}</button>
@@ -653,9 +695,9 @@ export default function CashierPOS() {
                 ))}
               </div>
               <div style={{ borderTop: '1px dashed #ccc', paddingTop: 8, marginTop: 8 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><span>Item Total</span><span>₹{Math.round(totals.price)}</span></div>
-                {orderType === 'takeaway' && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><span>Packaging</span><span>₹10</span></div>}
-                {couponDiscount && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#3FA34D' }}><span>Discount</span><span>-₹{couponDiscount.calculated_discount}</span></div>}
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><span>Item Total</span><span>₹{Math.round(bill.itemTotal)}</span></div>
+                {bill.packaging > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><span>Packaging</span><span>₹{Math.round(bill.packaging)}</span></div>}
+                {couponInfo && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#3FA34D' }}><span>Discount</span><span>-₹{Math.round(bill.discount)}</span></div>}
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#9C9C9C', marginTop: 4 }}><span>Base (excl. GST)</span><span>₹{getBaseAmount()}</span></div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#9C9C9C' }}><span>CGST (2.5%)</span><span>₹{Math.round(getGST() / 2 * 100) / 100}</span></div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#9C9C9C' }}><span>SGST (2.5%)</span><span>₹{Math.round(getGST() / 2 * 100) / 100}</span></div>
