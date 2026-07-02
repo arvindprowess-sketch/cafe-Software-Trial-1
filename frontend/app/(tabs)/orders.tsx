@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl,
   ActivityIndicator
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { apiCall } from '../../utils/api';
@@ -11,6 +12,7 @@ import { useRealtime } from '../../utils/realtime';
 import { FUEL, FONT, RADIUS, SPACE } from '../../utils/theme';
 import { useCart } from '../../utils/CartContext';
 import { SkeletonList } from '../components/Skeleton';
+import { useReduceMotion } from '../components/PressableScale';
 
 // F6: 4-step progress tracker config per order type.
 const TRACKER_STEPS: Record<string, string[]> = {
@@ -42,6 +44,21 @@ export default function OrdersScreen() {
   const [favoriteOrders, setFavoriteOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Phase 3: stagger the order cards in for a short window after (re)load only.
+  const reduceMotion = useReduceMotion();
+  const [staggerOn, setStaggerOn] = useState(false);
+  const staggerTimer = useRef<any>(null);
+  useEffect(() => {
+    if (loading) return;
+    setStaggerOn(true);
+    if (staggerTimer.current) clearTimeout(staggerTimer.current);
+    staggerTimer.current = setTimeout(() => setStaggerOn(false), 800);
+  }, [loading, activeTab]);
+  const orderEntering = (index: number) =>
+    (staggerOn && !reduceMotion.current)
+      ? FadeInDown.delay(Math.min(index, 8) * 50).duration(300).springify()
+      : undefined;
 
   useEffect(() => {
     loadOrders();
@@ -166,7 +183,7 @@ export default function OrdersScreen() {
     return mins > 0 ? mins : null;
   };
 
-  const renderOrder = ({ item }: { item: any }) => {
+  const renderOrder = ({ item, index }: { item: any; index: number }) => {
     const orderDate = new Date(item.created_at);
     const isToday = orderDate.toDateString() === new Date().toDateString();
     const statusColor = getStatusColor(item.status);
@@ -177,6 +194,7 @@ export default function OrdersScreen() {
     const eta = etaMinutes(item);
 
     return (
+      <Animated.View entering={orderEntering(index)}>
       <TouchableOpacity
         style={styles.orderCard}
         onPress={() => router.push({ pathname: '/order-detail', params: { orderId: item.id } })}
@@ -312,6 +330,7 @@ export default function OrdersScreen() {
           )}
         </View>
       </TouchableOpacity>
+      </Animated.View>
     );
   };
 

@@ -13,12 +13,13 @@ import { apiCall, getStoredUser } from '../../utils/api';
 import SideDrawer from '../components/SideDrawer';
 import CartPill from '../components/CartPill';
 import { Image as ExpoImage } from 'expo-image';
+import Reanimated, { FadeInDown as ReFadeInDown } from 'react-native-reanimated';
 import { useCart } from '../../utils/CartContext';
 import { useStore } from '../../utils/StoreContext';
 import { HomeSkeleton } from '../components/Skeleton';
 import { FUEL, FONT, GOALS as FUEL_GOALS, RADIUS, SPACE } from '../../utils/theme';
 import { DIET_TAGS, DIET_LABEL, toggleDietTag } from '../../utils/diet';
-import PressableScale from '../components/PressableScale';
+import PressableScale, { useReduceMotion } from '../components/PressableScale';
 import * as Haptics from 'expo-haptics';
 import { setTabBarHidden, resetTabBar } from '../../utils/tabBar';
 
@@ -221,6 +222,22 @@ export default function HomeScreen() {
 
   // Re-fetch on mount and whenever the selected store changes (store-scoped Home).
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Phase 3: cascade the product cards in for a short window after load only
+  // (reanimated `entering` fires on mount; the window guard keeps re-renders calm).
+  const reduceMotion = useReduceMotion();
+  const [staggerOn, setStaggerOn] = useState(false);
+  const staggerTimer = useRef<any>(null);
+  useEffect(() => {
+    if (loading) return;
+    setStaggerOn(true);
+    if (staggerTimer.current) clearTimeout(staggerTimer.current);
+    staggerTimer.current = setTimeout(() => setStaggerOn(false), 800);
+  }, [loading]);
+  const cardEntering = (index: number) =>
+    (staggerOn && !reduceMotion.current)
+      ? ReFadeInDown.delay(Math.min(index, 8) * 50).duration(300).springify()
+      : undefined;
   // Refresh the personalized target, saved meals and the live order status
   // whenever Home regains focus; also restore the tab bar (it may have been
   // hidden by scroll on a previous visit).
@@ -313,8 +330,9 @@ export default function HomeScreen() {
         : { label: 'POPULAR', icon: 'flame', bg: null, color: FUEL.lime };
     const ci = cartCtx.getItem(item.id);
     return (
+      <Reanimated.View key={item.id} entering={cardEntering(idx)}>
       <TouchableOpacity
-        key={item.id} testID={`popular-${item.id}`} style={styles.popularCard}
+        testID={`popular-${item.id}`} style={styles.popularCard}
         onPress={() => router.push('/(tabs)/menu')} activeOpacity={0.9}
       >
         {item.image_url ? (
@@ -353,6 +371,7 @@ export default function HomeScreen() {
           </View>
         </View>
       </TouchableOpacity>
+      </Reanimated.View>
     );
   };
 

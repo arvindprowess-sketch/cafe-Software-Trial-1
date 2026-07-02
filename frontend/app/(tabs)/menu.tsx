@@ -19,7 +19,7 @@ import { useStore } from '../../utils/StoreContext';
 import { DIET_TAGS, DIET_LABEL, matchesDiet, matchesAnyDiet, toggleDietTag } from '../../utils/diet';
 import { goalFitForProduct, sortByGoalFit } from '../../utils/goalFit';
 import CartPill from '../components/CartPill';
-import PressableScale from '../components/PressableScale';
+import PressableScale, { useReduceMotion } from '../components/PressableScale';
 import * as Haptics from 'expo-haptics';
 
 // PR-C: success haptic on add-to-cart (safe no-op on web)
@@ -90,6 +90,20 @@ export default function MenuScreen() {
   const [storePickerOpen, setStorePickerOpen] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const searchRef = useRef<TextInput>(null);
+  // Phase 3: stagger the product rows in only for a short window right after a
+  // (re)load — never on every scroll/re-render. onRefresh re-loads → re-staggers.
+  const reduceMotion = useReduceMotion();
+  const [staggerOn, setStaggerOn] = useState(false);
+  const staggerTimer = useRef<any>(null);
+  const triggerStagger = useCallback(() => {
+    setStaggerOn(true);
+    if (staggerTimer.current) clearTimeout(staggerTimer.current);
+    staggerTimer.current = setTimeout(() => setStaggerOn(false), 800);
+  }, []);
+  const rowEntering = (index: number) =>
+    (staggerOn && !reduceMotion.current)
+      ? FadeInDown.delay(Math.min(index, 8) * 50).duration(300).springify()
+      : undefined;
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [orderType, setOrderType] = useState('dine-in');
@@ -143,9 +157,10 @@ export default function MenuScreen() {
         setCategories(cats);
       }
       setLoadError(false);
+      triggerStagger(); // cascade the freshly-loaded rows in (once)
     }
     catch (e) { setLoadError(true); } finally { setLoading(false); }
-  }, [selectedStoreId]);
+  }, [selectedStoreId, triggerStagger]);
 
   // Re-fetch on mount and whenever the selected store changes (store-scoped menu).
   useEffect(() => { loadProducts(); }, [loadProducts]);
@@ -286,18 +301,18 @@ export default function MenuScreen() {
   };
 
   // PR-1: render a subcategory section header, else delegate to the product card.
-  const renderRow = ({ item }: { item: any }) => {
+  const renderRow = ({ item, index }: { item: any; index: number }) => {
     if (item.__header) {
       return (
         <Text testID={`menu-subcat-${String(item.label).toLowerCase().replace(/[^a-z]+/g, '-')}`}
           style={styles.subcatHeader}>{item.label}</Text>
       );
     }
-    return renderProduct({ item });
+    return renderProduct({ item, index });
   };
 
   // Render product row — photo left + ₹/g-protein badge + macros + ADD
-  const renderProduct = ({ item }: { item: any }) => {
+  const renderProduct = ({ item, index = 0 }: { item: any; index?: number }) => {
     const inCart = getItem(item.id);
     const isReadyMade = item.product_type === 'ready_made';
     const displayPrice = getDisplayPrice(item);
@@ -308,6 +323,7 @@ export default function MenuScreen() {
     const goalFit = userGoal ? goalFitForProduct(item, userGoal) : null;
 
     return (
+      <Animated.View entering={rowEntering(index)}>
       <View style={styles.productCard} testID={`product-${item.id}`}>
         {/* Photo (72px, rounded) with ₹/g-protein badge */}
         <View style={styles.productImageWrapper}>
@@ -382,6 +398,7 @@ export default function MenuScreen() {
           </View>
         </View>
       </View>
+      </Animated.View>
     );
   };
 
