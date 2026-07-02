@@ -13,6 +13,7 @@ import { apiCall, getStoredUser } from '../../utils/api';
 import SideDrawer from '../components/SideDrawer';
 import CartPill from '../components/CartPill';
 import { useCart } from '../../utils/CartContext';
+import { useStore } from '../../utils/StoreContext';
 import { FUEL, FONT, GOALS as FUEL_GOALS, RADIUS, SPACE } from '../../utils/theme';
 import { DIET_TAGS, DIET_LABEL, toggleDietTag } from '../../utils/diet';
 import PressableScale from '../components/PressableScale';
@@ -84,6 +85,7 @@ const MENU_CATEGORIES = [
 export default function HomeScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const { selectedStoreId } = useStore();
   const [user, setUser] = useState<any>(null);
   const [summary, setSummary] = useState<any>(null);
   const [products, setProducts] = useState<any[]>([]);
@@ -93,6 +95,7 @@ export default function HomeScreen() {
   const [goalFit, setGoalFit] = useState<any[]>([]);    // "Best for your goal" (/products/goal-fit)
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false); // FIX 5: Home resilience — show a retry block when the core load fails
   const bannerRef = useRef<FlatList>(null);
   const [bannerIdx, setBannerIdx] = useState(0);
   // Offers popup (NET-NEW): bottom-sheet shown once/day/user after first load
@@ -187,29 +190,39 @@ export default function HomeScreen() {
   }, []);
 
   const loadData = useCallback(async () => {
+    // Store-scoped best-sellers/fallback so per-store price & availability show on Home.
+    const storeQ = selectedStoreId ? `?store_id=${selectedStoreId}` : '';
     try {
       const [u, s, best, b, cats, pk, gf] = await Promise.all([
         getStoredUser(),
         apiCall('/user/nutrition-summary').catch(() => null),
-        apiCall('/products/best-sellers').catch(() => apiCall('/products')).catch(() => []),
-        apiCall('/banners'),
+        apiCall(`/products/best-sellers${storeQ}`).catch(() => apiCall(`/products${storeQ}`)).catch(() => []),
+        apiCall('/banners').catch(() => []), // FIX 5: never let a banners failure blank the whole Home
         apiCall('/categories').catch(() => []),
         apiCall('/packs').catch(() => []),
         apiCall('/products/goal-fit').catch(() => null),
       ]);
       setPacks(Array.isArray(pk) ? pk : []);
       setGoalFit(gf?.products ? gf.products.filter((p: any) => p.goal_fit).slice(0, 8) : []);
-      setUser(u); setSummary(s); setProducts(best); setBanners(b);
+      // Map any store `selling_price` (override) onto the price fields the cards read.
+      const bestPriced = Array.isArray(best) ? best.map((p: any) => (
+        p?.selling_price == null ? p
+          : p.product_type === 'ready_made' ? { ...p, fixed_price: p.selling_price }
+          : { ...p, cost_per_100g: p.selling_price }
+      )) : best;
+      setUser(u); setSummary(s); setProducts(bestPriced); setBanners(b);
       setMenuCats(Array.isArray(cats) && cats.length ? cats : []);
+      setLoadError(false);
       loadTarget();
       loadSavedMeals();
       loadActiveOrder();
       loadNotifCount();
       maybeShowOffersPopup(b, u);
-    } catch (e) {} finally { setLoading(false); }
-  }, [loadTarget, loadSavedMeals, loadActiveOrder, loadNotifCount, maybeShowOffersPopup]);
+    } catch (e) { setLoadError(true); } finally { setLoading(false); }
+  }, [selectedStoreId, loadTarget, loadSavedMeals, loadActiveOrder, loadNotifCount, maybeShowOffersPopup]);
 
-  useEffect(() => { loadData(); }, []);
+  // Re-fetch on mount and whenever the selected store changes (store-scoped Home).
+  useEffect(() => { loadData(); }, [loadData]);
   // Refresh the personalized target, saved meals and the live order status
   // whenever Home regains focus; also restore the tab bar (it may have been
   // hidden by scroll on a previous visit).
@@ -480,6 +493,23 @@ export default function HomeScreen() {
   };
 
   if (loading) return <SafeAreaView style={styles.safe} edges={['top']}><View style={styles.center}><ActivityIndicator size="large" color={FUEL.ink} /></View></SafeAreaView>;
+
+  // FIX 5: if the core load failed and we have nothing to show, offer a retry
+  // instead of a silently blank Home.
+  if (!loading && loadError && products.length === 0) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <View style={styles.center} testID="home-error">
+          <Ionicons name="cloud-offline-outline" size={48} color={FUEL.sandBorder} />
+          <Text style={styles.homeErrorText}>Couldn't load. Check your connection.</Text>
+          <TouchableOpacity testID="home-retry" style={styles.homeRetryBtn} onPress={() => { setLoading(true); loadData(); }} activeOpacity={0.85}>
+            <Ionicons name="refresh" size={16} color={FUEL.lime} />
+            <Text style={styles.homeRetryText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <View style={styles.safe}>
@@ -1391,6 +1421,9 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: FUEL.sand },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  homeErrorText: { fontFamily: FONT.bodySemibold, fontSize: 14, color: FUEL.muted, marginTop: SPACE.m, textAlign: 'center', paddingHorizontal: SPACE.xl },
+  homeRetryBtn: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s, backgroundColor: FUEL.ink, borderRadius: RADIUS.lg, paddingVertical: SPACE.m, paddingHorizontal: SPACE.xl, marginTop: SPACE.l },
+  homeRetryText: { color: FUEL.lime, fontFamily: FONT.bodyExtrabold, fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.3 },
 
   // ===== Edge-to-edge hero carousel =====
   heroWrap: { width: '100%', backgroundColor: FUEL.ink },
