@@ -947,27 +947,25 @@ export default function HomeScreen() {
           </>
         )}
 
-        {/* ===== QUICK ACTIONS — Reorder · Schedule · Scan ===== */}
-        <View style={styles.quickRow}>
-          <TouchableOpacity testID="quick-reorder" style={styles.quickCard} activeOpacity={0.9} onPress={() => router.push('/(tabs)/orders')}>
-            <View style={styles.quickIcon}><Ionicons name="repeat" size={19} color={FUEL.limeDeep} /></View>
-            <Text style={styles.quickLabel}>Reorder</Text>
+        {/* ===== QUICK ACTIONS — Schedule (hero) + Reorder ===== */}
+        {/* Scan Table removed: dine-in entry lives in the location bar above. */}
+        <View style={styles.quickActions}>
+          <TouchableOpacity testID="schedule-for-later" style={styles.scheduleHero} activeOpacity={0.9} onPress={() => router.push('/(tabs)/menu')}>
+            <View style={styles.scheduleHeroIcon}><Ionicons name="time" size={22} color={FUEL.ink} /></View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.scheduleHeroTitle}>Schedule a Meal</Text>
+              <Text style={styles.scheduleHeroSub}>Plan today's meals — ready when you are</Text>
+            </View>
+            <Ionicons name="arrow-forward" size={20} color={FUEL.lime} />
           </TouchableOpacity>
-          <TouchableOpacity testID="schedule-for-later" style={styles.quickCard} activeOpacity={0.9} onPress={() => router.push('/(tabs)/menu')}>
-            <View style={styles.quickIcon}><Ionicons name="time" size={19} color={FUEL.success} /></View>
-            <Text style={styles.quickLabel}>Schedule</Text>
+          <TouchableOpacity testID="quick-reorder" style={styles.reorderCard} activeOpacity={0.9} onPress={() => router.push('/(tabs)/orders')}>
+            <View style={styles.reorderIcon}><Ionicons name="repeat" size={19} color={FUEL.limeDeep} /></View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.reorderTitle}>Reorder</Text>
+              <Text style={styles.reorderSub}>Your last order, one tap away</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={FUEL.muted} />
           </TouchableOpacity>
-          {orderType === 'dine-in' ? (
-            <TouchableOpacity testID="quick-scan" style={[styles.quickCard, styles.quickCardInk]} activeOpacity={0.9} onPress={() => router.push('/scan-table')}>
-              <View style={[styles.quickIcon, styles.quickIconInk]}><Ionicons name="qr-code" size={19} color={FUEL.lime} /></View>
-              <Text style={[styles.quickLabel, { color: FUEL.white }]}>Scan Table</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity testID="quick-address" style={styles.quickCard} activeOpacity={0.9} onPress={() => setShowAddressModal(true)}>
-              <View style={styles.quickIcon}><Ionicons name="location" size={19} color={FUEL.limeDeep} /></View>
-              <Text style={styles.quickLabel}>Address</Text>
-            </TouchableOpacity>
-          )}
         </View>
 
         {showMealBuilder && !aiMeal && (
@@ -1476,13 +1474,16 @@ const styles = StyleSheet.create({
   packViewBtn: { backgroundColor: FUEL.lime, borderRadius: RADIUS.pill, paddingHorizontal: SPACE.m, paddingVertical: 6 },
   packViewText: { fontFamily: FONT.bodyExtrabold, fontSize: 11, color: FUEL.ink, letterSpacing: 0.5 },
 
-  // ===== Quick actions grid =====
-  quickRow: { flexDirection: 'row', gap: SPACE.m, paddingHorizontal: SPACE.l, marginTop: SPACE.l },
-  quickCard: { flex: 1, alignItems: 'center', gap: SPACE.s, backgroundColor: FUEL.white, borderRadius: RADIUS.md, paddingVertical: SPACE.l, borderWidth: 1, borderColor: FUEL.sandBorder },
-  quickCardInk: { backgroundColor: FUEL.ink, borderColor: FUEL.ink },
-  quickIcon: { width: 40, height: 40, borderRadius: RADIUS.sm, backgroundColor: FUEL.limeTint, alignItems: 'center', justifyContent: 'center' },
-  quickIconInk: { backgroundColor: 'rgba(199,242,78,0.15)' },
-  quickLabel: { fontFamily: FONT.bodyExtrabold, fontSize: 11.5, color: FUEL.ink },
+  // ===== Quick actions — Schedule hero + Reorder secondary =====
+  quickActions: { paddingHorizontal: SPACE.l, marginTop: SPACE.l, gap: SPACE.m },
+  scheduleHero: { flexDirection: 'row', alignItems: 'center', gap: SPACE.m, backgroundColor: FUEL.ink, borderRadius: RADIUS.md, padding: SPACE.l },
+  scheduleHeroIcon: { width: 44, height: 44, borderRadius: RADIUS.sm, backgroundColor: FUEL.lime, alignItems: 'center', justifyContent: 'center' },
+  scheduleHeroTitle: { fontFamily: FONT.bodyExtrabold, fontSize: 16, color: FUEL.sand },
+  scheduleHeroSub: { fontFamily: FONT.body, fontSize: 12, color: 'rgba(244,241,233,0.7)', marginTop: 2 },
+  reorderCard: { flexDirection: 'row', alignItems: 'center', gap: SPACE.m, backgroundColor: FUEL.white, borderRadius: RADIUS.md, padding: SPACE.l, borderWidth: 1, borderColor: FUEL.sandBorder },
+  reorderIcon: { width: 40, height: 40, borderRadius: RADIUS.sm, backgroundColor: FUEL.limeTint, alignItems: 'center', justifyContent: 'center' },
+  reorderTitle: { fontFamily: FONT.bodyExtrabold, fontSize: 14, color: FUEL.ink },
+  reorderSub: { fontFamily: FONT.body, fontSize: 11.5, color: FUEL.muted, marginTop: 2 },
 
   // Goal-first ordering
   goalSelector: { paddingHorizontal: SPACE.l, marginTop: SPACE.l },
