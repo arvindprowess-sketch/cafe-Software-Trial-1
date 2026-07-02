@@ -898,27 +898,6 @@ export default function HomeScreen() {
           </>
         )}
 
-        {/* ===== AI COACH — chat + portion adjust ===== */}
-        <View style={styles.popularHeaderRow}>
-          <Text style={styles.sectionTitle}>AI Coach</Text>
-        </View>
-        <View style={styles.aiCoachRow}>
-          <TouchableOpacity style={styles.aiCoachCard} onPress={() => router.push('/ai-chat')} testID="ai-coach-chat" activeOpacity={0.9}>
-            <View style={styles.aiCoachIcon}><Ionicons name="chatbubbles" size={18} color={FUEL.limeDeep} /></View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.aiCoachTitle}>AI Chat</Text>
-              <Text style={styles.aiCoachSub}>Ask your coach</Text>
-            </View>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.aiCoachCard} onPress={() => setShowMealBuilder(true)} testID="ai-coach-adjust" activeOpacity={0.9}>
-            <View style={styles.aiCoachIcon}><Ionicons name="options" size={18} color={FUEL.limeDeep} /></View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.aiCoachTitle}>Adjust Portions</Text>
-              <Text style={styles.aiCoachSub}>Fine-tune macros</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
-
         {/* ===== TODAY'S NUTRITION CARD (CLICKABLE) ===== */}
         <TouchableOpacity
           style={styles.nutriCard}
@@ -1496,13 +1475,6 @@ const styles = StyleSheet.create({
   packPrice: { fontFamily: FONT.display, fontSize: 16, color: FUEL.ink },
   packViewBtn: { backgroundColor: FUEL.lime, borderRadius: RADIUS.pill, paddingHorizontal: SPACE.m, paddingVertical: 6 },
   packViewText: { fontFamily: FONT.bodyExtrabold, fontSize: 11, color: FUEL.ink, letterSpacing: 0.5 },
-
-  // ===== AI Coach row =====
-  aiCoachRow: { flexDirection: 'row', gap: SPACE.m, paddingHorizontal: SPACE.l },
-  aiCoachCard: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: SPACE.s, backgroundColor: FUEL.white, borderRadius: RADIUS.md, padding: SPACE.m, borderWidth: 1, borderColor: FUEL.sandBorder },
-  aiCoachIcon: { width: 36, height: 36, borderRadius: RADIUS.sm, backgroundColor: FUEL.limeTint, alignItems: 'center', justifyContent: 'center' },
-  aiCoachTitle: { fontFamily: FONT.bodyExtrabold, fontSize: 12.5, color: FUEL.ink },
-  aiCoachSub: { fontFamily: FONT.body, fontSize: 10.5, color: FUEL.muted, marginTop: 1 },
 
   // ===== Quick actions grid =====
   quickRow: { flexDirection: 'row', gap: SPACE.m, paddingHorizontal: SPACE.l, marginTop: SPACE.l },
