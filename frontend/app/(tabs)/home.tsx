@@ -1234,10 +1234,10 @@ export default function HomeScreen() {
             <Ionicons name="sparkles" size={17} color={FUEL.lime} />
           </TouchableOpacity>
           {/* Notifications — bell with unread badge */}
-          <TouchableOpacity testID="header-notifications" style={styles.headerIconBtn} onPress={() => router.push('/notifications')} activeOpacity={0.85}>
+          <TouchableOpacity testID="notif-bell" style={styles.headerIconBtn} onPress={() => router.push('/notifications')} activeOpacity={0.85}>
             <Ionicons name="notifications" size={17} color={FUEL.sand} />
             {notifUnread > 0 && (
-              <View style={styles.notifBadge}>
+              <View style={styles.notifBadge} testID="notif-unread-badge">
                 <Text style={styles.notifBadgeText}>{notifUnread > 9 ? '9+' : notifUnread}</Text>
               </View>
             )}
