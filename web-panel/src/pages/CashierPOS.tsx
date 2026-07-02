@@ -461,28 +461,26 @@ export default function CashierPOS() {
             const unavailable = isUnavailable(p);
             const inCart = cart.find(c => c.id === p.id);
             const isRM = p.product_type === 'ready_made';
+            const tags = dietTagsOf(p);
+            const nonVeg = tags.includes('non-veg');
+            const cartCount = inCart ? (isRM ? (inCart.plateQty || 1) : 1) : 0;
             return (
               <div key={p.id} className={`pos-product ${inCart ? 'in-cart' : ''} ${unavailable ? 'unavailable' : ''}`}
-                onClick={() => !unavailable && openDetail(p)} data-testid={`product-${p.id}`}
-                style={unavailable ? { opacity: 0.4, cursor: 'not-allowed' } : {}}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }} data-testid={`pos-diet-tags-${p.id}`}>
-                    {dietTagsOf(p).slice(0, 3).map((t: string) => (
-                      <span key={t} className="pos-product-badge" style={{ background: t === 'non-veg' ? '#F1E7E1' : '#EAF2DD', color: t === 'non-veg' ? '#15140F' : '#3FA34D', fontSize: 9 }}>{POS_DIET_LABEL[t] || t}</span>
-                    ))}
-                  </div>
-                  {isRM && <span style={{ fontSize: 9, fontWeight: 700, background: '#15140F15', color: '#15140F', padding: '2px 6px', borderRadius: 4 }}>MEAL</span>}
+                onClick={() => !unavailable && openDetail(p)} data-testid={`product-${p.id}`}>
+                <div className="pos-card-top">
+                  {inCart ? <span className="pos-count-chip" data-testid={`pos-count-${p.id}`}>{cartCount}</span> : <span />}
+                  {unavailable
+                    ? <span className="pos-out-tag" data-testid={`pos-out-${p.id}`}>OUT</span>
+                    : <span className="pos-diet-dot" style={{ background: nonVeg ? 'var(--protein)' : 'var(--success)' }} title={nonVeg ? 'Non-Veg' : 'Veg'} data-testid={`pos-diet-dot-${p.id}`} />}
                 </div>
                 <div className="pos-product-name">{p.name}</div>
-                {unavailable && <div style={{ fontSize: 11, color: '#15140F', fontWeight: 700 }}>Unavailable</div>}
                 {isRM ? (
-                  <><div className="pos-product-price">₹{p.fixed_price || Math.round(p.cost_per_100g * (p.serving_grams || 200) / 100)}/plate</div>
-                  <div className="pos-product-nutrition">{p.total_calories_per_serving || Math.round(p.calories_per_100g * (p.serving_grams || 200) / 100)} cal</div></>
+                  <><div className="pos-product-price">₹{p.fixed_price || Math.round(p.cost_per_100g * (p.serving_grams || 200) / 100)}<span style={{ fontSize: 11, color: 'var(--muted)', letterSpacing: 0 }}>/plate</span></div>
+                  <div className="pos-product-nutrition">{p.total_calories_per_serving || Math.round(p.calories_per_100g * (p.serving_grams || 200) / 100)} cal · Meal</div></>
                 ) : (
-                  <><div className="pos-product-price">₹{p.cost_per_100g}/100g</div>
-                  <div className="pos-product-nutrition">{p.calories_per_100g} cal | P:{p.protein_per_100g}g</div></>
+                  <><div className="pos-product-price">₹{p.cost_per_100g}<span style={{ fontSize: 11, color: 'var(--muted)', letterSpacing: 0 }}>/100g</span></div>
+                  <div className="pos-product-nutrition">{p.calories_per_100g} cal · P{p.protein_per_100g}g</div></>
                 )}
-                {inCart && <div style={{ marginTop: 4, fontSize: 11, fontWeight: 700, color: '#15140F' }}>In cart</div>}
               </div>
             );
           };
@@ -506,96 +504,87 @@ export default function CashierPOS() {
         })()}
       </div>
 
-      {/* RIGHT - Cart */}
-      <div className="pos-cart">
-        <div className="pos-cart-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span>Cart ({cart.length})</span>
-          {cart.length > 0 && (
-            <button className="btn btn-sm btn-orange" onClick={holdBill} data-testid="hold-bill-btn" title="Hold this bill for later">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M10 15V9l5 3-5 3z"/></svg>
-              Hold
-            </button>
-          )}
+      {/* RIGHT - Ink bill panel */}
+      <div className="pos-bill" data-testid="pos-bill">
+        <div className="pos-bill-header">
+          <div className="pos-bill-title-row">
+            <span className="pos-bill-title">Bill <span className="count">· {cart.length}</span></span>
+            {cart.length > 0 && (
+              <button className="pos-hold-btn" onClick={holdBill} data-testid="hold-bill-btn" title="Hold this bill for later (H)">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M10 15V9l5 3-5 3z"/></svg>
+                Hold
+              </button>
+            )}
+          </div>
+          <div className="pos-bill-fields">
+            <input className="pos-ink-input" value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="Customer name (Walk-in)" data-testid="customer-name-input" />
+            <div className="pos-type-pills">
+              {['dine-in', 'takeaway'].map(t => (
+                <button key={t} className={`pos-type-pill ${orderType === t ? 'active' : ''}`} onClick={() => setOrderType(t)} data-testid={`type-${t}`}>{t === 'dine-in' ? 'Dine-In' : 'Takeaway'}</button>
+              ))}
+            </div>
+          </div>
         </div>
-        <div style={{ padding: '8px 12px', borderBottom: '1px solid #EFEFEF' }}>
-          <input value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="Customer name (Walk-in)" data-testid="customer-name-input" style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #EFEFEF', fontSize: 13 }} />
-        </div>
-        <div className="pos-cart-items">
+
+        <div className="pos-bill-items" data-testid="pos-bill-items">
           {cart.map((c, idx) => (
-            <div className="pos-cart-item" key={`${c.id}_${idx}`} style={{ flexDirection: 'column', gap: 4 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-                <div className="pos-cart-info" style={{ flex: 1 }}>
-                  <div className="pos-cart-name">{c.name} {c.product_type === 'ready_made' && <span style={{ fontSize: 10, color: '#15140F' }}>MEAL</span>}</div>
-                  {c.product_type === 'ready_made' ? (
-                    <div className="pos-cart-detail">x{c.plateQty || 1} plate | {c.calories} cal</div>
-                  ) : (
-                    <div className="pos-cart-detail">{c.grams}g | {c.calories} cal</div>
-                  )}
+            <div className="pos-bill-item" key={`${c.id}_${idx}`}>
+              <div className="pos-bill-item-top">
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="pos-bill-item-name">{c.name}{c.product_type === 'ready_made' && <span className="pos-bill-item-meal">MEAL</span>}</div>
+                  <div className="pos-bill-item-detail">{c.product_type === 'ready_made' ? `x${c.plateQty || 1} plate · ${c.calories} cal` : `${c.grams}g · ${c.calories} cal`}</div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span className="pos-cart-price" style={{ cursor: c.product_type !== 'ready_made' ? 'pointer' : 'default' }} onClick={() => { if (c.product_type !== 'ready_made') { setEditingIdx(idx); setEditGramsVal(String(c.grams)); setEditPriceVal(String(Math.round(c.price))); } }}>₹{Math.round(c.price)}</span>
-                  <button className="pos-cart-remove" onClick={() => removeItem(idx)} data-testid={`remove-${idx}`}>x</button>
+                  <span className="pos-bill-item-price" style={{ cursor: c.product_type !== 'ready_made' ? 'pointer' : 'default' }} onClick={() => { if (c.product_type !== 'ready_made') { setEditingIdx(idx); setEditGramsVal(String(c.grams)); setEditPriceVal(String(Math.round(c.price))); } }}>₹{Math.round(c.price)}</span>
+                  <button className="pos-bill-remove" onClick={() => removeItem(idx)} data-testid={`remove-${idx}`} aria-label="Remove item">×</button>
                 </div>
               </div>
-              {/* Inline edit for single items */}
               {c.product_type !== 'ready_made' && editingIdx === idx && (
-                <div style={{ display: 'flex', gap: 4, alignItems: 'center', background: '#F8F8F8', borderRadius: 8, padding: 6 }}>
+                <div className="pos-inline-edit">
                   <div style={{ flex: 1 }}>
-                    <label style={{ fontSize: 10, color: '#9C9C9C' }}>Grams</label>
-                    <input type="number" value={editGramsVal} onChange={e => setEditGramsVal(e.target.value)} onKeyDown={e => e.key === 'Enter' && applyEditGrams(idx)}
-                      style={{ width: '100%', padding: '4px 6px', borderRadius: 6, border: '1px solid #EFEFEF', fontSize: 13 }} data-testid={`edit-grams-${idx}`} />
+                    <label>Grams</label>
+                    <input type="number" value={editGramsVal} onChange={e => setEditGramsVal(e.target.value)} onKeyDown={e => e.key === 'Enter' && applyEditGrams(idx)} data-testid={`edit-grams-${idx}`} />
                   </div>
                   <div style={{ flex: 1 }}>
-                    <label style={{ fontSize: 10, color: '#9C9C9C' }}>Price (₹)</label>
-                    <input type="number" value={editPriceVal} onChange={e => setEditPriceVal(e.target.value)} onKeyDown={e => e.key === 'Enter' && applyEditPrice(idx)}
-                      style={{ width: '100%', padding: '4px 6px', borderRadius: 6, border: '1px solid #EFEFEF', fontSize: 13 }} data-testid={`edit-price-${idx}`} />
+                    <label>Price (₹)</label>
+                    <input type="number" value={editPriceVal} onChange={e => setEditPriceVal(e.target.value)} onKeyDown={e => e.key === 'Enter' && applyEditPrice(idx)} data-testid={`edit-price-${idx}`} />
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 12 }}>
-                    <button className="btn btn-sm btn-green" onClick={() => applyEditGrams(idx)} data-testid={`save-grams-${idx}`} style={{ fontSize: 10, padding: '4px 8px' }}>g</button>
-                    <button className="btn btn-sm btn-purple" onClick={() => applyEditPrice(idx)} data-testid={`save-price-${idx}`} style={{ fontSize: 10, padding: '4px 8px' }}>₹</button>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    <button className="btn btn-sm btn-green" onClick={() => applyEditGrams(idx)} data-testid={`save-grams-${idx}`} style={{ fontSize: 10, padding: '5px 9px' }}>g</button>
+                    <button className="btn btn-sm btn-primary" onClick={() => applyEditPrice(idx)} data-testid={`save-price-${idx}`} style={{ fontSize: 10, padding: '5px 9px' }}>₹</button>
                   </div>
                 </div>
               )}
               {c.product_type !== 'ready_made' && editingIdx !== idx && (
-                <button style={{ fontSize: 11, color: '#15140F', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', padding: 0, fontWeight: 600 }}
-                  onClick={() => { setEditingIdx(idx); setEditGramsVal(String(c.grams)); setEditPriceVal(String(Math.round(c.price))); }}>
-                  Edit grams / price
-                </button>
+                <button className="pos-bill-linkbtn" onClick={() => { setEditingIdx(idx); setEditGramsVal(String(c.grams)); setEditPriceVal(String(Math.round(c.price))); }}>Edit grams / price</button>
               )}
             </div>
           ))}
-          {cart.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: '#9C9C9C', fontSize: 14 }}>Add items from menu</div>}
+          {cart.length === 0 && <div className="pos-bill-empty">Add items from the menu</div>}
         </div>
-        <div className="pos-cart-footer">
+
+        <div className="pos-bill-footer">
           {cart.length > 0 && (
             <div style={{ marginBottom: 10 }}>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <input value={couponCode} onChange={e => setCouponCode(e.target.value.toUpperCase())} onKeyDown={e => e.key === 'Enter' && applyCoupon()} placeholder="Coupon code" data-testid="coupon-input" style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: '1px solid #EFEFEF', fontSize: 13, fontWeight: 600 }} />
-                <button className="btn btn-sm btn-orange" onClick={applyCoupon} data-testid="apply-coupon-btn" disabled={!couponCode.trim()}>Apply</button>
+              <div className="pos-coupon-row">
+                <input className="pos-ink-input" style={{ flex: 1, fontWeight: 600 }} value={couponCode} onChange={e => setCouponCode(e.target.value.toUpperCase())} onKeyDown={e => e.key === 'Enter' && applyCoupon()} placeholder="Coupon code" data-testid="coupon-input" />
+                <button className="pos-coupon-apply" onClick={applyCoupon} data-testid="apply-coupon-btn" disabled={!couponCode.trim()}>Apply</button>
               </div>
-              {couponError && <p style={{ color: '#15140F', fontSize: 12, marginTop: 4 }} data-testid="coupon-error">{couponError}</p>}
+              {couponError && <p className="pos-coupon-error" data-testid="coupon-error">{couponError}</p>}
               {couponInfo && (
-                <div style={{ background: '#EAF2DD', borderRadius: 8, padding: '6px 10px', marginTop: 6, fontSize: 12, color: '#3FA34D', display: 'flex', justifyContent: 'space-between' }} data-testid="coupon-applied">
+                <div className="pos-coupon-chip" data-testid="coupon-applied">
                   <span>{couponInfo.title}</span><span style={{ fontWeight: 700 }}>-₹{Math.round(bill.discount)}</span>
                 </div>
               )}
             </div>
           )}
-          <div className="order-type-toggle">
-            {['dine-in', 'takeaway'].map(t => (
-              <button key={t} className={`order-type-btn ${orderType === t ? 'active' : ''}`} onClick={() => setOrderType(t)} data-testid={`type-${t}`}>{t === 'dine-in' ? 'Dine-In' : 'Takeaway'}</button>
-            ))}
-          </div>
-          <div className="pos-totals">
-            <div className="pos-total-row"><span>Item Total</span><span>{quoteLoading ? '…' : `₹${Math.round(bill.itemTotal)}`}</span></div>
-            {bill.packaging > 0 && <div className="pos-total-row"><span>Packaging</span><span>₹{Math.round(bill.packaging)}</span></div>}
-            {couponInfo && <div className="pos-total-row" style={{ color: '#3FA34D' }}><span>Discount</span><span>-₹{Math.round(bill.discount)}</span></div>}
-            <div className="pos-total-row" style={{ fontSize: 12, color: '#9C9C9C' }}><span>Base Amount</span><span>₹{getBaseAmount()}</span></div>
-            <div className="pos-total-row" style={{ fontSize: 12, color: '#9C9C9C' }}><span>GST (5% incl.)</span><span>₹{getGST()}</span></div>
-            <div className="pos-total-row grand"><span>Total</span><span>{quoteLoading ? '…' : `₹${getFinalTotal()}`}</span></div>
-            <div className="pos-total-row" style={{ fontSize: 11, color: '#9C9C9C' }}><span>Nutrition</span><span>{Math.round(totals.calories)} cal | P:{Math.round(totals.protein)}g</span></div>
-          </div>
-          <button className="pos-order-btn" onClick={() => setShowPayment(true)} disabled={!cart.length} data-testid="proceed-payment-btn">Proceed to Payment — ₹{getFinalTotal()}</button>
+          <div className="pos-bill-total-row"><span>Item Total</span><span>{quoteLoading ? '…' : `₹${Math.round(bill.itemTotal)}`}</span></div>
+          {bill.packaging > 0 && <div className="pos-bill-total-row"><span>Packaging</span><span>₹{Math.round(bill.packaging)}</span></div>}
+          {couponInfo && <div className="pos-bill-total-row discount"><span>Discount</span><span>-₹{Math.round(bill.discount)}</span></div>}
+          <div className="pos-bill-total-row"><span>Base Amount</span><span>₹{getBaseAmount()}</span></div>
+          <div className="pos-bill-total-row"><span>GST (5% incl.)</span><span>₹{getGST()}</span></div>
+          <div className="pos-bill-total-row grand"><span>Total</span><span>{quoteLoading ? '…' : `₹${getFinalTotal()}`}</span></div>
+          <button className="pos-charge-btn" onClick={() => setShowPayment(true)} disabled={!cart.length} data-testid="proceed-payment-btn">Charge ₹{getFinalTotal()}</button>
         </div>
       </div>
 

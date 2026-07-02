@@ -340,6 +340,95 @@ th.sortable .sort-caret { opacity: 0.6; font-size: 11px; margin-left: 4px; }
   .area-inbox { grid-template-columns: 1fr; }
 }
 
+/* ===================================================================== */
+/* POS PREMIUM ELEVATION (Cashier Round 3)                                */
+/* Sand product zone · ink bill column · lime CTA. Extends FUEL only.     */
+/* Muted text on ink uses sand-alpha (contrast) — never --muted (#6B6A5E)*/
+/* which fails 4.5:1 on ink.                                              */
+/* ===================================================================== */
+
+/* One consistent section-title treatment across all cashier pages (A1.4) */
+.pos-section-title { font-family: var(--font-brand); font-size: 16px; font-weight: 400; text-transform: uppercase; letter-spacing: 0.03em; color: var(--ink); line-height: 1.1; }
+.pos-section-kicker { font-family: var(--font-body); font-size: 12px; font-weight: 500; color: var(--muted); margin-top: 3px; }
+
+/* Wider bill column (A1.1) — overrides the 380px grid above */
+.pos-layout { grid-template-columns: 1fr 400px; }
+
+/* --- Ink bill panel (A1.1/A1.2) --- */
+.pos-bill { background: var(--ink); color: var(--sand); border-radius: var(--radius-lg); display: flex; flex-direction: column; position: sticky; top: 80px; max-height: calc(100vh - 100px); margin: 20px 20px 20px 0; box-shadow: 0 12px 36px rgba(21,20,15,0.28); overflow: hidden; }
+.pos-bill-header { padding: 16px 18px 14px; border-bottom: 1px solid rgba(244,241,233,0.12); }
+.pos-bill-title-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.pos-bill-title { font-family: var(--font-brand); font-size: 20px; font-weight: 400; text-transform: uppercase; letter-spacing: 0.02em; color: var(--sand); }
+.pos-bill-title .count { color: var(--lime); }
+.pos-bill-fields { display: flex; flex-direction: column; gap: 10px; }
+
+/* Dark inputs on the ink panel */
+.pos-ink-input { width: 100%; padding: 10px 12px; border-radius: var(--radius); border: 1.5px solid rgba(244,241,233,0.18); background: rgba(244,241,233,0.06); color: var(--sand); font-size: 13px; outline: none; transition: border-color 0.15s; }
+.pos-ink-input::placeholder { color: rgba(244,241,233,0.4); }
+.pos-ink-input:focus { border-color: var(--lime); }
+
+/* Order-type pills on ink */
+.pos-type-pills { display: flex; gap: 6px; }
+.pos-type-pill { flex: 1; padding: 9px 8px; border-radius: var(--radius-pill); border: 1.5px solid rgba(244,241,233,0.2); background: transparent; color: rgba(244,241,233,0.6); font-family: var(--font-brand); font-size: 13px; font-weight: 400; text-transform: uppercase; letter-spacing: 0.02em; min-height: 40px; transition: background-color 0.15s, color 0.15s, border-color 0.15s; }
+.pos-type-pill.active { background: var(--lime); color: var(--ink); border-color: var(--lime); }
+
+/* Item list on ink */
+.pos-bill-items { flex: 1; overflow-y: auto; padding: 10px 14px; }
+.pos-bill-item { padding: 10px 0; border-bottom: 1px solid rgba(244,241,233,0.1); }
+.pos-bill-item:last-child { border-bottom: none; }
+.pos-bill-item-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.pos-bill-item-name { font-size: 14px; font-weight: 700; color: var(--sand); }
+.pos-bill-item-meal { font-size: 10px; color: var(--lime); font-family: var(--font-brand); letter-spacing: 0.03em; margin-left: 4px; }
+.pos-bill-item-detail { font-size: 12px; color: rgba(244,241,233,0.55); margin-top: 1px; }
+.pos-bill-item-price { font-family: var(--font-brand); font-size: 16px; color: var(--sand); font-variant-numeric: tabular-nums; }
+.pos-bill-remove { background: none; border: none; color: rgba(244,241,233,0.5); font-size: 18px; line-height: 1; padding: 2px 7px; border-radius: 6px; transition: color 0.15s, background-color 0.15s; }
+.pos-bill-remove:hover { color: var(--sand); background: rgba(244,241,233,0.1); }
+.pos-bill-empty { text-align: center; padding: 44px 20px; color: rgba(244,241,233,0.45); font-size: 14px; }
+.pos-bill-linkbtn { font-size: 11px; color: var(--lime); background: none; border: none; cursor: pointer; padding: 2px 0; font-weight: 600; text-align: left; }
+
+/* Inline grams/price editor (kept, tuned for the ink panel) */
+.pos-inline-edit { display: flex; gap: 6px; align-items: flex-end; background: rgba(244,241,233,0.08); border-radius: 8px; padding: 8px; margin-top: 8px; }
+.pos-inline-edit label { font-size: 10px; color: rgba(244,241,233,0.55); display: block; margin-bottom: 3px; }
+.pos-inline-edit input { width: 100%; padding: 5px 7px; border-radius: 6px; border: 1px solid rgba(244,241,233,0.2); background: rgba(244,241,233,0.06); color: var(--sand); font-size: 13px; outline: none; }
+
+/* Sticky footer with totals + CHARGE (A1.2) */
+.pos-bill-footer { padding: 14px 18px 18px; border-top: 1px solid rgba(244,241,233,0.12); background: var(--ink-soft); }
+.pos-bill-total-row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 13px; color: rgba(244,241,233,0.65); font-variant-numeric: tabular-nums; }
+.pos-bill-total-row.grand { font-family: var(--font-brand); font-size: 22px; font-weight: 400; color: var(--sand); border-top: 1px solid rgba(244,241,233,0.15); padding-top: 10px; margin-top: 6px; }
+.pos-bill-total-row.discount { color: var(--lime); }
+
+/* Coupon on ink */
+.pos-coupon-row { display: flex; gap: 6px; }
+.pos-coupon-apply { background: var(--lime); color: var(--ink); border: none; border-radius: var(--radius-pill); padding: 0 16px; font-family: var(--font-brand); font-size: 12px; text-transform: uppercase; letter-spacing: 0.02em; min-height: 38px; }
+.pos-coupon-apply:disabled { background: rgba(244,241,233,0.14); color: rgba(244,241,233,0.4); }
+.pos-coupon-chip { background: rgba(199,242,78,0.15); border-radius: 8px; padding: 7px 10px; margin-top: 6px; font-size: 12px; color: var(--lime); display: flex; justify-content: space-between; }
+.pos-coupon-error { color: #F0B4A8; font-size: 12px; margin-top: 4px; }
+
+/* Hold pill on ink */
+.pos-hold-btn { display: inline-flex; align-items: center; gap: 5px; background: rgba(244,241,233,0.1); border: 1px solid rgba(244,241,233,0.2); color: var(--sand); padding: 6px 12px; border-radius: var(--radius-pill); font-family: var(--font-brand); font-size: 12px; font-weight: 400; text-transform: uppercase; letter-spacing: 0.02em; min-height: 34px; transition: background-color 0.15s, color 0.15s, border-color 0.15s; }
+.pos-hold-btn:hover { background: var(--lime); color: var(--ink); border-color: var(--lime); }
+
+/* Primary CTA — live total in the button (A1.3) */
+.pos-charge-btn { width: 100%; margin-top: 12px; padding: 16px; border-radius: var(--radius); border: none; background: var(--lime); color: var(--ink); font-family: var(--font-brand); font-size: 18px; font-weight: 400; text-transform: uppercase; letter-spacing: 0.03em; font-variant-numeric: tabular-nums; min-height: 56px; transition: background-color 0.12s, transform 0.06s; }
+.pos-charge-btn:hover { background: var(--lime-deep); }
+.pos-charge-btn:active { transform: translateY(1px); background: var(--lime-deep); }
+.pos-charge-btn:disabled { background: rgba(244,241,233,0.14); color: rgba(244,241,233,0.4); cursor: not-allowed; transform: none; }
+
+/* --- Product grid cards (A2) --- */
+.pos-product { position: relative; border-radius: 14px; padding: 14px; border: 1px solid var(--border); background: var(--white); cursor: pointer; box-shadow: none; transition: border-color 0.12s, box-shadow 0.12s, transform 0.06s; }
+.pos-product:hover { border-color: var(--ink); box-shadow: 0 2px 8px rgba(21,20,15,0.08); transform: none; }
+.pos-product:active { transform: scale(0.99); }
+.pos-product.in-cart { border: 2px solid var(--lime-deep); background: var(--white); padding: 13px; }
+.pos-product.unavailable { opacity: 0.45; cursor: not-allowed; }
+.pos-product.unavailable:hover { border-color: var(--border); box-shadow: none; }
+.pos-card-top { display: flex; align-items: center; justify-content: space-between; min-height: 18px; margin-bottom: 8px; }
+.pos-product-name { font-family: var(--font-body); font-size: 14px; font-weight: 700; color: var(--ink); line-height: 1.25; margin-bottom: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 35px; }
+.pos-product-price { font-family: var(--font-brand); font-size: 16px; font-weight: 400; color: var(--ink); margin-top: 8px; font-variant-numeric: tabular-nums; }
+.pos-product-nutrition { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.pos-diet-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.pos-count-chip { background: var(--lime); color: var(--ink); font-family: var(--font-brand); font-size: 11px; min-width: 18px; height: 18px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; padding: 0 5px; }
+.pos-out-tag { font-family: var(--font-brand); font-size: 10px; background: var(--ink); color: var(--sand); padding: 2px 6px; border-radius: 4px; letter-spacing: 0.04em; }
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: var(--sand); }
