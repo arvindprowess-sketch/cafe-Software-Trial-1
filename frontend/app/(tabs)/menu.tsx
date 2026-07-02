@@ -4,11 +4,14 @@ import {
   ActivityIndicator, ScrollView, TextInput, Dimensions, Modal
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Image as ExpoImage } from 'expo-image';
+import Animated, { FadeIn, FadeOut, FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { setTabBarHidden, resetTabBar } from '../../utils/tabBar';
 import { apiCall } from '../../utils/api';
 import SideDrawer from '../components/SideDrawer';
+import { SkeletonList } from '../components/Skeleton';
 import { getStoredUser } from '../../utils/api';
 import { useRealtime } from '../../utils/realtime';
 import { FUEL, FONT, RADIUS, SPACE } from '../../utils/theme';
@@ -17,7 +20,8 @@ import { useStore } from '../../utils/StoreContext';
 import { DIET_TAGS, DIET_LABEL, matchesDiet, matchesAnyDiet, toggleDietTag } from '../../utils/diet';
 import { goalFitForProduct, sortByGoalFit } from '../../utils/goalFit';
 import CartPill from '../components/CartPill';
-import PressableScale from '../components/PressableScale';
+import PressableScale, { useReduceMotion } from '../components/PressableScale';
+import { useFlyToCart } from '../components/FlyToCart';
 import * as Haptics from 'expo-haptics';
 
 // PR-C: success haptic on add-to-cart (safe no-op on web)
@@ -92,6 +96,34 @@ export default function MenuScreen() {
   const [storePickerOpen, setStorePickerOpen] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const searchRef = useRef<TextInput>(null);
+  // Phase 3: stagger the product rows in only for a short window right after a
+  // (re)load — never on every scroll/re-render. onRefresh re-loads → re-staggers.
+  const reduceMotion = useReduceMotion();
+  const [staggerOn, setStaggerOn] = useState(false);
+  const staggerTimer = useRef<any>(null);
+  const triggerStagger = useCallback(() => {
+    setStaggerOn(true);
+    if (staggerTimer.current) clearTimeout(staggerTimer.current);
+    staggerTimer.current = setTimeout(() => setStaggerOn(false), 800);
+  }, []);
+  const rowEntering = (index: number) =>
+    (staggerOn && !reduceMotion.current)
+      ? FadeInDown.delay(Math.min(index, 8) * 50).duration(300).springify()
+      : undefined;
+
+  // Phase 4: fly-to-cart. Measure the pressed row's thumbnail, then add + fly.
+  const flyCtx = useFlyToCart();
+  const imgRefs = useRef<Record<string, any>>({});
+  const handleAdd = (item: any) => {
+    addItem(item);
+    hapticSuccess();
+    const node = imgRefs.current[item.id];
+    if (node && flyCtx) {
+      node.measureInWindow((x: number, y: number, w: number, h: number) => {
+        flyCtx.fly({ x, y, width: w, height: h, imageUri: item.image_url });
+      });
+    }
+  };
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [orderType, setOrderType] = useState('dine-in');
@@ -145,9 +177,10 @@ export default function MenuScreen() {
         setCategories(cats);
       }
       setLoadError(false);
+      triggerStagger(); // cascade the freshly-loaded rows in (once)
     }
     catch (e) { setLoadError(true); } finally { setLoading(false); }
-  }, [selectedStoreId]);
+  }, [selectedStoreId, triggerStagger]);
 
   // Re-fetch on mount and whenever the selected store changes (store-scoped menu).
   useEffect(() => { loadProducts(); }, [loadProducts]);
@@ -277,12 +310,11 @@ export default function MenuScreen() {
     const isDark = !!cat.is_signature || (index === 0 && !cat.parent_group);
     const fontStyleProp = cat.font_style === 'italic' ? { fontStyle: 'italic' as const } : cat.font_style === 'mono' ? { fontFamily: 'monospace' } : {};
     return (
-      <TouchableOpacity
+      <PressableScale
         key={cat.id || catValue}
         testID={`sidebar-cat-${catValue}`}
         style={[styles.wallTile, isDark && styles.wallTileFirst, isActive && styles.wallTileActive]}
         onPress={() => setSelectedCat(prev => prev === catValue ? '' : catValue)}
-        activeOpacity={0.85}
       >
         <View style={styles.wallTileTop}>
           <Text style={[styles.wallTileTitle, isDark && styles.wallTileTitleFirst, fontStyleProp]} numberOfLines={2}>
@@ -291,23 +323,23 @@ export default function MenuScreen() {
           {isActive && <Ionicons name="checkmark-circle" size={18} color={isDark ? FUEL.lime : FUEL.limeDeep} />}
         </View>
         <Text style={[styles.wallTileCount, isDark && styles.wallTileCountFirst]}>{countFor(cat)} ITEMS</Text>
-      </TouchableOpacity>
+      </PressableScale>
     );
   };
 
   // PR-1: render a subcategory section header, else delegate to the product card.
-  const renderRow = ({ item }: { item: any }) => {
+  const renderRow = ({ item, index }: { item: any; index: number }) => {
     if (item.__header) {
       return (
         <Text testID={`menu-subcat-${String(item.label).toLowerCase().replace(/[^a-z]+/g, '-')}`}
           style={styles.subcatHeader}>{item.label}</Text>
       );
     }
-    return renderProduct({ item });
+    return renderProduct({ item, index });
   };
 
   // Render product row — photo left + ₹/g-protein badge + macros + ADD
-  const renderProduct = ({ item }: { item: any }) => {
+  const renderProduct = ({ item, index = 0 }: { item: any; index?: number }) => {
     const inCart = getItem(item.id);
     const isReadyMade = item.product_type === 'ready_made';
     const displayPrice = getDisplayPrice(item);
@@ -318,11 +350,12 @@ export default function MenuScreen() {
     const goalFit = userGoal ? goalFitForProduct(item, userGoal) : null;
 
     return (
+      <Animated.View entering={rowEntering(index)}>
       <View style={styles.productCard} testID={`product-${item.id}`}>
         {/* Photo (72px, rounded) with ₹/g-protein badge */}
-        <View style={styles.productImageWrapper}>
+        <View ref={(r) => { imgRefs.current[item.id] = r; }} collapsable={false} style={styles.productImageWrapper}>
           {item.image_url ? (
-            <Image source={{ uri: item.image_url }} style={styles.productImage} />
+            <ExpoImage source={{ uri: item.image_url }} style={styles.productImage} contentFit="cover" transition={250} cachePolicy="memory-disk" />
           ) : (
             <View style={[styles.productImage, styles.productImagePlaceholder]}>
               <Ionicons name={isReadyMade ? 'fast-food' : 'restaurant'} size={26} color={FUEL.sandBorder} />
@@ -385,17 +418,16 @@ export default function MenuScreen() {
                 </TouchableOpacity>
               </View>
             ) : (
-              <PressableScale haptic testID={`add-${item.id}`} style={styles.addBtn} onPress={() => { addItem(item); hapticSuccess(); }}>
+              <PressableScale haptic testID={`add-${item.id}`} style={styles.addBtn} onPress={() => handleAdd(item)}>
                 <Text style={styles.addBtnText}>ADD +</Text>
               </PressableScale>
             )}
           </View>
         </View>
       </View>
+      </Animated.View>
     );
   };
-
-  if (loading) return <SafeAreaView style={styles.safe}><View style={styles.center}><ActivityIndicator size="large" color={FUEL.ink} /></View></SafeAreaView>;
 
   // ===== Scrolling header: hero + diet chips + category wall + best-value card =====
   const listHeader = (
@@ -580,6 +612,11 @@ export default function MenuScreen() {
       )}
 
       {/* Product list with hero / wall / best-value header */}
+      {loading ? (
+        <Animated.View entering={FadeIn.duration(200)} exiting={FadeOut.duration(150)} style={{ flex: 1 }} testID="menu-skeleton">
+          <SkeletonList row="menu" count={6} />
+        </Animated.View>
+      ) : (
       <FlatList
         data={sectioned}
         keyExtractor={i => i.id}
@@ -635,6 +672,7 @@ export default function MenuScreen() {
           )
         }
       />
+      )}
 
       {/* Store picker — same store choices as cart, reused via useStore() */}
       <Modal visible={storePickerOpen} transparent animationType="fade" onRequestClose={() => setStorePickerOpen(false)}>

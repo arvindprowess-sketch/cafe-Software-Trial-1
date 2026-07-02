@@ -12,11 +12,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiCall, getStoredUser } from '../../utils/api';
 import SideDrawer from '../components/SideDrawer';
 import CartPill from '../components/CartPill';
+import { Image as ExpoImage } from 'expo-image';
+import Reanimated, { FadeInDown as ReFadeInDown } from 'react-native-reanimated';
 import { useCart } from '../../utils/CartContext';
 import { useStore } from '../../utils/StoreContext';
+import { HomeSkeleton } from '../components/Skeleton';
 import { FUEL, FONT, GOALS as FUEL_GOALS, RADIUS, SPACE } from '../../utils/theme';
 import { DIET_TAGS, DIET_LABEL, toggleDietTag } from '../../utils/diet';
-import PressableScale from '../components/PressableScale';
+import PressableScale, { useReduceMotion } from '../components/PressableScale';
 import * as Haptics from 'expo-haptics';
 import { setTabBarHidden, resetTabBar } from '../../utils/tabBar';
 
@@ -219,6 +222,22 @@ export default function HomeScreen() {
 
   // Re-fetch on mount and whenever the selected store changes (store-scoped Home).
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Phase 3: cascade the product cards in for a short window after load only
+  // (reanimated `entering` fires on mount; the window guard keeps re-renders calm).
+  const reduceMotion = useReduceMotion();
+  const [staggerOn, setStaggerOn] = useState(false);
+  const staggerTimer = useRef<any>(null);
+  useEffect(() => {
+    if (loading) return;
+    setStaggerOn(true);
+    if (staggerTimer.current) clearTimeout(staggerTimer.current);
+    staggerTimer.current = setTimeout(() => setStaggerOn(false), 800);
+  }, [loading]);
+  const cardEntering = (index: number) =>
+    (staggerOn && !reduceMotion.current)
+      ? ReFadeInDown.delay(Math.min(index, 8) * 50).duration(300).springify()
+      : undefined;
   // Refresh the personalized target, saved meals and the live order status
   // whenever Home regains focus; also restore the tab bar (it may have been
   // hidden by scroll on a previous visit).
@@ -311,12 +330,13 @@ export default function HomeScreen() {
         : { label: 'POPULAR', icon: 'flame', bg: null, color: FUEL.lime };
     const ci = cartCtx.getItem(item.id);
     return (
+      <Reanimated.View key={item.id} entering={cardEntering(idx)}>
       <TouchableOpacity
-        key={item.id} testID={`popular-${item.id}`} style={styles.popularCard}
+        testID={`popular-${item.id}`} style={styles.popularCard}
         onPress={() => router.push('/(tabs)/menu')} activeOpacity={0.9}
       >
         {item.image_url ? (
-          <Image source={{ uri: item.image_url }} style={styles.popularImg} resizeMode="cover" />
+          <ExpoImage source={{ uri: item.image_url }} style={styles.popularImg} contentFit="cover" transition={250} cachePolicy="memory-disk" />
         ) : (
           <View style={[styles.popularImg, styles.popularImgPlaceholder]}>
             <Ionicons name="restaurant" size={28} color={FUEL.sandBorder} />
@@ -351,6 +371,7 @@ export default function HomeScreen() {
           </View>
         </View>
       </TouchableOpacity>
+      </Reanimated.View>
     );
   };
 
@@ -488,7 +509,7 @@ export default function HomeScreen() {
     }
   };
 
-  if (loading) return <SafeAreaView style={styles.safe} edges={['top']}><View style={styles.center}><ActivityIndicator size="large" color={FUEL.ink} /></View></SafeAreaView>;
+  if (loading) return <SafeAreaView style={styles.safe} edges={['top']} testID="home-skeleton"><HomeSkeleton /></SafeAreaView>;
 
   // FIX 5: if the core load failed and we have nothing to show, offer a retry
   // instead of a silently blank Home.
@@ -543,7 +564,7 @@ export default function HomeScreen() {
                   onPress={() => { if (!item.__brand) handleBannerPress(item); }}
                   style={[styles.heroSlide, { width, height: HERO_HEIGHT, paddingTop: insets.top + 64 }]}
                 >
-                  <Image source={{ uri: img }} style={styles.heroImg} resizeMode="cover" />
+                  <ExpoImage source={{ uri: img }} style={styles.heroImg} contentFit="cover" transition={250} cachePolicy="memory-disk" />
                   <LinearGradient
                     colors={['rgba(21,20,15,0.4)', 'rgba(21,20,15,0)', 'rgba(21,20,15,0.94)']}
                     locations={[0, 0.34, 1]}
@@ -820,7 +841,7 @@ export default function HomeScreen() {
                     style={styles.offerImgCard}
                     onPress={() => handleBannerPress(item)}
                   >
-                    <Image source={{ uri: img }} style={styles.offerImg} resizeMode="cover" />
+                    <ExpoImage source={{ uri: img }} style={styles.offerImg} contentFit="cover" transition={250} cachePolicy="memory-disk" />
                     <LinearGradient
                       colors={['rgba(21,20,15,0.15)', 'rgba(21,20,15,0)', 'rgba(21,20,15,0.9)']}
                       locations={[0, 0.4, 1]}
@@ -878,7 +899,7 @@ export default function HomeScreen() {
                     <Ionicons name="sparkles" size={24} color={FUEL.lime} />
                   </View>
                 ) : img ? (
-                  <Image source={{ uri: img }} style={styles.catCircle} />
+                  <ExpoImage source={{ uri: img }} style={styles.catCircle} contentFit="cover" transition={250} cachePolicy="memory-disk" />
                 ) : (
                   <View style={[styles.catCircle, styles.catCircleAi, { backgroundColor: cat.color || FUEL.ink }]}>
                     <Ionicons name={(cat.icon as any) || 'grid'} size={22} color={FUEL.white} />
@@ -909,7 +930,7 @@ export default function HomeScreen() {
                   onPress={() => router.push({ pathname: '/pack-detail', params: { packId: p.id } })}
                 >
                   {p.image_url ? (
-                    <Image source={{ uri: p.image_url }} style={styles.packImg} resizeMode="cover" />
+                    <ExpoImage source={{ uri: p.image_url }} style={styles.packImg} contentFit="cover" transition={250} cachePolicy="memory-disk" />
                   ) : (
                     <View style={[styles.packImg, styles.packImgPlaceholder, { backgroundColor: p.banner_color || FUEL.ink }]}>
                       <Ionicons name="cube" size={26} color={FUEL.lime} />
@@ -950,22 +971,22 @@ export default function HomeScreen() {
         {/* ===== QUICK ACTIONS — Schedule (hero) + Reorder ===== */}
         {/* Scan Table removed: dine-in entry lives in the location bar above. */}
         <View style={styles.quickActions}>
-          <TouchableOpacity testID="schedule-for-later" style={styles.scheduleHero} activeOpacity={0.9} onPress={() => router.push('/(tabs)/menu')}>
+          <PressableScale testID="schedule-for-later" style={styles.scheduleHero} onPress={() => router.push('/(tabs)/menu')}>
             <View style={styles.scheduleHeroIcon}><Ionicons name="time" size={22} color={FUEL.ink} /></View>
             <View style={{ flex: 1 }}>
               <Text style={styles.scheduleHeroTitle}>Schedule a Meal</Text>
               <Text style={styles.scheduleHeroSub}>Plan today's meals — ready when you are</Text>
             </View>
             <Ionicons name="arrow-forward" size={20} color={FUEL.lime} />
-          </TouchableOpacity>
-          <TouchableOpacity testID="quick-reorder" style={styles.reorderCard} activeOpacity={0.9} onPress={() => router.push('/(tabs)/orders')}>
+          </PressableScale>
+          <PressableScale testID="quick-reorder" style={styles.reorderCard} onPress={() => router.push('/(tabs)/orders')}>
             <View style={styles.reorderIcon}><Ionicons name="repeat" size={19} color={FUEL.limeDeep} /></View>
             <View style={{ flex: 1 }}>
               <Text style={styles.reorderTitle}>Reorder</Text>
               <Text style={styles.reorderSub}>Your last order, one tap away</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={FUEL.muted} />
-          </TouchableOpacity>
+          </PressableScale>
         </View>
 
         {showMealBuilder && !aiMeal && (
@@ -1401,7 +1422,7 @@ const styles = StyleSheet.create({
   // ===== Edge-to-edge hero carousel =====
   heroWrap: { width: '100%', backgroundColor: FUEL.ink },
   heroSlide: { height: '100%', justifyContent: 'flex-end' },
-  heroImg: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
+  heroImg: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%', backgroundColor: FUEL.sand },
   heroContent: { paddingHorizontal: SPACE.xl, paddingBottom: SPACE.xxl + SPACE.s },
   heroEyebrow: { fontFamily: FONT.bodyExtrabold, fontSize: 11, letterSpacing: 1.4, color: FUEL.lime, marginBottom: SPACE.s },
   heroTitle: { fontFamily: FONT.display, fontSize: 30, lineHeight: 32, color: FUEL.white, letterSpacing: 0.3 },
@@ -1451,7 +1472,7 @@ const styles = StyleSheet.create({
 
   // ===== Offers (full-image cards) =====
   offerImgCard: { width: OFFER_CARD_W, height: 150, borderRadius: RADIUS.lg, overflow: 'hidden', marginRight: OFFER_GAP, backgroundColor: FUEL.ink },
-  offerImg: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
+  offerImg: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%', backgroundColor: FUEL.sand },
   offerImgContent: { flex: 1, padding: SPACE.l, justifyContent: 'space-between' },
   offerImgTag: { alignSelf: 'flex-start', backgroundColor: FUEL.lime, borderRadius: RADIUS.pill, paddingHorizontal: SPACE.s, paddingVertical: 3 },
   offerImgTagText: { fontFamily: FONT.bodyExtrabold, fontSize: 9, color: FUEL.ink, letterSpacing: 0.5 },
@@ -1464,7 +1485,7 @@ const styles = StyleSheet.create({
 
   // ===== Meal Packs =====
   packCard: { width: 220, borderRadius: RADIUS.lg, backgroundColor: FUEL.white, overflow: 'hidden', borderWidth: 1, borderColor: FUEL.sandBorder },
-  packImg: { width: '100%', height: 96 },
+  packImg: { width: '100%', height: 96, backgroundColor: FUEL.sand },
   packImgPlaceholder: { alignItems: 'center', justifyContent: 'center' },
   packBody: { padding: SPACE.m },
   packName: { fontFamily: FONT.bodyExtrabold, fontSize: 14, color: FUEL.ink },

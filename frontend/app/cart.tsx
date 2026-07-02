@@ -11,7 +11,9 @@ import { apiCall, getStoredUser, createPayment } from '../utils/api';
 import { useCart, itemPrice, CartItem } from '../utils/CartContext';
 import { useStore } from '../utils/StoreContext';
 import { FUEL, FONT, RADIUS, SPACE } from '../utils/theme';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import PressableScale from './components/PressableScale';
+import AnimatedNumber from './components/AnimatedNumber';
 import * as Haptics from 'expo-haptics';
 
 // PR-C: success haptic on the order-placed moment (safe no-op on web)
@@ -361,16 +363,16 @@ export default function CartScreen() {
         {/* FIX 3 — the only remaining tier is free delivery, so the nudge is
             meaningless on dine-in/takeaway (no delivery fee ever applies). */}
         {nextTier && orderType === 'delivery' && (
-          <View style={styles.savingsBar} testID="savings-bar">
+          <Animated.View entering={FadeIn.duration(250)} style={styles.savingsBar} testID="savings-bar">
             <Ionicons name="pricetags" size={15} color={FUEL.limeDeep} />
             <Text style={styles.savingsText}>Add ₹{Math.round(nextTier.threshold - subtotal)} more to unlock <Text style={{ fontFamily: FONT.bodyExtrabold }}>{nextTier.label}</Text></Text>
-          </View>
+          </Animated.View>
         )}
         {q.total_savings > 0 && (
-          <View style={styles.savedLine} testID="saved-line">
+          <Animated.View entering={FadeInDown.duration(250)} style={styles.savedLine} testID="saved-line">
             <Ionicons name="checkmark-circle" size={15} color={FUEL.success} />
             <Text style={styles.savedText}>You saved ₹{Math.round(q.total_savings)} on this order</Text>
-          </View>
+          </Animated.View>
         )}
 
         {/* ITEMS */}
@@ -420,11 +422,11 @@ export default function CartScreen() {
           </TouchableOpacity>
         </View>
         {appliedCoupon ? (
-          <View style={styles.couponApplied} testID="coupon-applied">
+          <Animated.View entering={FadeInDown.duration(250)} style={styles.couponApplied} testID="coupon-applied">
             <Ionicons name="checkmark-circle" size={16} color={FUEL.success} />
             <Text style={styles.couponAppliedText}>{appliedCoupon} applied{q.discount ? ` · −₹${Math.round(q.discount)}` : ''}</Text>
             <TouchableOpacity onPress={() => setAppliedCoupon('')}><Ionicons name="close-circle" size={18} color={FUEL.muted} /></TouchableOpacity>
-          </View>
+          </Animated.View>
         ) : null}
         {q.coupon_error ? <Text style={styles.couponError} testID="coupon-error">{q.coupon_error}</Text> : null}
         {offers.filter(o => o.coupon_code).map(o => {
@@ -513,7 +515,10 @@ export default function CartScreen() {
       <View style={styles.bottomBar}>
         <View>
           <Text style={styles.bottomLabel}>To Pay</Text>
-          <Text style={styles.bottomTotal}>₹{Math.round(grandTotal)}{quoting && <Text style={styles.bottomQuoting}>  …</Text>}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+            <AnimatedNumber value={Math.round(grandTotal)} prefix="₹" style={styles.bottomTotal} testID="cart-bottom-total" />
+            {quoting && <Text style={styles.bottomQuoting}>  …</Text>}
+          </View>
         </View>
         <PressableScale haptic testID="place-order-btn" style={[styles.payBtn, placing && { opacity: 0.6 }]} disabled={placing} onPress={() => placeOrder(false)}>
           {placing ? <ActivityIndicator color={FUEL.ink} /> : (

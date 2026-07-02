@@ -15,6 +15,7 @@ import * as Sentry from '@sentry/react-native';
 import { FUEL } from '../utils/theme';
 import { CartProvider } from '../utils/CartContext';
 import { StoreProvider } from '../utils/StoreContext';
+import { FlyToCartProvider } from './components/FlyToCart';
 import { getStoredUser } from '../utils/api';
 import { registerPushToken, watchPushTokenRefresh } from '../utils/push';
 
@@ -53,18 +54,20 @@ function RootLayout() {
       <StatusBar style="dark" />
       <StoreProvider>
         <CartProvider>
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              animation: 'slide_from_right',
-              contentStyle: { backgroundColor: FUEL.sand },
-            }}
-          >
-            <Stack.Screen name="index" />
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="cart" />
-            <Stack.Screen name="customize" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
-          </Stack>
+          <FlyToCartProvider>
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                animation: 'slide_from_right',
+                contentStyle: { backgroundColor: FUEL.sand },
+              }}
+            >
+              <Stack.Screen name="index" />
+              <Stack.Screen name="(tabs)" />
+              <Stack.Screen name="cart" />
+              <Stack.Screen name="customize" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+            </Stack>
+          </FlyToCartProvider>
         </CartProvider>
       </StoreProvider>
     </View>

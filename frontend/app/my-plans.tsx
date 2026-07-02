@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { apiCall } from '../utils/api';
 import { FUEL, FONT, RADIUS, SPACE } from '../utils/theme';
+import { SkeletonList } from './components/Skeleton';
 
 // GET /meal-plans -> [{ id, name, goal, diet_preference, days:[{day, meals:[...]}], created_at }]
 export default function MyPlansScreen() {
@@ -51,7 +52,7 @@ export default function MyPlansScreen() {
       </View>
 
       {loading ? (
-        <View style={styles.center}><ActivityIndicator size="large" color={FUEL.ink} /></View>
+        <SkeletonList count={5} />
       ) : (
         <ScrollView
           contentContainerStyle={plans.length === 0 ? styles.emptyWrap : { padding: SPACE.l, paddingBottom: 40 }}
