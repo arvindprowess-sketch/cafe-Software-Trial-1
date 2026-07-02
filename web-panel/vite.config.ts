@@ -99,6 +99,16 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 3000,
     allowedHosts: true,
+    // Behind the preview's HTTPS ingress the HMR client must reach Vite over
+    // wss on 443, not ws on the dev port. Without this it fails to connect,
+    // keeps retrying, and Vite triggers a full page reload on every reconnect —
+    // which is what wiped half-filled forms in the admin panel. Pinning the
+    // client to wss:443 stops the false reloads. Local dev over http still
+    // works (the browser upgrades/downgrades to the page's own scheme/port).
+    hmr: {
+      clientPort: 443,
+      protocol: 'wss',
+    },
     proxy: {
       '/api': {
         target: 'http://localhost:8001',
