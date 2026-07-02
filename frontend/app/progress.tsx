@@ -74,11 +74,11 @@ export default function ProgressScreen() {
             <Text style={styles.statBig}>{data?.current_streak || 0}</Text>
             <Text style={styles.statLbl}>day streak</Text>
           </View>
-          <View style={styles.statCard} testID="progress-points">
+          <TouchableOpacity style={styles.statCard} testID="progress-points" onPress={() => router.push('/rewards')} activeOpacity={0.85}>
             <Ionicons name="star" size={20} color={FUEL.carbs} />
             <Text style={styles.statBig}>{data?.points || 0}</Text>
-            <Text style={styles.statLbl}>points</Text>
-          </View>
+            <Text style={styles.statLbl}>points ›</Text>
+          </TouchableOpacity>
           <View style={styles.statCard} testID="progress-change">
             <Ionicons name={(data?.change || 0) <= 0 ? 'trending-down' : 'trending-up'} size={20} color={FUEL.limeDeep} />
             <Text style={styles.statBig}>{data?.change != null ? `${data.change > 0 ? '+' : ''}${data.change}` : '—'}</Text>
