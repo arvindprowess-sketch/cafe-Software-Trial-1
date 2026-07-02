@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { apiCall } from '../utils/api';
 import { FUEL, FONT, RADIUS, SPACE } from '../utils/theme';
+import { SkeletonList } from './components/Skeleton';
 
 // /user/history returns per-day meal_history docs:
 //   { date: "YYYY-MM-DD", meals: [{order_id, calories, protein, carbs, fat, time}],
@@ -42,7 +43,7 @@ export default function HistoryScreen() {
       </View>
 
       {loading ? (
-        <View style={styles.center}><ActivityIndicator size="large" color={FUEL.ink} /></View>
+        <SkeletonList count={5} />
       ) : (
         <ScrollView
           contentContainerStyle={days.length === 0 ? styles.emptyWrap : { padding: SPACE.l, paddingBottom: 40 }}

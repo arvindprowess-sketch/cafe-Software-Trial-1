@@ -4,10 +4,13 @@ import {
   Alert, ActivityIndicator, ScrollView, TextInput, Dimensions, Modal
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Image as ExpoImage } from 'expo-image';
+import Animated, { FadeIn, FadeOut, FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { apiCall } from '../../utils/api';
 import SideDrawer from '../components/SideDrawer';
+import { SkeletonList } from '../components/Skeleton';
 import { getStoredUser } from '../../utils/api';
 import { useRealtime } from '../../utils/realtime';
 import { FUEL, FONT, RADIUS, SPACE } from '../../utils/theme';
@@ -382,8 +385,6 @@ export default function MenuScreen() {
     );
   };
 
-  if (loading) return <SafeAreaView style={styles.safe}><View style={styles.center}><ActivityIndicator size="large" color={FUEL.ink} /></View></SafeAreaView>;
-
   // ===== Scrolling header: hero + diet chips + category wall + best-value card =====
   const listHeader = (
     <View>
@@ -567,6 +568,11 @@ export default function MenuScreen() {
       )}
 
       {/* Product list with hero / wall / best-value header */}
+      {loading ? (
+        <Animated.View entering={FadeIn.duration(200)} exiting={FadeOut.duration(150)} style={{ flex: 1 }} testID="menu-skeleton">
+          <SkeletonList row="menu" count={6} />
+        </Animated.View>
+      ) : (
       <FlatList
         data={sectioned}
         keyExtractor={i => i.id}
@@ -620,6 +626,7 @@ export default function MenuScreen() {
           )
         }
       />
+      )}
 
       {/* Store picker — same store choices as cart, reused via useStore() */}
       <Modal visible={storePickerOpen} transparent animationType="fade" onRequestClose={() => setStorePickerOpen(false)}>

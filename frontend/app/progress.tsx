@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { apiCall } from '../utils/api';
 import { FUEL, FONT, RADIUS, SPACE } from '../utils/theme';
+import { SkeletonList } from './components/Skeleton';
 
 // Phase 4 — Progress: weight log + simple graph + streak/points (customer app only).
 export default function ProgressScreen() {
@@ -44,7 +45,7 @@ export default function ProgressScreen() {
   };
 
   if (loading) {
-    return <SafeAreaView style={styles.safe}><View style={styles.center}><ActivityIndicator size="large" color={FUEL.ink} /></View></SafeAreaView>;
+    return <SafeAreaView style={styles.safe} testID="progress-skeleton"><SkeletonList count={5} /></SafeAreaView>;
   }
 
   const logs: any[] = (data?.logs || []).slice(-14);

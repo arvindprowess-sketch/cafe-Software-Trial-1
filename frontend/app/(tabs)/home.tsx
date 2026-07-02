@@ -14,6 +14,7 @@ import SideDrawer from '../components/SideDrawer';
 import CartPill from '../components/CartPill';
 import { useCart } from '../../utils/CartContext';
 import { useStore } from '../../utils/StoreContext';
+import { HomeSkeleton } from '../components/Skeleton';
 import { FUEL, FONT, GOALS as FUEL_GOALS, RADIUS, SPACE } from '../../utils/theme';
 import { DIET_TAGS, DIET_LABEL, toggleDietTag } from '../../utils/diet';
 import PressableScale from '../components/PressableScale';
@@ -488,7 +489,7 @@ export default function HomeScreen() {
     }
   };
 
-  if (loading) return <SafeAreaView style={styles.safe} edges={['top']}><View style={styles.center}><ActivityIndicator size="large" color={FUEL.ink} /></View></SafeAreaView>;
+  if (loading) return <SafeAreaView style={styles.safe} edges={['top']} testID="home-skeleton"><HomeSkeleton /></SafeAreaView>;
 
   // FIX 5: if the core load failed and we have nothing to show, offer a retry
   // instead of a silently blank Home.

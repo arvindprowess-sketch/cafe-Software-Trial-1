@@ -10,6 +10,7 @@ import { apiCall } from '../../utils/api';
 import { useRealtime } from '../../utils/realtime';
 import { FUEL, FONT, RADIUS, SPACE } from '../../utils/theme';
 import { useCart } from '../../utils/CartContext';
+import { SkeletonList } from '../components/Skeleton';
 
 // F6: 4-step progress tracker config per order type.
 const TRACKER_STEPS: Record<string, string[]> = {
@@ -318,10 +319,8 @@ export default function OrdersScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.safe}>
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={FUEL.ink} />
-        </View>
+      <SafeAreaView style={styles.safe} testID="orders-skeleton">
+        <SkeletonList count={6} />
       </SafeAreaView>
     );
   }

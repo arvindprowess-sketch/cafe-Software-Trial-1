@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { apiCall } from '../utils/api';
 import { FUEL, FONT, RADIUS, SPACE } from '../utils/theme';
+import { SkeletonList } from './components/Skeleton';
 
 // Tier thresholds by total_earned (mirrors backend /loyalty/points).
 const TIERS = [
@@ -61,7 +62,7 @@ export default function RewardsScreen() {
       </View>
 
       {loading ? (
-        <View style={styles.center}><ActivityIndicator size="large" color={FUEL.ink} /></View>
+        <SkeletonList count={5} />
       ) : (
         <ScrollView
           contentContainerStyle={{ padding: SPACE.l, paddingBottom: 40 }}
