@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 
@@ -65,6 +65,8 @@ export default function CashierPOS() {
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [editGramsVal, setEditGramsVal] = useState('');
   const [editPriceVal, setEditPriceVal] = useState('');
+
+  const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     (async () => {
@@ -428,6 +430,28 @@ export default function CashierPOS() {
     setAppliedCode((offer.coupon_code || '').toUpperCase());
   };
 
+  // A5 — keyboard shortcuts. Inert while typing in an input/textarea (except Esc).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement;
+      const typing = ['input', 'textarea'].includes((el?.tagName || '').toLowerCase()) || el?.isContentEditable;
+      if (e.key === 'Escape') {
+        if (showPayment) setShowPayment(false);
+        else if (detailProduct) setDetailProduct(null);
+        else if (showAI) { setShowAI(false); setAiResult(null); }
+        else if (showReceipt) setShowReceipt(null);
+        else if (search) { setSearch(''); (document.activeElement as HTMLElement)?.blur?.(); }
+        return;
+      }
+      if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === '/') { e.preventDefault(); searchRef.current?.focus(); }
+      else if (e.key.toLowerCase() === 'h') { if (cart.length) holdBill(); }
+      else if (e.key.toLowerCase() === 'p') { if (cart.length && !needsTable) { setTendered(''); setShowPayment(true); } }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showPayment, detailProduct, showAI, showReceipt, search, cart, needsTable]);
+
   const PAYMENT_MODES = [
     { key: 'cash', label: 'Cash', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/></svg> },
     { key: 'upi', label: 'UPI', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="18.01"/></svg> },
@@ -439,7 +463,7 @@ export default function CashierPOS() {
     <div className="pos-layout">
       <div className="pos-menu">
         <div className="pos-search">
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search menu..." data-testid="pos-search" />
+          <input ref={searchRef} value={search} onChange={e => setSearch(e.target.value)} placeholder="Search menu... ( / )" data-testid="pos-search" />
           <button className="btn btn-purple" onClick={() => setShowAI(true)} data-testid="ai-suggest-btn">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
             AI Guide
@@ -542,6 +566,9 @@ export default function CashierPOS() {
           }
           return <div className="pos-products">{filtered.map(renderCard)}</div>;
         })()}
+        <div className="pos-keyhint" data-testid="pos-keyhint">
+          <kbd>/</kbd> search · <kbd>H</kbd> hold · <kbd>P</kbd> pay · <kbd>Esc</kbd> close
+        </div>
       </div>
 
       {/* RIGHT - Ink bill panel */}
@@ -561,7 +588,12 @@ export default function CashierPOS() {
               <input className="pos-ink-input name" value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="Customer name (Walk-in)" data-testid="customer-name-input" />
               <input className="pos-ink-input phone" type="tel" inputMode="numeric" maxLength={10} value={customerPhone} onChange={e => setCustomerPhone(e.target.value.replace(/\D/g, '').slice(0, 10))} placeholder="Phone (optional)" data-testid="customer-phone-input" />
             </div>
-            {customerLookup && <div className="pos-loyalty-chip" data-testid="loyalty-chip">★ {customerLookup.loyalty_points} pts · {customerLookup.name}</div>}
+            {customerLookup && (
+              <div className="pos-loyalty-chip" data-testid="loyalty-chip">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14l-5-4.87 6.91-1.01L12 2Z"/></svg>
+                {customerLookup.loyalty_points} pts · {customerLookup.name}
+              </div>
+            )}
             <div className="pos-type-pills">
               {['dine-in', 'takeaway'].map(t => (
                 <button key={t} className={`pos-type-pill ${orderType === t ? 'active' : ''}`} onClick={() => setOrderType(t)} data-testid={`type-${t}`}>{t === 'dine-in' ? 'Dine-In' : 'Takeaway'}</button>
