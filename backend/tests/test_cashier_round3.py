@@ -326,3 +326,46 @@ def test_app_customer_cash_order_still_grants(ctx):
         loyalty = await server.db.loyalty.find_one({"user_id": cust["user"]["id"]}, {"_id": 0})
         assert loyalty and loyalty["points"] > 0
     run(go())
+
+
+# ---------------- FIX 3 — offer channel (list filter + enforcement) ----------------
+
+def test_offer_channel_list_and_enforcement(ctx):
+    async def go():
+        cust = await _register_customer(ctx, "chan@t.com")
+        # app_only offer
+        await ctx.client.post("/api/offers", headers=auth(ctx.hq), json={
+            "title": "App only", "coupon_code": "APPONLY", "discount_type": "flat",
+            "discount_value": 15, "applicable_to": "all", "channel": "app_only", "is_active": True})
+        # pos_only offer
+        await ctx.client.post("/api/offers", headers=auth(ctx.hq), json={
+            "title": "Counter only", "coupon_code": "POSONLY", "discount_type": "flat",
+            "discount_value": 15, "applicable_to": "all", "channel": "pos_only", "is_active": True})
+
+        # --- list filtering ---
+        app_list = (await ctx.client.get("/api/offers", headers=auth(cust["token"]))).json()
+        app_codes = {o.get("coupon_code") for o in app_list}
+        assert "APPONLY" in app_codes and "POSONLY" not in app_codes
+        pos_list = (await ctx.client.get("/api/offers", headers=auth(ctx.cashier))).json()
+        pos_codes = {o.get("coupon_code") for o in pos_list}
+        assert "POSONLY" in pos_codes and "APPONLY" not in pos_codes
+        # anonymous == app channel
+        anon = (await ctx.client.get("/api/offers")).json()
+        assert "APPONLY" in {o.get("coupon_code") for o in anon}
+
+        # --- enforcement (typing the code anyway) ---
+        # POS tries the app_only code -> rejected
+        r = await place_pos_order(ctx, "dine-in", coupon="APPONLY")
+        assert r.status_code == 400, r.text
+        # app customer tries the pos_only code -> rejected
+        items = pos_items(ctx.product)
+        body = {"order_type": "dine-in", "payment_mode": "cash", "store_id": ctx.store,
+                "items": items, "total_price": sum(i["price"] for i in items),
+                "total_calories": 100, "total_protein": 10, "total_carbs": 5, "total_fat": 2,
+                "coupon_code": "POSONLY", "confirm_duplicate": True}
+        r2 = await ctx.client.post("/api/orders", json=body, headers=auth(cust["token"]))
+        assert r2.status_code == 400, r2.text
+        # correct channel works: POS + pos_only
+        r3 = await place_pos_order(ctx, "dine-in", coupon="POSONLY")
+        assert r3.status_code == 200, r3.text
+    run(go())

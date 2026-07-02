@@ -2952,9 +2952,10 @@ async def create_order(data: OrderCreate, user=Depends(get_current_user)):
     # FIX 1 — server-authoritative bill (anti-tamper). Prices, discount, delivery
     # fee, GST and totals are recomputed here from the store's resolved menu +
     # validate_offer_for_order; client-sent money fields are NOT trusted.
+    order_channel = "pos" if role_in(user, *STAFF_ROLES) else "app"
     bill = await compute_authoritative_bill(
         [it.dict() for it in data.items], data.order_type, data.coupon_code,
-        (data.tip or 0), store_id, coupon_user)
+        (data.tip or 0), store_id, coupon_user, channel=order_channel)
     # A coupon the client asked for that the server rejects -> 400 (no silent discount).
     if data.coupon_code and not bill["coupon_applied"]:
         raise HTTPException(status_code=400, detail={"error": "coupon_rejected",
@@ -4959,6 +4960,7 @@ class OfferCreate(BaseModel):
     usage_limit_total: Optional[int] = None      # null = unlimited
     usage_limit_per_user: Optional[int] = None   # null = unlimited
     first_order_only: bool = False               # valid only on a user's first order
+    channel: str = "all"                         # FIX 3 — "all" | "app_only" | "pos_only"
 
 class OfferUpdate(BaseModel):
     title: Optional[str] = None
@@ -4982,6 +4984,7 @@ class OfferUpdate(BaseModel):
     usage_limit_total: Optional[int] = None
     usage_limit_per_user: Optional[int] = None
     first_order_only: Optional[bool] = None
+    channel: Optional[str] = None                # FIX 3 — "all" | "app_only" | "pos_only"
 
 # ========== PHASE 2A — shared offer/coupon validation (scope + date + usage) ==========
 def compute_offer_discount(offer: dict, subtotal: float, line_items: list) -> float:
@@ -5009,14 +5012,23 @@ async def offer_cluster_store_ids(offer: dict) -> list:
     return (owner or {}).get("cluster_store_ids") or []
 
 async def validate_offer_for_order(offer: dict, store_id: Optional[str], user: dict,
-                                   subtotal: float, line_items: list):
+                                   subtotal: float, line_items: list,
+                                   channel: Optional[str] = None):
     """THE single coupon validator. Returns (ok: bool, discount: float, error: str|None).
     Used identically by /orders/apply-coupon, /cart/quote and order placement so
     scope/date/usage rules can never diverge. Offers with no scope field are
-    treated as scope 'all' (backward compatible)."""
+    treated as scope 'all' (backward compatible). `channel` is the ORDER source
+    ('pos' for a staff caller, else 'app') — enforced against the offer's channel
+    so filtering the list isn't the only guard (someone can still type the code)."""
     now = datetime.now(timezone.utc).isoformat()
     if not offer.get("is_active", True):
         return (False, 0.0, "This coupon is not active")
+    # FIX 3 — channel gate
+    offer_channel = offer.get("channel", "all")
+    if channel and offer_channel == "app_only" and channel != "app":
+        return (False, 0.0, "This coupon is only available in the app")
+    if channel and offer_channel == "pos_only" and channel != "pos":
+        return (False, 0.0, "This coupon is only available at the counter")
     # Date window (null dates = always valid)
     if offer.get("start_date") and now < offer["start_date"]:
         return (False, 0.0, "This coupon is not active yet")
@@ -5082,10 +5094,15 @@ def assert_offer_manage_allowed(user: dict, scope: str, store_ids: list, cluster
     raise HTTPException(status_code=400, detail="Invalid scope")
 
 @api_router.get("/offers")
-async def get_active_offers():
-    """Get all active offers for customers"""
+async def get_active_offers(user=Depends(get_optional_user)):
+    """Active offers for the caller's channel (FIX 3). Auth-optional so the app
+    stays public: a staff (bearer) caller sees all + pos_only; customers and
+    anonymous callers see all + app_only. Filtering the list is convenience —
+    validate_offer_for_order still enforces the channel on redemption."""
     offers = await db.offers.find({"is_active": True}, {"_id": 0}).sort("created_at", -1).to_list(20)
-    return offers
+    is_staff = bool(user) and role_in(user, *STAFF_ROLES)
+    allowed = ("all", "pos_only") if is_staff else ("all", "app_only")
+    return [o for o in offers if o.get("channel", "all") in allowed]
 
 @api_router.get("/offers/all")
 async def get_all_offers(user=Depends(get_current_user)):
@@ -5845,7 +5862,8 @@ async def apply_coupon(
     items = cart_items or []
     subtotal = cart_total if cart_total is not None else round(sum(float(i.get("price", 0)) for i in items), 2)
     coupon_user = await resolve_coupon_user(user, customer_phone)
-    ok, discount, error = await validate_offer_for_order(offer, store_id, coupon_user, subtotal, items)
+    channel = "pos" if role_in(user, *STAFF_ROLES) else "app"
+    ok, discount, error = await validate_offer_for_order(offer, store_id, coupon_user, subtotal, items, channel=channel)
     if not ok:
         raise HTTPException(status_code=400, detail=error)
     return {
@@ -5862,7 +5880,7 @@ async def apply_coupon(
 
 FREE_DELIVERY_THRESHOLD = 300
 
-async def compute_authoritative_bill(items, order_type, coupon_code, tip, store_id, user):
+async def compute_authoritative_bill(items, order_type, coupon_code, tip, store_id, user, channel=None):
     """THE single server-side bill. Every price comes from the store's resolved
     menu (resolve_menu_for_store / product master) — never from the client; the
     discount comes ONLY from validate_offer_for_order. Used by /cart/quote AND
@@ -5932,7 +5950,7 @@ async def compute_authoritative_bill(items, order_type, coupon_code, tip, store_
         if not offer:
             coupon_error = "Invalid or expired coupon code"
         else:
-            ok, disc, error = await validate_offer_for_order(offer, store_id, user, subtotal, line_items)
+            ok, disc, error = await validate_offer_for_order(offer, store_id, user, subtotal, line_items, channel=channel)
             if not ok:
                 coupon_error = error
             else:
@@ -6010,7 +6028,8 @@ async def cart_quote(
     compute_authoritative_bill (the same math used at order placement). FIX 2: a
     POS caller may pass customer_phone so coupon limits check the customer."""
     coupon_user = await resolve_coupon_user(user, customer_phone)
-    return await compute_authoritative_bill(items, order_type, coupon_code, tip, store_id, coupon_user)
+    channel = "pos" if role_in(user, *STAFF_ROLES) else "app"
+    return await compute_authoritative_bill(items, order_type, coupon_code, tip, store_id, coupon_user, channel=channel)
 
 # ========== SMART PORTION ADJUSTER ==========
 @api_router.post("/ai/adjust-portions")
