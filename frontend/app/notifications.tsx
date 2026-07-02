@@ -78,7 +78,7 @@ export default function NotificationsScreen() {
           showsVerticalScrollIndicator={false}
         >
           {items.length === 0 ? (
-            <View style={styles.empty}>
+            <View style={styles.empty} testID="notif-empty">
               <Ionicons name="notifications-off-outline" size={44} color={FUEL.sandBorder} />
               <Text style={styles.emptyText}>No notifications yet</Text>
               <Text style={styles.emptySub}>Order updates and offers will show up here.</Text>
@@ -86,7 +86,7 @@ export default function NotificationsScreen() {
           ) : items.map((n) => (
             <TouchableOpacity
               key={n.id}
-              testID={`notif-${n.id}`}
+              testID={`notif-row-${n.id}`}
               style={[styles.card, !n.read && styles.cardUnread]}
               activeOpacity={0.85}
               onPress={() => markRead(n)}
