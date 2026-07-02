@@ -1,13 +1,16 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import { apiCall, createPayment } from '../utils/api';
 import { useCart } from '../utils/CartContext';
 import { useRealtime } from '../utils/realtime';
+import { useReduceMotion } from './components/PressableScale';
 import { FUEL, FONT, RADIUS, SPACE } from '../utils/theme';
 
 export default function OrderDetailScreen() {
@@ -19,6 +22,24 @@ export default function OrderDetailScreen() {
   // P7: one-tap order rating (completed orders, once only)
   const [ratingSubmitting, setRatingSubmitting] = useState(false);
   const [paying, setPaying] = useState(false);
+
+  // Phase 7: satisfying success moment — the status icon springs in, and a
+  // success haptic fires when the order reaches ready/completed.
+  const reduceMotion = useReduceMotion();
+  const iconScale = useSharedValue(1);
+  const iconAnimStyle = useAnimatedStyle(() => ({ transform: [{ scale: iconScale.value }] }));
+  const successBuzzed = useRef(false);
+  useEffect(() => {
+    if (!order?.status) return;
+    if (!reduceMotion.current) {
+      iconScale.value = 0.5;
+      iconScale.value = withSpring(1, { damping: 12, stiffness: 320 });
+    }
+    if (['ready', 'completed'].includes(order.status) && !successBuzzed.current) {
+      successBuzzed.current = true;
+      try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {}); } catch {}
+    }
+  }, [order?.status]);
 
   // Retry online payment for an unpaid order: re-create the Razorpay order and
   // hand off to the /pay screen (same flow as checkout).
@@ -191,7 +212,9 @@ export default function OrderDetailScreen() {
         <View style={styles.orderHeaderCard}>
           <View style={styles.orderIdRow}>
             <View style={styles.orderIdLeft}>
-              <Ionicons name={statusIcon as any} size={28} color={statusColor} />
+              <Animated.View style={iconAnimStyle}>
+                <Ionicons name={statusIcon as any} size={28} color={statusColor} />
+              </Animated.View>
               <View>
                 <Text style={styles.orderId}>Order #{order.id}</Text>
                 <Text style={styles.orderDate}>
