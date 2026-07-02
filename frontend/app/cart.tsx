@@ -101,12 +101,12 @@ export default function CartScreen() {
     try {
       const q = await apiCall('/cart/quote', {
         method: 'POST',
-        body: { items: itemsPayload(), order_type: orderType, coupon_code: appliedCoupon || null, tip },
+        body: { items: itemsPayload(), order_type: orderType, coupon_code: appliedCoupon || null, tip, store_id: selectedStoreId || undefined },
       });
       setQuote(q);
       if (q.coupon_error && appliedCoupon) { setAppliedCoupon(''); }
     } catch (e) { /* keep last quote */ } finally { setQuoting(false); }
-  }, [items, orderType, appliedCoupon, tip, itemsPayload]);
+  }, [items, orderType, appliedCoupon, tip, itemsPayload, selectedStoreId]);
 
   const debounce = useRef<any>(null);
   useEffect(() => {
@@ -145,7 +145,7 @@ export default function CartScreen() {
       // Stock recheck (authoritative)
       const fresh = await apiCall('/cart/quote', {
         method: 'POST',
-        body: { items: itemsPayload(), order_type: orderType, coupon_code: appliedCoupon || null, tip },
+        body: { items: itemsPayload(), order_type: orderType, coupon_code: appliedCoupon || null, tip, store_id: selectedStoreId || undefined },
       });
       setQuote(fresh);
       if (fresh.out_of_stock?.length) {
