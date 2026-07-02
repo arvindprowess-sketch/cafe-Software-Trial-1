@@ -12,7 +12,7 @@ import { useRealtime } from '../../utils/realtime';
 import { FUEL, FONT, RADIUS, SPACE } from '../../utils/theme';
 import { useCart } from '../../utils/CartContext';
 import { SkeletonList } from '../components/Skeleton';
-import { useReduceMotion } from '../components/PressableScale';
+import PressableScale, { useReduceMotion } from '../components/PressableScale';
 
 // F6: 4-step progress tracker config per order type.
 const TRACKER_STEPS: Record<string, string[]> = {
@@ -195,10 +195,9 @@ export default function OrdersScreen() {
 
     return (
       <Animated.View entering={orderEntering(index)}>
-      <TouchableOpacity
+      <PressableScale
         style={styles.orderCard}
         onPress={() => router.push({ pathname: '/order-detail', params: { orderId: item.id } })}
-        activeOpacity={0.9}
         testID={`order-card-${item.id}`}
       >
         {/* First Row: Order Info and Order Type Icon */}
@@ -329,7 +328,7 @@ export default function OrdersScreen() {
             </TouchableOpacity>
           )}
         </View>
-      </TouchableOpacity>
+      </PressableScale>
       </Animated.View>
     );
   };

@@ -971,22 +971,22 @@ export default function HomeScreen() {
         {/* ===== QUICK ACTIONS — Schedule (hero) + Reorder ===== */}
         {/* Scan Table removed: dine-in entry lives in the location bar above. */}
         <View style={styles.quickActions}>
-          <TouchableOpacity testID="schedule-for-later" style={styles.scheduleHero} activeOpacity={0.9} onPress={() => router.push('/(tabs)/menu')}>
+          <PressableScale testID="schedule-for-later" style={styles.scheduleHero} onPress={() => router.push('/(tabs)/menu')}>
             <View style={styles.scheduleHeroIcon}><Ionicons name="time" size={22} color={FUEL.ink} /></View>
             <View style={{ flex: 1 }}>
               <Text style={styles.scheduleHeroTitle}>Schedule a Meal</Text>
               <Text style={styles.scheduleHeroSub}>Plan today's meals — ready when you are</Text>
             </View>
             <Ionicons name="arrow-forward" size={20} color={FUEL.lime} />
-          </TouchableOpacity>
-          <TouchableOpacity testID="quick-reorder" style={styles.reorderCard} activeOpacity={0.9} onPress={() => router.push('/(tabs)/orders')}>
+          </PressableScale>
+          <PressableScale testID="quick-reorder" style={styles.reorderCard} onPress={() => router.push('/(tabs)/orders')}>
             <View style={styles.reorderIcon}><Ionicons name="repeat" size={19} color={FUEL.limeDeep} /></View>
             <View style={{ flex: 1 }}>
               <Text style={styles.reorderTitle}>Reorder</Text>
               <Text style={styles.reorderSub}>Your last order, one tap away</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={FUEL.muted} />
-          </TouchableOpacity>
+          </PressableScale>
         </View>
 
         {showMealBuilder && !aiMeal && (

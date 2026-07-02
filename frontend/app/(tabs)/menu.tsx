@@ -297,12 +297,11 @@ export default function MenuScreen() {
     const isDark = !!cat.is_signature || (index === 0 && !cat.parent_group);
     const fontStyleProp = cat.font_style === 'italic' ? { fontStyle: 'italic' as const } : cat.font_style === 'mono' ? { fontFamily: 'monospace' } : {};
     return (
-      <TouchableOpacity
+      <PressableScale
         key={cat.id || catValue}
         testID={`sidebar-cat-${catValue}`}
         style={[styles.wallTile, isDark && styles.wallTileFirst, isActive && styles.wallTileActive]}
         onPress={() => setSelectedCat(prev => prev === catValue ? '' : catValue)}
-        activeOpacity={0.85}
       >
         <View style={styles.wallTileTop}>
           <Text style={[styles.wallTileTitle, isDark && styles.wallTileTitleFirst, fontStyleProp]} numberOfLines={2}>
@@ -311,7 +310,7 @@ export default function MenuScreen() {
           {isActive && <Ionicons name="checkmark-circle" size={18} color={isDark ? FUEL.lime : FUEL.limeDeep} />}
         </View>
         <Text style={[styles.wallTileCount, isDark && styles.wallTileCountFirst]}>{countFor(cat)} ITEMS</Text>
-      </TouchableOpacity>
+      </PressableScale>
     );
   };
 
