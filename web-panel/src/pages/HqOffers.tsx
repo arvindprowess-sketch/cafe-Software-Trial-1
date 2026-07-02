@@ -19,6 +19,13 @@ const APPLICABLE = [
   { key: 'category', label: 'Category' },
   { key: 'products', label: 'Specific products' },
 ];
+// FIX 3 — where the offer is usable.
+const CHANNELS = [
+  { key: 'all', label: 'All' },
+  { key: 'app_only', label: 'App only' },
+  { key: 'pos_only', label: 'Counter only' },
+];
+const channelLabel = (c?: string) => (CHANNELS.find(x => x.key === (c || 'all'))?.label || 'All');
 
 const todayDate = (iso?: string | null) => (iso ? String(iso).slice(0, 10) : '');
 
@@ -31,6 +38,7 @@ const blankForm = () => ({
   start_date: '', end_date: '',
   usage_limit_total: '', usage_limit_per_user: '', first_order_only: false, is_active: true,
   scope: 'all', store_ids: [] as string[], cluster_owner_id: '',
+  channel: 'all',
 });
 
 export default function HqOffers() {
@@ -98,6 +106,7 @@ export default function HqOffers() {
       usage_limit_per_user: o.usage_limit_per_user == null ? '' : String(o.usage_limit_per_user),
       first_order_only: !!o.first_order_only, is_active: o.is_active !== false,
       scope: o.scope || 'all', store_ids: o.store_ids || [], cluster_owner_id: o.cluster_owner_id || '',
+      channel: o.channel || 'all',
     });
     setFormError(null); setShowForm(true);
   };
@@ -134,6 +143,7 @@ export default function HqOffers() {
       usage_limit_total: f.usage_limit_total === '' ? null : Number(f.usage_limit_total),
       usage_limit_per_user: f.usage_limit_per_user === '' ? null : Number(f.usage_limit_per_user),
       first_order_only: f.first_order_only,
+      channel: f.channel || 'all',
     };
     if (f.scope === 'cluster' && isHQ) body.cluster_owner_id = f.cluster_owner_id;
 
@@ -192,7 +202,10 @@ export default function HqOffers() {
                 <td><strong>{o.title}</strong>{o.subtitle ? <div style={{ fontSize: 11, color: '#9C9C9C' }}>{o.subtitle}</div> : null}</td>
                 <td><span className="badge badge-purple">{o.discount_type}</span> {o.discount_type !== 'bogo' ? <span style={{ fontSize: 12 }}>{o.discount_type === 'percentage' ? `${o.discount_value}%` : `₹${o.discount_value}`}</span> : null}</td>
                 <td style={{ fontSize: 12 }}>{o.coupon_code || '—'}</td>
-                <td><span className="badge badge-green" data-testid={`offer-scope-${o.id}`}>{scopeSummary(o)}</span></td>
+                <td>
+                  <span className="badge badge-green" data-testid={`offer-scope-${o.id}`}>{scopeSummary(o)}</span>
+                  {(o.channel && o.channel !== 'all') && <span className="badge badge-gray" style={{ marginLeft: 4 }} data-testid={`offer-channel-${o.id}`}>{channelLabel(o.channel)}</span>}
+                </td>
                 <td style={{ fontSize: 11, color: '#696969' }}>{todayDate(o.start_date) || '—'} → {todayDate(o.end_date) || '∞'}</td>
                 <td style={{ fontSize: 11, color: '#696969' }}>
                   {o.usage_limit_total != null ? `tot ${o.usage_limit_total}` : 'tot ∞'} · {o.usage_limit_per_user != null ? `user ${o.usage_limit_per_user}` : 'user ∞'}{o.first_order_only ? ' · 1st' : ''}
@@ -235,10 +248,17 @@ export default function HqOffers() {
                 )}
               </div>
 
-              <div className="form-group"><label>Applies to</label>
-                <select value={form.applicable_to} onChange={(e) => setForm({ ...form, applicable_to: e.target.value })} data-testid="offer-applicable">
-                  {APPLICABLE.map((a) => <option key={a.key} value={a.key}>{a.label}</option>)}
-                </select>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div className="form-group"><label>Applies to</label>
+                  <select value={form.applicable_to} onChange={(e) => setForm({ ...form, applicable_to: e.target.value })} data-testid="offer-applicable">
+                    {APPLICABLE.map((a) => <option key={a.key} value={a.key}>{a.label}</option>)}
+                  </select>
+                </div>
+                <div className="form-group"><label>Channel</label>
+                  <select value={form.channel} onChange={(e) => setForm({ ...form, channel: e.target.value })} data-testid="offer-channel">
+                    {CHANNELS.map((ch) => <option key={ch.key} value={ch.key}>{ch.label}</option>)}
+                  </select>
+                </div>
               </div>
               {form.applicable_to === 'category' && (
                 <div className="form-group"><label>Category</label>

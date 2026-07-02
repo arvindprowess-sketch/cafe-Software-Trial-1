@@ -4,7 +4,15 @@ import { useRealtime } from '../utils/realtime';
 import { useAuth } from '../context/AuthContext';
 import { roomsForUser } from '../utils/rooms';
 
-const STATUS_COLORS: Record<string, string> = { pending: 'badge-orange', accepted: 'badge-blue', preparing: 'badge-purple', ready: 'badge-green', completed: 'badge-gray', cancelled: 'badge-red' };
+// A4 — consolidated status families (kills the purple/blue/orange soup):
+// active pipeline = carbs tint, ready/paid = lime tint, cancelled/refund =
+// protein tint, done = gray.
+const STATUS_FAMILY = (s: string): string => {
+  if (['ready', 'delivered', 'paid'].includes(s)) return 'badge-green';
+  if (['completed', 'done'].includes(s)) return 'badge-gray';
+  if (['cancelled', 'voided', 'refunded'].includes(s)) return 'badge-red';
+  return 'badge-orange'; // pending / accepted / preparing / scheduled / out_for_delivery
+};
 const PAYMENT_COLORS: Record<string, string> = { paid: '#3FA34D', unpaid: '#15140F', pending: '#D69A35' };
 
 export default function CashierOrders() {
@@ -199,7 +207,7 @@ export default function CashierOrders() {
                         </span>
                       </div>
                     </td>
-                    <td><span className={`badge ${STATUS_COLORS[o.status] || 'badge-gray'}`}>{o.status}</span></td>
+                    <td><span className={`badge ${STATUS_FAMILY(o.status)}`}>{o.status}</span></td>
                     <td style={{ fontSize: 12, color: '#9C9C9C' }}>{new Date(o.created_at).toLocaleString()}</td>
                     <td>
                       <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -208,7 +216,10 @@ export default function CashierOrders() {
                           <button className="btn btn-sm btn-purple" onClick={() => openAssign(o)} data-testid={`assign-driver-${o.id}`}>Assign driver</button>
                         )}
                         {o.driver_name && (
-                          <span style={{ fontSize: 11, color: '#3FA34D', fontWeight: 700 }}>🛵 {o.driver_name}</span>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#3FA34D', fontWeight: 700 }}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="5.5" cy="17.5" r="2.5"/><circle cx="18.5" cy="17.5" r="2.5"/><path d="M8 17.5h8M6 17.5 9 8h4l2 4h3"/></svg>
+                            {o.driver_name}
+                          </span>
                         )}
                       </div>
                     </td>

@@ -264,8 +264,10 @@ export default function CashierRefunds() {
                 <td>
                   {canFinalize(r) ? (
                     <button className="btn btn-sm btn-green" data-testid={`finalize-${r.id}`} onClick={() => finalize(r)}>Finalize</button>
+                  ) : r.status === 'completed' ? (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-label="completed"><path d="M20 6 9 17l-5-5"/></svg>
                   ) : (
-                    <span style={{ fontSize: 12, color: '#9C9C9C' }}>{r.status === 'completed' ? '✓' : '—'}</span>
+                    <span style={{ fontSize: 12, color: '#9C9C9C' }}>—</span>
                   )}
                 </td>
               </tr>

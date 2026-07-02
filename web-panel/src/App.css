@@ -255,10 +255,19 @@ input, select { font-family: inherit; }
 .tables-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
 .table-card { aspect-ratio: 1; border-radius: var(--radius-lg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; border: 2px solid; cursor: pointer; transition: transform 0.2s; }
 .table-card:hover { transform: scale(1.03); }
-.table-card.available { background: #E4F0DC; border-color: var(--success); }
-.table-card.occupied { background: #F4E3E0; border-color: var(--error); }
+.table-card { padding: 14px 10px; position: relative; }
+.table-card.available { background: var(--white); border-color: var(--success); color: var(--ink); }
+.table-card.occupied { background: var(--ink); border-color: var(--ink); color: var(--sand); }
+.table-card .table-glyph { color: var(--success); display: flex; }
+.table-card.occupied .table-glyph { color: var(--lime); }
 .table-number { font-family: var(--font-brand); font-size: 28px; font-weight: 400; color: var(--ink); }
+.table-card.occupied .table-number { color: var(--sand); }
 .table-status { font-size: 11px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
+.table-card.occupied .table-status { color: rgba(244,241,233,0.6); }
+.table-new-order { margin-top: 4px; display: inline-flex; align-items: center; gap: 4px; background: var(--lime); color: var(--ink); border: none; border-radius: var(--radius-pill); padding: 6px 12px; font-family: var(--font-brand); font-size: 11px; text-transform: uppercase; letter-spacing: 0.02em; min-height: 32px; }
+.table-new-order:hover { background: var(--lime-deep); }
+.table-card.available .table-new-order { background: var(--ink); color: var(--lime); }
+.table-card.available .table-new-order:hover { background: var(--ink-soft); }
 
 /* Empty state */
 .empty-state { text-align: center; padding: 60px 20px; color: var(--muted); }
@@ -339,6 +348,143 @@ th.sortable .sort-caret { opacity: 0.6; font-size: 11px; margin-left: 4px; }
   .area-grid { grid-template-columns: 1fr; }
   .area-inbox { grid-template-columns: 1fr; }
 }
+
+/* ===================================================================== */
+/* POS PREMIUM ELEVATION (Cashier Round 3)                                */
+/* Sand product zone · ink bill column · lime CTA. Extends FUEL only.     */
+/* Muted text on ink uses sand-alpha (contrast) — never --muted (#6B6A5E)*/
+/* which fails 4.5:1 on ink.                                              */
+/* ===================================================================== */
+
+/* One consistent section-title treatment across all cashier pages (A1.4) */
+.pos-section-title { font-family: var(--font-brand); font-size: 16px; font-weight: 400; text-transform: uppercase; letter-spacing: 0.03em; color: var(--ink); line-height: 1.1; }
+.pos-section-kicker { font-family: var(--font-body); font-size: 12px; font-weight: 500; color: var(--muted); margin-top: 3px; }
+
+/* Wider bill column (A1.1) — overrides the 380px grid above */
+.pos-layout { grid-template-columns: 1fr 400px; }
+
+/* --- Ink bill panel (A1.1/A1.2) --- */
+.pos-bill { background: var(--ink); color: var(--sand); border-radius: var(--radius-lg); display: flex; flex-direction: column; position: sticky; top: 80px; max-height: calc(100vh - 100px); margin: 20px 20px 20px 0; box-shadow: 0 12px 36px rgba(21,20,15,0.28); overflow: hidden; }
+.pos-bill-header { padding: 16px 18px 14px; border-bottom: 1px solid rgba(244,241,233,0.12); }
+.pos-bill-title-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.pos-bill-title { font-family: var(--font-brand); font-size: 20px; font-weight: 400; text-transform: uppercase; letter-spacing: 0.02em; color: var(--sand); }
+.pos-bill-title .count { color: var(--lime); }
+.pos-bill-fields { display: flex; flex-direction: column; gap: 10px; }
+.pos-name-row { display: flex; gap: 8px; }
+.pos-name-row .name { flex: 1.3; }
+.pos-name-row .phone { flex: 1; }
+.pos-loyalty-chip { display: inline-flex; align-items: center; gap: 5px; background: rgba(199,242,78,0.15); color: var(--lime); border-radius: var(--radius-pill); padding: 5px 11px; font-size: 12px; font-weight: 600; align-self: flex-start; }
+
+/* Dark inputs on the ink panel */
+.pos-ink-input { width: 100%; padding: 10px 12px; border-radius: var(--radius); border: 1.5px solid rgba(244,241,233,0.18); background: rgba(244,241,233,0.06); color: var(--sand); font-size: 13px; outline: none; transition: border-color 0.15s; }
+.pos-ink-input::placeholder { color: rgba(244,241,233,0.4); }
+.pos-ink-input:focus { border-color: var(--lime); }
+
+/* Dine-in table picker on ink (FIX 1) */
+.pos-table-label { font-size: 11px; color: rgba(244,241,233,0.55); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
+.pos-table-picker { display: flex; flex-wrap: wrap; gap: 6px; }
+.pos-table-chip { min-width: 42px; height: 38px; padding: 0 10px; border-radius: 9px; border: 1.5px solid rgba(244,241,233,0.2); background: transparent; color: rgba(244,241,233,0.72); font-family: var(--font-brand); font-size: 13px; letter-spacing: 0.02em; transition: background-color 0.12s, color 0.12s, border-color 0.12s; }
+.pos-table-chip:hover { border-color: var(--lime); }
+.pos-table-chip.occupied { border-style: dashed; color: var(--warning); border-color: rgba(214,154,53,0.55); }
+.pos-table-chip.selected { background: var(--lime); color: var(--ink); border-color: var(--lime); }
+.pos-table-hint { font-size: 11px; color: #F0B4A8; margin-top: 6px; }
+
+/* Order-type pills on ink */
+.pos-type-pills { display: flex; gap: 6px; }
+.pos-type-pill { flex: 1; padding: 9px 8px; border-radius: var(--radius-pill); border: 1.5px solid rgba(244,241,233,0.2); background: transparent; color: rgba(244,241,233,0.6); font-family: var(--font-brand); font-size: 13px; font-weight: 400; text-transform: uppercase; letter-spacing: 0.02em; min-height: 40px; transition: background-color 0.15s, color 0.15s, border-color 0.15s; }
+.pos-type-pill.active { background: var(--lime); color: var(--ink); border-color: var(--lime); }
+
+/* Item list on ink */
+.pos-bill-items { flex: 1; overflow-y: auto; padding: 10px 14px; }
+.pos-bill-item { padding: 10px 0; border-bottom: 1px solid rgba(244,241,233,0.1); }
+.pos-bill-item:last-child { border-bottom: none; }
+.pos-bill-item-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.pos-bill-item-name { font-size: 14px; font-weight: 700; color: var(--sand); }
+.pos-bill-item-meal { font-size: 10px; color: var(--lime); font-family: var(--font-brand); letter-spacing: 0.03em; margin-left: 4px; }
+.pos-bill-item-detail { font-size: 12px; color: rgba(244,241,233,0.55); margin-top: 1px; }
+.pos-bill-item-price { font-family: var(--font-brand); font-size: 16px; color: var(--sand); font-variant-numeric: tabular-nums; }
+.pos-bill-remove { background: none; border: none; color: rgba(244,241,233,0.5); font-size: 18px; line-height: 1; padding: 2px 7px; border-radius: 6px; transition: color 0.15s, background-color 0.15s; }
+.pos-bill-remove:hover { color: var(--sand); background: rgba(244,241,233,0.1); }
+.pos-bill-empty { text-align: center; padding: 44px 20px; color: rgba(244,241,233,0.45); font-size: 14px; }
+.pos-bill-linkbtn { font-size: 11px; color: var(--lime); background: none; border: none; cursor: pointer; padding: 2px 0; font-weight: 600; text-align: left; }
+
+/* Inline grams/price editor (kept, tuned for the ink panel) */
+.pos-inline-edit { display: flex; gap: 6px; align-items: flex-end; background: rgba(244,241,233,0.08); border-radius: 8px; padding: 8px; margin-top: 8px; }
+.pos-inline-edit label { font-size: 10px; color: rgba(244,241,233,0.55); display: block; margin-bottom: 3px; }
+.pos-inline-edit input { width: 100%; padding: 5px 7px; border-radius: 6px; border: 1px solid rgba(244,241,233,0.2); background: rgba(244,241,233,0.06); color: var(--sand); font-size: 13px; outline: none; }
+
+/* Sticky footer with totals + CHARGE (A1.2) */
+.pos-bill-footer { padding: 14px 18px 18px; border-top: 1px solid rgba(244,241,233,0.12); background: var(--ink-soft); }
+.pos-bill-total-row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 13px; color: rgba(244,241,233,0.65); font-variant-numeric: tabular-nums; }
+.pos-bill-total-row.grand { font-family: var(--font-brand); font-size: 22px; font-weight: 400; color: var(--sand); border-top: 1px solid rgba(244,241,233,0.15); padding-top: 10px; margin-top: 6px; }
+.pos-bill-total-row.discount { color: var(--lime); }
+
+/* Coupon on ink */
+.pos-coupon-row { display: flex; gap: 6px; }
+.pos-coupon-apply { background: var(--lime); color: var(--ink); border: none; border-radius: var(--radius-pill); padding: 0 16px; font-family: var(--font-brand); font-size: 12px; text-transform: uppercase; letter-spacing: 0.02em; min-height: 38px; }
+.pos-coupon-apply:disabled { background: rgba(244,241,233,0.14); color: rgba(244,241,233,0.4); }
+.pos-coupon-chip { background: rgba(199,242,78,0.15); border-radius: 8px; padding: 7px 10px; margin-top: 6px; font-size: 12px; color: var(--lime); display: flex; justify-content: space-between; }
+.pos-coupon-error { color: #F0B4A8; font-size: 12px; margin-top: 4px; }
+
+/* Hold pill on ink */
+.pos-hold-btn { display: inline-flex; align-items: center; gap: 5px; background: rgba(244,241,233,0.1); border: 1px solid rgba(244,241,233,0.2); color: var(--sand); padding: 6px 12px; border-radius: var(--radius-pill); font-family: var(--font-brand); font-size: 12px; font-weight: 400; text-transform: uppercase; letter-spacing: 0.02em; min-height: 34px; transition: background-color 0.15s, color 0.15s, border-color 0.15s; }
+.pos-hold-btn:hover { background: var(--lime); color: var(--ink); border-color: var(--lime); }
+
+/* Primary CTA — live total in the button (A1.3) */
+.pos-charge-btn { width: 100%; margin-top: 12px; padding: 16px; border-radius: var(--radius); border: none; background: var(--lime); color: var(--ink); font-family: var(--font-brand); font-size: 18px; font-weight: 400; text-transform: uppercase; letter-spacing: 0.03em; font-variant-numeric: tabular-nums; min-height: 56px; transition: background-color 0.12s, transform 0.06s; }
+.pos-charge-btn:hover { background: var(--lime-deep); }
+.pos-charge-btn:active { transform: translateY(1px); background: var(--lime-deep); }
+.pos-charge-btn:disabled { background: rgba(244,241,233,0.14); color: rgba(244,241,233,0.4); cursor: not-allowed; transform: none; }
+
+/* --- Product grid cards (A2) --- */
+.pos-product { position: relative; border-radius: 14px; padding: 14px; border: 1px solid var(--border); background: var(--white); cursor: pointer; box-shadow: none; transition: border-color 0.12s, box-shadow 0.12s, transform 0.06s; }
+.pos-product:hover { border-color: var(--ink); box-shadow: 0 2px 8px rgba(21,20,15,0.08); transform: none; }
+.pos-product:active { transform: scale(0.99); }
+.pos-product.in-cart { border: 2px solid var(--lime-deep); background: var(--white); padding: 13px; }
+.pos-product.unavailable { opacity: 0.45; cursor: not-allowed; }
+.pos-product.unavailable:hover { border-color: var(--border); box-shadow: none; }
+.pos-card-top { display: flex; align-items: center; justify-content: space-between; min-height: 18px; margin-bottom: 8px; }
+.pos-product-name { font-family: var(--font-body); font-size: 14px; font-weight: 700; color: var(--ink); line-height: 1.25; margin-bottom: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 35px; }
+.pos-product-price { font-family: var(--font-brand); font-size: 16px; font-weight: 400; color: var(--ink); margin-top: 8px; font-variant-numeric: tabular-nums; }
+.pos-product-nutrition { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.pos-diet-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.pos-count-chip { background: var(--lime); color: var(--ink); font-family: var(--font-brand); font-size: 11px; min-width: 18px; height: 18px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; padding: 0 5px; }
+.pos-out-tag { font-family: var(--font-brand); font-size: 10px; background: var(--ink); color: var(--sand); padding: 2px 6px; border-radius: 4px; letter-spacing: 0.04em; }
+
+/* Keyboard hint bar (A5) */
+.pos-keyhint { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 11px; color: var(--muted); letter-spacing: 0.01em; }
+.pos-keyhint kbd { font-family: var(--font-body); font-weight: 700; background: var(--white); border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; color: var(--ink); font-size: 11px; margin: 0 1px; }
+@media (max-width: 900px) { .pos-keyhint { display: none; } }
+
+/* --- Payment sheet (A3) — slides in over the bill panel --- */
+.pos-pay-overlay { position: fixed; inset: 0; background: rgba(21,20,15,0.5); backdrop-filter: blur(4px); z-index: 210; display: flex; justify-content: flex-end; }
+.pos-pay-sheet { width: 420px; max-width: 100vw; height: 100%; background: var(--sand); display: flex; flex-direction: column; box-shadow: -18px 0 50px rgba(21,20,15,0.35); animation: pos-sheet-in 0.22s cubic-bezier(0.22,0.61,0.36,1); }
+@keyframes pos-sheet-in { from { transform: translateX(100%); } to { transform: translateX(0); } }
+.pos-pay-head { background: var(--ink); color: var(--sand); padding: 20px 22px 18px; }
+.pos-pay-head-row { display: flex; justify-content: space-between; align-items: center; }
+.pos-pay-kicker { font-family: var(--font-body); font-size: 12px; font-weight: 600; color: rgba(244,241,233,0.6); text-transform: uppercase; letter-spacing: 0.05em; }
+.pos-pay-close { background: rgba(244,241,233,0.1); border: none; color: var(--sand); width: 34px; height: 34px; border-radius: 50%; font-size: 20px; line-height: 1; }
+.pos-pay-close:hover { background: rgba(244,241,233,0.2); }
+.pos-pay-total { font-family: var(--font-brand); font-size: 34px; font-weight: 400; color: var(--sand); letter-spacing: 0.01em; font-variant-numeric: tabular-nums; margin-top: 4px; }
+.pos-pay-body { flex: 1; overflow-y: auto; padding: 20px 22px; }
+.pos-pay-label { font-family: var(--font-brand); font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink); margin-bottom: 10px; }
+
+/* Segmented payment mode control */
+.pos-seg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); padding: 5px; }
+.pos-seg-btn { display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 12px 4px; border-radius: 9px; border: none; background: transparent; color: var(--muted); font-family: var(--font-brand); font-size: 12px; text-transform: uppercase; letter-spacing: 0.02em; min-height: 56px; transition: background-color 0.12s, color 0.12s; }
+.pos-seg-btn.active { background: var(--ink); color: var(--lime); }
+
+/* Cash tender + change */
+.pos-tender-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 14px 0 10px; }
+.pos-tender-btn { padding: 12px 4px; border-radius: var(--radius); border: 1.5px solid var(--border); background: var(--white); font-family: var(--font-brand); font-size: 14px; color: var(--ink); min-height: 46px; transition: border-color 0.12s, background-color 0.12s; }
+.pos-tender-btn:hover { border-color: var(--ink); }
+.pos-tender-btn.exact { color: var(--lime-deep); border-color: var(--lime-deep); }
+.pos-tender-input { width: 100%; padding: 13px 14px; border-radius: var(--radius); border: 1.5px solid var(--border); font-size: 18px; font-weight: 700; color: var(--ink); outline: none; background: var(--white); font-variant-numeric: tabular-nums; }
+.pos-tender-input:focus { border-color: var(--ink); }
+.pos-change-row { display: flex; justify-content: space-between; align-items: center; background: var(--ink); border-radius: var(--radius); padding: 14px 16px; margin-top: 12px; }
+.pos-change-row .lbl { font-family: var(--font-brand); font-size: 14px; text-transform: uppercase; letter-spacing: 0.03em; color: rgba(244,241,233,0.7); }
+.pos-change-row .amt { font-family: var(--font-brand); font-size: 26px; color: var(--lime); font-variant-numeric: tabular-nums; }
+.pos-pay-foot { padding: 16px 22px 20px; border-top: 1px solid var(--border); background: var(--white); }
 
 /* Scrollbar */
 ::-webkit-scrollbar { width: 8px; height: 8px; }

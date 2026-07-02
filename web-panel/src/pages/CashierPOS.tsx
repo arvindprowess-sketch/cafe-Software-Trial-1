@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../utils/api';
+import { useAuth } from '../context/AuthContext';
 
 const GST_RATE = 5;
 const POS_DIET_TAGS = ['veg', 'non-veg', 'vegan', 'eggetarian', 'jain', 'keto', 'high-protein'];
@@ -7,6 +8,7 @@ const POS_DIET_LABEL: Record<string, string> = { 'veg': 'Veg', 'non-veg': 'Non-V
 const dietTagsOf = (p: any): string[] => (p?.diet_types && p.diet_types.length ? p.diet_types : [p?.diet_type]).filter(Boolean);
 
 export default function CashierPOS() {
+  const { user } = useAuth();
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [offers, setOffers] = useState<any[]>([]);
@@ -17,7 +19,13 @@ export default function CashierPOS() {
   const [orderType, setOrderType] = useState('dine-in');
   const [placing, setPlacing] = useState(false);
   const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [customerLookup, setCustomerLookup] = useState<any>(null);  // FIX 2 loyalty chip
   const [activeHoldId, setActiveHoldId] = useState<string | null>(null);
+
+  // FIX 1 — dine-in table selection (required before charge)
+  const [tables, setTables] = useState<any[]>([]);
+  const [selectedTable, setSelectedTable] = useState<number | null>(null);
 
   // Product detail modal
   const [detailProduct, setDetailProduct] = useState<any>(null);
@@ -34,14 +42,19 @@ export default function CashierPOS() {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiResult, setAiResult] = useState<any>(null);
 
-  // Coupon
+  // Coupon (server-quoted; appliedCode is the code sent to /cart/quote)
   const [couponCode, setCouponCode] = useState('');
-  const [couponDiscount, setCouponDiscount] = useState<any>(null);
-  const [couponError, setCouponError] = useState('');
+  const [appliedCode, setAppliedCode] = useState('');
+
+  // Server-authoritative bill (FIX 4 — /cart/quote is the single source of truth
+  // for subtotal / discount / GST / total; client math is optimistic-only).
+  const [quote, setQuote] = useState<any>(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
 
   // Payment
   const [showPayment, setShowPayment] = useState(false);
   const [paymentMode, setPaymentMode] = useState('cash');
+  const [tendered, setTendered] = useState('');   // FIX 4.3 — cash received
   const [showReceipt, setShowReceipt] = useState<any>(null);
 
   // View & offers
@@ -53,6 +66,8 @@ export default function CashierPOS() {
   const [editGramsVal, setEditGramsVal] = useState('');
   const [editPriceVal, setEditPriceVal] = useState('');
 
+  const searchRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     (async () => {
       try {
@@ -62,8 +77,14 @@ export default function CashierPOS() {
         setOffers(o.filter((of: any) => of.is_active));
       } catch {}
     })();
-    // Check for resumed held bill
+    // Check for resumed held bill / table deep-link (FIX 5.2)
     const params = new URLSearchParams(window.location.search);
+    const tableParam = params.get('table');
+    if (tableParam && !isNaN(Number(tableParam))) {
+      setOrderType('dine-in');
+      setSelectedTable(Number(tableParam));
+      window.history.replaceState({}, '', '/cashier');
+    }
     const resumeData = params.get('resume');
     if (resumeData) {
       try {
@@ -71,7 +92,8 @@ export default function CashierPOS() {
         setCustomerName(bill.customer_name || '');
         setOrderType(bill.order_type || 'dine-in');
         setActiveHoldId(bill.id);
-        if (bill.coupon_code) setCouponCode(bill.coupon_code);
+        if (bill.table_number != null) setSelectedTable(bill.table_number);
+        if (bill.coupon_code) { setCouponCode(bill.coupon_code); setAppliedCode(bill.coupon_code); }
         // Restore cart items
         if (bill.items?.length) {
           setCart(bill.items.map((item: any) => ({
@@ -220,29 +242,88 @@ export default function CashierPOS() {
     setEditingIdx(null);
   };
 
-  const resetCoupon = () => { if (couponDiscount) { setCouponDiscount(null); setCouponCode(''); setCouponError(''); } };
+  // Cart edits invalidate any applied coupon; the quote re-runs and re-validates.
+  const resetCoupon = () => { if (appliedCode) { setAppliedCode(''); setCouponCode(''); } };
 
   const totals = cart.reduce((a, c) => ({ price: a.price + c.price, calories: a.calories + c.calories, protein: a.protein + c.protein, carbs: a.carbs + (c.carbs || 0), fat: a.fat + (c.fat || 0) }), { price: 0, calories: 0, protein: 0, carbs: 0, fat: 0 });
 
-  const applyCoupon = async () => {
-    if (!couponCode.trim()) return;
-    setCouponError('');
-    try {
-      const result = await api('/orders/apply-coupon', { method: 'POST', body: { coupon_code: couponCode.trim().toUpperCase() } });
-      if (result.min_order_value && totals.price < result.min_order_value) { setCouponError(`Min order ₹${result.min_order_value}`); setCouponDiscount(null); return; }
-      let discount = 0;
-      if (result.discount_type === 'percentage') { discount = (totals.price * result.discount_value) / 100; if (result.max_discount) discount = Math.min(discount, result.max_discount); }
-      else discount = result.discount_value;
-      setCouponDiscount({ ...result, calculated_discount: Math.round(discount * 100) / 100 });
-    } catch (err: any) { setCouponError(err.message || 'Invalid coupon'); setCouponDiscount(null); }
-  };
+  // FIX 4 — debounced server quote. Bill panel renders THESE numbers; the client
+  // reduce above is only an optimistic placeholder shown until the quote lands.
+  useEffect(() => {
+    if (!cart.length) { setQuote(null); setQuoteLoading(false); return; }
+    const items = cart.map(c => ({
+      product_id: c.id, grams: c.grams, quantity: c.plateQty || 1,
+      product_type: c.product_type || 'single', cost_per_100g: c.cost_per_100g,
+    }));
+    let cancelled = false;
+    setQuoteLoading(true);
+    const t = setTimeout(async () => {
+      try {
+        const q = await api('/cart/quote', { method: 'POST', body: {
+          items, order_type: orderType,
+          coupon_code: appliedCode || undefined,
+          store_id: user?.store_id || undefined,
+          customer_phone: customerPhone.length === 10 ? customerPhone : undefined,
+        } });
+        if (!cancelled) setQuote(q);
+      } catch { if (!cancelled) setQuote(null); }
+      finally { if (!cancelled) setQuoteLoading(false); }
+    }, 400);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [cart, orderType, appliedCode, user?.store_id, customerPhone]);
 
-  const getExtraCharge = () => orderType === 'takeaway' ? 10 : 0;
-  const getDiscount = () => couponDiscount?.calculated_discount || 0;
-  const getSubtotal = () => Math.round((totals.price + getExtraCharge() - getDiscount()) * 100) / 100;
-  const getGST = () => Math.round(getSubtotal() * GST_RATE / (100 + GST_RATE) * 100) / 100;
-  const getBaseAmount = () => Math.round((getSubtotal() - getGST()) * 100) / 100;
-  const getFinalTotal = () => Math.max(0, getSubtotal());
+  // FIX 2 — silent walk-in lookup once a full 10-digit phone is entered.
+  useEffect(() => {
+    if (customerPhone.length !== 10) { setCustomerLookup(null); return; }
+    let cancelled = false;
+    api(`/customers/lookup?phone=${customerPhone}`).then(r => {
+      if (cancelled) return;
+      if (r?.exists) { setCustomerLookup(r); setCustomerName(prev => prev || r.name || ''); }
+      else setCustomerLookup(null);
+    }).catch(() => { if (!cancelled) setCustomerLookup(null); });
+    return () => { cancelled = true; };
+  }, [customerPhone]);
+
+  // FIX 1 — load this store's tables when dine-in is active (server scopes by
+  // the staff member's own store).
+  useEffect(() => {
+    if (orderType !== 'dine-in') return;
+    let cancelled = false;
+    api('/tables').then(t => { if (!cancelled) setTables(t); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [orderType]);
+
+  const needsTable = orderType === 'dine-in' && selectedTable == null;
+
+  // Apply = send the code to the next quote; the quote result is the authority.
+  const applyCoupon = () => { if (couponCode.trim()) setAppliedCode(couponCode.trim().toUpperCase()); };
+
+  // Coupon feedback derived from the server quote (no local percentage math).
+  const couponApplied = !!(appliedCode && quote?.coupon_applied);
+  const couponInfo = couponApplied ? quote.coupon : null;
+  const couponError = (appliedCode && quote && !quote.coupon_applied) ? (quote.coupon_error || 'Coupon not valid') : '';
+
+  // Server-authoritative bill, with an optimistic client fallback pre-quote.
+  const clientNet = Math.max(0, totals.price + (orderType === 'takeaway' ? 10 : 0));
+  const bill = quote ? {
+    itemTotal: quote.subtotal,
+    packaging: quote.delivery_fee || 0,
+    discount: quote.coupon_applied ? quote.discount : 0,
+    gst: quote.gst_amount,
+    base: quote.base_amount,
+    total: quote.total,
+  } : {
+    itemTotal: Math.round(totals.price * 100) / 100,
+    packaging: orderType === 'takeaway' ? 10 : 0,
+    discount: 0,
+    gst: Math.round(clientNet * GST_RATE / (100 + GST_RATE) * 100) / 100,
+    base: Math.round((clientNet - clientNet * GST_RATE / (100 + GST_RATE)) * 100) / 100,
+    total: clientNet,
+  };
+  const getDiscount = () => bill.discount;
+  const getGST = () => bill.gst;
+  const getBaseAmount = () => bill.base;
+  const getFinalTotal = () => Math.round(bill.total);
 
   const isUnavailable = (p: any) => p.product_type === 'ready_made' ? ((p.available_servings || 0) <= 0 && !p.is_active) : (p.available_qty_grams || 0) <= 0;
 
@@ -257,8 +338,8 @@ export default function CashierPOS() {
         protein_per_100g: c.protein_per_100g, carbs_per_100g: c.carbs_per_100g || 0,
         fat_per_100g: c.fat_per_100g || 0, diet_type: c.diet_type, category: c.category,
       }));
-      await api('/held-bills', { method: 'POST', body: { customer_name: customerName || 'Walk-in', order_type: orderType, items, coupon_code: couponDiscount ? couponCode : null, coupon_discount: getDiscount() } });
-      setCart([]); setCouponCode(''); setCouponDiscount(null); setCouponError(''); setCustomerName(''); setActiveHoldId(null);
+      await api('/held-bills', { method: 'POST', body: { customer_name: customerName || 'Walk-in', order_type: orderType, items, coupon_code: appliedCode || null, coupon_discount: getDiscount(), table_number: orderType === 'dine-in' ? selectedTable : null } });
+      setCart([]); setCouponCode(''); setAppliedCode(''); setCustomerName(''); setActiveHoldId(null); setSelectedTable(null); setCustomerPhone(""); setCustomerLookup(null);
     } catch (e: any) { alert(e.message); }
   };
 
@@ -270,7 +351,9 @@ export default function CashierPOS() {
       const body = {
         order_type: orderType, payment_mode: paymentMode,
         customer_name: customerName.trim() || undefined,
-        coupon_code: couponDiscount ? couponCode : undefined, discount: getDiscount(),
+        customer_phone: customerPhone.length === 10 ? customerPhone : undefined,
+        table_number: orderType === 'dine-in' ? selectedTable : undefined,
+        coupon_code: couponApplied ? appliedCode : undefined, discount: getDiscount(),
         items: cart.map(c => ({ product_id: c.id, product_name: c.name, grams: c.grams, price: c.price, calories: c.calories, protein: c.protein, carbs: c.carbs || 0, fat: c.fat || 0, product_type: c.product_type || 'single', quantity: c.plateQty || 1 })),
         total_price: getFinalTotal(), total_calories: totals.calories, total_protein: totals.protein, total_carbs: totals.carbs, total_fat: totals.fat,
       };
@@ -278,7 +361,7 @@ export default function CashierPOS() {
       // If resumed from hold, delete the held bill
       if (activeHoldId) { try { await api(`/held-bills/${activeHoldId}`, { method: 'DELETE' }); } catch {} }
       try { const receipt = await api(`/orders/${r.id}/receipt`); setShowReceipt(receipt); } catch { alert(`Order #${r.id} placed!`); }
-      setCart([]); setCouponCode(''); setCouponDiscount(null); setCouponError(''); setShowPayment(false); setCustomerName(''); setActiveHoldId(null);
+      setCart([]); setCouponCode(''); setAppliedCode(''); setShowPayment(false); setCustomerName(''); setActiveHoldId(null); setSelectedTable(null); setCustomerPhone(""); setCustomerLookup(null);
     } catch (e: any) { alert(e.message); }
     finally { setPlacing(false); }
   };
@@ -342,9 +425,32 @@ export default function CashierPOS() {
       // Show all products for "all" offers
       setSelectedCat('All');
     }
-    // Auto-apply coupon
+    // Auto-apply coupon (drives the server quote)
     setCouponCode(offer.coupon_code || '');
+    setAppliedCode((offer.coupon_code || '').toUpperCase());
   };
+
+  // A5 — keyboard shortcuts. Inert while typing in an input/textarea (except Esc).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement;
+      const typing = ['input', 'textarea'].includes((el?.tagName || '').toLowerCase()) || el?.isContentEditable;
+      if (e.key === 'Escape') {
+        if (showPayment) setShowPayment(false);
+        else if (detailProduct) setDetailProduct(null);
+        else if (showAI) { setShowAI(false); setAiResult(null); }
+        else if (showReceipt) setShowReceipt(null);
+        else if (search) { setSearch(''); (document.activeElement as HTMLElement)?.blur?.(); }
+        return;
+      }
+      if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === '/') { e.preventDefault(); searchRef.current?.focus(); }
+      else if (e.key.toLowerCase() === 'h') { if (cart.length) holdBill(); }
+      else if (e.key.toLowerCase() === 'p') { if (cart.length && !needsTable) { setTendered(''); setShowPayment(true); } }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showPayment, detailProduct, showAI, showReceipt, search, cart, needsTable]);
 
   const PAYMENT_MODES = [
     { key: 'cash', label: 'Cash', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/></svg> },
@@ -357,7 +463,7 @@ export default function CashierPOS() {
     <div className="pos-layout">
       <div className="pos-menu">
         <div className="pos-search">
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search menu..." data-testid="pos-search" />
+          <input ref={searchRef} value={search} onChange={e => setSearch(e.target.value)} placeholder="Search menu... ( / )" data-testid="pos-search" />
           <button className="btn btn-purple" onClick={() => setShowAI(true)} data-testid="ai-suggest-btn">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
             AI Guide
@@ -419,28 +525,26 @@ export default function CashierPOS() {
             const unavailable = isUnavailable(p);
             const inCart = cart.find(c => c.id === p.id);
             const isRM = p.product_type === 'ready_made';
+            const tags = dietTagsOf(p);
+            const nonVeg = tags.includes('non-veg');
+            const cartCount = inCart ? (isRM ? (inCart.plateQty || 1) : 1) : 0;
             return (
               <div key={p.id} className={`pos-product ${inCart ? 'in-cart' : ''} ${unavailable ? 'unavailable' : ''}`}
-                onClick={() => !unavailable && openDetail(p)} data-testid={`product-${p.id}`}
-                style={unavailable ? { opacity: 0.4, cursor: 'not-allowed' } : {}}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }} data-testid={`pos-diet-tags-${p.id}`}>
-                    {dietTagsOf(p).slice(0, 3).map((t: string) => (
-                      <span key={t} className="pos-product-badge" style={{ background: t === 'non-veg' ? '#F1E7E1' : '#EAF2DD', color: t === 'non-veg' ? '#15140F' : '#3FA34D', fontSize: 9 }}>{POS_DIET_LABEL[t] || t}</span>
-                    ))}
-                  </div>
-                  {isRM && <span style={{ fontSize: 9, fontWeight: 700, background: '#15140F15', color: '#15140F', padding: '2px 6px', borderRadius: 4 }}>MEAL</span>}
+                onClick={() => !unavailable && openDetail(p)} data-testid={`product-${p.id}`}>
+                <div className="pos-card-top">
+                  {inCart ? <span className="pos-count-chip" data-testid={`pos-count-${p.id}`}>{cartCount}</span> : <span />}
+                  {unavailable
+                    ? <span className="pos-out-tag" data-testid={`pos-out-${p.id}`}>OUT</span>
+                    : <span className="pos-diet-dot" style={{ background: nonVeg ? 'var(--protein)' : 'var(--success)' }} title={nonVeg ? 'Non-Veg' : 'Veg'} data-testid={`pos-diet-dot-${p.id}`} />}
                 </div>
                 <div className="pos-product-name">{p.name}</div>
-                {unavailable && <div style={{ fontSize: 11, color: '#15140F', fontWeight: 700 }}>Unavailable</div>}
                 {isRM ? (
-                  <><div className="pos-product-price">₹{p.fixed_price || Math.round(p.cost_per_100g * (p.serving_grams || 200) / 100)}/plate</div>
-                  <div className="pos-product-nutrition">{p.total_calories_per_serving || Math.round(p.calories_per_100g * (p.serving_grams || 200) / 100)} cal</div></>
+                  <><div className="pos-product-price">₹{p.fixed_price || Math.round(p.cost_per_100g * (p.serving_grams || 200) / 100)}<span style={{ fontSize: 11, color: 'var(--muted)', letterSpacing: 0 }}>/plate</span></div>
+                  <div className="pos-product-nutrition">{p.total_calories_per_serving || Math.round(p.calories_per_100g * (p.serving_grams || 200) / 100)} cal · Meal</div></>
                 ) : (
-                  <><div className="pos-product-price">₹{p.cost_per_100g}/100g</div>
-                  <div className="pos-product-nutrition">{p.calories_per_100g} cal | P:{p.protein_per_100g}g</div></>
+                  <><div className="pos-product-price">₹{p.cost_per_100g}<span style={{ fontSize: 11, color: 'var(--muted)', letterSpacing: 0 }}>/100g</span></div>
+                  <div className="pos-product-nutrition">{p.calories_per_100g} cal · P{p.protein_per_100g}g</div></>
                 )}
-                {inCart && <div style={{ marginTop: 4, fontSize: 11, fontWeight: 700, color: '#15140F' }}>In cart</div>}
               </div>
             );
           };
@@ -462,98 +566,120 @@ export default function CashierPOS() {
           }
           return <div className="pos-products">{filtered.map(renderCard)}</div>;
         })()}
+        <div className="pos-keyhint" data-testid="pos-keyhint">
+          <kbd>/</kbd> search · <kbd>H</kbd> hold · <kbd>P</kbd> pay · <kbd>Esc</kbd> close
+        </div>
       </div>
 
-      {/* RIGHT - Cart */}
-      <div className="pos-cart">
-        <div className="pos-cart-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span>Cart ({cart.length})</span>
-          {cart.length > 0 && (
-            <button className="btn btn-sm btn-orange" onClick={holdBill} data-testid="hold-bill-btn" title="Hold this bill for later">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M10 15V9l5 3-5 3z"/></svg>
-              Hold
-            </button>
-          )}
+      {/* RIGHT - Ink bill panel */}
+      <div className="pos-bill" data-testid="pos-bill">
+        <div className="pos-bill-header">
+          <div className="pos-bill-title-row">
+            <span className="pos-bill-title">Bill <span className="count">· {cart.length}</span></span>
+            {cart.length > 0 && (
+              <button className="pos-hold-btn" onClick={holdBill} data-testid="hold-bill-btn" title="Hold this bill for later (H)">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M10 15V9l5 3-5 3z"/></svg>
+                Hold
+              </button>
+            )}
+          </div>
+          <div className="pos-bill-fields">
+            <div className="pos-name-row">
+              <input className="pos-ink-input name" value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="Customer name (Walk-in)" data-testid="customer-name-input" />
+              <input className="pos-ink-input phone" type="tel" inputMode="numeric" maxLength={10} value={customerPhone} onChange={e => setCustomerPhone(e.target.value.replace(/\D/g, '').slice(0, 10))} placeholder="Phone (optional)" data-testid="customer-phone-input" />
+            </div>
+            {customerLookup && (
+              <div className="pos-loyalty-chip" data-testid="loyalty-chip">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14l-5-4.87 6.91-1.01L12 2Z"/></svg>
+                {customerLookup.loyalty_points} pts · {customerLookup.name}
+              </div>
+            )}
+            <div className="pos-type-pills">
+              {['dine-in', 'takeaway'].map(t => (
+                <button key={t} className={`pos-type-pill ${orderType === t ? 'active' : ''}`} onClick={() => setOrderType(t)} data-testid={`type-${t}`}>{t === 'dine-in' ? 'Dine-In' : 'Takeaway'}</button>
+              ))}
+            </div>
+            {orderType === 'dine-in' && (
+              <div data-testid="pos-table-picker">
+                <div className="pos-table-label">Table {selectedTable != null ? `· T${selectedTable}` : '(required)'}</div>
+                <div className="pos-table-picker">
+                  {tables.map(t => {
+                    const occ = t.is_occupied || t.status === 'occupied';
+                    const sel = selectedTable === t.table_number;
+                    return (
+                      <button key={t.table_number} type="button" data-testid={`pos-table-${t.table_number}`}
+                        className={`pos-table-chip ${occ ? 'occupied' : ''} ${sel ? 'selected' : ''}`}
+                        title={occ ? 'Occupied — add to this table' : 'Free'}
+                        onClick={() => setSelectedTable(sel ? null : t.table_number)}>T{t.table_number}</button>
+                    );
+                  })}
+                  {tables.length === 0 && <span style={{ fontSize: 12, color: 'rgba(244,241,233,0.5)' }}>No tables configured</span>}
+                </div>
+                {needsTable && cart.length > 0 && <div className="pos-table-hint" data-testid="table-required-hint">Select a table to charge this dine-in order.</div>}
+              </div>
+            )}
+          </div>
         </div>
-        <div style={{ padding: '8px 12px', borderBottom: '1px solid #EFEFEF' }}>
-          <input value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="Customer name (Walk-in)" data-testid="customer-name-input" style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #EFEFEF', fontSize: 13 }} />
-        </div>
-        <div className="pos-cart-items">
+
+        <div className="pos-bill-items" data-testid="pos-bill-items">
           {cart.map((c, idx) => (
-            <div className="pos-cart-item" key={`${c.id}_${idx}`} style={{ flexDirection: 'column', gap: 4 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-                <div className="pos-cart-info" style={{ flex: 1 }}>
-                  <div className="pos-cart-name">{c.name} {c.product_type === 'ready_made' && <span style={{ fontSize: 10, color: '#15140F' }}>MEAL</span>}</div>
-                  {c.product_type === 'ready_made' ? (
-                    <div className="pos-cart-detail">x{c.plateQty || 1} plate | {c.calories} cal</div>
-                  ) : (
-                    <div className="pos-cart-detail">{c.grams}g | {c.calories} cal</div>
-                  )}
+            <div className="pos-bill-item" key={`${c.id}_${idx}`}>
+              <div className="pos-bill-item-top">
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="pos-bill-item-name">{c.name}{c.product_type === 'ready_made' && <span className="pos-bill-item-meal">MEAL</span>}</div>
+                  <div className="pos-bill-item-detail">{c.product_type === 'ready_made' ? `x${c.plateQty || 1} plate · ${c.calories} cal` : `${c.grams}g · ${c.calories} cal`}</div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span className="pos-cart-price" style={{ cursor: c.product_type !== 'ready_made' ? 'pointer' : 'default' }} onClick={() => { if (c.product_type !== 'ready_made') { setEditingIdx(idx); setEditGramsVal(String(c.grams)); setEditPriceVal(String(Math.round(c.price))); } }}>₹{Math.round(c.price)}</span>
-                  <button className="pos-cart-remove" onClick={() => removeItem(idx)} data-testid={`remove-${idx}`}>x</button>
+                  <span className="pos-bill-item-price" style={{ cursor: c.product_type !== 'ready_made' ? 'pointer' : 'default' }} onClick={() => { if (c.product_type !== 'ready_made') { setEditingIdx(idx); setEditGramsVal(String(c.grams)); setEditPriceVal(String(Math.round(c.price))); } }}>₹{Math.round(c.price)}</span>
+                  <button className="pos-bill-remove" onClick={() => removeItem(idx)} data-testid={`remove-${idx}`} aria-label="Remove item">×</button>
                 </div>
               </div>
-              {/* Inline edit for single items */}
               {c.product_type !== 'ready_made' && editingIdx === idx && (
-                <div style={{ display: 'flex', gap: 4, alignItems: 'center', background: '#F8F8F8', borderRadius: 8, padding: 6 }}>
+                <div className="pos-inline-edit">
                   <div style={{ flex: 1 }}>
-                    <label style={{ fontSize: 10, color: '#9C9C9C' }}>Grams</label>
-                    <input type="number" value={editGramsVal} onChange={e => setEditGramsVal(e.target.value)} onKeyDown={e => e.key === 'Enter' && applyEditGrams(idx)}
-                      style={{ width: '100%', padding: '4px 6px', borderRadius: 6, border: '1px solid #EFEFEF', fontSize: 13 }} data-testid={`edit-grams-${idx}`} />
+                    <label>Grams</label>
+                    <input type="number" value={editGramsVal} onChange={e => setEditGramsVal(e.target.value)} onKeyDown={e => e.key === 'Enter' && applyEditGrams(idx)} data-testid={`edit-grams-${idx}`} />
                   </div>
                   <div style={{ flex: 1 }}>
-                    <label style={{ fontSize: 10, color: '#9C9C9C' }}>Price (₹)</label>
-                    <input type="number" value={editPriceVal} onChange={e => setEditPriceVal(e.target.value)} onKeyDown={e => e.key === 'Enter' && applyEditPrice(idx)}
-                      style={{ width: '100%', padding: '4px 6px', borderRadius: 6, border: '1px solid #EFEFEF', fontSize: 13 }} data-testid={`edit-price-${idx}`} />
+                    <label>Price (₹)</label>
+                    <input type="number" value={editPriceVal} onChange={e => setEditPriceVal(e.target.value)} onKeyDown={e => e.key === 'Enter' && applyEditPrice(idx)} data-testid={`edit-price-${idx}`} />
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 12 }}>
-                    <button className="btn btn-sm btn-green" onClick={() => applyEditGrams(idx)} data-testid={`save-grams-${idx}`} style={{ fontSize: 10, padding: '4px 8px' }}>g</button>
-                    <button className="btn btn-sm btn-purple" onClick={() => applyEditPrice(idx)} data-testid={`save-price-${idx}`} style={{ fontSize: 10, padding: '4px 8px' }}>₹</button>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    <button className="btn btn-sm btn-green" onClick={() => applyEditGrams(idx)} data-testid={`save-grams-${idx}`} style={{ fontSize: 10, padding: '5px 9px' }}>g</button>
+                    <button className="btn btn-sm btn-primary" onClick={() => applyEditPrice(idx)} data-testid={`save-price-${idx}`} style={{ fontSize: 10, padding: '5px 9px' }}>₹</button>
                   </div>
                 </div>
               )}
               {c.product_type !== 'ready_made' && editingIdx !== idx && (
-                <button style={{ fontSize: 11, color: '#15140F', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', padding: 0, fontWeight: 600 }}
-                  onClick={() => { setEditingIdx(idx); setEditGramsVal(String(c.grams)); setEditPriceVal(String(Math.round(c.price))); }}>
-                  Edit grams / price
-                </button>
+                <button className="pos-bill-linkbtn" onClick={() => { setEditingIdx(idx); setEditGramsVal(String(c.grams)); setEditPriceVal(String(Math.round(c.price))); }}>Edit grams / price</button>
               )}
             </div>
           ))}
-          {cart.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: '#9C9C9C', fontSize: 14 }}>Add items from menu</div>}
+          {cart.length === 0 && <div className="pos-bill-empty">Add items from the menu</div>}
         </div>
-        <div className="pos-cart-footer">
+
+        <div className="pos-bill-footer">
           {cart.length > 0 && (
             <div style={{ marginBottom: 10 }}>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <input value={couponCode} onChange={e => { setCouponCode(e.target.value.toUpperCase()); setCouponError(''); }} placeholder="Coupon code" data-testid="coupon-input" style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: '1px solid #EFEFEF', fontSize: 13, fontWeight: 600 }} />
-                <button className="btn btn-sm btn-orange" onClick={applyCoupon} data-testid="apply-coupon-btn" disabled={!couponCode.trim()}>Apply</button>
+              <div className="pos-coupon-row">
+                <input className="pos-ink-input" style={{ flex: 1, fontWeight: 600 }} value={couponCode} onChange={e => setCouponCode(e.target.value.toUpperCase())} onKeyDown={e => e.key === 'Enter' && applyCoupon()} placeholder="Coupon code" data-testid="coupon-input" />
+                <button className="pos-coupon-apply" onClick={applyCoupon} data-testid="apply-coupon-btn" disabled={!couponCode.trim()}>Apply</button>
               </div>
-              {couponError && <p style={{ color: '#15140F', fontSize: 12, marginTop: 4 }} data-testid="coupon-error">{couponError}</p>}
-              {couponDiscount && (
-                <div style={{ background: '#EAF2DD', borderRadius: 8, padding: '6px 10px', marginTop: 6, fontSize: 12, color: '#3FA34D', display: 'flex', justifyContent: 'space-between' }} data-testid="coupon-applied">
-                  <span>{couponDiscount.title}</span><span style={{ fontWeight: 700 }}>-₹{couponDiscount.calculated_discount}</span>
+              {couponError && <p className="pos-coupon-error" data-testid="coupon-error">{couponError}</p>}
+              {couponInfo && (
+                <div className="pos-coupon-chip" data-testid="coupon-applied">
+                  <span>{couponInfo.title}</span><span style={{ fontWeight: 700 }}>-₹{Math.round(bill.discount)}</span>
                 </div>
               )}
             </div>
           )}
-          <div className="order-type-toggle">
-            {['dine-in', 'takeaway'].map(t => (
-              <button key={t} className={`order-type-btn ${orderType === t ? 'active' : ''}`} onClick={() => setOrderType(t)} data-testid={`type-${t}`}>{t === 'dine-in' ? 'Dine-In' : 'Takeaway'}</button>
-            ))}
-          </div>
-          <div className="pos-totals">
-            <div className="pos-total-row"><span>Item Total</span><span>₹{Math.round(totals.price)}</span></div>
-            {orderType === 'takeaway' && <div className="pos-total-row"><span>Packaging</span><span>₹10</span></div>}
-            {couponDiscount && <div className="pos-total-row" style={{ color: '#3FA34D' }}><span>Discount</span><span>-₹{couponDiscount.calculated_discount}</span></div>}
-            <div className="pos-total-row" style={{ fontSize: 12, color: '#9C9C9C' }}><span>Base Amount</span><span>₹{getBaseAmount()}</span></div>
-            <div className="pos-total-row" style={{ fontSize: 12, color: '#9C9C9C' }}><span>GST (5% incl.)</span><span>₹{getGST()}</span></div>
-            <div className="pos-total-row grand"><span>Total</span><span>₹{getFinalTotal()}</span></div>
-            <div className="pos-total-row" style={{ fontSize: 11, color: '#9C9C9C' }}><span>Nutrition</span><span>{Math.round(totals.calories)} cal | P:{Math.round(totals.protein)}g</span></div>
-          </div>
-          <button className="pos-order-btn" onClick={() => setShowPayment(true)} disabled={!cart.length} data-testid="proceed-payment-btn">Proceed to Payment — ₹{getFinalTotal()}</button>
+          <div className="pos-bill-total-row"><span>Item Total</span><span>{quoteLoading ? '…' : `₹${Math.round(bill.itemTotal)}`}</span></div>
+          {bill.packaging > 0 && <div className="pos-bill-total-row"><span>Packaging</span><span>₹{Math.round(bill.packaging)}</span></div>}
+          {couponInfo && <div className="pos-bill-total-row discount"><span>Discount</span><span>-₹{Math.round(bill.discount)}</span></div>}
+          <div className="pos-bill-total-row"><span>Base Amount</span><span>₹{getBaseAmount()}</span></div>
+          <div className="pos-bill-total-row"><span>GST (5% incl.)</span><span>₹{getGST()}</span></div>
+          <div className="pos-bill-total-row grand"><span>Total</span><span>{quoteLoading ? '…' : `₹${getFinalTotal()}`}</span></div>
+          <button className="pos-charge-btn" onClick={() => { setTendered(''); setShowPayment(true); }} disabled={!cart.length || needsTable} data-testid="proceed-payment-btn">{needsTable && cart.length > 0 ? 'Select a table' : `Charge ₹${getFinalTotal()}`}</button>
         </div>
       </div>
 
@@ -639,47 +765,59 @@ export default function CashierPOS() {
         </div>
       )}
 
-      {/* Payment Modal */}
-      {showPayment && (
-        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowPayment(false)}>
-          <div className="modal" style={{ maxWidth: 440 }}>
-            <h2>Collect Payment</h2>
-            <div style={{ background: '#F8F8F8', borderRadius: 10, padding: 14, marginBottom: 16 }}>
-              <div style={{ fontSize: 13, marginBottom: 8 }}>
-                {cart.map((c, i) => (
-                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
-                    <span>{c.name} {c.product_type === 'ready_made' ? `x${c.plateQty || 1}` : `(${c.grams}g)`}</span><span>₹{Math.round(c.price)}</span>
+      {/* Payment Sheet (A3) */}
+      {showPayment && (() => {
+        const total = getFinalTotal();
+        const tenderedNum = parseFloat(tendered) || 0;
+        const change = Math.max(0, Math.round((tenderedNum - total) * 100) / 100);
+        return (
+          <div className="pos-pay-overlay" onClick={e => e.target === e.currentTarget && !placing && setShowPayment(false)}>
+            <div className="pos-pay-sheet" data-testid="payment-sheet">
+              <div className="pos-pay-head">
+                <div className="pos-pay-head-row">
+                  <span className="pos-pay-kicker">Amount due</span>
+                  <button className="pos-pay-close" onClick={() => setShowPayment(false)} data-testid="close-payment-btn" aria-label="Close">×</button>
+                </div>
+                <div className="pos-pay-total" data-testid="pay-total">₹{total}</div>
+              </div>
+              <div className="pos-pay-body">
+                <div className="pos-pay-label">Payment method</div>
+                <div className="pos-seg">
+                  {PAYMENT_MODES.map(pm => (
+                    <button key={pm.key} data-testid={`pay-${pm.key}`} className={`pos-seg-btn ${paymentMode === pm.key ? 'active' : ''}`} onClick={() => setPaymentMode(pm.key)}>
+                      {pm.icon}{pm.label}
+                    </button>
+                  ))}
+                </div>
+
+                {paymentMode === 'cash' && (
+                  <div data-testid="cash-tender">
+                    <div className="pos-pay-label" style={{ marginTop: 22 }}>Cash received</div>
+                    <div className="pos-tender-grid">
+                      {[100, 200, 500].map(v => (
+                        <button key={v} type="button" className="pos-tender-btn" onClick={() => setTendered(String(v))} data-testid={`tender-${v}`}>₹{v}</button>
+                      ))}
+                      <button type="button" className="pos-tender-btn exact" onClick={() => setTendered(String(total))} data-testid="tender-exact">EXACT</button>
+                    </div>
+                    <input className="pos-tender-input" type="number" inputMode="numeric" value={tendered} onChange={e => setTendered(e.target.value)} placeholder="Enter amount" data-testid="tender-input" />
+                    {tenderedNum > 0 && (
+                      <div className="pos-change-row" data-testid="change-row">
+                        <span className="lbl">Change</span>
+                        <span className="amt" data-testid="change-amount">₹{change}</span>
+                      </div>
+                    )}
                   </div>
-                ))}
+                )}
               </div>
-              <div style={{ borderTop: '1px dashed #ccc', paddingTop: 8, marginTop: 8 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><span>Item Total</span><span>₹{Math.round(totals.price)}</span></div>
-                {orderType === 'takeaway' && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><span>Packaging</span><span>₹10</span></div>}
-                {couponDiscount && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#3FA34D' }}><span>Discount</span><span>-₹{couponDiscount.calculated_discount}</span></div>}
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#9C9C9C', marginTop: 4 }}><span>Base (excl. GST)</span><span>₹{getBaseAmount()}</span></div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#9C9C9C' }}><span>CGST (2.5%)</span><span>₹{Math.round(getGST() / 2 * 100) / 100}</span></div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#9C9C9C' }}><span>SGST (2.5%)</span><span>₹{Math.round(getGST() / 2 * 100) / 100}</span></div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 18, fontWeight: 800, marginTop: 8, borderTop: '1px solid #333', paddingTop: 8 }}><span>TOTAL</span><span>₹{getFinalTotal()}</span></div>
+              <div className="pos-pay-foot">
+                <button className="pos-charge-btn" style={{ marginTop: 0 }} onClick={confirmPayment} disabled={placing} data-testid="confirm-payment-btn">
+                  {placing ? 'Processing…' : `Charge ₹${total} · ${paymentMode.toUpperCase()}`}
+                </button>
               </div>
-            </div>
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ fontWeight: 700, fontSize: 14, marginBottom: 8, display: 'block' }}>Payment Method</label>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-                {PAYMENT_MODES.map(pm => (
-                  <button key={pm.key} data-testid={`pay-${pm.key}`} onClick={() => setPaymentMode(pm.key)}
-                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '14px 8px', borderRadius: 12, cursor: 'pointer',
-                      border: paymentMode === pm.key ? '2px solid #15140F' : '2px solid #EFEFEF', background: paymentMode === pm.key ? '#15140F10' : '#fff',
-                      color: paymentMode === pm.key ? '#15140F' : '#333', fontWeight: paymentMode === pm.key ? 700 : 500, fontSize: 13 }}>{pm.icon}{pm.label}</button>
-                ))}
-              </div>
-            </div>
-            <div className="modal-actions">
-              <button className="btn btn-secondary" onClick={() => setShowPayment(false)}>Back to Cart</button>
-              <button className="btn btn-green" onClick={confirmPayment} disabled={placing} data-testid="confirm-payment-btn" style={{ flex: 2 }}>{placing ? 'Processing...' : `Confirm ${paymentMode.toUpperCase()} — ₹${getFinalTotal()}`}</button>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* AI Modal */}
       {showAI && (
