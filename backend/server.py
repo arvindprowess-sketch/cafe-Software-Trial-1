@@ -4140,7 +4140,8 @@ async def reorder(order_id: str, user=Depends(get_current_user)):
 
 # ========== MIGRATE EXISTING PRODUCTS ==========
 @api_router.post("/migrate/diet-type")
-async def migrate_diet_type():
+async def migrate_diet_type(user=Depends(get_current_user)):
+    if not is_hq(user): raise HTTPException(403, "HQ only")
     """Add diet_type to all existing products that don't have it"""
     products = await db.products.find({"diet_type": {"$exists": False}}, {"_id": 0}).to_list(500)
     count = 0
@@ -6109,7 +6110,8 @@ async def notify_order_status(order_id: str, status: str):
 
 # ========== SEED DEFAULT OFFERS & PACKS ==========
 @api_router.post("/seed-offers-packs")
-async def seed_offers_and_packs():
+async def seed_offers_and_packs(user=Depends(get_current_user)):
+    if not is_hq(user): raise HTTPException(403, "HQ only")
     """Seed default offers and packs for demo"""
     offers_count = await db.offers.count_documents({})
     packs_count = await db.packs.count_documents({})
@@ -7014,6 +7016,23 @@ async def active_orders(user=Depends(get_current_user)):
     query = {**store_filter(user), "status": {"$in": ["pending", "accepted", "preparing", "ready"]}}
     orders = await db.orders.find(query, {"_id": 0}).sort("created_at", 1).to_list(100)
     return orders
+
+# Single-order fetch — powers the customer order-detail screen (single fetch +
+# live status) instead of pulling the whole /orders list and filtering client-side.
+# Registered after the static /orders/* GET routes so the {order_id} path param
+# never shadows them. Access check mirrors get_order_receipt exactly:
+# owner customer, or staff with store-scope access to the order's store.
+@api_router.get("/orders/{order_id}")
+async def get_order(order_id: str, user=Depends(get_current_user)):
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if normalize_role(user) == "customer":
+        if order.get("user_id") != user["id"]:
+            raise HTTPException(status_code=403, detail="Access denied")
+    else:
+        assert_store_allowed(user, order.get("store_id"))
+    return order
 
 # ========== P2: SHIFT MANAGEMENT ==========
 class ShiftCreate(BaseModel):

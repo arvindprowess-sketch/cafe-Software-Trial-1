@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { apiCall } from '../utils/api';
+import { useStore } from '../utils/StoreContext';
 
 import { FUEL, FONT, RADIUS, SPACE } from '../utils/theme';
 const Z_RED = FUEL.ink;
@@ -16,6 +17,7 @@ const PURPLE = '#15140F';
 export default function ScanTableScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const { selectedStoreId, selectStore } = useStore();
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -32,11 +34,13 @@ export default function ScanTableScreen() {
   const handleBarCodeScanned = async ({ type, data }: { type: string, data: string }) => {
     if (scanned) return;
     setScanned(true);
-    
-    // Parse QR code - expected format: BORAROC-TABLE-{number}
-    const match = data.match(/BORAROC-TABLE-(\d+)/i);
+
+    // Accept both the new store-scoped format `BORAROC-{store_id}-TABLE-{n}` and
+    // the legacy `BORAROC-TABLE-{n}` (which falls back to the current store).
+    const match = (data || '').trim().match(/^BORAROC-(?:([A-Za-z0-9_-]+)-)?TABLE-(\d+)$/i);
     if (match) {
-      await handleTableNumber(parseInt(match[1]));
+      const qrStoreId = match[1] || null;
+      await handleTableNumber(parseInt(match[2]), qrStoreId);
     } else {
       Alert.alert('Invalid QR', 'This QR code is not from Diet Café', [
         { text: 'Scan Again', onPress: () => setScanned(false) }
@@ -44,16 +48,22 @@ export default function ScanTableScreen() {
     }
   };
 
-  const handleTableNumber = async (tableNum: number) => {
+  const handleTableNumber = async (tableNum: number, qrStoreId: string | null = null) => {
     setLoading(true);
+    // A store carried by the QR wins; else fall back to the selected store.
+    const sid = qrStoreId || selectedStoreId || null;
+    const storeQ = sid ? `?store_id=${encodeURIComponent(sid)}` : '';
     try {
-      // Get table info
-      const table = await apiCall(`/tables/${tableNum}`);
+      // Get table info (store-scoped)
+      const table = await apiCall(`/tables/${tableNum}${storeQ}`);
       setTableInfo(table);
-      
-      // Occupy the table
-      await apiCall(`/tables/${tableNum}/occupy`, { method: 'POST' });
-      
+
+      // Occupy the table (store-scoped)
+      await apiCall(`/tables/${tableNum}/occupy${storeQ}`, { method: 'POST' });
+
+      // Scoped scan → point the rest of the app (menu, dine-in order) at this store.
+      if (qrStoreId) selectStore(qrStoreId);
+
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Could not access table');
       setScanned(false);
