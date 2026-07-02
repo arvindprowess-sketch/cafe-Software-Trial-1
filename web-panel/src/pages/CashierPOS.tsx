@@ -19,6 +19,8 @@ export default function CashierPOS() {
   const [orderType, setOrderType] = useState('dine-in');
   const [placing, setPlacing] = useState(false);
   const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [customerLookup, setCustomerLookup] = useState<any>(null);  // FIX 2 loyalty chip
   const [activeHoldId, setActiveHoldId] = useState<string | null>(null);
 
   // FIX 1 — dine-in table selection (required before charge)
@@ -259,13 +261,26 @@ export default function CashierPOS() {
           items, order_type: orderType,
           coupon_code: appliedCode || undefined,
           store_id: user?.store_id || undefined,
+          customer_phone: customerPhone.length === 10 ? customerPhone : undefined,
         } });
         if (!cancelled) setQuote(q);
       } catch { if (!cancelled) setQuote(null); }
       finally { if (!cancelled) setQuoteLoading(false); }
     }, 400);
     return () => { cancelled = true; clearTimeout(t); };
-  }, [cart, orderType, appliedCode, user?.store_id]);
+  }, [cart, orderType, appliedCode, user?.store_id, customerPhone]);
+
+  // FIX 2 — silent walk-in lookup once a full 10-digit phone is entered.
+  useEffect(() => {
+    if (customerPhone.length !== 10) { setCustomerLookup(null); return; }
+    let cancelled = false;
+    api(`/customers/lookup?phone=${customerPhone}`).then(r => {
+      if (cancelled) return;
+      if (r?.exists) { setCustomerLookup(r); setCustomerName(prev => prev || r.name || ''); }
+      else setCustomerLookup(null);
+    }).catch(() => { if (!cancelled) setCustomerLookup(null); });
+    return () => { cancelled = true; };
+  }, [customerPhone]);
 
   // FIX 1 — load this store's tables when dine-in is active (server scopes by
   // the staff member's own store).
@@ -322,7 +337,7 @@ export default function CashierPOS() {
         fat_per_100g: c.fat_per_100g || 0, diet_type: c.diet_type, category: c.category,
       }));
       await api('/held-bills', { method: 'POST', body: { customer_name: customerName || 'Walk-in', order_type: orderType, items, coupon_code: appliedCode || null, coupon_discount: getDiscount(), table_number: orderType === 'dine-in' ? selectedTable : null } });
-      setCart([]); setCouponCode(''); setAppliedCode(''); setCustomerName(''); setActiveHoldId(null); setSelectedTable(null);
+      setCart([]); setCouponCode(''); setAppliedCode(''); setCustomerName(''); setActiveHoldId(null); setSelectedTable(null); setCustomerPhone(""); setCustomerLookup(null);
     } catch (e: any) { alert(e.message); }
   };
 
@@ -334,6 +349,7 @@ export default function CashierPOS() {
       const body = {
         order_type: orderType, payment_mode: paymentMode,
         customer_name: customerName.trim() || undefined,
+        customer_phone: customerPhone.length === 10 ? customerPhone : undefined,
         table_number: orderType === 'dine-in' ? selectedTable : undefined,
         coupon_code: couponApplied ? appliedCode : undefined, discount: getDiscount(),
         items: cart.map(c => ({ product_id: c.id, product_name: c.name, grams: c.grams, price: c.price, calories: c.calories, protein: c.protein, carbs: c.carbs || 0, fat: c.fat || 0, product_type: c.product_type || 'single', quantity: c.plateQty || 1 })),
@@ -343,7 +359,7 @@ export default function CashierPOS() {
       // If resumed from hold, delete the held bill
       if (activeHoldId) { try { await api(`/held-bills/${activeHoldId}`, { method: 'DELETE' }); } catch {} }
       try { const receipt = await api(`/orders/${r.id}/receipt`); setShowReceipt(receipt); } catch { alert(`Order #${r.id} placed!`); }
-      setCart([]); setCouponCode(''); setAppliedCode(''); setShowPayment(false); setCustomerName(''); setActiveHoldId(null); setSelectedTable(null);
+      setCart([]); setCouponCode(''); setAppliedCode(''); setShowPayment(false); setCustomerName(''); setActiveHoldId(null); setSelectedTable(null); setCustomerPhone(""); setCustomerLookup(null);
     } catch (e: any) { alert(e.message); }
     finally { setPlacing(false); }
   };
@@ -541,7 +557,11 @@ export default function CashierPOS() {
             )}
           </div>
           <div className="pos-bill-fields">
-            <input className="pos-ink-input" value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="Customer name (Walk-in)" data-testid="customer-name-input" />
+            <div className="pos-name-row">
+              <input className="pos-ink-input name" value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="Customer name (Walk-in)" data-testid="customer-name-input" />
+              <input className="pos-ink-input phone" type="tel" inputMode="numeric" maxLength={10} value={customerPhone} onChange={e => setCustomerPhone(e.target.value.replace(/\D/g, '').slice(0, 10))} placeholder="Phone (optional)" data-testid="customer-phone-input" />
+            </div>
+            {customerLookup && <div className="pos-loyalty-chip" data-testid="loyalty-chip">★ {customerLookup.loyalty_points} pts · {customerLookup.name}</div>}
             <div className="pos-type-pills">
               {['dine-in', 'takeaway'].map(t => (
                 <button key={t} className={`pos-type-pill ${orderType === t ? 'active' : ''}`} onClick={() => setOrderType(t)} data-testid={`type-${t}`}>{t === 'dine-in' ? 'Dine-In' : 'Takeaway'}</button>

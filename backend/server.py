@@ -480,6 +480,7 @@ class OrderCreate(BaseModel):
     coupon_code: Optional[str] = None
     discount: Optional[float] = 0
     customer_name: Optional[str] = None  # For walk-in customers
+    customer_phone: Optional[str] = None  # FIX 2 — walk-in loyalty: resolve/create the customer
     is_scheduled: Optional[bool] = False
     scheduled_ready_time: Optional[str] = None  # ISO datetime string
     table_number: Optional[int] = None
@@ -757,6 +758,62 @@ async def resolve_order_store_id(user, requested_store_id):
     if not store or store.get("status") == "inactive":
         raise HTTPException(status_code=400, detail="Invalid or inactive store_id")
     return sid
+
+def normalize_indian_phone(raw) -> Optional[str]:
+    """Return a clean 10-digit Indian mobile, or None if invalid. Strips spaces,
+    +91 / 91 country code and a leading 0. Mobiles start 6-9 (FIX 2)."""
+    if not raw:
+        return None
+    digits = re.sub(r"\D", "", str(raw))
+    if len(digits) == 12 and digits.startswith("91"):
+        digits = digits[2:]
+    elif len(digits) == 11 and digits.startswith("0"):
+        digits = digits[1:]
+    if len(digits) == 10 and digits[0] in "6789":
+        return digits
+    return None
+
+
+async def resolve_coupon_user(caller: dict, customer_phone: Optional[str]) -> dict:
+    """The user a coupon should be validated AGAINST. For a staff (POS) caller who
+    supplied a customer phone, that's the customer — so first_order_only / per-user
+    limits check the CUSTOMER, not the cashier (FIX 2). Lookup only (no create):
+    an existing customer resolves to their real id; a brand-new phone gets a
+    synthetic id (no prior orders/redemptions -> first-order coupons pass). Any
+    other case falls back to the caller unchanged."""
+    if customer_phone and role_in(caller, *STAFF_ROLES):
+        phone = normalize_indian_phone(customer_phone)
+        if phone:
+            cust = await db.users.find_one({"phone": phone, "deleted": {"$ne": True}}, {"_id": 0})
+            return cust or {"id": f"walkin:{phone}", "role": "customer", "phone": phone}
+    return caller
+
+
+async def find_or_create_walkin_customer(caller: dict, customer_phone: Optional[str],
+                                         customer_name: Optional[str]) -> Optional[str]:
+    """For a staff (POS) order with a valid customer phone, return the customer
+    user id — reusing an existing account (claimable later when they log into the
+    app with the same phone) or creating a fresh customer. Returns None when there
+    is no usable phone or the caller isn't staff. Never mutates user_id/audit."""
+    if not (customer_phone and role_in(caller, *STAFF_ROLES)):
+        return None
+    phone = normalize_indian_phone(customer_phone)
+    if not phone:
+        return None
+    cust = await db.users.find_one({"phone": phone, "deleted": {"$ne": True}}, {"_id": 0})
+    if cust:
+        return cust["id"]
+    cust_id = str(uuid.uuid4())
+    await db.users.insert_one({
+        "id": cust_id, "phone": phone,
+        "name": (customer_name or "").strip() or f"Guest {phone[-4:]}",
+        "email": None, "role": "customer", "fitness_goal": "maintenance",
+        "daily_calories": 2000, "daily_protein": 100, "daily_carbs": 250, "daily_fat": 65,
+        "walk_in_created": True,  # account seeded at the counter; claimable via OTP login
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    return cust_id
+
 
 def match_nutrition(product_name: str) -> Dict:
     name_lower = product_name.lower().strip()
@@ -2800,8 +2857,18 @@ async def _grant_order_rewards(order: dict):
     """Customer rewards for a CONFIRMED order: meal history + loyalty points +
     streak. Used by create_order for immediately-confirmed orders (POS / app-cash)
     and by _fulfill_paid_order once an app non-cash order is gateway-verified —
-    never on an unpaid order, so loyalty/meal-history can't be farmed (C-4 #3)."""
-    uid = order["user_id"]
+    never on an unpaid order, so loyalty/meal-history can't be farmed (C-4 #3).
+
+    FIX 2 — rewards go to the walk-in customer (customer_user_id) when a phone was
+    captured at POS. Without one, a staff/cashier placing the order earns NOTHING
+    (previously it credited the cashier account — a farming hole). App/customer
+    orders are unaffected: user_id is the customer there."""
+    uid = order.get("customer_user_id")
+    if not uid:
+        payer = await db.users.find_one({"id": order["user_id"]}, {"_id": 0})
+        if not payer or normalize_role(payer) in STAFF_ROLES:
+            return  # walk-in with no customer phone -> no farming, no rewards
+        uid = order["user_id"]
     order_id = order["id"]
     now_iso = datetime.now(timezone.utc).isoformat()
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -2878,12 +2945,16 @@ async def create_order(data: OrderCreate, user=Depends(get_current_user)):
     # Multi-store: every order is tied to a store. POS/staff orders use the staff
     # member's own store; customer orders carry the selected store_id.
     store_id = await resolve_order_store_id(user, data.store_id)
+    # FIX 2 — walk-in loyalty: for a staff/POS order carrying a customer phone,
+    # validate the coupon against the CUSTOMER (first_order_only / per-user), and
+    # resolve/create that customer account. user_id stays the cashier (audit).
+    coupon_user = await resolve_coupon_user(user, data.customer_phone)
     # FIX 1 — server-authoritative bill (anti-tamper). Prices, discount, delivery
     # fee, GST and totals are recomputed here from the store's resolved menu +
     # validate_offer_for_order; client-sent money fields are NOT trusted.
     bill = await compute_authoritative_bill(
         [it.dict() for it in data.items], data.order_type, data.coupon_code,
-        (data.tip or 0), store_id, user)
+        (data.tip or 0), store_id, coupon_user)
     # A coupon the client asked for that the server rejects -> 400 (no silent discount).
     if data.coupon_code and not bill["coupon_applied"]:
         raise HTTPException(status_code=400, detail={"error": "coupon_rejected",
@@ -2957,6 +3028,8 @@ async def create_order(data: OrderCreate, user=Depends(get_current_user)):
     is_scheduled = data.is_scheduled and data.scheduled_ready_time
     payment_mode = getattr(data, 'payment_mode', None) or "cash"
     order_source = "walk_in" if role_in(user, "cashier", "store_manager", "super_admin") else "app"
+    # FIX 2 — resolve/create the walk-in customer (None if no phone/not staff).
+    customer_user_id = await find_or_create_walkin_customer(user, data.customer_phone, data.customer_name)
     # C-4 (revenue-theft fix): a customer-app order paid by anything other than
     # cash (i.e. an online gateway method) must be confirmed by the gateway BEFORE
     # it is treated as real. Otherwise the client could just send payment_mode=upi
@@ -3008,6 +3081,7 @@ async def create_order(data: OrderCreate, user=Depends(get_current_user)):
         "coupon_code": data.coupon_code if bill["coupon_applied"] else None,
         "discount": bill["discount"],                       # ONLY from validate_offer_for_order
         "customer_name": data.customer_name or user["name"],
+        "customer_user_id": customer_user_id,   # FIX 2 — walk-in customer (rewards/coupons), user_id stays cashier
         "order_source": order_source,
         "gst_percent": 5,
         "gst_amount": bill["gst_amount"],                   # server-authoritative
@@ -3036,7 +3110,9 @@ async def create_order(data: OrderCreate, user=Depends(get_current_user)):
             "id": str(uuid.uuid4()),
             "offer_id": off["id"] if off else None,
             "coupon_code": data.coupon_code,
-            "user_id": user["id"],
+            # FIX 2 — per-user coupon limits count the CUSTOMER when a walk-in
+            # phone was given (else the cashier), matching validate_offer_for_order.
+            "user_id": customer_user_id or user["id"],
             "store_id": store_id,
             "order_id": order_id,
             "redeemed_at": datetime.now(timezone.utc).isoformat(),
@@ -4713,6 +4789,21 @@ async def get_tables(store_id: Optional[str] = None, user=Depends(get_optional_u
     tables = await db.tables.find({"store_id": target}, {"_id": 0}).to_list(50)
     return tables
 
+@api_router.get("/customers/lookup")
+async def lookup_customer(phone: str, user=Depends(get_current_user)):
+    """Staff-only minimal walk-in lookup by phone (FIX 2). Returns ONLY
+    {exists, name, loyalty_points} — no order history / no wider PII."""
+    if not role_in(user, "super_admin", "area_manager", "store_manager", "cashier"):
+        raise HTTPException(status_code=403, detail="Staff only")
+    norm = normalize_indian_phone(phone)
+    if not norm:
+        raise HTTPException(status_code=400, detail="Enter a valid 10-digit mobile number")
+    cust = await db.users.find_one({"phone": norm, "role": "customer", "deleted": {"$ne": True}}, {"_id": 0})
+    if not cust:
+        return {"exists": False, "name": None, "loyalty_points": 0}
+    loyalty = await db.loyalty.find_one({"user_id": cust["id"]}, {"_id": 0})
+    return {"exists": True, "name": cust.get("name"), "loyalty_points": (loyalty or {}).get("points", 0)}
+
 @api_router.get("/tables/{table_number}")
 async def get_table(table_number: int, store_id: Optional[str] = None):
     """Get table info by scanning QR code (within a store)."""
@@ -4944,9 +5035,12 @@ async def validate_offer_for_order(offer: dict, store_id: Optional[str], user: d
     min_ov = offer.get("min_order_value", 0) or 0
     if subtotal < min_ov:
         return (False, 0.0, f"Add ₹{round(min_ov - subtotal)} more to use {offer.get('coupon_code') or 'this coupon'}")
-    # First-order-only
+    # First-order-only. A POS order stores the customer under customer_user_id
+    # (user_id is the cashier), so match either field for the resolved coupon user.
     if offer.get("first_order_only"):
-        prior = await db.orders.count_documents({"user_id": user["id"], "status": {"$ne": "cancelled"}})
+        uid = user["id"]
+        prior = await db.orders.count_documents(
+            {"$or": [{"user_id": uid}, {"customer_user_id": uid}], "status": {"$ne": "cancelled"}})
         if prior >= 1:
             return (False, 0.0, "This coupon is valid on your first order only")
     # Usage limits (read from append-only coupon_redemptions)
@@ -5738,17 +5832,20 @@ async def apply_coupon(
     cart_items: Optional[List[Dict[str, Any]]] = Body(None, embed=True),
     cart_total: Optional[float] = Body(None, embed=True),
     store_id: Optional[str] = Body(None, embed=True),
+    customer_phone: Optional[str] = Body(None, embed=True),
     user=Depends(get_current_user),
 ):
     """Validate a coupon and return discount details (percentage/flat/bogo).
     Uses the shared validate_offer_for_order so scope/date/usage match cart_quote.
-    This is a PREVIEW only — it never records a redemption."""
+    This is a PREVIEW only — it never records a redemption. FIX 2: a POS caller may
+    pass customer_phone so first_order_only / per-user limits check the customer."""
     offer = await db.offers.find_one({"coupon_code": coupon_code}, {"_id": 0})
     if not offer:
         raise HTTPException(status_code=404, detail="Invalid or expired coupon code")
     items = cart_items or []
     subtotal = cart_total if cart_total is not None else round(sum(float(i.get("price", 0)) for i in items), 2)
-    ok, discount, error = await validate_offer_for_order(offer, store_id, user, subtotal, items)
+    coupon_user = await resolve_coupon_user(user, customer_phone)
+    ok, discount, error = await validate_offer_for_order(offer, store_id, coupon_user, subtotal, items)
     if not ok:
         raise HTTPException(status_code=400, detail=error)
     return {
@@ -5906,11 +6003,14 @@ async def cart_quote(
     coupon_code: Optional[str] = Body(None),
     tip: float = Body(0),
     store_id: Optional[str] = Body(None),
+    customer_phone: Optional[str] = Body(None),
     user=Depends(get_current_user),
 ):
     """Authoritative, server-side cart bill — thin wrapper over
-    compute_authoritative_bill (the same math used at order placement)."""
-    return await compute_authoritative_bill(items, order_type, coupon_code, tip, store_id, user)
+    compute_authoritative_bill (the same math used at order placement). FIX 2: a
+    POS caller may pass customer_phone so coupon limits check the customer."""
+    coupon_user = await resolve_coupon_user(user, customer_phone)
+    return await compute_authoritative_bill(items, order_type, coupon_code, tip, store_id, coupon_user)
 
 # ========== SMART PORTION ADJUSTER ==========
 @api_router.post("/ai/adjust-portions")

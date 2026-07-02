@@ -222,3 +222,107 @@ def test_held_bill_older_than_24h_hidden(ctx):
         bills = (await ctx.client.get("/api/held-bills", headers=auth(ctx.cashier))).json()
         assert all(b["id"] != old_id for b in bills), "25h-old held bill must be hidden"
     run(go())
+
+
+# ---------------- FIX 2 — walk-in loyalty / customer resolution ----------------
+
+async def _register_customer(ctx, email):
+    return (await ctx.client.post("/api/auth/register", json={
+        "email": email, "password": "p", "name": email, "role": "customer"})).json()
+
+
+def test_pos_phone_grants_loyalty_to_customer_not_cashier(ctx):
+    async def go():
+        phone = "9876500011"
+        r = await place_pos_order(ctx, "dine-in", phone=phone)
+        assert r.status_code == 200, r.text
+        order = r.json()
+        # user_id stays the cashier (audit); customer_user_id points at the customer
+        assert order["user_id"] == ctx.cashier_id
+        assert order.get("customer_user_id")
+        cust = await server.db.users.find_one({"phone": phone}, {"_id": 0})
+        assert cust and cust["role"] == "customer" and cust.get("walk_in_created")
+        assert order["customer_user_id"] == cust["id"]
+        # loyalty credited to the CUSTOMER, never the cashier
+        cust_loyalty = await server.db.loyalty.find_one({"user_id": cust["id"]}, {"_id": 0})
+        assert cust_loyalty and cust_loyalty["points"] > 0
+        cashier_loyalty = await server.db.loyalty.find_one({"user_id": ctx.cashier_id}, {"_id": 0})
+        assert cashier_loyalty is None, "cashier must never earn points on a walk-in"
+    run(go())
+
+
+def test_same_phone_reuses_customer(ctx):
+    async def go():
+        phone = "9876500011"  # same as above
+        before = await server.db.users.count_documents({"phone": phone})
+        r = await place_pos_order(ctx, "dine-in", phone=phone)
+        assert r.status_code == 200
+        after = await server.db.users.count_documents({"phone": phone})
+        assert before == after == 1, "must reuse the existing customer, not duplicate"
+    run(go())
+
+
+def test_pos_order_without_phone_grants_nobody(ctx):
+    async def go():
+        r = await place_pos_order(ctx, "dine-in")  # no phone
+        assert r.status_code == 200
+        assert r.json().get("customer_user_id") is None
+        # cashier still earns nothing
+        assert await server.db.loyalty.find_one({"user_id": ctx.cashier_id}, {"_id": 0}) is None
+    run(go())
+
+
+def test_lookup_endpoint(ctx):
+    async def go():
+        # unknown phone
+        r = await ctx.client.get("/api/customers/lookup?phone=9000000000", headers=auth(ctx.cashier))
+        assert r.status_code == 200 and r.json()["exists"] is False
+        # known walk-in from earlier test, minimal PII only
+        r2 = await ctx.client.get("/api/customers/lookup?phone=9876500011", headers=auth(ctx.cashier))
+        body = r2.json()
+        assert r2.status_code == 200 and body["exists"] is True
+        assert set(body.keys()) == {"exists", "name", "loyalty_points"}
+        assert body["loyalty_points"] > 0
+        # invalid phone -> 400
+        assert (await ctx.client.get("/api/customers/lookup?phone=123", headers=auth(ctx.cashier))).status_code == 400
+    run(go())
+
+
+def test_first_order_only_checks_customer_at_pos(ctx):
+    async def go():
+        await ctx.client.post("/api/offers", headers=auth(ctx.hq), json={
+            "title": "Welcome", "coupon_code": "FIRST", "discount_type": "flat",
+            "discount_value": 20, "applicable_to": "all", "first_order_only": True, "is_active": True})
+        phone = "9876500022"  # genuinely new
+        # quote sees it as valid for the new phone
+        q = await ctx.client.post("/api/cart/quote", headers=auth(ctx.cashier), json={
+            "items": [{"product_id": ctx.product["id"], "grams": 200,
+                       "cost_per_100g": ctx.product["cost_per_100g"]}],
+            "order_type": "dine-in", "coupon_code": "FIRST", "store_id": ctx.store,
+            "customer_phone": phone})
+        assert q.json()["coupon_applied"] is True, q.text
+        # 1st placement succeeds
+        r1 = await place_pos_order(ctx, "dine-in", coupon="FIRST", phone=phone)
+        assert r1.status_code == 200, r1.text
+        # 2nd placement for the SAME phone is rejected (first order only)
+        r2 = await place_pos_order(ctx, "dine-in", coupon="FIRST", phone=phone)
+        assert r2.status_code == 400, r2.text
+    run(go())
+
+
+def test_app_customer_cash_order_still_grants(ctx):
+    async def go():
+        cust = await _register_customer(ctx, "appcash@t.com")
+        items = pos_items(ctx.product)
+        body = {
+            "order_type": "dine-in", "payment_mode": "cash", "store_id": ctx.store,
+            "items": items, "total_price": sum(i["price"] for i in items),
+            "total_calories": 100, "total_protein": 10, "total_carbs": 5, "total_fat": 2,
+            "confirm_duplicate": True,
+        }
+        r = await ctx.client.post("/api/orders", json=body, headers=auth(cust["token"]))
+        assert r.status_code == 200, r.text
+        # regression: the app customer earns points (user_id is the customer here)
+        loyalty = await server.db.loyalty.find_one({"user_id": cust["user"]["id"]}, {"_id": 0})
+        assert loyalty and loyalty["points"] > 0
+    run(go())
