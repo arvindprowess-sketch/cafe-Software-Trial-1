@@ -13,6 +13,7 @@ Run:  pytest backend/tests/test_cashier_round3.py
 import os
 import asyncio
 import uuid
+from datetime import datetime, timezone, timedelta
 
 os.environ.setdefault("MONGO_URL", "mongodb://localhost:27017")
 os.environ.setdefault("DB_NAME", "round3_test")
@@ -62,6 +63,10 @@ def ctx():
             return sid, server.create_token(sid, role)
 
         c.cashier_id, c.cashier = await mk_staff("cashier", store_id=c.store, code="CASH1")
+        # Second store + its cashier for isolation checks (FIX 5)
+        c.store_b = (await client.post("/api/stores", json={"name": "Store B", "code": "BBB"},
+                                       headers=auth(c.hq))).json()["store_id"]
+        c.cashier_b_id, c.cashier_b = await mk_staff("cashier", store_id=c.store_b, code="CASH2")
         c.product = (await client.get("/api/products")).json()[0]
         return c
 
@@ -150,4 +155,70 @@ def test_quote_matches_receipt_coupon_flat_maxcap(ctx):
         r = await place_pos_order(ctx, "dine-in", coupon="CAP")
         assert r.status_code == 200, r.text
         assert round(q["total"], 2) == round(r.json()["total_price"], 2)
+    run(go())
+
+
+# ---------------- FIX 1 — table number on dine-in POS order ----------------
+
+def test_dinein_order_carries_table_number(ctx):
+    async def go():
+        items = pos_items(ctx.product)
+        body = {
+            "order_type": "dine-in", "payment_mode": "cash", "items": items,
+            "total_price": sum(i["price"] for i in items), "total_calories": 100,
+            "total_protein": 10, "total_carbs": 5, "total_fat": 2,
+            "table_number": 4, "confirm_duplicate": True,
+        }
+        r = await ctx.client.post("/api/orders", json=body, headers=auth(ctx.cashier))
+        assert r.status_code == 200, r.text
+        assert r.json()["table_number"] == 4
+    run(go())
+
+
+# ---------------- FIX 5 — table store isolation ----------------
+
+def test_table_occupy_scoped_to_staff_store(ctx):
+    async def go():
+        # Load tables first (materializes store B's tables, as the page does),
+        # then cashier B occupies table 2 WITHOUT passing store_id -> must hit
+        # store B, never the DEFAULT store.
+        await ctx.client.get("/api/tables", headers=auth(ctx.cashier_b))
+        r = await ctx.client.post("/api/tables/2/occupy", headers=auth(ctx.cashier_b))
+        assert r.status_code == 200, r.text
+        # store B's table 2 is occupied...
+        tb = await server.db.tables.find_one({"table_number": 2, "store_id": ctx.store_b}, {"_id": 0})
+        assert tb and tb["status"] == "occupied"
+        # ...and the DEFAULT store's table 2 is untouched
+        td = await server.db.tables.find_one({"table_number": 2, "store_id": server.DEFAULT_STORE_ID}, {"_id": 0})
+        assert (td or {}).get("status") != "occupied"
+        # cashier A sees store A tables only (GET is store-scoped)
+        ta = (await ctx.client.get("/api/tables", headers=auth(ctx.cashier))).json()
+        assert all(t["store_id"] == ctx.store for t in ta)
+    run(go())
+
+
+# ---------------- FIX 6 — held-bill table + 24h soft expiry ----------------
+
+def test_held_bill_stores_and_lists_table(ctx):
+    async def go():
+        r = await ctx.client.post("/api/held-bills", headers=auth(ctx.cashier), json={
+            "customer_name": "T4 guest", "order_type": "dine-in",
+            "items": [{"name": "X", "price": 100}], "table_number": 4})
+        assert r.status_code == 200, r.text
+        assert r.json()["table_number"] == 4
+        bills = (await ctx.client.get("/api/held-bills", headers=auth(ctx.cashier))).json()
+        assert any(b.get("table_number") == 4 for b in bills)
+    run(go())
+
+
+def test_held_bill_older_than_24h_hidden(ctx):
+    async def go():
+        old_id = str(uuid.uuid4())
+        stale = (datetime.now(timezone.utc) - timedelta(hours=25)).isoformat()
+        await server.db.held_bills.insert_one({
+            "id": old_id, "store_id": ctx.store, "cashier_id": ctx.cashier_id,
+            "cashier_name": "cashier", "customer_name": "Old", "order_type": "dine-in",
+            "items": [{"name": "Y", "price": 50}], "status": "held", "created_at": stale})
+        bills = (await ctx.client.get("/api/held-bills", headers=auth(ctx.cashier))).json()
+        assert all(b["id"] != old_id for b in bills), "25h-old held bill must be hidden"
     run(go())

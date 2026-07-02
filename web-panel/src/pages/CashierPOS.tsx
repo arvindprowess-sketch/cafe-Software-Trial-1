@@ -21,6 +21,10 @@ export default function CashierPOS() {
   const [customerName, setCustomerName] = useState('');
   const [activeHoldId, setActiveHoldId] = useState<string | null>(null);
 
+  // FIX 1 — dine-in table selection (required before charge)
+  const [tables, setTables] = useState<any[]>([]);
+  const [selectedTable, setSelectedTable] = useState<number | null>(null);
+
   // Product detail modal
   const [detailProduct, setDetailProduct] = useState<any>(null);
   const [detailGrams, setDetailGrams] = useState('100');
@@ -69,8 +73,14 @@ export default function CashierPOS() {
         setOffers(o.filter((of: any) => of.is_active));
       } catch {}
     })();
-    // Check for resumed held bill
+    // Check for resumed held bill / table deep-link (FIX 5.2)
     const params = new URLSearchParams(window.location.search);
+    const tableParam = params.get('table');
+    if (tableParam && !isNaN(Number(tableParam))) {
+      setOrderType('dine-in');
+      setSelectedTable(Number(tableParam));
+      window.history.replaceState({}, '', '/cashier');
+    }
     const resumeData = params.get('resume');
     if (resumeData) {
       try {
@@ -78,6 +88,7 @@ export default function CashierPOS() {
         setCustomerName(bill.customer_name || '');
         setOrderType(bill.order_type || 'dine-in');
         setActiveHoldId(bill.id);
+        if (bill.table_number != null) setSelectedTable(bill.table_number);
         if (bill.coupon_code) { setCouponCode(bill.coupon_code); setAppliedCode(bill.coupon_code); }
         // Restore cart items
         if (bill.items?.length) {
@@ -256,6 +267,17 @@ export default function CashierPOS() {
     return () => { cancelled = true; clearTimeout(t); };
   }, [cart, orderType, appliedCode, user?.store_id]);
 
+  // FIX 1 — load this store's tables when dine-in is active (server scopes by
+  // the staff member's own store).
+  useEffect(() => {
+    if (orderType !== 'dine-in') return;
+    let cancelled = false;
+    api('/tables').then(t => { if (!cancelled) setTables(t); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [orderType]);
+
+  const needsTable = orderType === 'dine-in' && selectedTable == null;
+
   // Apply = send the code to the next quote; the quote result is the authority.
   const applyCoupon = () => { if (couponCode.trim()) setAppliedCode(couponCode.trim().toUpperCase()); };
 
@@ -299,8 +321,8 @@ export default function CashierPOS() {
         protein_per_100g: c.protein_per_100g, carbs_per_100g: c.carbs_per_100g || 0,
         fat_per_100g: c.fat_per_100g || 0, diet_type: c.diet_type, category: c.category,
       }));
-      await api('/held-bills', { method: 'POST', body: { customer_name: customerName || 'Walk-in', order_type: orderType, items, coupon_code: appliedCode || null, coupon_discount: getDiscount() } });
-      setCart([]); setCouponCode(''); setAppliedCode(''); setCustomerName(''); setActiveHoldId(null);
+      await api('/held-bills', { method: 'POST', body: { customer_name: customerName || 'Walk-in', order_type: orderType, items, coupon_code: appliedCode || null, coupon_discount: getDiscount(), table_number: orderType === 'dine-in' ? selectedTable : null } });
+      setCart([]); setCouponCode(''); setAppliedCode(''); setCustomerName(''); setActiveHoldId(null); setSelectedTable(null);
     } catch (e: any) { alert(e.message); }
   };
 
@@ -312,6 +334,7 @@ export default function CashierPOS() {
       const body = {
         order_type: orderType, payment_mode: paymentMode,
         customer_name: customerName.trim() || undefined,
+        table_number: orderType === 'dine-in' ? selectedTable : undefined,
         coupon_code: couponApplied ? appliedCode : undefined, discount: getDiscount(),
         items: cart.map(c => ({ product_id: c.id, product_name: c.name, grams: c.grams, price: c.price, calories: c.calories, protein: c.protein, carbs: c.carbs || 0, fat: c.fat || 0, product_type: c.product_type || 'single', quantity: c.plateQty || 1 })),
         total_price: getFinalTotal(), total_calories: totals.calories, total_protein: totals.protein, total_carbs: totals.carbs, total_fat: totals.fat,
@@ -320,7 +343,7 @@ export default function CashierPOS() {
       // If resumed from hold, delete the held bill
       if (activeHoldId) { try { await api(`/held-bills/${activeHoldId}`, { method: 'DELETE' }); } catch {} }
       try { const receipt = await api(`/orders/${r.id}/receipt`); setShowReceipt(receipt); } catch { alert(`Order #${r.id} placed!`); }
-      setCart([]); setCouponCode(''); setAppliedCode(''); setShowPayment(false); setCustomerName(''); setActiveHoldId(null);
+      setCart([]); setCouponCode(''); setAppliedCode(''); setShowPayment(false); setCustomerName(''); setActiveHoldId(null); setSelectedTable(null);
     } catch (e: any) { alert(e.message); }
     finally { setPlacing(false); }
   };
@@ -524,6 +547,25 @@ export default function CashierPOS() {
                 <button key={t} className={`pos-type-pill ${orderType === t ? 'active' : ''}`} onClick={() => setOrderType(t)} data-testid={`type-${t}`}>{t === 'dine-in' ? 'Dine-In' : 'Takeaway'}</button>
               ))}
             </div>
+            {orderType === 'dine-in' && (
+              <div data-testid="pos-table-picker">
+                <div className="pos-table-label">Table {selectedTable != null ? `· T${selectedTable}` : '(required)'}</div>
+                <div className="pos-table-picker">
+                  {tables.map(t => {
+                    const occ = t.is_occupied || t.status === 'occupied';
+                    const sel = selectedTable === t.table_number;
+                    return (
+                      <button key={t.table_number} type="button" data-testid={`pos-table-${t.table_number}`}
+                        className={`pos-table-chip ${occ ? 'occupied' : ''} ${sel ? 'selected' : ''}`}
+                        title={occ ? 'Occupied — add to this table' : 'Free'}
+                        onClick={() => setSelectedTable(sel ? null : t.table_number)}>T{t.table_number}</button>
+                    );
+                  })}
+                  {tables.length === 0 && <span style={{ fontSize: 12, color: 'rgba(244,241,233,0.5)' }}>No tables configured</span>}
+                </div>
+                {needsTable && cart.length > 0 && <div className="pos-table-hint" data-testid="table-required-hint">Select a table to charge this dine-in order.</div>}
+              </div>
+            )}
           </div>
         </div>
 
@@ -585,7 +627,7 @@ export default function CashierPOS() {
           <div className="pos-bill-total-row"><span>Base Amount</span><span>₹{getBaseAmount()}</span></div>
           <div className="pos-bill-total-row"><span>GST (5% incl.)</span><span>₹{getGST()}</span></div>
           <div className="pos-bill-total-row grand"><span>Total</span><span>{quoteLoading ? '…' : `₹${getFinalTotal()}`}</span></div>
-          <button className="pos-charge-btn" onClick={() => { setTendered(''); setShowPayment(true); }} disabled={!cart.length} data-testid="proceed-payment-btn">Charge ₹{getFinalTotal()}</button>
+          <button className="pos-charge-btn" onClick={() => { setTendered(''); setShowPayment(true); }} disabled={!cart.length || needsTable} data-testid="proceed-payment-btn">{needsTable && cart.length > 0 ? 'Select a table' : `Charge ₹${getFinalTotal()}`}</button>
         </div>
       </div>
 

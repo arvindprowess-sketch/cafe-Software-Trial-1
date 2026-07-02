@@ -4708,15 +4708,7 @@ async def _ensure_store_tables(store_id: str):
 async def get_tables(store_id: Optional[str] = None, user=Depends(get_optional_user)):
     """Café tables for a store. Staff are restricted to their own store scope;
     anonymous/customer callers must specify the store (defaults to the default store)."""
-    if user and role_in(user, *STAFF_ROLES):
-        scope = staff_store_scope(user)
-        if scope is None:  # HQ
-            target = store_id or DEFAULT_STORE_ID
-        else:
-            target = store_id or (scope[0] if scope else DEFAULT_STORE_ID)
-            assert_store_allowed(user, target)
-    else:
-        target = store_id or DEFAULT_STORE_ID
+    target = resolve_table_store(user, store_id)
     await _ensure_store_tables(target)
     tables = await db.tables.find({"store_id": target}, {"_id": 0}).to_list(50)
     return tables
@@ -4734,10 +4726,23 @@ async def get_table(table_number: int, store_id: Optional[str] = None):
         current_order = await db.orders.find_one({"id": table["current_order_id"]}, {"_id": 0})
     return {**table, "current_order": current_order}
 
+def resolve_table_store(user, store_id: Optional[str]) -> str:
+    """Store a table op targets. Staff are pinned to their own store scope (FIX 5 —
+    a cashier of store B must never mutate store A's tables via the DEFAULT
+    fallback); anonymous/customer QR callers use the passed store_id or default."""
+    if user and role_in(user, *STAFF_ROLES):
+        scope = staff_store_scope(user)
+        if scope is None:  # HQ
+            return store_id or DEFAULT_STORE_ID
+        target = store_id or (scope[0] if scope else DEFAULT_STORE_ID)
+        assert_store_allowed(user, target)
+        return target
+    return store_id or DEFAULT_STORE_ID
+
 @api_router.post("/tables/{table_number}/occupy")
 async def occupy_table(table_number: int, store_id: Optional[str] = None, user=Depends(get_current_user)):
-    """Mark table as occupied when customer scans QR"""
-    sid = store_id or DEFAULT_STORE_ID
+    """Mark table as occupied when customer scans QR (or staff opens an order)."""
+    sid = resolve_table_store(user, store_id)
     table = await db.tables.find_one({"table_number": table_number, "store_id": sid}, {"_id": 0})
     if not table:
         raise HTTPException(status_code=404, detail="Table not found")
@@ -4752,7 +4757,7 @@ async def occupy_table(table_number: int, store_id: Optional[str] = None, user=D
 @api_router.post("/tables/{table_number}/release")
 async def release_table(table_number: int, store_id: Optional[str] = None, user=Depends(get_current_user)):
     """Release table after payment"""
-    sid = store_id or DEFAULT_STORE_ID
+    sid = resolve_table_store(user, store_id)
     await db.tables.update_one(
         {"table_number": table_number, "store_id": sid},
         {"$set": {"status": "available", "occupied_by": None, "current_order_id": None, "occupied_at": None}}
@@ -6806,6 +6811,7 @@ class HoldBillCreate(BaseModel):
     items: List[Dict[str, Any]]
     coupon_code: Optional[str] = None
     coupon_discount: Optional[float] = 0
+    table_number: Optional[int] = None   # FIX 6 — restore the dine-in table on resume
 
 @api_router.post("/held-bills")
 async def hold_bill(data: HoldBillCreate, user=Depends(get_current_user)):
@@ -6824,6 +6830,7 @@ async def hold_bill(data: HoldBillCreate, user=Depends(get_current_user)):
         "items": data.items,
         "coupon_code": data.coupon_code,
         "coupon_discount": data.coupon_discount or 0,
+        "table_number": data.table_number,
         "status": "held",
         "created_at": datetime.now(timezone.utc).isoformat()
     }
@@ -6835,7 +6842,10 @@ async def list_held_bills(user=Depends(get_current_user)):
     """Cashier/Manager: List held bills within the caller's store scope."""
     if not role_in(user, "super_admin", "area_manager", "store_manager", "cashier"):
         raise HTTPException(status_code=403, detail="Cashier/Manager only")
-    query = {**store_filter(user), "status": "held"}
+    # FIX 6 — soft-expiry: hide held bills older than 24h (not deleted; hard
+    # cleanup is a follow-up). Legacy docs without created_at still show.
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+    query = {**store_filter(user), "status": "held", "created_at": {"$gte": cutoff}}
     bills = await db.held_bills.find(query, {"_id": 0}).sort("created_at", -1).to_list(50)
     return bills
 

@@ -255,10 +255,19 @@ input, select { font-family: inherit; }
 .tables-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
 .table-card { aspect-ratio: 1; border-radius: var(--radius-lg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; border: 2px solid; cursor: pointer; transition: transform 0.2s; }
 .table-card:hover { transform: scale(1.03); }
-.table-card.available { background: #E4F0DC; border-color: var(--success); }
-.table-card.occupied { background: #F4E3E0; border-color: var(--error); }
+.table-card { padding: 14px 10px; position: relative; }
+.table-card.available { background: var(--white); border-color: var(--success); color: var(--ink); }
+.table-card.occupied { background: var(--ink); border-color: var(--ink); color: var(--sand); }
+.table-card .table-glyph { color: var(--success); display: flex; }
+.table-card.occupied .table-glyph { color: var(--lime); }
 .table-number { font-family: var(--font-brand); font-size: 28px; font-weight: 400; color: var(--ink); }
+.table-card.occupied .table-number { color: var(--sand); }
 .table-status { font-size: 11px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
+.table-card.occupied .table-status { color: rgba(244,241,233,0.6); }
+.table-new-order { margin-top: 4px; display: inline-flex; align-items: center; gap: 4px; background: var(--lime); color: var(--ink); border: none; border-radius: var(--radius-pill); padding: 6px 12px; font-family: var(--font-brand); font-size: 11px; text-transform: uppercase; letter-spacing: 0.02em; min-height: 32px; }
+.table-new-order:hover { background: var(--lime-deep); }
+.table-card.available .table-new-order { background: var(--ink); color: var(--lime); }
+.table-card.available .table-new-order:hover { background: var(--ink-soft); }
 
 /* Empty state */
 .empty-state { text-align: center; padding: 60px 20px; color: var(--muted); }
@@ -366,6 +375,15 @@ th.sortable .sort-caret { opacity: 0.6; font-size: 11px; margin-left: 4px; }
 .pos-ink-input { width: 100%; padding: 10px 12px; border-radius: var(--radius); border: 1.5px solid rgba(244,241,233,0.18); background: rgba(244,241,233,0.06); color: var(--sand); font-size: 13px; outline: none; transition: border-color 0.15s; }
 .pos-ink-input::placeholder { color: rgba(244,241,233,0.4); }
 .pos-ink-input:focus { border-color: var(--lime); }
+
+/* Dine-in table picker on ink (FIX 1) */
+.pos-table-label { font-size: 11px; color: rgba(244,241,233,0.55); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
+.pos-table-picker { display: flex; flex-wrap: wrap; gap: 6px; }
+.pos-table-chip { min-width: 42px; height: 38px; padding: 0 10px; border-radius: 9px; border: 1.5px solid rgba(244,241,233,0.2); background: transparent; color: rgba(244,241,233,0.72); font-family: var(--font-brand); font-size: 13px; letter-spacing: 0.02em; transition: background-color 0.12s, color 0.12s, border-color 0.12s; }
+.pos-table-chip:hover { border-color: var(--lime); }
+.pos-table-chip.occupied { border-style: dashed; color: var(--warning); border-color: rgba(214,154,53,0.55); }
+.pos-table-chip.selected { background: var(--lime); color: var(--ink); border-color: var(--lime); }
+.pos-table-hint { font-size: 11px; color: #F0B4A8; margin-top: 6px; }
 
 /* Order-type pills on ink */
 .pos-type-pills { display: flex; gap: 6px; }
