@@ -20,6 +20,7 @@ import { DIET_TAGS, DIET_LABEL, matchesDiet, matchesAnyDiet, toggleDietTag } fro
 import { goalFitForProduct, sortByGoalFit } from '../../utils/goalFit';
 import CartPill from '../components/CartPill';
 import PressableScale, { useReduceMotion } from '../components/PressableScale';
+import { useFlyToCart } from '../components/FlyToCart';
 import * as Haptics from 'expo-haptics';
 
 // PR-C: success haptic on add-to-cart (safe no-op on web)
@@ -104,6 +105,20 @@ export default function MenuScreen() {
     (staggerOn && !reduceMotion.current)
       ? FadeInDown.delay(Math.min(index, 8) * 50).duration(300).springify()
       : undefined;
+
+  // Phase 4: fly-to-cart. Measure the pressed row's thumbnail, then add + fly.
+  const flyCtx = useFlyToCart();
+  const imgRefs = useRef<Record<string, any>>({});
+  const handleAdd = (item: any) => {
+    addItem(item);
+    hapticSuccess();
+    const node = imgRefs.current[item.id];
+    if (node && flyCtx) {
+      node.measureInWindow((x: number, y: number, w: number, h: number) => {
+        flyCtx.fly({ x, y, width: w, height: h, imageUri: item.image_url });
+      });
+    }
+  };
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [orderType, setOrderType] = useState('dine-in');
@@ -326,7 +341,7 @@ export default function MenuScreen() {
       <Animated.View entering={rowEntering(index)}>
       <View style={styles.productCard} testID={`product-${item.id}`}>
         {/* Photo (72px, rounded) with ₹/g-protein badge */}
-        <View style={styles.productImageWrapper}>
+        <View ref={(r) => { imgRefs.current[item.id] = r; }} collapsable={false} style={styles.productImageWrapper}>
           {item.image_url ? (
             <ExpoImage source={{ uri: item.image_url }} style={styles.productImage} contentFit="cover" transition={250} cachePolicy="memory-disk" />
           ) : (
@@ -391,7 +406,7 @@ export default function MenuScreen() {
                 </TouchableOpacity>
               </View>
             ) : (
-              <PressableScale haptic testID={`add-${item.id}`} style={styles.addBtn} onPress={() => { addItem(item); hapticSuccess(); }}>
+              <PressableScale haptic testID={`add-${item.id}`} style={styles.addBtn} onPress={() => handleAdd(item)}>
                 <Text style={styles.addBtnText}>ADD +</Text>
               </PressableScale>
             )}
