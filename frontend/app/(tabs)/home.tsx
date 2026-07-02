@@ -61,13 +61,9 @@ const offerValueText = (item: any): string => {
   return `${v}% OFF`;
 };
 
-// Inline AI Combo Builder: 4 goals (keys match GOALS + /ai/quick-meal) + min budget.
-const COMBO_GOALS = [
-  { key: 'muscle_gain', label: 'Muscle' },
-  { key: 'fat_loss', label: 'Fat Loss' },
-  { key: 'maintenance', label: 'Maintain' },
-  { key: 'recomposition', label: 'Recomp' },
-];
+// Inline AI Combo Builder goals — derived from the canonical GOALS (all 6),
+// never a hardcoded subset. Keys match /ai/quick-meal; label is the short form.
+const COMBO_GOALS = FUEL_GOALS.map(g => ({ key: g.key, label: g.shortLabel }));
 const COMBO_MIN_BUDGET = 50;
 
 // Category grid (FUEL palette)
@@ -693,7 +689,7 @@ export default function HomeScreen() {
               </View>
             </View>
 
-            <View style={styles.comboGoalRow}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.comboGoalRow}>
               {COMBO_GOALS.map(g => {
                 const active = mealGoal === g.key;
                 return (
@@ -708,7 +704,7 @@ export default function HomeScreen() {
                   </TouchableOpacity>
                 );
               })}
-            </View>
+            </ScrollView>
 
             <View style={styles.comboBuildRow}>
               <TextInput
@@ -1808,7 +1804,7 @@ const styles = StyleSheet.create({
   comboTitleRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.m },
   comboTitle: { fontFamily: FONT.display, fontSize: 16, color: FUEL.sand, textTransform: 'uppercase' },
   comboSub: { fontFamily: FONT.bodyMedium, fontSize: 12, color: 'rgba(244,241,233,0.7)', marginTop: 2 },
-  comboGoalRow: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.s },
+  comboGoalRow: { flexDirection: 'row', gap: SPACE.s, paddingRight: SPACE.s },
   comboGoalChip: { paddingHorizontal: SPACE.m, paddingVertical: SPACE.s, borderRadius: 999, backgroundColor: FUEL.inkSoft, borderWidth: 1.5, borderColor: FUEL.inkSoft },
   comboGoalChipActive: { backgroundColor: FUEL.lime, borderColor: FUEL.lime },
   comboGoalText: { fontFamily: FONT.bodyExtrabold, fontSize: 12, color: FUEL.sand, textTransform: 'uppercase', letterSpacing: 0.3 },
