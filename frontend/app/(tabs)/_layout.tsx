@@ -1,16 +1,26 @@
 import { Tabs } from 'expo-router';
+import { BottomTabBar } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-import { StyleSheet, View, Text } from 'react-native';
+import { Animated, StyleSheet, View, Text } from 'react-native';
 import { FUEL, FONT, SPACE } from '../../utils/theme';
 import { tabBarTranslateY } from '../../utils/tabBar';
 
 export default function TabLayout() {
   return (
     <Tabs
+      // Slide the nav away on scroll-down via our OWN Animated.View wrapper
+      // rather than injecting the transform into tabBarStyle: BottomTabBar
+      // applies its own translateY transform to the same node, and the two
+      // conflict (works on Android, silently no-ops on iOS). Owning the
+      // transform on a separate wrapper decouples us from that internal node.
+      tabBar={(props) => (
+        <Animated.View style={[styles.tabBarWrap, { transform: [{ translateY: tabBarTranslateY }] }]}>
+          <BottomTabBar {...props} />
+        </Animated.View>
+      )}
       screenOptions={{
         headerShown: false,
-        // Animated transform lets Home slide the nav away on scroll-down.
-        tabBarStyle: [styles.tabBar, { transform: [{ translateY: tabBarTranslateY }] }],
+        tabBarStyle: styles.tabBar,
         tabBarActiveTintColor: FUEL.lime,
         tabBarInactiveTintColor: 'rgba(244,241,233,0.55)',
         tabBarLabelStyle: styles.tabLabel,
@@ -51,13 +61,15 @@ export default function TabLayout() {
 }
 
 const styles = StyleSheet.create({
-  tabBar: {
-    // Absolute so the bar reserves no layout slot: when it slides away on
-    // scroll it reveals the sand scene behind it instead of a dark gap.
+  // The wrapper owns absolute positioning (and our hide/show transform) so the
+  // bar reserves no layout slot and reveals the sand scene when it slides away.
+  tabBarWrap: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
+  },
+  tabBar: {
     backgroundColor: FUEL.ink,
     borderTopWidth: 0,
     height: 66,

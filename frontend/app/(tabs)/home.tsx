@@ -61,13 +61,9 @@ const offerValueText = (item: any): string => {
   return `${v}% OFF`;
 };
 
-// Inline AI Combo Builder: 4 goals (keys match GOALS + /ai/quick-meal) + min budget.
-const COMBO_GOALS = [
-  { key: 'muscle_gain', label: 'Muscle' },
-  { key: 'fat_loss', label: 'Fat Loss' },
-  { key: 'maintenance', label: 'Maintain' },
-  { key: 'recomposition', label: 'Recomp' },
-];
+// Inline AI Combo Builder goals — derived from the canonical GOALS (all 6),
+// never a hardcoded subset. Keys match /ai/quick-meal; label is the short form.
+const COMBO_GOALS = FUEL_GOALS.map(g => ({ key: g.key, label: g.shortLabel }));
 const COMBO_MIN_BUDGET = 50;
 
 // Category grid (FUEL palette)
@@ -680,7 +676,56 @@ export default function HomeScreen() {
           ) : null}
         </View>
 
-        {/* ===== AI COMBO BUILDER — moved directly below goals/target ===== */}
+        {/* ===== TODAY'S NUTRITION CARD (CLICKABLE) — placed right below the goal selector ===== */}
+        <TouchableOpacity
+          style={styles.nutriCard}
+          testID="nutrition-summary-card"
+          onPress={() => router.push('/nutrition-detail')}
+          activeOpacity={0.8}
+        >
+          <View style={styles.nutriHeader}>
+            <Ionicons name="fitness" size={18} color={isCalorieOver ? FUEL.error : FUEL.limeDeep} />
+            <Text style={styles.nutriTitle}>Today's Nutrition</Text>
+            <Text style={styles.nutriMeals}>{summary?.meals_count || 0} meals</Text>
+            <Ionicons name="chevron-forward" size={18} color={FUEL.muted} style={{ marginLeft: 'auto' }} />
+          </View>
+          <View style={styles.nutriRow}>
+            <View style={styles.nutriMain}>
+              <Text style={[styles.calValue, isCalorieOver && { color: FUEL.error }]}>{Math.round(consumed.calories || 0)}</Text>
+              <Text style={styles.calUnit}>/ {goals.daily_calories || 2000} kcal</Text>
+              {goals.daily_calories > 0 && !isCalorieOver && (
+                <Text style={styles.calLeft}>{Math.round(goals.daily_calories - (consumed.calories || 0))} left</Text>
+              )}
+            </View>
+            <View style={styles.macroRow}>
+              {[
+                { label: 'Protein', val: consumed.protein, goal: goals.daily_protein, color: FUEL.protein },
+                { label: 'Carbs', val: consumed.carbs, goal: goals.daily_carbs, color: FUEL.carbs },
+                { label: 'Fat', val: consumed.fat, goal: goals.daily_fat, color: FUEL.fat },
+              ].map(m => (
+                <View key={m.label} testID={`macro-chip-${m.label.toLowerCase()}`} style={styles.macroItem}>
+                  <Text style={[styles.macroVal, { color: m.color }]}>
+                    {m.goal > 0 ? `${Math.round(m.val || 0)}/${Math.round(m.goal)}g` : `${Math.round(m.val || 0)}g`}
+                  </Text>
+                  <Text style={styles.macroLabel}>{m.label}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+          <View style={styles.progressBg}>
+            <View style={[styles.progressFill, { width: `${Math.min(calPct, 100)}%` }, isCalorieOver && styles.progressFillOver]} />
+          </View>
+          {isCalorieOver && (
+            <View style={styles.overGoalBanner} testID="calorie-over-banner">
+              <Ionicons name="information-circle" size={14} color={FUEL.error} />
+              <Text style={styles.overGoalText}>
+                {caloriesOverAmount} cal over your daily goal — you're in control!
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        {/* ===== AI COMBO BUILDER — below goals + nutrition ===== */}
         {!showMealBuilder && !aiMeal && (
           <View testID="open-meal-builder" style={styles.comboCard}>
             <View style={styles.comboTitleRow}>
@@ -693,7 +738,7 @@ export default function HomeScreen() {
               </View>
             </View>
 
-            <View style={styles.comboGoalRow}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.comboGoalRow}>
               {COMBO_GOALS.map(g => {
                 const active = mealGoal === g.key;
                 return (
@@ -708,7 +753,7 @@ export default function HomeScreen() {
                   </TouchableOpacity>
                 );
               })}
-            </View>
+            </ScrollView>
 
             <View style={styles.comboBuildRow}>
               <TextInput
@@ -902,97 +947,25 @@ export default function HomeScreen() {
           </>
         )}
 
-        {/* ===== AI COACH — chat + portion adjust ===== */}
-        <View style={styles.popularHeaderRow}>
-          <Text style={styles.sectionTitle}>AI Coach</Text>
-        </View>
-        <View style={styles.aiCoachRow}>
-          <TouchableOpacity style={styles.aiCoachCard} onPress={() => router.push('/ai-chat')} testID="ai-coach-chat" activeOpacity={0.9}>
-            <View style={styles.aiCoachIcon}><Ionicons name="chatbubbles" size={18} color={FUEL.limeDeep} /></View>
+        {/* ===== QUICK ACTIONS — Schedule (hero) + Reorder ===== */}
+        {/* Scan Table removed: dine-in entry lives in the location bar above. */}
+        <View style={styles.quickActions}>
+          <TouchableOpacity testID="schedule-for-later" style={styles.scheduleHero} activeOpacity={0.9} onPress={() => router.push('/(tabs)/menu')}>
+            <View style={styles.scheduleHeroIcon}><Ionicons name="time" size={22} color={FUEL.ink} /></View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.aiCoachTitle}>AI Chat</Text>
-              <Text style={styles.aiCoachSub}>Ask your coach</Text>
+              <Text style={styles.scheduleHeroTitle}>Schedule a Meal</Text>
+              <Text style={styles.scheduleHeroSub}>Plan today's meals — ready when you are</Text>
             </View>
+            <Ionicons name="arrow-forward" size={20} color={FUEL.lime} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.aiCoachCard} onPress={() => setShowMealBuilder(true)} testID="ai-coach-adjust" activeOpacity={0.9}>
-            <View style={styles.aiCoachIcon}><Ionicons name="options" size={18} color={FUEL.limeDeep} /></View>
+          <TouchableOpacity testID="quick-reorder" style={styles.reorderCard} activeOpacity={0.9} onPress={() => router.push('/(tabs)/orders')}>
+            <View style={styles.reorderIcon}><Ionicons name="repeat" size={19} color={FUEL.limeDeep} /></View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.aiCoachTitle}>Adjust Portions</Text>
-              <Text style={styles.aiCoachSub}>Fine-tune macros</Text>
+              <Text style={styles.reorderTitle}>Reorder</Text>
+              <Text style={styles.reorderSub}>Your last order, one tap away</Text>
             </View>
+            <Ionicons name="chevron-forward" size={18} color={FUEL.muted} />
           </TouchableOpacity>
-        </View>
-
-        {/* ===== TODAY'S NUTRITION CARD (CLICKABLE) ===== */}
-        <TouchableOpacity
-          style={styles.nutriCard}
-          testID="nutrition-summary-card"
-          onPress={() => router.push('/nutrition-detail')}
-          activeOpacity={0.8}
-        >
-          <View style={styles.nutriHeader}>
-            <Ionicons name="fitness" size={18} color={isCalorieOver ? FUEL.error : FUEL.limeDeep} />
-            <Text style={styles.nutriTitle}>Today's Nutrition</Text>
-            <Text style={styles.nutriMeals}>{summary?.meals_count || 0} meals</Text>
-            <Ionicons name="chevron-forward" size={18} color={FUEL.muted} style={{ marginLeft: 'auto' }} />
-          </View>
-          <View style={styles.nutriRow}>
-            <View style={styles.nutriMain}>
-              <Text style={[styles.calValue, isCalorieOver && { color: FUEL.error }]}>{Math.round(consumed.calories || 0)}</Text>
-              <Text style={styles.calUnit}>/ {goals.daily_calories || 2000} kcal</Text>
-              {goals.daily_calories > 0 && !isCalorieOver && (
-                <Text style={styles.calLeft}>{Math.round(goals.daily_calories - (consumed.calories || 0))} left</Text>
-              )}
-            </View>
-            <View style={styles.macroRow}>
-              {[
-                { label: 'Protein', val: consumed.protein, goal: goals.daily_protein, color: FUEL.protein },
-                { label: 'Carbs', val: consumed.carbs, goal: goals.daily_carbs, color: FUEL.carbs },
-                { label: 'Fat', val: consumed.fat, goal: goals.daily_fat, color: FUEL.fat },
-              ].map(m => (
-                <View key={m.label} testID={`macro-chip-${m.label.toLowerCase()}`} style={styles.macroItem}>
-                  <Text style={[styles.macroVal, { color: m.color }]}>
-                    {m.goal > 0 ? `${Math.round(m.val || 0)}/${Math.round(m.goal)}g` : `${Math.round(m.val || 0)}g`}
-                  </Text>
-                  <Text style={styles.macroLabel}>{m.label}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-          <View style={styles.progressBg}>
-            <View style={[styles.progressFill, { width: `${Math.min(calPct, 100)}%` }, isCalorieOver && styles.progressFillOver]} />
-          </View>
-          {isCalorieOver && (
-            <View style={styles.overGoalBanner} testID="calorie-over-banner">
-              <Ionicons name="information-circle" size={14} color={FUEL.error} />
-              <Text style={styles.overGoalText}>
-                {caloriesOverAmount} cal over your daily goal — you're in control!
-              </Text>
-            </View>
-          )}
-        </TouchableOpacity>
-
-        {/* ===== QUICK ACTIONS — Reorder · Schedule · Scan ===== */}
-        <View style={styles.quickRow}>
-          <TouchableOpacity testID="quick-reorder" style={styles.quickCard} activeOpacity={0.9} onPress={() => router.push('/(tabs)/orders')}>
-            <View style={styles.quickIcon}><Ionicons name="repeat" size={19} color={FUEL.limeDeep} /></View>
-            <Text style={styles.quickLabel}>Reorder</Text>
-          </TouchableOpacity>
-          <TouchableOpacity testID="schedule-for-later" style={styles.quickCard} activeOpacity={0.9} onPress={() => router.push('/(tabs)/menu')}>
-            <View style={styles.quickIcon}><Ionicons name="time" size={19} color={FUEL.success} /></View>
-            <Text style={styles.quickLabel}>Schedule</Text>
-          </TouchableOpacity>
-          {orderType === 'dine-in' ? (
-            <TouchableOpacity testID="quick-scan" style={[styles.quickCard, styles.quickCardInk]} activeOpacity={0.9} onPress={() => router.push('/scan-table')}>
-              <View style={[styles.quickIcon, styles.quickIconInk]}><Ionicons name="qr-code" size={19} color={FUEL.lime} /></View>
-              <Text style={[styles.quickLabel, { color: FUEL.white }]}>Scan Table</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity testID="quick-address" style={styles.quickCard} activeOpacity={0.9} onPress={() => setShowAddressModal(true)}>
-              <View style={styles.quickIcon}><Ionicons name="location" size={19} color={FUEL.limeDeep} /></View>
-              <Text style={styles.quickLabel}>Address</Text>
-            </TouchableOpacity>
-          )}
         </View>
 
         {showMealBuilder && !aiMeal && (
@@ -1501,20 +1474,16 @@ const styles = StyleSheet.create({
   packViewBtn: { backgroundColor: FUEL.lime, borderRadius: RADIUS.pill, paddingHorizontal: SPACE.m, paddingVertical: 6 },
   packViewText: { fontFamily: FONT.bodyExtrabold, fontSize: 11, color: FUEL.ink, letterSpacing: 0.5 },
 
-  // ===== AI Coach row =====
-  aiCoachRow: { flexDirection: 'row', gap: SPACE.m, paddingHorizontal: SPACE.l },
-  aiCoachCard: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: SPACE.s, backgroundColor: FUEL.white, borderRadius: RADIUS.md, padding: SPACE.m, borderWidth: 1, borderColor: FUEL.sandBorder },
-  aiCoachIcon: { width: 36, height: 36, borderRadius: RADIUS.sm, backgroundColor: FUEL.limeTint, alignItems: 'center', justifyContent: 'center' },
-  aiCoachTitle: { fontFamily: FONT.bodyExtrabold, fontSize: 12.5, color: FUEL.ink },
-  aiCoachSub: { fontFamily: FONT.body, fontSize: 10.5, color: FUEL.muted, marginTop: 1 },
-
-  // ===== Quick actions grid =====
-  quickRow: { flexDirection: 'row', gap: SPACE.m, paddingHorizontal: SPACE.l, marginTop: SPACE.l },
-  quickCard: { flex: 1, alignItems: 'center', gap: SPACE.s, backgroundColor: FUEL.white, borderRadius: RADIUS.md, paddingVertical: SPACE.l, borderWidth: 1, borderColor: FUEL.sandBorder },
-  quickCardInk: { backgroundColor: FUEL.ink, borderColor: FUEL.ink },
-  quickIcon: { width: 40, height: 40, borderRadius: RADIUS.sm, backgroundColor: FUEL.limeTint, alignItems: 'center', justifyContent: 'center' },
-  quickIconInk: { backgroundColor: 'rgba(199,242,78,0.15)' },
-  quickLabel: { fontFamily: FONT.bodyExtrabold, fontSize: 11.5, color: FUEL.ink },
+  // ===== Quick actions — Schedule hero + Reorder secondary =====
+  quickActions: { paddingHorizontal: SPACE.l, marginTop: SPACE.l, gap: SPACE.m },
+  scheduleHero: { flexDirection: 'row', alignItems: 'center', gap: SPACE.m, backgroundColor: FUEL.ink, borderRadius: RADIUS.md, padding: SPACE.l },
+  scheduleHeroIcon: { width: 44, height: 44, borderRadius: RADIUS.sm, backgroundColor: FUEL.lime, alignItems: 'center', justifyContent: 'center' },
+  scheduleHeroTitle: { fontFamily: FONT.bodyExtrabold, fontSize: 16, color: FUEL.sand },
+  scheduleHeroSub: { fontFamily: FONT.body, fontSize: 12, color: 'rgba(244,241,233,0.7)', marginTop: 2 },
+  reorderCard: { flexDirection: 'row', alignItems: 'center', gap: SPACE.m, backgroundColor: FUEL.white, borderRadius: RADIUS.md, padding: SPACE.l, borderWidth: 1, borderColor: FUEL.sandBorder },
+  reorderIcon: { width: 40, height: 40, borderRadius: RADIUS.sm, backgroundColor: FUEL.limeTint, alignItems: 'center', justifyContent: 'center' },
+  reorderTitle: { fontFamily: FONT.bodyExtrabold, fontSize: 14, color: FUEL.ink },
+  reorderSub: { fontFamily: FONT.body, fontSize: 11.5, color: FUEL.muted, marginTop: 2 },
 
   // Goal-first ordering
   goalSelector: { paddingHorizontal: SPACE.l, marginTop: SPACE.l },
@@ -1808,7 +1777,7 @@ const styles = StyleSheet.create({
   comboTitleRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.m },
   comboTitle: { fontFamily: FONT.display, fontSize: 16, color: FUEL.sand, textTransform: 'uppercase' },
   comboSub: { fontFamily: FONT.bodyMedium, fontSize: 12, color: 'rgba(244,241,233,0.7)', marginTop: 2 },
-  comboGoalRow: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.s },
+  comboGoalRow: { flexDirection: 'row', gap: SPACE.s, paddingRight: SPACE.s },
   comboGoalChip: { paddingHorizontal: SPACE.m, paddingVertical: SPACE.s, borderRadius: 999, backgroundColor: FUEL.inkSoft, borderWidth: 1.5, borderColor: FUEL.inkSoft },
   comboGoalChipActive: { backgroundColor: FUEL.lime, borderColor: FUEL.lime },
   comboGoalText: { fontFamily: FONT.bodyExtrabold, fontSize: 12, color: FUEL.sand, textTransform: 'uppercase', letterSpacing: 0.3 },
