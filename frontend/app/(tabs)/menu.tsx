@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity, Image, RefreshControl,
-  Alert, ActivityIndicator, ScrollView, TextInput, Dimensions, Modal
+  ActivityIndicator, ScrollView, TextInput, Dimensions, Modal
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { setTabBarHidden, resetTabBar } from '../../utils/tabBar';
 import { apiCall } from '../../utils/api';
 import SideDrawer from '../components/SideDrawer';
 import { getStoredUser } from '../../utils/api';
@@ -80,9 +81,13 @@ const getPricePerGramProtein = (p: any): number | null => {
 export default function MenuScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const insets = useSafeAreaInsets();
+  // Match Home exactly so the shared CartPill sits above the (absolute) tab bar.
+  const TAB_BAR_H = 66 + insets.bottom;
+  const lastY = useRef(0);
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>(DEFAULT_CATS);
-  const { addItem, incItem, decItem, getItem, count: cartCount, subtotal: cartSubtotal } = useCart();
+  const { addItem, incItem, decItem, getItem } = useCart();
   const { stores, selectedStoreId, selectedStore, selectStore } = useStore();
   const [storePickerOpen, setStorePickerOpen] = useState(false);
   const [loadError, setLoadError] = useState(false);
@@ -243,10 +248,18 @@ export default function MenuScreen() {
     return Math.max(0, Math.round(dailyTarget.daily_protein - consumed));
   }, [dailyTarget, nutritionSummary]);
 
-  const goCustomize = () => {
-    if (cartCount === 0) { Alert.alert('Empty Cart', 'Add items first'); return; }
-    router.push('/cart');
+  // FIX 2 — hide the tab bar on scroll-down, reveal on scroll-up / at top.
+  // Same thresholds as Home; a plain JS handler is fine since we only toggle the
+  // shared value (no per-frame animation to drive here).
+  const onScroll = (e: any) => {
+    const y = e?.nativeEvent?.contentOffset?.y || 0;
+    if (y <= 6) setTabBarHidden(false);
+    else if (y > lastY.current + 6) setTabBarHidden(true);
+    else if (y < lastY.current - 6) setTabBarHidden(false);
+    lastY.current = y;
   };
+  // Never strand the bar hidden when leaving Menu.
+  useFocusEffect(useCallback(() => { resetTabBar(); }, []));
 
   // ===== Category wall (2-column grid replacing the old chip rail) =====
   const catValueOf = (cat: any) => cat.name || cat.key;
@@ -572,7 +585,9 @@ export default function MenuScreen() {
         keyExtractor={i => i.id}
         renderItem={renderRow}
         ListHeaderComponent={listHeader}
-        contentContainerStyle={styles.productListContent}
+        contentContainerStyle={[styles.productListContent, { paddingBottom: TAB_BAR_H + 96 }]}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={FUEL.ink} />}
         showsVerticalScrollIndicator={false}
         ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
@@ -643,19 +658,9 @@ export default function MenuScreen() {
         </TouchableOpacity>
       </Modal>
 
-      {/* Cart Bar */}
-      {cartCount > 0 && (
-        <TouchableOpacity testID="customize-btn" style={styles.cartBar} onPress={goCustomize} activeOpacity={0.95}>
-          <View>
-            <Text style={styles.cartItems}>{cartCount} item{cartCount > 1 ? 's' : ''}</Text>
-            <Text style={styles.cartTotal}>₹{Math.round(cartSubtotal)}</Text>
-          </View>
-          <View style={styles.cartRight}>
-            <Text style={styles.cartAction}>View Cart</Text>
-            <Ionicons name="arrow-forward" size={18} color={FUEL.ink} />
-          </View>
-        </TouchableOpacity>
-      )}
+      {/* Shared floating cart pill — same component + placement as Home, so it
+          sits above the tab bar (zIndex 200) and opens /cart. */}
+      <CartPill bottom={TAB_BAR_H + 8} />
     </SafeAreaView>
   );
 }
@@ -887,7 +892,8 @@ const styles = StyleSheet.create({
   // Product List
   productListContent: {
     padding: SPACE.s,
-    paddingBottom: 120,
+    // paddingBottom is set inline (TAB_BAR_H + 96) so the last row clears the
+    // floating pill + tab bar.
   },
   subcatHeader: {  // PR-1
     fontFamily: FONT.bodyExtrabold,
@@ -1030,32 +1036,6 @@ const styles = StyleSheet.create({
   nearestChipText: { fontFamily: FONT.bodyBold, fontSize: 12, color: FUEL.ink },
   clearFiltersBtn: { marginTop: SPACE.l, backgroundColor: FUEL.ink, borderRadius: RADIUS.lg, paddingVertical: SPACE.m, paddingHorizontal: SPACE.xl },
   clearFiltersText: { color: FUEL.lime, fontFamily: FONT.bodyExtrabold, fontSize: 13 },
-
-  // Cart Bar (lime CTA)
-  cartBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 16,
-    right: 16,
-    backgroundColor: FUEL.lime,
-    borderRadius: RADIUS.lg,
-    paddingHorizontal: SPACE.xl,
-    paddingVertical: SPACE.l,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: SPACE.s,
-    elevation: 12,
-    zIndex: 100,
-    shadowColor: FUEL.ink,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-  },
-  cartItems: { color: FUEL.ink, fontFamily: FONT.bodyBold, fontSize: 12 },
-  cartTotal: { color: FUEL.ink, fontFamily: FONT.display, fontSize: 24 },
-  cartRight: { flexDirection: 'row', alignItems: 'center', gap: SPACE.s },
-  cartAction: { color: FUEL.ink, fontFamily: FONT.display, fontSize: 15, textTransform: 'uppercase', letterSpacing: 0.5 },
 
   // Macro chips (P / C / F)
   macroChips: { flexDirection: 'row', gap: SPACE.s, marginTop: SPACE.s },
