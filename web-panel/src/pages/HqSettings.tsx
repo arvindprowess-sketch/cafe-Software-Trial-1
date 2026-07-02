@@ -18,6 +18,28 @@ export default function HqSettings() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
+  // §10: super-admin recovery phone (write-only; no read endpoint for current value)
+  const [recoveryPhone, setRecoveryPhone] = useState('');
+  const [savingPhone, setSavingPhone] = useState(false);
+  const [phoneErr, setPhoneErr] = useState('');
+  const [phoneMsg, setPhoneMsg] = useState('');
+
+  const saveRecoveryPhone = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPhoneErr(''); setPhoneMsg('');
+    const digits = recoveryPhone.replace(/\D/g, '');
+    if (digits.length !== 10) { setPhoneErr('Enter a 10-digit phone number.'); return; }
+    setSavingPhone(true);
+    try {
+      await api('/auth/super/recovery-phone', { method: 'PUT', body: { phone: digits } });
+      setPhoneMsg('Recovery phone updated.');
+      setRecoveryPhone('');
+    } catch (e) {
+      setPhoneErr(errMsg(e));
+    } finally {
+      setSavingPhone(false);
+    }
+  };
 
   const applySettings = (s: any) => {
     setHqThreshold(String(s.hq_value_threshold ?? ''));
@@ -119,6 +141,29 @@ export default function HqSettings() {
           <button type="submit" className="btn btn-primary" disabled={saving} data-testid="save-settings-btn">{saving ? 'Saving…' : 'Save settings'}</button>
         </form>
       )}
+
+      {/* §10: Super-admin recovery phone (self-service reset) */}
+      <div style={{ marginTop: 36, maxWidth: 460, borderTop: '1px solid #E6E1D4', paddingTop: 24 }}>
+        <h2 style={{ fontSize: 18, margin: '0 0 4px' }}>Recovery phone</h2>
+        <p style={{ fontSize: 12, color: '#9C9C9C', marginBottom: 14 }}>Super-admin only. Used for self-service password reset. Stored securely — the current number isn't shown here for safety.</p>
+        {phoneErr && <div className="badge badge-red" style={{ display: 'block', padding: 12, marginBottom: 12 }} data-testid="recovery-phone-error">{phoneErr}</div>}
+        {phoneMsg && <div className="badge badge-green" style={{ display: 'block', padding: 12, marginBottom: 12 }} data-testid="recovery-phone-saved">{phoneMsg}</div>}
+        <form onSubmit={saveRecoveryPhone}>
+          <div className="form-group">
+            <label>Recovery phone (10 digits)</label>
+            <input
+              value={recoveryPhone}
+              onChange={(e) => setRecoveryPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+              placeholder="10-digit mobile number"
+              inputMode="numeric"
+              data-testid="recovery-phone-input"
+            />
+          </div>
+          <button type="submit" className="btn btn-primary" disabled={savingPhone || recoveryPhone.replace(/\D/g, '').length !== 10} data-testid="recovery-phone-save">
+            {savingPhone ? 'Saving…' : 'Save recovery phone'}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
