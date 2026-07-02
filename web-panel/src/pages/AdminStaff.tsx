@@ -46,6 +46,14 @@ export default function AdminStaff() {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
 
+  // Reset-password flow (per-staff): set a fresh password via PUT /staff/{id}.
+  const [resetTarget, setResetTarget] = useState<any>(null); // staff being reset
+  const [resetPw, setResetPw] = useState('');
+  const [resetSaving, setResetSaving] = useState(false);
+  const [resetError, setResetError] = useState('');
+  const [resetDonePw, setResetDonePw] = useState('');        // shown once after save
+  const [resetCopied, setResetCopied] = useState(false);
+
   const load = async () => { try { setStaff(await api('/staff')); } catch {} };
   const loadStores = async () => { try { setStores(await api('/stores')); } catch {} };
   useEffect(() => { load(); loadStores(); }, []);
@@ -113,6 +121,28 @@ export default function AdminStaff() {
     try { await api(`/staff/${id}`, { method: 'DELETE' }); load(); } catch (err: any) { alert(err.message); }
   };
 
+  const openReset = (s: any) => { setResetTarget(s); setResetPw(''); setResetError(''); setResetDonePw(''); setResetCopied(false); };
+  const closeReset = () => { setResetTarget(null); setResetPw(''); setResetError(''); setResetDonePw(''); setResetCopied(false); };
+  const doReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetError('');
+    if (resetPw.length < 8) { setResetError('Password must be at least 8 characters.'); return; }
+    setResetSaving(true);
+    try {
+      await api(`/staff/${resetTarget.id}`, { method: 'PUT', body: { password: resetPw } });
+      setResetDonePw(resetPw); // show once; the backend never returns it again
+    } catch (err: any) {
+      setResetError(err?.message || 'Could not reset password. Please try again.');
+    } finally {
+      setResetSaving(false);
+    }
+  };
+  const copyResetPw = async () => {
+    if (!resetDonePw || !resetTarget) return;
+    const text = `Login code: ${resetTarget.login_code}\nPassword: ${resetDonePw}`;
+    try { await navigator.clipboard.writeText(text); setResetCopied(true); setTimeout(() => setResetCopied(false), 2000); } catch {}
+  };
+
   const toggleActive = async (id: string, active: boolean) => {
     try { await api(`/staff/${id}`, { method: 'PUT', body: { is_active: !active } }); load(); } catch {}
   };
@@ -144,6 +174,7 @@ export default function AdminStaff() {
               <td><span className={`badge ${s.is_active?'badge-green':'badge-gray'}`}>{s.is_active?'Active':'Inactive'}</span></td>
               <td>
                 <div style={{display:'flex',gap:6}}>
+                  <button className="btn btn-sm btn-secondary" onClick={() => openReset(s)} data-testid={`reset-staff-${s.id}`}>Reset PW</button>
                   <button className="btn btn-sm btn-secondary" onClick={() => toggleActive(s.id, s.is_active)} data-testid={`toggle-staff-${s.id}`}>{s.is_active?'Disable':'Enable'}</button>
                   <button className="btn btn-sm btn-danger" onClick={() => deleteStaff(s.id)} data-testid={`delete-staff-${s.id}`}>Remove</button>
                 </div>
@@ -254,6 +285,54 @@ export default function AdminStaff() {
                 <div className="modal-actions">
                   <button type="button" className="btn btn-secondary" onClick={closeModal}>Cancel</button>
                   <button type="submit" className="btn btn-primary" data-testid="save-staff-btn" disabled={submitting}>{submitting ? 'Creating…' : 'Create Staff'}</button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {resetTarget && (
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && closeReset()}>
+          <div className="modal">
+            {resetDonePw ? (
+              // ===== New password set — show once =====
+              <div>
+                <h2>Password updated</h2>
+                <p style={{color:'#6B6A5E',marginTop:-4}}>Share this with {resetTarget.name} now — it cannot be retrieved again. Existing sessions are signed out.</p>
+                <div className="form-group">
+                  <label>Login Code</label>
+                  <input value={resetTarget.login_code || ''} readOnly style={{fontFamily:'monospace'}} />
+                </div>
+                <div className="form-group">
+                  <label>New Password</label>
+                  <input value={resetDonePw} readOnly style={{fontFamily:'monospace'}} />
+                </div>
+                <div className="modal-actions">
+                  <button type="button" className="btn btn-secondary" onClick={copyResetPw} data-testid="copy-reset-btn">{resetCopied ? 'Copied' : 'Copy'}</button>
+                  <button type="button" className="btn btn-primary" onClick={closeReset} data-testid="reset-done-btn">Done</button>
+                </div>
+              </div>
+            ) : (
+              // ===== Set a new password =====
+              <form onSubmit={doReset}>
+                <h2>Reset password</h2>
+                <p style={{color:'#6B6A5E',marginTop:-4}}>{resetTarget.name} · <span style={{fontFamily:'monospace'}}>{resetTarget.login_code}</span></p>
+                {resetError && (
+                  <div data-testid="reset-error" style={{background:'#F7E6E0',color:'#C0392B',border:'1px solid #E2603F',borderRadius:6,padding:'8px 12px',fontSize:13,marginBottom:12}}>
+                    {resetError}
+                  </div>
+                )}
+                <div className="form-group">
+                  <label>New Password (min 8 characters)</label>
+                  <div style={{display:'flex',gap:8}}>
+                    <input value={resetPw} onChange={e => setResetPw(e.target.value)} placeholder="New password" data-testid="reset-password-input" style={{flex:1}} required />
+                    <button type="button" className="btn btn-secondary" onClick={() => setResetPw(generatePassword())} data-testid="reset-gen-btn">Generate</button>
+                  </div>
+                </div>
+                <div className="modal-actions">
+                  <button type="button" className="btn btn-secondary" onClick={closeReset}>Cancel</button>
+                  <button type="submit" className="btn btn-primary" data-testid="save-reset-btn" disabled={resetSaving}>{resetSaving ? 'Saving…' : 'Set Password'}</button>
                 </div>
               </form>
             )}
