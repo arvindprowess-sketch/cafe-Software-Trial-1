@@ -312,7 +312,7 @@ export default function MenuScreen() {
         {/* Photo (72px, rounded) with ₹/g-protein badge */}
         <View style={styles.productImageWrapper}>
           {item.image_url ? (
-            <Image source={{ uri: item.image_url }} style={styles.productImage} />
+            <ExpoImage source={{ uri: item.image_url }} style={styles.productImage} contentFit="cover" transition={250} cachePolicy="memory-disk" />
           ) : (
             <View style={[styles.productImage, styles.productImagePlaceholder]}>
               <Ionicons name={isReadyMade ? 'fast-food' : 'restaurant'} size={26} color={FUEL.sandBorder} />
