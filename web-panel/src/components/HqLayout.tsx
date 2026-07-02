@@ -23,6 +23,7 @@ const HQ_NAV = [
   { path: '/hq/discards', label: 'Discards & Wastage' },
   { path: '/hq/transfers', label: 'Transfers' },
   { path: '/hq/reports', label: 'Reports' },
+  { path: '/hq/profit', label: 'Profit Margins' },
   { path: '/hq/audit-log', label: 'Audit Log' },
   { path: '/hq/onboarding', label: 'Onboarding' },
   { path: '/hq/settings', label: 'Settings' },
